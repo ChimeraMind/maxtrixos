@@ -40,6 +40,7 @@ type IImage interface {
 
 	// Mount point accessors (set after successful Mount* calls)
 	EfifsMount() string
+	EfiBootDir() (string, error)
 	BootfsMount() string
 	RootfsMount() string
 
@@ -87,14 +88,14 @@ type IImage interface {
 	MountRootfs(mountRootfs string) error
 	GetKernelPath() (string, error)
 	SetupPasswords() error
-	SetupBootloaderConfig(ref, efibootDir string) error
+	SetupBootloaderConfig(ref string) error
 	SetupVmtestConfig() error
-	InstallSecurebootCerts(efibootDir string) error
-	InstallMemtest(efibootDir string) error
+	InstallSecurebootCerts() error
+	InstallMemtest() error
 	GenerateKernelBootArgs(ref, physicalRootDevice string, encryptionEnabled bool) ([]string, error)
 	PackageList() ([]string, error)
 	SetupHooks(ref string) error
-	InstallBootloader(efibootDir string) ([]string, error)
+	InstallBootloader() ([]string, error)
 	TestImage(imagePath, ref string) error
 	FinalizeFilesystems() error
 	Qcow2ImagePath(imagePath string) (string, error)
@@ -825,6 +826,19 @@ func (im *Image) MountEfifs(mountEfifs string) error {
 	return nil
 }
 
+// EfiBootDir returns the full path to the EFI boot directory on the mounted EFI filesystem.
+func (im *Image) EfiBootDir() (string, error) {
+	if im.efifsMount == "" {
+		return "", errors.New("EFI filesystem not mounted")
+	}
+	relEfiBootPath, err := im.RelativeEfiBootPath()
+	if err != nil {
+		return "", err
+	}
+	efibootDir := filepath.Join(im.efifsMount, relEfiBootPath)
+	return efibootDir, nil
+}
+
 // FormatBootfs creates a btrfs filesystem on the boot partition.
 func (im *Image) FormatBootfs() error {
 	if im.bootDevice == "" {
@@ -972,7 +986,7 @@ func (im *Image) SetupPasswords() error {
 }
 
 // SetupBootloaderConfig sets up the GRUB bootloader configuration.
-func (im *Image) SetupBootloaderConfig(ref, efibootDir string) error {
+func (im *Image) SetupBootloaderConfig(ref string) error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -989,8 +1003,9 @@ func (im *Image) SetupBootloaderConfig(ref, efibootDir string) error {
 	if im.bootfsMount == "" {
 		return errors.New("missing bootfsMount, call MountBootfs first")
 	}
-	if efibootDir == "" {
-		return errors.New("missing efibootDir parameter")
+	efibootDir, err := im.EfiBootDir()
+	if err != nil {
+		return fmt.Errorf("failed to determine EFI boot directory: %w", err)
 	}
 
 	if im.efiDevice == "" {
@@ -1159,15 +1174,16 @@ func (im *Image) SetupVmtestConfig() error {
 }
 
 // InstallSecurebootCerts installs SecureBoot certificates on the EFI partition.
-func (im *Image) InstallSecurebootCerts(efibootDir string) error {
+func (im *Image) InstallSecurebootCerts() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
 	if im.efifsMount == "" {
 		return errors.New("missing efifsMount, call MountEfifs first")
 	}
-	if efibootDir == "" {
-		return errors.New("missing efibootDir parameter")
+	efibootDir, err := im.EfiBootDir()
+	if err != nil {
+		return err
 	}
 
 	certFileName, err := im.EfiCertificateFileName()
@@ -1230,12 +1246,13 @@ func (im *Image) InstallSecurebootCerts(efibootDir string) error {
 }
 
 // InstallMemtest installs the memtest86+ EFI binary to the EFI boot directory.
-func (im *Image) InstallMemtest(efibootDir string) error {
+func (im *Image) InstallMemtest() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
-	if efibootDir == "" {
-		return errors.New("missing efibootDir parameter")
+	efibootDir, err := im.EfiBootDir()
+	if err != nil {
+		return err
 	}
 
 	memtestBin := filepath.Join(im.rootfs, "usr", "share", "memtest86+", "memtest.efi64")
@@ -1251,7 +1268,7 @@ func (im *Image) InstallMemtest(efibootDir string) error {
 // unsigned GRUBX64.EFI with the signed version.
 // It returns the list of extra mounts created during the process so the caller
 // can track them for cleanup.
-func (im *Image) InstallBootloader(efibootDir string) ([]string, error) {
+func (im *Image) InstallBootloader() ([]string, error) {
 	if im.rootfs == "" {
 		return nil, errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -1264,8 +1281,9 @@ func (im *Image) InstallBootloader(efibootDir string) ([]string, error) {
 	if im.devicePath == "" {
 		return nil, errors.New("missing devicePath, not set in NewImageOptions")
 	}
-	if efibootDir == "" {
-		return nil, errors.New("missing efibootDir parameter")
+	efibootDir, err := im.EfiBootDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine EFI boot directory: %w", err)
 	}
 
 	fmt.Fprintln(os.Stdout, "Installing bootloader ...")

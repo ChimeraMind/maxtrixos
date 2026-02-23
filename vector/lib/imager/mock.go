@@ -1,5 +1,7 @@
 package imager
 
+import "errors"
+
 // MockImage implements IImage for testing.
 // Only the fields/methods relevant to each test need to be configured;
 // everything else returns safe zero values.
@@ -87,6 +89,15 @@ func (m *MockImage) SetDevicePath(devicePath string) { m.DevicePath_ = devicePat
 func (m *MockImage) SetRootfs(rootfs string)         { m.Rootfs_ = rootfs }
 
 func (m *MockImage) EfifsMount() string  { return m.EfifsMount_ }
+func (m *MockImage) EfiBootDir() (string, error) {
+	if m.EfifsMount_ == "" {
+		return "", errors.New("EFI filesystem not mounted")
+	}
+	if m.RelativeEfiBootPath_ == "" {
+		return "", errors.New("invalid Imager.RelativeEfiBootPath")
+	}
+	return m.EfifsMount_ + "/" + m.RelativeEfiBootPath_, nil
+}
 func (m *MockImage) BootfsMount() string { return m.BootfsMount_ }
 func (m *MockImage) RootfsMount() string { return m.RootfsMount_ }
 
@@ -183,7 +194,7 @@ func (m *MockImage) SetupPasswords() error {
 	m.SetupPasswordsCalled = true
 	return nil
 }
-func (m *MockImage) SetupBootloaderConfig(ref, efibootdir string) error {
+func (m *MockImage) SetupBootloaderConfig(ref string) error {
 	m.SetupBootloaderCfgCalled = true
 	return nil
 }
@@ -191,11 +202,11 @@ func (m *MockImage) SetupVmtestConfig() error {
 	m.SetupVmtestConfigCalled = true
 	return nil
 }
-func (m *MockImage) InstallSecurebootCerts(efibootdir string) error {
+func (m *MockImage) InstallSecurebootCerts() error {
 	m.InstallSecurebootCalled = true
 	return nil
 }
-func (m *MockImage) InstallMemtest(efibootdir string) error {
+func (m *MockImage) InstallMemtest() error {
 	m.InstallMemtestCalled = true
 	return nil
 }
@@ -209,7 +220,7 @@ func (m *MockImage) SetupHooks(ref string) error {
 	m.SetupHooksCalled = true
 	return nil
 }
-func (m *MockImage) InstallBootloader(efibootdir string) ([]string, error) {
+func (m *MockImage) InstallBootloader() ([]string, error) {
 	m.InstallBootloaderCalled = true
 	return m.InstallBootloaderResult, m.InstallBootloaderErr
 }
