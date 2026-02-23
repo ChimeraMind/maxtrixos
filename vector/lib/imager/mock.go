@@ -146,7 +146,7 @@ func (m *MockImage) ClearPartitionTable() error {
 	return nil
 }
 func (m *MockImage) DatedFsLabel() string { return "IMG-20250101" }
-func (m *MockImage) PartitionDevices(efiSize, bootSize, imageSize, devicePath string) error {
+func (m *MockImage) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	m.PartitionDevicesCalled = true
 	return nil
 }
