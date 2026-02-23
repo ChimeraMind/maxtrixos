@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -672,7 +673,7 @@ func (c *JailbreakCommand) syncPortage(sysroot string) error {
 		return nil
 	}
 
-	ini, err := config.ParseIni(strings.NewReader(string(reposData)))
+	ini, err := config.ParseIni(bytes.NewReader(reposData))
 	if err != nil {
 		fmt.Fprintf(c.run.stderr, "WARNING: cannot parse repos config: %v\n", err)
 		return nil
