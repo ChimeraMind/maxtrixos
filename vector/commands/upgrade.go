@@ -45,6 +45,10 @@ func (c *UpgradeCommand) Name() string {
 
 // Init initializes the command
 func (c *UpgradeCommand) Init(args []string) error {
+	if err := c.parseArgs(args); err != nil {
+		return err
+	}
+
 	if err := c.initClientConfig(); err != nil {
 		return err
 	}
@@ -55,7 +59,7 @@ func (c *UpgradeCommand) Init(args []string) error {
 
 	c.StartUI()
 
-	return c.parseArgs(args)
+	return nil
 }
 
 // parseArgs parses the command-line arguments without initializing config or ostree.

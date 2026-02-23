@@ -160,6 +160,10 @@ func (c *JailbreakCommand) Name() string {
 
 // Init initializes the command.
 func (c *JailbreakCommand) Init(args []string) error {
+	if err := c.parseArgs(args); err != nil {
+		return err
+	}
+
 	if err := c.initClientConfig(); err != nil {
 		return err
 	}
@@ -168,7 +172,7 @@ func (c *JailbreakCommand) Init(args []string) error {
 	}
 	c.StartUI()
 	c.run = defaultRunner()
-	return c.parseArgs(args)
+	return nil
 }
 
 func (c *JailbreakCommand) parseArgs(args []string) error {
