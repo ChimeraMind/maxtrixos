@@ -712,6 +712,68 @@ func CopyFile(src, dst string) error {
 	return os.Rename(dst+".tmp", dst)
 }
 
+// CopyDirPreserve recursively copies a directory tree from src to dst,
+// preserving permissions and extended attributes. Symlinks are recreated
+// as symlinks. This is the native Go equivalent of "cp -rp".
+func CopyDirPreserve(src, dst string) error {
+	srcInfo, err := os.Lstat(src)
+	if err != nil {
+		return fmt.Errorf("failed to stat source %s: %w", src, err)
+	}
+	if !srcInfo.IsDir() {
+		return fmt.Errorf("source %s is not a directory", src)
+	}
+
+	if err := os.MkdirAll(dst, srcInfo.Mode().Perm()); err != nil {
+		return fmt.Errorf("failed to create destination %s: %w", dst, err)
+	}
+
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(dst, relPath)
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		// Handle symlinks.
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(path)
+			if err != nil {
+				return fmt.Errorf("failed to read symlink %s: %w", path, err)
+			}
+			return os.Symlink(target, dstPath)
+		}
+
+		// Handle directories.
+		if d.IsDir() {
+			if relPath == "." {
+				return nil // already created above
+			}
+			if err := os.MkdirAll(dstPath, info.Mode().Perm()); err != nil {
+				return err
+			}
+			// Preserve sticky, setuid, setgid bits that MkdirAll ignores.
+			specialBits := info.Mode() & (os.ModeSticky | os.ModeSetuid | os.ModeSetgid)
+			if specialBits != 0 {
+				return os.Chmod(dstPath, info.Mode().Perm()|specialBits)
+			}
+			return nil
+		}
+
+		// Handle regular files.
+		return CopyFilePreserveXattrs(path, dstPath)
+	})
+}
+
 // CopyFilePreserveXattrs copies a file from src to dst, preserving permissions
 // and extended attributes (xattrs). This is equivalent to "cp -a" for regular files.
 func CopyFilePreserveXattrs(src, dst string) error {
