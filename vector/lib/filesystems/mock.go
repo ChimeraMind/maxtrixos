@@ -1,0 +1,54 @@
+package filesystems
+
+// MockFsenc implements IFsenc for testing.
+// Only the fields/methods relevant to each test need to be configured;
+// everything else returns safe zero values.
+type MockFsenc struct {
+	EncryptionEnabled_     bool
+	EncryptionEnabledErr   error
+	EncryptionKey_         string
+	EncryptionKeyErr       error
+	EncryptedRootFsName_   string
+	EncryptedRootFsNameErr error
+	OsName_                string
+	OsNameErr              error
+	ValidateLuksErr        error
+	LuksEncryptErr         error
+	LuksBackupHeaderErr    error
+}
+
+func (m *MockFsenc) EncryptionEnabled() (bool, error) {
+	return m.EncryptionEnabled_, m.EncryptionEnabledErr
+}
+
+func (m *MockFsenc) EncryptionKey() (string, error) {
+	return m.EncryptionKey_, m.EncryptionKeyErr
+}
+
+func (m *MockFsenc) EncryptedRootFsName() (string, error) {
+	return m.EncryptedRootFsName_, m.EncryptedRootFsNameErr
+}
+
+func (m *MockFsenc) OsName() (string, error) {
+	return m.OsName_, m.OsNameErr
+}
+
+func (m *MockFsenc) LuksEncrypt(devicePath, desiredLuksDevice string, deviceMappers *[]string) error {
+	return m.LuksEncryptErr
+}
+
+func (m *MockFsenc) LuksBackupHeader(devicePath, mountEfifs string) error {
+	return m.LuksBackupHeaderErr
+}
+
+func (m *MockFsenc) ValidateLuksVariables() error {
+	return m.ValidateLuksErr
+}
+
+// DefaultMockFsenc returns a MockFsenc with sensible defaults for testing.
+func DefaultMockFsenc() *MockFsenc {
+	return &MockFsenc{
+		EncryptionEnabled_:   false,
+		EncryptedRootFsName_: "crypt-root",
+	}
+}
