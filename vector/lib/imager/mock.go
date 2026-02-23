@@ -183,7 +183,7 @@ func (m *MockImage) SetupPasswords() error {
 	m.SetupPasswordsCalled = true
 	return nil
 }
-func (m *MockImage) SetupBootloaderConfig(ref, efibootdir, efiUUID, bootUUID string) error {
+func (m *MockImage) SetupBootloaderConfig(ref, efibootdir string) error {
 	m.SetupBootloaderCfgCalled = true
 	return nil
 }
