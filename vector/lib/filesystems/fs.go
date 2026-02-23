@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -28,6 +29,11 @@ var (
 	sysLsetxattr                                 = unix.Lsetxattr
 	sysLgetxattr                                 = unix.Lgetxattr
 	sysLlistxattr                                = unix.Llistxattr
+
+	// Mockable paths for block-device sysfs queries.
+	sysClassBlockPath     = "/sys/class/block"
+	devDiskByLabelPath    = "/dev/disk/by-label"
+	devDiskByPartTypePath = "/dev/disk/by-parttypeuuid"
 )
 
 // BLKFLSBUF is the ioctl command to flush block device buffers.
@@ -1017,4 +1023,125 @@ func ChrootRun(chrootDir, chrootExec string, args ...string) error {
 // and returns its standard output.
 func ChrootOutput(chrootDir, chrootExec string, args ...string) ([]byte, error) {
 	return ExecChrootOutput(chrootDir, chrootExec, args...)
+}
+
+// BlockDeviceNthPartition returns the device path of the nth partition
+// (1-based) on a block device by scanning sysfs for child partitions.
+func BlockDeviceNthPartition(blockDevice string, nth int) (string, error) {
+	if blockDevice == "" {
+		return "", fmt.Errorf("missing blockDevice parameter")
+	}
+	if nth <= 0 {
+		return "", fmt.Errorf("invalid nth parameter: %d", nth)
+	}
+
+	parentBase := filepath.Base(blockDevice)
+	parentSysfs := filepath.Join(sysClassBlockPath, parentBase)
+
+	entries, err := os.ReadDir(parentSysfs)
+	if err != nil {
+		return "", fmt.Errorf("cannot read sysfs for %s: %w", blockDevice, err)
+	}
+
+	nthStr := strconv.Itoa(nth)
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		// Partition directories start with the parent device name.
+		if !strings.HasPrefix(e.Name(), parentBase) {
+			continue
+		}
+		// Read the partition number from sysfs.
+		partFile := filepath.Join(parentSysfs, e.Name(), "partition")
+		data, err := readFileBytes(partFile)
+		if err != nil {
+			continue
+		}
+		if strings.TrimSpace(string(data)) == nthStr {
+			return filepath.Join(filepath.Dir(blockDevice), e.Name()), nil
+		}
+	}
+
+	return "", fmt.Errorf("partition %d not found on %s", nth, blockDevice)
+}
+
+// BlockDeviceForPartition returns the parent block device for a partition
+// path by resolving the partition's sysfs entry and walking up to the
+// parent device.
+func BlockDeviceForPartition(partitionPath string) (string, error) {
+	if partitionPath == "" {
+		return "", fmt.Errorf("missing partitionPath parameter")
+	}
+
+	partBase := filepath.Base(partitionPath)
+	partSysfs := filepath.Join(sysClassBlockPath, partBase)
+
+	// Verify this is actually a partition by checking the "partition" file.
+	partFile := filepath.Join(partSysfs, "partition")
+	if _, err := readFileBytes(partFile); err != nil {
+		return "", fmt.Errorf("not a partition or cannot read sysfs for %s: %w", partitionPath, err)
+	}
+
+	// The real sysfs path for a partition is:
+	//   /sys/devices/.../sdX/sdX1
+	// Resolving the sysfs symlink and going up one directory gives the parent.
+	realPath, err := resolveDeviceLink(partSysfs)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve sysfs path for %s: %w", partitionPath, err)
+	}
+
+	parentSysfs := filepath.Dir(realPath)
+	parentName := filepath.Base(parentSysfs)
+
+	// Verify the parent is a valid block device.
+	parentDev := filepath.Join(filepath.Dir(partitionPath), parentName)
+	return parentDev, nil
+}
+
+// PartitionNumber returns the partition number of a partition device
+// by reading its sysfs "partition" attribute.
+func PartitionNumber(partitionPath string) (string, error) {
+	if partitionPath == "" {
+		return "", fmt.Errorf("missing partitionPath parameter")
+	}
+
+	partBase := filepath.Base(partitionPath)
+	partFile := filepath.Join(sysClassBlockPath, partBase, "partition")
+	data, err := readFileBytes(partFile)
+	if err != nil {
+		return "", fmt.Errorf("cannot read partition number for %s: %w", partitionPath, err)
+	}
+
+	return strings.TrimSpace(string(data)), nil
+}
+
+// PartitionLabel returns the filesystem label of a partition device
+// by scanning /dev/disk/by-label/ for a symlink pointing to the device.
+func PartitionLabel(partitionPath string) (string, error) {
+	if partitionPath == "" {
+		return "", fmt.Errorf("missing partitionPath parameter")
+	}
+
+	label, err := resolveDeviceAttribute(partitionPath, devDiskByLabelPath)
+	if err != nil {
+		// No label is not necessarily an error; some partitions have none.
+		return "", nil
+	}
+	return label, nil
+}
+
+// PartitionType returns the partition type GUID (uppercased) for a
+// partition device by scanning /dev/disk/by-parttypeuuid/ for a symlink
+// pointing to the device.
+func PartitionType(partitionPath string) (string, error) {
+	if partitionPath == "" {
+		return "", fmt.Errorf("missing partitionPath parameter")
+	}
+
+	partType, err := resolveDeviceAttribute(partitionPath, devDiskByPartTypePath)
+	if err != nil {
+		return "", fmt.Errorf("cannot determine partition type for %s: %w", partitionPath, err)
+	}
+	return strings.ToUpper(partType), nil
 }
