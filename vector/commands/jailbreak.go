@@ -107,7 +107,7 @@ func defaultRunner() *jailbreakRunner {
 		removeAll:    os.RemoveAll,
 		rename:       os.Rename,
 		realpath:     filepath.EvalSymlinks,
-		copyFile:     copyFile,
+		copyFile:     filesystems.CopyFile,
 		getMountInfo: getMountInfoFromSystem,
 		remountRW: func(mnt string) error {
 			cmd := execCommand("mount", "-o", "remount,rw", mnt)

@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/filesystems"
 )
 
 var (
@@ -359,7 +360,7 @@ func (c *UpgradeCommand) updateGrubDir_x64(efiDir, commit string) error {
 
 		fmt.Printf("   %sCopying %s to %s%s%s...\n",
 			c.iconDoc, filepath.Base(src), c.cBold, dst, c.cReset)
-		if err := copyFile(src, dst); err != nil {
+		if err := filesystems.CopyFile(src, dst); err != nil {
 			return fmt.Errorf("failed to copy file: %w", err)
 		}
 	}
