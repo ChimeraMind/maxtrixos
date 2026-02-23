@@ -9,7 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"matrixos/vector/lib/config"
-	fslib "matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/runner"
 	"os"
 	"os/user"
@@ -99,7 +99,7 @@ type IOstree interface {
 	Deploy(ref string, bootArgs []string, verbose bool) error
 	Upgrade(args []string, verbose bool) error
 	ListPackages(commit string, verbose bool) ([]string, error)
-	ListContents(commit, path string, verbose bool) (*[]fslib.PathInfo, error)
+	ListContents(commit, path string, verbose bool) (*[]filesystems.PathInfo, error)
 	ListEtcChanges(oldSHA, newSHA string) ([]EtcChange, error)
 }
 
@@ -916,9 +916,9 @@ func CollectionIDArgs(collectionID string) ([]string, error) {
 	return args, nil
 }
 
-var pathExists = fslib.PathExists
-var fileExists = fslib.FileExists
-var directoryExists = fslib.DirectoryExists
+var pathExists = filesystems.PathExists
+var fileExists = filesystems.FileExists
+var directoryExists = filesystems.DirectoryExists
 
 // GpgEnabled returns whether GPG signing and verification is enabled.
 func (o *Ostree) GpgEnabled() (bool, error) {
@@ -2236,12 +2236,12 @@ func (o *Ostree) Upgrade(args []string, verbose bool) error {
 }
 
 // ParseModeString takes a hybrid string like "-00644" and parses it.
-func ParseModeString(input string) (*fslib.PathMode, error) {
+func ParseModeString(input string) (*filesystems.PathMode, error) {
 	if len(input) < 4 {
 		return nil, fmt.Errorf("input too short to be valid mode string: %q", input)
 	}
 
-	mode := fslib.PathMode{
+	mode := filesystems.PathMode{
 		Type: string(input[0]),
 	}
 
@@ -2272,14 +2272,14 @@ func ParseModeString(input string) (*fslib.PathMode, error) {
 }
 
 // ParseOstreeLsChecksumLine parses a line from `ostree ls -C` output into a PathInfo struct.
-func ParseOstreeLsChecksumLine(line string) (*fslib.PathInfo, error) {
+func ParseOstreeLsChecksumLine(line string) (*filesystems.PathInfo, error) {
 	parts := strings.Fields(line)
 	if len(parts) < 6 {
 		return nil, fmt.Errorf("unexpected format for ostree ls line: %q", line)
 	}
 	idx := 0
 
-	pi := &fslib.PathInfo{}
+	pi := &filesystems.PathInfo{}
 	mode, err := ParseModeString(parts[idx])
 	if err != nil {
 		return nil, err
@@ -2324,7 +2324,7 @@ func ParseOstreeLsChecksumLine(line string) (*fslib.PathInfo, error) {
 }
 
 // ListContents lists the contents of a path in a commit.
-func (o *Ostree) ListContents(commit, path string, verbose bool) (*[]fslib.PathInfo, error) {
+func (o *Ostree) ListContents(commit, path string, verbose bool) (*[]filesystems.PathInfo, error) {
 	if commit == "" {
 		return nil, errors.New("missing commit parameter")
 	}
@@ -2338,7 +2338,7 @@ func (o *Ostree) ListContents(commit, path string, verbose bool) (*[]fslib.PathI
 	return o.listContentsOfPath(commit, repoDir, path, verbose)
 }
 
-func (o *Ostree) listContentsOfPath(commit, repoDir, path string, verbose bool) (*[]fslib.PathInfo, error) {
+func (o *Ostree) listContentsOfPath(commit, repoDir, path string, verbose bool) (*[]filesystems.PathInfo, error) {
 	stdout, err := o.ostreeRunCapture(
 		verbose,
 		"--repo="+repoDir,
@@ -2353,7 +2353,7 @@ func (o *Ostree) listContentsOfPath(commit, repoDir, path string, verbose bool) 
 		return nil, err
 	}
 
-	var pis []fslib.PathInfo
+	var pis []filesystems.PathInfo
 
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
@@ -2381,21 +2381,21 @@ type EtcChangeAction string
 
 // EtcChange describes a single change detected by the 3-way /etc diff.
 type EtcChange struct {
-	Path   string          // Relative path within /etc (e.g. "conf.d/foo")
-	Action EtcChangeAction // What will happen to this path
-	Old    *fslib.PathInfo // State in old commit (nil if absent)
-	New    *fslib.PathInfo // State in new commit (nil if absent)
-	User   *fslib.PathInfo // Current live state (nil if absent)
+	Path   string                // Relative path within /etc (e.g. "conf.d/foo")
+	Action EtcChangeAction       // What will happen to this path
+	Old    *filesystems.PathInfo // State in old commit (nil if absent)
+	New    *filesystems.PathInfo // State in new commit (nil if absent)
+	User   *filesystems.PathInfo // Current live state (nil if absent)
 }
 
 // indexPathInfoSlice builds a map from relative path to *PathInfo.
 // It strips the given prefix from each entry's Path and skips the root
 // directory itself (empty relative path after stripping).
-func indexPathInfoSlice(items *[]fslib.PathInfo, prefix string) map[string]*fslib.PathInfo {
+func indexPathInfoSlice(items *[]filesystems.PathInfo, prefix string) map[string]*filesystems.PathInfo {
 	if items == nil {
-		return map[string]*fslib.PathInfo{}
+		return map[string]*filesystems.PathInfo{}
 	}
-	m := make(map[string]*fslib.PathInfo, len(*items))
+	m := make(map[string]*filesystems.PathInfo, len(*items))
 	for i := range *items {
 		pi := &(*items)[i]
 		rel := strings.TrimPrefix(pi.Path, prefix)
@@ -2409,8 +2409,8 @@ func indexPathInfoSlice(items *[]fslib.PathInfo, prefix string) map[string]*fsli
 }
 
 // indexPathInfoPtrSlice is like indexPathInfoSlice but for []*PathInfo.
-func indexPathInfoPtrSlice(items []*fslib.PathInfo, prefix string) map[string]*fslib.PathInfo {
-	m := make(map[string]*fslib.PathInfo, len(items))
+func indexPathInfoPtrSlice(items []*filesystems.PathInfo, prefix string) map[string]*filesystems.PathInfo {
+	m := make(map[string]*filesystems.PathInfo, len(items))
 	for _, pi := range items {
 		rel := strings.TrimPrefix(pi.Path, prefix)
 		rel = strings.TrimPrefix(rel, "/")
@@ -2428,9 +2428,9 @@ func indexPathInfoPtrSlice(items []*fslib.PathInfo, prefix string) map[string]*f
 // The algorithm keys every entry by its relative path (e.g. "conf.d/foo")
 // and classifies each path into one of the EtcChangeAction categories.
 func computeEtcDiff(
-	oldContent *[]fslib.PathInfo,
-	newContent *[]fslib.PathInfo,
-	userContent []*fslib.PathInfo,
+	oldContent *[]filesystems.PathInfo,
+	newContent *[]filesystems.PathInfo,
+	userContent []*filesystems.PathInfo,
 ) []EtcChange {
 	oldMap := indexPathInfoSlice(oldContent, "/usr/etc")
 	newMap := indexPathInfoSlice(newContent, "/usr/etc")
@@ -2479,7 +2479,7 @@ func computeEtcDiff(
 //	 ✓     ✗     ✗   | skip (both removed)
 //	 ✓     ✓     ✗   | old==new → user-only, else conflict
 //	 ✗     ✗     ✓   | user-only
-func classifyEtcChange(relPath string, old, new_, user *fslib.PathInfo) *EtcChange {
+func classifyEtcChange(relPath string, old, new_, user *filesystems.PathInfo) *EtcChange {
 	hasOld := old != nil
 	hasNew := new_ != nil
 	hasUser := user != nil
@@ -2557,7 +2557,7 @@ func (o *Ostree) ListEtcChanges(oldSHA, newSHA string) ([]EtcChange, error) {
 	if err != nil {
 		return nil, err
 	}
-	userEtcContent, err := fslib.ListContents("/etc")
+	userEtcContent, err := filesystems.ListContents("/etc")
 	if err != nil {
 		return nil, err
 	}
