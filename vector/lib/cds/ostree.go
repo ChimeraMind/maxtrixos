@@ -1151,20 +1151,20 @@ func (o *Ostree) LastCommit(ref string, verbose bool) (string, error) {
 	return o.lastCommitFromRepo(repoDir, ref, verbose)
 }
 
-func (o *Ostree) getDevGpgHomedir() (string, error) {
-	dir, err := o.cfg.GetItem("Ostree.DevGpgHomedir")
+func (o *Ostree) getDevGpgHomeDir() (string, error) {
+	dir, err := o.cfg.GetItem("Ostree.DevGpgHomeDir")
 	if err != nil {
 		return "", err
 	}
 	if dir == "" {
-		return "", errors.New("invalid Ostree.DevGpgHomedir")
+		return "", errors.New("invalid Ostree.DevGpgHomeDir")
 	}
 	return dir, nil
 }
 
 // GpgHomeDir returns the path to the GPG homedir, creating and setting permissions if needed.
 func (o *Ostree) GpgHomeDir() (string, error) {
-	devGpgHomeDir, err := o.getDevGpgHomedir()
+	devGpgHomeDir, err := o.getDevGpgHomeDir()
 	if err != nil {
 		return "", err
 	}

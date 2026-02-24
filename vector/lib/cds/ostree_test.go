@@ -726,7 +726,7 @@ func TestGpgKeyID(t *testing.T) {
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Ostree.DevGpgHomedir": {filepath.Join(tmpDir, "gpg")},
+			"Ostree.DevGpgHomeDir": {filepath.Join(tmpDir, "gpg")},
 			"Ostree.GpgPublicKey":  {pubKey},
 		},
 	}
@@ -868,7 +868,7 @@ func TestGpgSignFile(t *testing.T) {
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Ostree.DevGpgHomedir": {filepath.Join(tmpDir, "gpg")},
+			"Ostree.DevGpgHomeDir": {filepath.Join(tmpDir, "gpg")},
 			"Ostree.GpgPublicKey":  {pubKey},
 		},
 	}
@@ -918,7 +918,7 @@ func TestImportGpgKey(t *testing.T) {
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Ostree.DevGpgHomedir": {filepath.Join(tmpDir, "gpg")},
+			"Ostree.DevGpgHomeDir": {filepath.Join(tmpDir, "gpg")},
 		},
 	}
 	o, err := NewOstree(cfg)
@@ -1059,7 +1059,7 @@ func TestMaybeInitializeGpg(t *testing.T) {
 			"Ostree.GpgPrivateKey":        {privKey},
 			"Ostree.GpgPublicKey":         {pubKey},
 			"Ostree.GpgOfficialPublicKey": {offKey},
-			"Ostree.DevGpgHomedir":        {filepath.Join(tmpDir, "gpg")},
+			"Ostree.DevGpgHomeDir":        {filepath.Join(tmpDir, "gpg")},
 		},
 		Bools: map[string]bool{
 			"Ostree.Gpg": true,
@@ -1205,7 +1205,7 @@ func TestInitializeSigningGpg(t *testing.T) {
 			"Ostree.GpgPrivateKey":        {privKey},
 			"Ostree.GpgPublicKey":         {pubKey},
 			"Ostree.GpgOfficialPublicKey": {offKey},
-			"Ostree.DevGpgHomedir":        {filepath.Join(tmpDir, "gpg")},
+			"Ostree.DevGpgHomeDir":        {filepath.Join(tmpDir, "gpg")},
 		},
 	}
 	o, err := NewOstree(cfg)
@@ -1537,7 +1537,7 @@ func TestGpgArgsEnabled(t *testing.T) {
 	// Mock GpgKeyID execution
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Ostree.DevGpgHomedir": {filepath.Join(tmpDir, "gpg")},
+			"Ostree.DevGpgHomeDir": {filepath.Join(tmpDir, "gpg")},
 			"Ostree.GpgPublicKey":  {pubKey},
 		},
 		Bools: map[string]bool{
