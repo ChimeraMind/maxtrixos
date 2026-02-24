@@ -16,6 +16,8 @@ type MockOstree struct {
 	DeploymentsErr   error
 	Refs             []string
 	RefsErr          error
+	Remote_          string
+	RemoteErr        error
 	SwitchRef        string
 	SwitchErr        error
 	LastCommit_      string
@@ -57,7 +59,7 @@ func (m *MockOstree) OsName() (string, error)                    { return "", ni
 func (m *MockOstree) Arch() (string, error)                      { return "", nil }
 func (m *MockOstree) RepoDir() (string, error)                   { return "", nil }
 func (m *MockOstree) Sysroot() (string, error)                   { return "", nil }
-func (m *MockOstree) Remote() (string, error)                    { return "", nil }
+func (m *MockOstree) Remote() (string, error)                    { return m.Remote_, m.RemoteErr }
 func (m *MockOstree) RemoteURL() (string, error)                 { return "", nil }
 func (m *MockOstree) AvailableGpgPubKeyPaths() ([]string, error) { return nil, nil }
 func (m *MockOstree) GpgBestPubKeyPath() (string, error)         { return "", nil }
