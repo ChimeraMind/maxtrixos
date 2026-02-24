@@ -1362,7 +1362,7 @@ func (im *Image) InstallSecurebootCerts() error {
 	// Copy the shim binaries.
 	shimDir := filepath.Join(im.rootfs, "usr", "share", "shim")
 	fmt.Fprintf(os.Stdout, "Copying shim for Secureboot from %s to %s ...\n", shimDir, efibootDir)
-	return im.runner(nil, os.Stdout, os.Stderr, "cp", "-v", shimDir+"/.", efibootDir+"/")
+	return filesystems.CopyDirPreserve(shimDir, efibootDir)
 }
 
 // InstallMemtest installs the memtest86+ EFI binary to the EFI boot directory.
@@ -1714,7 +1714,7 @@ func (im *Image) TestImage(imagePath string) error {
 	imageName := filepath.Base(imagePath)
 	testImagePath := filepath.Join(imageTempDir, imageName)
 	fmt.Fprintf(os.Stdout, "Copying image to %s for testing ...\n", testImagePath)
-	if err := im.runner(nil, os.Stdout, os.Stderr, "cp", "--reflink=auto", "-v", imagePath, testImagePath); err != nil {
+	if err := filesystems.CopyFileReflink(imagePath, testImagePath); err != nil {
 		return fmt.Errorf("failed to copy image for testing: %w", err)
 	}
 
