@@ -147,17 +147,17 @@ func setupMockExec(t *testing.T) {
 }
 
 func setupMockSyscalls(t *testing.T) {
-	origMount := sysMount
-	origUnmount := sysUnmount
+	origMount := Mount
+	origUnmount := Unmount
 	origIoctl := sysIoctl
 
-	sysMount = func(source string, target string, fstype string, flags uintptr, data string) error {
+	Mount = func(source string, target string, fstype string, flags uintptr, data string) error {
 		if os.Getenv("MOCK_MOUNT_FAIL") == "1" {
 			return fmt.Errorf("mock mount failed")
 		}
 		return nil
 	}
-	sysUnmount = func(target string, flags int) error {
+	Unmount = func(target string, flags int) error {
 		if os.Getenv("MOCK_UMOUNT_FAIL") == "1" {
 			return fmt.Errorf("mock unmount failed")
 		}
@@ -168,8 +168,8 @@ func setupMockSyscalls(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		sysMount = origMount
-		sysUnmount = origUnmount
+		Mount = origMount
+		Unmount = origUnmount
 		sysIoctl = origIoctl
 	})
 }
