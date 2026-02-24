@@ -38,7 +38,6 @@ type NewImageOptions struct {
 	DevicePath string
 	ImagePath  string
 	Mode       ImageMode
-	Ref        string
 }
 
 // IImage defines the interface for image operations.
@@ -72,6 +71,7 @@ type IImage interface {
 
 	SetRootfs(rootfs string)
 	Rootfs() string
+	SetRef(ref string)
 	Ref() string
 
 	// Mount point accessors (set after successful Mount* calls)
@@ -104,9 +104,12 @@ type IImage interface {
 	LockDir() (string, error)
 	LockWaitSeconds() (string, error)
 	BuildMetadataFile() (string, error)
+	CreateQcow2() (bool, error)
+	Productionize() (bool, error)
+	ImageTests() (bool, error)
 
 	// Operations
-	ReleaseVersion() (string, error)
+	ExtractReleaseVersion() (string, error)
 	BuildImagePathWithReleaseVersion(releaseVersion string) (string, error)
 	CreateImage(imageSize string) error
 	BuildImagePathWithCompressorExtension() (string, error)
@@ -129,7 +132,7 @@ type IImage interface {
 	InstallSecurebootCerts() error
 	InstallMemtest() error
 	GenerateKernelBootArgs() ([]string, error)
-	PackageList() ([]string, error)
+	ExtractPackageList() ([]string, error)
 	SetupHooks() error
 	InstallBootloader() error
 	Cleanup()
@@ -138,7 +141,7 @@ type IImage interface {
 	Qcow2ImagePath() (string, error)
 	CreateQcow2Image() error
 	ShowFinalFilesystemInfo() error
-	ShowTestInfo(artifacts []string)
+	ShowImageTestInfo(artifacts []string)
 	RemoveImageFile() error
 	ImageLockDir() (string, error)
 	ImageLockPath() (string, error)
@@ -258,7 +261,6 @@ func NewImage(cfg config.IConfig, ot cds.IOstree, fsenc filesystems.IFsenc, opts
 		im.bootDevice = opts.BootDevice
 		im.rootDevice = opts.RootDevice
 		im.devicePath = opts.DevicePath
-		im.ref = opts.Ref
 		im.encrypted = encrypted
 		im.imagePath = opts.ImagePath
 		im.mode = opts.Mode
@@ -327,6 +329,9 @@ func (im *Image) Rootfs() string { return im.rootfs }
 
 // Ref returns the ostree ref.
 func (im *Image) Ref() string { return im.ref }
+
+// SetRef sets the ostree ref.
+func (im *Image) SetRef(ref string) { im.ref = ref }
 
 // EfifsMount returns the EFI filesystem mount point (set by MountEfifs on success).
 func (im *Image) EfifsMount() string { return im.efifsMount }
@@ -622,6 +627,33 @@ func (im *Image) BuildMetadataFile() (string, error) {
 	return filepath.Join(metadataDir, buildFileName), nil
 }
 
+// CreateQcow2 returns whether a QCOW2 image should be created in addition to the raw .img file.
+func (im *Image) CreateQcow2() (bool, error) {
+	v, err := im.cfg.GetBool("Imager.CreateQcow2")
+	if err != nil {
+		return false, err
+	}
+	return v, nil
+}
+
+// Productionize returns whether productionization steps should be executed after image creation.
+func (im *Image) Productionize() (bool, error) {
+	v, err := im.cfg.GetBool("Imager.Productionize")
+	if err != nil {
+		return false, err
+	}
+	return v, nil
+}
+
+// ImageTests returns whether integration tests should be run after image creation.
+func (im *Image) ImageTests() (bool, error) {
+	v, err := im.cfg.GetBool("Imager.ImageTests")
+	if err != nil {
+		return false, err
+	}
+	return v, nil
+}
+
 // --- Helpers ---
 
 // buildImagePath builds the full image file path from a suffix.
@@ -683,10 +715,10 @@ func (im *Image) extractSeedName(data []byte) (string, error) {
 	return releaseVersion, nil
 }
 
-// ReleaseVersion extracts or generates a release version string for an image.
+// ExtractReleaseVersion extracts or generates a release version string for an image.
 // It attempts to read a build metadata file from the rootfs for the version;
 // if unavailable, falls back to the current date (YYYYMMDD).
-func (im *Image) ReleaseVersion() (string, error) {
+func (im *Image) ExtractReleaseVersion() (string, error) {
 	if im.rootfs == "" {
 		return "", errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -1356,6 +1388,10 @@ func (im *Image) SetupBootloaderConfig() error {
 
 // SetupVmtestConfig creates a VM test grub config based on the ostree boot config.
 func (im *Image) SetupVmtestConfig() error {
+	if err := im.validateImageModeForCreation(); err != nil {
+		return err
+	}
+
 	if im.bootfsMount == "" {
 		return errors.New("missing bootfsMount, call MountBootfs first")
 	}
@@ -1698,8 +1734,8 @@ func (im *Image) GenerateKernelBootArgs() ([]string, error) {
 	return bootArgs, nil
 }
 
-// PackageList returns the list of packages installed in a rootfs.
-func (im *Image) PackageList() ([]string, error) {
+// ExtractPackageList returns the list of packages installed in a rootfs.
+func (im *Image) ExtractPackageList() ([]string, error) {
 	if im.rootfs == "" {
 		return nil, errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -1937,16 +1973,18 @@ func (im *Image) ShowFinalFilesystemInfo() error {
 	return nil
 }
 
-// ShowTestInfo prints information about generated artifacts and how to test them.
-func (im *Image) ShowTestInfo(artifacts []string) {
-	if len(artifacts) == 0 {
-		im.PrintError("show_test_info: missing artifacts array parameter\n")
+// ShowImageTestInfo prints information about generated artifacts and how to test them.
+func (im *Image) ShowImageTestInfo(artifacts []string) {
+	if err := im.validateImageModeForCreation(); err != nil {
+		im.PrintError("show_test_info: invalid image mode: %v\n", err)
 		return
 	}
 
-	im.Print("Generated artifacts:\n")
-	for _, a := range artifacts {
-		im.Print(">> %s\n", a)
+	if len(artifacts) != 0 {
+		im.Print("Generated artifacts:\n")
+		for _, a := range artifacts {
+			im.Print(">> %s\n", a)
+		}
 	}
 
 	im.Print("\n")
@@ -1956,15 +1994,13 @@ func (im *Image) ShowTestInfo(artifacts []string) {
 	im.Print("To move to a USB stick:\n")
 	im.Print("    dd if=IMAGE_PATH of=/dev/sdX bs=4M conv=sparse,sync status=progress\n")
 	im.Print("\n")
+	im.Print("\nImage creation complete! > %s\n", im.ImagePath())
 }
 
 // RemoveImageFile removes an image file and its associated .sha256 and .asc files.
 func (im *Image) RemoveImageFile() error {
-	if im.mode != ModeCreateImageFile {
-		return errors.New("RemoveImageFile can only be called in ModeCreateImageFile")
-	}
-	if im.imagePath == "" {
-		return errors.New("missing imagePath parameter")
+	if err := im.validateImageModeForCreation(); err != nil {
+		return err
 	}
 
 	im.Print("Removing %s ...\n", im.imagePath)
