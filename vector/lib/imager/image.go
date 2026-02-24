@@ -793,41 +793,54 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	fmt.Fprintf(os.Stdout, "Partitioning %s:\n", im.devicePath)
 	fmt.Fprintf(os.Stdout, " --> p1 (EFI: %s)\n", efiSize)
 	fmt.Fprintf(os.Stdout, " --> p2 (BOOT: %s)\n", bootSize)
-	fmt.Fprintf(os.Stdout, " --> p3 (ROOT: Remainder of %s, plus autogrow)\n\n", imageSize)
+	fmt.Fprintf(os.Stdout, " --> p3 (ROOT: Remainder of %s, plus autogrow)\n", imageSize)
 
 	// Create EFI partition.
-	if err := im.runner(nil, os.Stdout, os.Stderr, "sgdisk",
+	epArgs := []string{
+		"sgdisk",
 		"-n", fmt.Sprintf("1:0:+%s", efiSize),
 		"-t", fmt.Sprintf("1:%s", espPartType),
-		im.devicePath); err != nil {
+		im.devicePath,
+	}
+	if err := im.runner(nil, os.Stdout, os.Stderr, epArgs[0], epArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk EFI partition failed: %w", err)
 	}
 
 	// Create boot partition.
-	if err := im.runner(nil, os.Stdout, os.Stderr, "sgdisk",
+	bpArgs := []string{
+		"sgdisk",
 		"-n", fmt.Sprintf("2:0:+%s", bootSize),
 		"-t", fmt.Sprintf("2:%s", bootPartType),
-		im.devicePath); err != nil {
+		im.devicePath,
+	}
+	if err := im.runner(nil, os.Stdout, os.Stderr, bpArgs[0], bpArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk boot partition failed: %w", err)
 	}
 
 	// Create root partition with -10M padding for systemd-repart.
-	if err := im.runner(nil, os.Stdout, os.Stderr, "sgdisk",
+	rpArgs := []string{
+		"sgdisk",
 		"-n", "3:0:-10M",
 		"-t", fmt.Sprintf("3:%s", rootPartType),
-		im.devicePath); err != nil {
+		im.devicePath,
+	}
+	if err := im.runner(nil, os.Stdout, os.Stderr, rpArgs[0], rpArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk root partition failed: %w", err)
 	}
 
 	// Set the auto-grow flag (bit 59) on partition 3.
-	if err := im.runner(nil, os.Stdout, os.Stderr, "sgdisk",
-		"-A", "3:set:59",
-		im.devicePath); err != nil {
+	agArgs := []string{
+		"sgdisk", "-A", "3:set:59", im.devicePath,
+	}
+	if err := im.runner(nil, os.Stdout, os.Stderr, agArgs[0], agArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk set auto-grow flag failed: %w", err)
 	}
 
 	fmt.Fprintln(os.Stdout, "Refreshing partition table ...")
-	if err := im.runner(nil, os.Stdout, os.Stderr, "partprobe", "-s", im.devicePath); err != nil {
+	args := []string{
+		"partprobe", "-s", im.devicePath,
+	}
+	if err := im.runner(nil, os.Stdout, os.Stderr, args[0], args[1:]...); err != nil {
 		return fmt.Errorf("partprobe failed: %w", err)
 	}
 
@@ -843,7 +856,13 @@ func (im *Image) FormatEfifs() error {
 
 	fmt.Fprintf(os.Stdout, "Creating EFI partition on %s\n", im.efiDevice)
 	label := "ME" + im.DatedFsLabel()
-	return im.runner(nil, os.Stdout, os.Stderr, "mkfs.vfat", "-F", "32", "-n", label, im.efiDevice)
+	args := []string{
+		"mkfs.vfat",
+		"-F", "32",
+		"-n", label,
+		im.efiDevice,
+	}
+	return im.runner(nil, os.Stdout, os.Stderr, args[0], args[1:]...)
 }
 
 // MountEfifs mounts the EFI partition.
@@ -863,15 +882,16 @@ func (im *Image) MountEfifs(mountEfifs string) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "Mounting %s to %s\n", im.efiDevice, mountEfifs)
+	im.trackMount(mountEfifs)
 	if err := im.runner(nil, os.Stdout, os.Stderr, "mount", "-t", "vfat", im.efiDevice, mountEfifs); err != nil {
 		return err
 	}
 	im.efifsMount = mountEfifs
-	im.trackMount(mountEfifs)
 	return nil
 }
 
-// EfiBootDir returns the full path to the EFI boot directory on the mounted EFI filesystem.
+// EfiBootDir returns the full path to the EFI boot directory on the mounted
+// EFI filesystem.
 func (im *Image) EfiBootDir() (string, error) {
 	if im.efifsMount == "" {
 		return "", errors.New("EFI filesystem not mounted")
@@ -892,7 +912,13 @@ func (im *Image) FormatBootfs() error {
 
 	label := "MB" + im.DatedFsLabel()
 	fmt.Fprintf(os.Stdout, "Creating btrfs on %s (boot)\n", im.bootDevice)
-	return im.runner(nil, os.Stdout, os.Stderr, "mkfs.btrfs", "-f", "-L", label, im.bootDevice)
+	args := []string{
+		"mkfs.btrfs",
+		"-f",
+		"-L", label,
+		im.bootDevice,
+	}
+	return im.runner(nil, os.Stdout, os.Stderr, args[0], args[1:]...)
 }
 
 // MountBootfs mounts the boot partition.
@@ -912,11 +938,11 @@ func (im *Image) MountBootfs(mountBootfs string) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "Mounting %s to %s\n", im.bootDevice, mountBootfs)
+	im.trackMount(mountBootfs)
 	if err := im.runner(nil, os.Stdout, os.Stderr, "mount", im.bootDevice, mountBootfs); err != nil {
 		return err
 	}
 	im.bootfsMount = mountBootfs
-	im.trackMount(mountBootfs)
 	return nil
 }
 
@@ -955,7 +981,13 @@ func (im *Image) FormatRootfs() error {
 
 	label := "MR" + im.DatedFsLabel()
 	fmt.Fprintf(os.Stdout, "Creating btrfs on %s (root)\n", im.rootDevice)
-	return im.runner(nil, os.Stdout, os.Stderr, "mkfs.btrfs", "-f", "-L", label, im.rootDevice)
+	args := []string{
+		"mkfs.btrfs",
+		"-f",
+		"-L", label,
+		im.rootDevice,
+	}
+	return im.runner(nil, os.Stdout, os.Stderr, args[0], args[1:]...)
 }
 
 // RootfsKernelArgs returns the default kernel arguments for the root filesystem.
@@ -982,11 +1014,19 @@ func (im *Image) MountRootfs(mountRootfs string) error {
 	compression := "zstd:6"
 	btrfsOpts := fmt.Sprintf("compress-force=%s,space_cache=v2,commit=120", compression)
 	fmt.Fprintf(os.Stdout, "Mounting %s to %s\n", im.rootDevice, mountRootfs)
-	if err := im.runner(nil, os.Stdout, os.Stderr, "mount", "-o", btrfsOpts, im.rootDevice, mountRootfs); err != nil {
+
+	im.trackMount(mountRootfs)
+	args := []string{
+		"mount",
+		"-o", btrfsOpts,
+		im.rootDevice,
+		mountRootfs,
+	}
+	if err := im.runner(nil, os.Stdout, os.Stderr, args[0], args[1:]...); err != nil {
 		return err
 	}
 	im.rootfsMount = mountRootfs
-	im.trackMount(mountRootfs)
+
 	return nil
 }
 
@@ -1064,32 +1104,36 @@ func (im *Image) SetupBootloaderConfig() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
-	ref, err := im.cleanAndStripRef()
-	if err != nil {
-		return fmt.Errorf("failed to clean ref: %w", err)
+
+	if im.efiDevice == "" {
+		return errors.New("missing efiDevice, not set in NewImageOptions")
+	}
+	if im.bootDevice == "" {
+		return errors.New("missing bootDevice, not set in NewImageOptions")
+	}
+
+	if im.bootfsMount == "" {
+		return errors.New("missing bootfsMount, call MountBootfs first")
 	}
 	if im.rootfsMount == "" {
 		return errors.New("missing rootfsMount, call MountRootfs first")
 	}
-	if im.bootfsMount == "" {
-		return errors.New("missing bootfsMount, call MountBootfs first")
+
+	ref, err := im.cleanAndStripRef()
+	if err != nil {
+		return fmt.Errorf("failed to clean ref: %w", err)
 	}
+
 	efibootDir, err := im.EfiBootDir()
 	if err != nil {
 		return fmt.Errorf("failed to determine EFI boot directory: %w", err)
 	}
 
-	if im.efiDevice == "" {
-		return errors.New("missing efiDevice, not set in NewImageOptions")
-	}
 	efiDeviceUUID, err := filesystems.DeviceUUID(im.efiDevice)
 	if err != nil {
 		return fmt.Errorf("unable to get UUID for %s: %w", im.efiDevice, err)
 	}
 
-	if im.bootDevice == "" {
-		return errors.New("missing bootDevice, not set in NewImageOptions")
-	}
 	bootDeviceUUID, err := filesystems.DeviceUUID(im.bootDevice)
 	if err != nil {
 		return fmt.Errorf("unable to get UUID for %s: %w", im.bootDevice, err)
@@ -1140,14 +1184,21 @@ func (im *Image) SetupBootloaderConfig() error {
 	if err != nil {
 		return err
 	}
-	themesDir := filepath.Join(im.rootfs, "usr", "share", "grub", "themes", osName+"-theme")
+	themesDir := filepath.Join(
+		im.rootfs,
+		"usr", "share", "grub",
+		"themes", osName+"-theme",
+	)
 	if filesystems.DirectoryExists(themesDir) {
 		fmt.Fprintf(os.Stdout, "Copying GRUB themes from %s ...\n", themesDir)
 		dstThemesDir := filepath.Join(im.bootfsMount, "grub", "themes")
+
 		if err := os.MkdirAll(dstThemesDir, 0755); err != nil {
 			return fmt.Errorf("failed to create themes dir: %w", err)
 		}
+
 		dstThemeDir := filepath.Join(dstThemesDir, filepath.Base(themesDir))
+
 		if err := filesystems.CopyDirPreserve(themesDir, dstThemeDir); err != nil {
 			return fmt.Errorf("failed to copy themes: %w", err)
 		}
@@ -1189,7 +1240,6 @@ func (im *Image) SetupBootloaderConfig() error {
 
 	fmt.Fprintln(os.Stdout, "Current grub.cfg:")
 	fmt.Fprintln(os.Stdout, grubContent)
-	fmt.Fprintln(os.Stdout, "EOF")
 
 	return nil
 }
@@ -1239,7 +1289,6 @@ func (im *Image) SetupVmtestConfig() error {
 	fmt.Fprintf(os.Stdout, "Set up vmtest grub config at %s\n", vmtestBootCfg)
 	fmt.Fprintln(os.Stdout, "Current vmtest grub config:")
 	fmt.Fprintln(os.Stdout, content)
-	fmt.Fprintln(os.Stdout, "EOF")
 
 	return nil
 }
@@ -1313,6 +1362,7 @@ func (im *Image) InstallSecurebootCerts() error {
 	// Copy the shim binaries.
 	shimDir := filepath.Join(im.rootfs, "usr", "share", "shim")
 	fmt.Fprintf(os.Stdout, "Copying shim for Secureboot from %s to %s ...\n", shimDir, efibootDir)
+	// XXX
 	return im.runner(nil, os.Stdout, os.Stderr, "cp", "-v", shimDir+"/.", efibootDir+"/")
 }
 
