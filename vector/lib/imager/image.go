@@ -23,12 +23,21 @@ import (
 	"matrixos/vector/lib/runner"
 )
 
+type ImageMode int
+
+const (
+	ModeFlashToDevice ImageMode = iota
+	ModeCreateImageFile
+)
+
 // NewImageOptions contains device configuration for image creation.
 type NewImageOptions struct {
 	EfiDevice  string
 	BootDevice string
 	RootDevice string
 	DevicePath string
+	ImagePath  string
+	Mode       ImageMode
 	Ref        string
 }
 
@@ -55,6 +64,12 @@ type IImage interface {
 	RootDevice() string
 	SetDevicePath(devicePath string)
 	DevicePath() string
+	SetImagePath(imagePath string)
+	ImagePath() string
+	BuildImagePath() (string, error)
+	SetImageMode(mode ImageMode) error
+	ImageMode() ImageMode
+
 	SetRootfs(rootfs string)
 	Rootfs() string
 	Ref() string
@@ -92,11 +107,10 @@ type IImage interface {
 
 	// Operations
 	ReleaseVersion() (string, error)
-	ImagePath() (string, error)
-	ImagePathWithReleaseVersion(releaseVersion string) (string, error)
-	CreateImage(imagePath, imageSize string) error
-	ImagePathWithCompressorExtension(imagePath string) (string, error)
-	CompressImage(imagePath string) error
+	BuildImagePathWithReleaseVersion(releaseVersion string) (string, error)
+	CreateImage(imageSize string) error
+	BuildImagePathWithCompressorExtension() (string, error)
+	CompressImage() error
 	ClearPartitionTable() error
 	DatedFsLabel() string
 	PartitionDevices(efiSize, bootSize, imageSize string) error
@@ -119,13 +133,13 @@ type IImage interface {
 	SetupHooks() error
 	InstallBootloader() error
 	Cleanup()
-	TestImage(imagePath string) error
+	TestImage() error
 	FinalizeFilesystems() error
-	Qcow2ImagePath(imagePath string) (string, error)
-	CreateQcow2Image(imagePath string) error
+	Qcow2ImagePath() (string, error)
+	CreateQcow2Image() error
 	ShowFinalFilesystemInfo() error
 	ShowTestInfo(artifacts []string)
-	RemoveImageFile(imagePath string) error
+	RemoveImageFile() error
 	ImageLockDir() (string, error)
 	ImageLockPath() (string, error)
 	ExecuteWithImageLock(fn func() error) error
@@ -144,6 +158,8 @@ type Image struct {
 	rootDevice     string
 	realRootDevice string // if encrypted, devicePath is replaced.
 	devicePath     string
+	imagePath      string
+	mode           ImageMode
 	rootfs         string
 	ref            string
 	encrypted      bool
@@ -244,6 +260,8 @@ func NewImage(cfg config.IConfig, ot cds.IOstree, fsenc filesystems.IFsenc, opts
 		im.devicePath = opts.DevicePath
 		im.ref = opts.Ref
 		im.encrypted = encrypted
+		im.imagePath = opts.ImagePath
+		im.mode = opts.Mode
 	}
 	return im, nil
 }
@@ -274,6 +292,35 @@ func (im *Image) DevicePath() string { return im.devicePath }
 
 // SetRootfs sets the deployed ostree rootfs path.
 func (im *Image) SetRootfs(rootfs string) { im.rootfs = rootfs }
+
+// SetImagePath sets the image file path (for ModeCreateImageFile).
+func (im *Image) SetImagePath(imagePath string) { im.imagePath = imagePath }
+
+// ImagePath returns the currently stored image file path.
+func (im *Image) ImagePath() string { return im.imagePath }
+
+// SetImageMode sets the image creation mode
+// (e.g. flash to device or create image file).
+func (im *Image) SetImageMode(mode ImageMode) error {
+	switch mode {
+	case ModeFlashToDevice:
+		if im.devicePath == "" {
+			return errors.New("devicePath must be set for ModeFlashToDevice")
+		}
+	case ModeCreateImageFile:
+		if im.imagePath == "" {
+			return errors.New("imagePath must be set for ModeCreateImageFile")
+		}
+	default:
+		return errors.New("invalid image mode")
+	}
+
+	im.mode = mode
+	return nil
+}
+
+// ImageMode returns the current image creation mode.
+func (im *Image) ImageMode() ImageMode { return im.mode }
 
 // Rootfs returns the deployed ostree rootfs path.
 func (im *Image) Rootfs() string { return im.rootfs }
@@ -577,8 +624,8 @@ func (im *Image) BuildMetadataFile() (string, error) {
 
 // --- Helpers ---
 
-// imagePath builds the full image file path from a suffix.
-func (im *Image) imagePath(suffix string) (string, error) {
+// buildImagePath builds the full image file path from a suffix.
+func (im *Image) buildImagePath(suffix string) (string, error) {
 	outDir, err := im.ImagesDir()
 	if err != nil {
 		return "", err
@@ -675,18 +722,18 @@ func (im *Image) ReleaseVersion() (string, error) {
 	return releaseVersion, nil
 }
 
-// ImagePath returns the image file path for the stored ostree ref.
-func (im *Image) ImagePath() (string, error) {
+// BuildImagePath returns the image file path for the stored ostree ref.
+func (im *Image) BuildImagePath() (string, error) {
 	if im.ref == "" {
 		return "", errors.New("missing ref, set Ref in NewImageOptions")
 	}
 	ref := cds.CleanRemoteFromRef(im.ref)
 	suffix := refToSuffix(ref) + ".img"
-	return im.imagePath(suffix)
+	return im.buildImagePath(suffix)
 }
 
-// ImagePathWithReleaseVersion returns the image file path with an embedded release version.
-func (im *Image) ImagePathWithReleaseVersion(releaseVersion string) (string, error) {
+// BuildImagePathWithReleaseVersion returns the image file path with an embedded release version.
+func (im *Image) BuildImagePathWithReleaseVersion(releaseVersion string) (string, error) {
 	if im.ref == "" {
 		return "", errors.New("missing ref, set Ref in NewImageOptions")
 	}
@@ -695,19 +742,30 @@ func (im *Image) ImagePathWithReleaseVersion(releaseVersion string) (string, err
 	}
 	ref := cds.CleanRemoteFromRef(im.ref)
 	suffix := refToSuffix(ref) + "-" + releaseVersion + ".img"
-	return im.imagePath(suffix)
+	return im.buildImagePath(suffix)
+}
+
+func (im *Image) validateImageModeForCreation() error {
+	if im.mode != ModeCreateImageFile {
+		return errors.New("invalid image creation mode")
+	}
+	if im.imagePath == "" {
+		return errors.New("missing imagePath parameter")
+	}
+	return nil
 }
 
 // CreateImage creates a sparse image file at imagePath with the given size.
-func (im *Image) CreateImage(imagePath, imageSize string) (retErr error) {
-	if imagePath == "" {
-		return errors.New("missing imagePath parameter")
+func (im *Image) CreateImage(imageSize string) (retErr error) {
+	if err := im.validateImageModeForCreation(); err != nil {
+		return err
 	}
+
 	if imageSize == "" {
 		return errors.New("missing imageSize parameter")
 	}
 
-	imagesDir := filepath.Dir(imagePath)
+	imagesDir := filepath.Dir(im.imagePath)
 	im.Print(
 		"Creating images directory: %s (if it does not exist)\n",
 		imagesDir,
@@ -717,7 +775,7 @@ func (im *Image) CreateImage(imagePath, imageSize string) (retErr error) {
 	}
 
 	// Don't skip removing or sgdisk gets confused due to truncate.
-	if err := im.RemoveImageFile(imagePath); err != nil {
+	if err := im.RemoveImageFile(); err != nil {
 		return err
 	}
 
@@ -726,10 +784,10 @@ func (im *Image) CreateImage(imagePath, imageSize string) (retErr error) {
 		return fmt.Errorf("failed to parse image size %q: %w", imageSize, err)
 	}
 
-	im.Print("Creating block device image file: %s\n", imagePath)
-	f, err := os.Create(imagePath)
+	im.Print("Creating block device image file: %s\n", im.imagePath)
+	f, err := os.Create(im.imagePath)
 	if err != nil {
-		return fmt.Errorf("failed to create image file %s: %w", imagePath, err)
+		return fmt.Errorf("failed to create image file %s: %w", im.imagePath, err)
 	}
 	defer func() {
 		if cerr := f.Close(); cerr != nil && retErr == nil {
@@ -738,16 +796,16 @@ func (im *Image) CreateImage(imagePath, imageSize string) (retErr error) {
 	}()
 
 	if err := f.Truncate(sizeBytes); err != nil {
-		return fmt.Errorf("failed to truncate image file %s to %d bytes: %w", imagePath, sizeBytes, err)
+		return fmt.Errorf("failed to truncate image file %s to %d bytes: %w", im.imagePath, sizeBytes, err)
 	}
 	return nil
 }
 
-// ImagePathWithCompressorExtension appends the compressor's file extension to the image path.
+// BuildImagePathWithCompressorExtension appends the compressor's file extension to the image path.
 // The extension is derived from the first word of the compressor command string.
-func (im *Image) ImagePathWithCompressorExtension(imagePath string) (string, error) {
-	if imagePath == "" {
-		return "", errors.New("missing imagePath parameter")
+func (im *Image) BuildImagePathWithCompressorExtension() (string, error) {
+	if err := im.validateImageModeForCreation(); err != nil {
+		return "", err
 	}
 	compressor, err := im.Compressor()
 	if err != nil {
@@ -760,13 +818,13 @@ func (im *Image) ImagePathWithCompressorExtension(imagePath string) (string, err
 	if len(parts) == 0 {
 		return "", errors.New("invalid compressor parameters: empty command")
 	}
-	return imagePath + "." + parts[0], nil
+	return im.imagePath + "." + parts[0], nil
 }
 
 // CompressImage compresses an image file using the configured compressor.
-func (im *Image) CompressImage(imagePath string) error {
-	if imagePath == "" {
-		return errors.New("missing imagePath parameter")
+func (im *Image) CompressImage() error {
+	if err := im.validateImageModeForCreation(); err != nil {
+		return err
 	}
 	compressor, err := im.Compressor()
 	if err != nil {
@@ -776,7 +834,7 @@ func (im *Image) CompressImage(imagePath string) error {
 		return errors.New("missing compressor parameter")
 	}
 
-	imagePathWithExt, err := im.ImagePathWithCompressorExtension(imagePath)
+	imagePathWithExt, err := im.BuildImagePathWithCompressorExtension()
 	if err != nil {
 		return err
 	}
@@ -785,7 +843,7 @@ func (im *Image) CompressImage(imagePath string) error {
 	if len(parts) == 0 {
 		return errors.New("invalid compressor parameters: empty command")
 	}
-	args := append(parts[1:], imagePath)
+	args := append(parts[1:], im.imagePath)
 	if err := im.runner(nil, im.stdout, im.stderr, parts[0], args...); err != nil {
 		return fmt.Errorf("compression failed: %w", err)
 	}
@@ -1732,9 +1790,9 @@ func (im *Image) SetupHooks() error {
 }
 
 // TestImage copies an image to a temp directory and runs test scripts against it.
-func (im *Image) TestImage(imagePath string) error {
-	if imagePath == "" {
-		return errors.New("missing imagePath parameter")
+func (im *Image) TestImage() error {
+	if err := im.validateImageModeForCreation(); err != nil {
+		return err
 	}
 
 	ref, err := im.cleanAndStripRef()
@@ -1764,10 +1822,10 @@ func (im *Image) TestImage(imagePath string) error {
 	}
 	defer os.RemoveAll(imageTempDir)
 
-	imageName := filepath.Base(imagePath)
+	imageName := filepath.Base(im.imagePath)
 	testImagePath := filepath.Join(imageTempDir, imageName)
 	im.Print("Copying image to %s for testing ...\n", testImagePath)
-	if err := filesystems.CopyFileReflink(imagePath, testImagePath); err != nil {
+	if err := filesystems.CopyFileReflink(im.imagePath, testImagePath); err != nil {
 		return fmt.Errorf("failed to copy image for testing: %w", err)
 	}
 
@@ -1822,27 +1880,30 @@ func (im *Image) FinalizeFilesystems() error {
 	}
 
 	// fstrim may fail on USB sticks, so errors are intentionally ignored.
-	filesystems.FstrimAll(im.runner, im.stdout, im.stderr, im.rootfsMount, im.bootfsMount)
+	filesystems.FstrimAll(
+		im.runner, im.stdout, im.stderr,
+		im.rootfsMount, im.bootfsMount,
+	)
 
 	return nil
 }
 
 // Qcow2ImagePath returns the qcow2 image path for a given .img path.
-func (im *Image) Qcow2ImagePath(imagePath string) (string, error) {
-	if imagePath == "" {
-		return "", errors.New("missing imagePath parameter")
+func (im *Image) Qcow2ImagePath() (string, error) {
+	if err := im.validateImageModeForCreation(); err != nil {
+		return "", err
 	}
-	return imagePath + ".qcow2", nil
+	return im.imagePath + ".qcow2", nil
 }
 
 // CreateQcow2Image creates a compressed qcow2 image from a raw image.
-func (im *Image) CreateQcow2Image(imagePath string) error {
-	if imagePath == "" {
-		return errors.New("missing imagePath parameter")
+func (im *Image) CreateQcow2Image() error {
+	if err := im.validateImageModeForCreation(); err != nil {
+		return err
 	}
-	qcow2Path, _ := im.Qcow2ImagePath(imagePath)
+	qcow2Path, _ := im.Qcow2ImagePath()
 	return im.runner(nil, im.stdout, im.stderr,
-		"qemu-img", "convert", "-c", "-O", "qcow2", "-p", imagePath, qcow2Path)
+		"qemu-img", "convert", "-c", "-O", "qcow2", "-p", im.imagePath, qcow2Path)
 }
 
 // ShowFinalFilesystemInfo displays information about the final filesystem layout.
@@ -1898,13 +1959,16 @@ func (im *Image) ShowTestInfo(artifacts []string) {
 }
 
 // RemoveImageFile removes an image file and its associated .sha256 and .asc files.
-func (im *Image) RemoveImageFile(imagePath string) error {
-	if imagePath == "" {
+func (im *Image) RemoveImageFile() error {
+	if im.mode != ModeCreateImageFile {
+		return errors.New("RemoveImageFile can only be called in ModeCreateImageFile")
+	}
+	if im.imagePath == "" {
 		return errors.New("missing imagePath parameter")
 	}
 
-	im.Print("Removing %s ...\n", imagePath)
-	for _, path := range []string{imagePath, imagePath + ".sha256", imagePath + ".asc"} {
+	im.Print("Removing %s ...\n", im.imagePath)
+	for _, path := range []string{im.imagePath, im.imagePath + ".sha256", im.imagePath + ".asc"} {
 		os.Remove(path) // Ignore errors (file may not exist).
 	}
 	return nil
