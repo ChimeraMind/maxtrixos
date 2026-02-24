@@ -242,7 +242,6 @@ func (q *QA) VerifyDistroRootfsEnvironmentSetup(imageDir string) error {
 		"partprobe",
 		"qemu-img",
 		"qemu-system-x86_64",
-		"sha256sum",
 		"sgdisk",
 		"udevadm",
 		"unshare",
@@ -322,7 +321,7 @@ func (q *QA) VerifySeederEnvironmentSetup(imageDir string) error {
 }
 
 // VerifyImagerEnvironmentSetup checks tools for imager
-func (q *QA) VerifyImagerEnvironmentSetup(imageDir string, _gpgEnabled string) error {
+func (q *QA) VerifyImagerEnvironmentSetup(imageDir string) error {
 	if imageDir == "" {
 		return errors.New("missing parameter imageDir")
 	}
@@ -344,7 +343,6 @@ func (q *QA) VerifyImagerEnvironmentSetup(imageDir string, _gpgEnabled string) e
 		"partprobe",
 		"qemu-img",
 		"qemu-system-x86_64",
-		"sha256sum",
 		"sgdisk",
 		"unshare",
 		"udevadm",
