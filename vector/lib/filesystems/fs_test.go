@@ -270,22 +270,16 @@ func TestHelperProcess(t *testing.T) {
 
 func TestDeviceUUID(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		uuidDir, _ := setupMockDevDisk(t)
-		expectedUUID := "1234-5678"
-		devFile := filepath.Join(t.TempDir(), "sda1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Symlink(devFile, filepath.Join(uuidDir, expectedUUID)); err != nil {
-			t.Fatal(err)
-		}
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:UUID": "1234-5678",
+		})
 
-		uuid, err := DeviceUUID(devFile)
+		uuid, err := DeviceUUID("/dev/sda1")
 		if err != nil {
 			t.Fatalf("DeviceUUID failed: %v", err)
 		}
-		if uuid != expectedUUID {
-			t.Errorf("Expected UUID %s, got %s", expectedUUID, uuid)
+		if uuid != "1234-5678" {
+			t.Errorf("Expected UUID 1234-5678, got %s", uuid)
 		}
 	})
 
@@ -297,19 +291,15 @@ func TestDeviceUUID(t *testing.T) {
 	})
 
 	t.Run("DeviceNotFound", func(t *testing.T) {
-		setupMockDevDisk(t)
-		devFile := filepath.Join(t.TempDir(), "sda1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-		_, err := DeviceUUID(devFile)
+		setupMockLsblkFail(t)
+		_, err := DeviceUUID("/dev/sda1")
 		if err == nil {
 			t.Error("Expected error for device not found in by-uuid, got nil")
 		}
 	})
 
 	t.Run("NonexistentDevice", func(t *testing.T) {
-		setupMockDevDisk(t)
+		setupMockLsblkFail(t)
 		_, err := DeviceUUID("/dev/nonexistent_device_xyz")
 		if err == nil {
 			t.Error("Expected error for nonexistent device path, got nil")
@@ -319,22 +309,16 @@ func TestDeviceUUID(t *testing.T) {
 
 func TestDevicePartUUID(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		_, partuuidDir := setupMockDevDisk(t)
-		expectedPartUUID := "abcdef-01"
-		devFile := filepath.Join(t.TempDir(), "sda1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Symlink(devFile, filepath.Join(partuuidDir, expectedPartUUID)); err != nil {
-			t.Fatal(err)
-		}
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:PARTUUID": "abcdef-01",
+		})
 
-		partuuid, err := DevicePartUUID(devFile)
+		partuuid, err := DevicePartUUID("/dev/sda1")
 		if err != nil {
 			t.Fatalf("DevicePartUUID failed: %v", err)
 		}
-		if partuuid != expectedPartUUID {
-			t.Errorf("Expected PARTUUID %s, got %s", expectedPartUUID, partuuid)
+		if partuuid != "abcdef-01" {
+			t.Errorf("Expected PARTUUID abcdef-01, got %s", partuuid)
 		}
 	})
 
@@ -346,19 +330,15 @@ func TestDevicePartUUID(t *testing.T) {
 	})
 
 	t.Run("DeviceNotFound", func(t *testing.T) {
-		setupMockDevDisk(t)
-		devFile := filepath.Join(t.TempDir(), "sda1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-		_, err := DevicePartUUID(devFile)
+		setupMockLsblkFail(t)
+		_, err := DevicePartUUID("/dev/sda1")
 		if err == nil {
 			t.Error("Expected error for device not found in by-partuuid, got nil")
 		}
 	})
 
 	t.Run("NonexistentDevice", func(t *testing.T) {
-		setupMockDevDisk(t)
+		setupMockLsblkFail(t)
 		_, err := DevicePartUUID("/dev/nonexistent_device_xyz")
 		if err == nil {
 			t.Error("Expected error for nonexistent device path, got nil")
@@ -413,25 +393,19 @@ func TestMountpointToDevice(t *testing.T) {
 
 func TestMountpointToUUID(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		uuidDir, _ := setupMockDevDisk(t)
-		devFile := filepath.Join(t.TempDir(), "sda1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-		expectedUUID := "abcd-1234-ef56-7890"
-		if err := os.Symlink(devFile, filepath.Join(uuidDir, expectedUUID)); err != nil {
-			t.Fatal(err)
-		}
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:UUID": "abcd-1234-ef56-7890",
+		})
 		setupMockMountInfo(t, []*MountInfoEntry{
-			{Mountpoint: "/mnt", Source: devFile, FSType: "ext4"},
+			{Mountpoint: "/mnt", Source: "/dev/sda1", FSType: "ext4"},
 		})
 
 		uuid, err := MountpointToUUID("/mnt")
 		if err != nil {
 			t.Fatalf("MountpointToUUID failed: %v", err)
 		}
-		if uuid != expectedUUID {
-			t.Errorf("Expected UUID %s, got %s", expectedUUID, uuid)
+		if uuid != "abcd-1234-ef56-7890" {
+			t.Errorf("Expected UUID abcd-1234-ef56-7890, got %s", uuid)
 		}
 	})
 
@@ -451,7 +425,7 @@ func TestMountpointToUUID(t *testing.T) {
 	})
 
 	t.Run("NoUUID", func(t *testing.T) {
-		setupMockDevDisk(t)
+		setupMockLsblkFail(t)
 		setupMockMountInfo(t, []*MountInfoEntry{
 			{Mountpoint: "/mnt", Source: "tmpfs", FSType: "tmpfs"},
 		})
@@ -1363,34 +1337,6 @@ func setupMockSysClassBlock(t *testing.T) string {
 	return tmpDir
 }
 
-// setupMockDevDiskByLabel creates a temp directory simulating /dev/disk/by-label/
-// and redirects devDiskByLabelPath to it. Returns the temp dir.
-func setupMockDevDiskByLabel(t *testing.T) string {
-	t.Helper()
-	tmpDir := filepath.Join(t.TempDir(), "by-label")
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	orig := devDiskByLabelPath
-	devDiskByLabelPath = tmpDir
-	t.Cleanup(func() { devDiskByLabelPath = orig })
-	return tmpDir
-}
-
-// setupMockDevDiskByPartType creates a temp directory simulating /dev/disk/by-parttypeuuid/
-// and redirects devDiskByPartTypePath to it. Returns the temp dir.
-func setupMockDevDiskByPartType(t *testing.T) string {
-	t.Helper()
-	tmpDir := filepath.Join(t.TempDir(), "by-parttypeuuid")
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	orig := devDiskByPartTypePath
-	devDiskByPartTypePath = tmpDir
-	t.Cleanup(func() { devDiskByPartTypePath = orig })
-	return tmpDir
-}
-
 // createSysfsPartition creates a fake sysfs partition directory inside the
 // parent device directory with the given partition number.
 func createSysfsPartition(t *testing.T, sysClassBlock, parentName, partName string, partNum int) {
@@ -1695,20 +1641,11 @@ func TestPartitionNumber(t *testing.T) {
 
 func TestPartitionLabel(t *testing.T) {
 	t.Run("HasLabel", func(t *testing.T) {
-		labelDir := setupMockDevDiskByLabel(t)
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:LABEL": "MY_LABEL",
+		})
 
-		// Create a device file to resolve against.
-		devFile := filepath.Join(t.TempDir(), "sda1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		// Create a symlink: by-label/MY_LABEL -> devFile
-		if err := os.Symlink(devFile, filepath.Join(labelDir, "MY_LABEL")); err != nil {
-			t.Fatal(err)
-		}
-
-		result, err := PartitionLabel(devFile)
+		result, err := PartitionLabel("/dev/sda1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1718,15 +1655,10 @@ func TestPartitionLabel(t *testing.T) {
 	})
 
 	t.Run("NoLabel", func(t *testing.T) {
-		setupMockDevDiskByLabel(t)
+		setupMockLsblkFail(t)
 
-		devFile := filepath.Join(t.TempDir(), "sdb1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		// No symlink created, so no label found.
-		result, err := PartitionLabel(devFile)
+		// No label found is not an error for PartitionLabel.
+		result, err := PartitionLabel("/dev/sdb1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1745,19 +1677,12 @@ func TestPartitionLabel(t *testing.T) {
 
 func TestPartitionType(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		partTypeDir := setupMockDevDiskByPartType(t)
-
-		devFile := filepath.Join(t.TempDir(), "sda1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-
 		typeGUID := "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
-		if err := os.Symlink(devFile, filepath.Join(partTypeDir, typeGUID)); err != nil {
-			t.Fatal(err)
-		}
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:PARTTYPE": typeGUID,
+		})
 
-		result, err := PartitionType(devFile)
+		result, err := PartitionType("/dev/sda1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1768,14 +1693,9 @@ func TestPartitionType(t *testing.T) {
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		setupMockDevDiskByPartType(t)
+		setupMockLsblkFail(t)
 
-		devFile := filepath.Join(t.TempDir(), "sdb1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		_, err := PartitionType(devFile)
+		_, err := PartitionType("/dev/sdb1")
 		if err == nil {
 			t.Error("expected error when partition type not found")
 		}
