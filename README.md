@@ -145,12 +145,6 @@ matrixOS uses OSTree for atomic updates.
 Update to the latest image:
 
 ```shell
-ostree admin upgrade
-```
-
-Or use the *experimental* vector binary (if available in your image):
-
-```shell
 vector upgrade
 ```
 
@@ -168,18 +162,17 @@ ostree admin status # to see the current state
 List available branches and switch between them (e.g., from `gnome` to `kde` if available):
 
 ```shell
-ostree remote refs origin
-ostree admin switch <another_branch>
+vector branch switch
 reboot
 ```
 
 ### Mutability & Jailbreaking
 
-- **Temporary Mutability**: `ostree admin unlock --hotfix` (resets on upgrade). So that you can run `emerge` as much as you like (important: switch to a `*-full` OSTree branch before doing this).
+- **Temporary Mutability**: `vector readwrite` (resets on upgrade). So that you can run `emerge` as much as you like (important: switch to a `*-full` OSTree branch before doing this).
 - **Permanent Jailbreak**: Convert to a standard Gentoo system.
-  - List available branches: `ostree remote refs origin`
-  - Switch to the `-full` branch: `ostree admin switch <branch>-full && reboot`
-  - Run the jailbreak script: `/matrixos/install/jailbreak && reboot`
+  - List available branches: `vector branch list`
+  - Switch to the `-full` branch: `vector branch switch <branch>-full`
+  - Run the jailbreak script: `vector jailbreak`
 
 ## 🛠️ Build Your Own Distro
 
@@ -198,7 +191,8 @@ You can build custom versions of matrixOS using the provided `dev/build.sh` scri
 
 ### Configuration Rules
 
-All configuration is centralized in `conf/matrixos.conf`.
+The base configuration is centralized in `conf/matrixos.conf`. Vector client-side tooling
+also read from `conf/client.conf` (e.g. the upgrade command).
 
 - **Project Info**: OS name, architecture, git repositories.
 - **Paths**: Directories for logs, downloads, and output artifacts.
@@ -239,24 +233,6 @@ If nouveau loads despite NVIDIA drivers being present:
 ```shell
 ostree admin kargs edit-in-place --append-if-missing=modprobe.blacklist=nouveau
 ostree admin kargs edit-in-place --append-if-missing=rd.driver.blacklist=nouveau
-```
-
-### SecureBoot Shim/MokManager does not want to enroll key
-
-This has been fixed after the `20260216` release. Disable SecureBoot, boot the image
-and then upgrade your system. You may need to copy the latest `/usr/lib/grub/grub-x86_64.efi.signed` to `/efi/EFI/BOOT/grubx64.efi` or run `vector upgrade --update-bootloader`.
-
-### Vector does not run (compile) from /matrixos/vector
-
-This is because the image files are stripped off of all the unnecessary development only
-tools and libraries, including C/C++ headers. You have two options:
-
-1. Wait for new images, where vector will be shipped compiled and working out of the box.
-1. Switch to the `-full` branch, for example, for the GNOME release:
-
-```shell
-ostree remote refs origin # shows all the branches available.
-ostree admin switch origin:matrixos/amd64/dev/gnome-full && reboot
 ```
 
 ## 🚀 Roadmap Milestones
