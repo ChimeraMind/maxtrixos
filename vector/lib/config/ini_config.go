@@ -24,45 +24,35 @@ const (
 	BaseConfigFileName = "matrixos.conf"
 	// ClientConfigFileName is the name of the client configuration file that vector looks for.
 	ClientConfigFileName = "client.conf"
+	// MarkerFileName is the name of the marker file that indicates the root of the matrixOS toolkit.
+	MarkerFileName = ".matrixos"
 )
 
 // smartRootify translates matrixOS.Root into a path that's complying with the config var
 // specifications.
-func smartRootify(path string) (string, error) {
+func smartRootify(path, defaultRoot string) (string, error) {
 	if filepath.IsAbs(path) {
 		return path, nil
 	}
 
 	// Get the working directory so that we can compare it with path.
-	wd, err := os.Getwd()
-	if err != nil {
-		return wd, err
+	if defaultRoot == "" {
+		var err error
+		defaultRoot, err = os.Getwd()
+		if err != nil {
+			return defaultRoot, err
+		}
 	}
 
-	pathAbs, err := filepath.Abs(path)
-	if err != nil {
-		return pathAbs, err
-	}
-	cwdAbs, err := filepath.Abs(wd)
-	if err != nil {
-		return cwdAbs, err
-	}
+	rootPath := filepath.Join(defaultRoot, path)
 
-	if pathAbs == cwdAbs {
-		// This means that matrixOS.Root is set to ./ or .
-		// Which means that we need to make this ../ as vector is in one subdir deeper.
-		return filepath.Abs("..")
-	}
-	return pathAbs, nil
+	return filepath.Abs(rootPath)
 }
 
-func searchPaths(cfgName string) []searchPath {
-	// Navigate CWD up until we find a .matrixos file.
-	var sps []searchPath
-
+func findMarkerDir() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return sps
+		return "", err
 	}
 
 	goUp := func() bool {
@@ -75,7 +65,7 @@ func searchPaths(cfgName string) []searchPath {
 	}
 
 	for {
-		dotMatrixosPath := filepath.Join(cwd, ".matrixos")
+		dotMatrixosPath := filepath.Join(cwd, MarkerFileName)
 		if _, err := os.Stat(dotMatrixosPath); err != nil {
 			if os.IsNotExist(err) {
 				if !goUp() {
@@ -84,19 +74,26 @@ func searchPaths(cfgName string) []searchPath {
 				continue
 			}
 			// Error found, and is not "not exist".
-			break
+			return "", err
 		}
 
+		return cwd, nil
+	}
+
+	return "", fmt.Errorf("market path not found in any parent directories of %s", cwd)
+}
+
+func searchPaths(cfgName string) []searchPath {
+	// Navigate CWD up until we find a .matrixos file.
+	var sps []searchPath
+
+	markerDir, err := findMarkerDir()
+	if err == nil && markerDir != "" {
 		sps = append(sps, searchPath{
 			fileName:    cfgName,
-			dirPath:     filepath.Join(cwd, "conf"),
-			defaultRoot: cwd,
+			dirPath:     filepath.Join(markerDir, "conf"),
+			defaultRoot: markerDir,
 		})
-		parent := filepath.Dir(cwd)
-		if parent == cwd {
-			break
-		}
-		cwd = parent
 	}
 
 	// add this as last resort option at the moment.
@@ -350,7 +347,7 @@ func (c *IniConfig) Load() error {
 	if !foundRoot {
 		c.setVal("matrixOS.Root", c.sp.defaultRoot)
 	} else {
-		rootVal, err := smartRootify(rootVal)
+		rootVal, err := smartRootify(rootVal, c.sp.defaultRoot)
 		if err != nil {
 			return err
 		}
@@ -360,12 +357,6 @@ func (c *IniConfig) Load() error {
 	// Expand base paths to absolute
 	if err := c.expandAbs("matrixOS.Root"); err != nil {
 		return err
-	}
-	// PrivateGitRepoPath is usually absolute, but if relative, treat as relative to CWD
-	if _, ok := c.getVal("matrixOS.PrivateGitRepoPath"); ok {
-		if err := c.expandAbs("matrixOS.PrivateGitRepoPath"); err != nil {
-			return err
-		}
 	}
 
 	rootDependents := []string{
