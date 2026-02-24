@@ -600,10 +600,10 @@ func (im *Image) ReleaseVersion() (string, error) {
 	}
 
 	releaseVersion := time.Now().Format("20060102")
-
 	metadataRelPath, err := im.BuildMetadataFile()
 	if err != nil {
-		return "", fmt.Errorf("failed to determine build metadata file path: %w", err)
+		return "", fmt.Errorf(
+			"failed to determine build metadata file path: %w", err)
 	}
 	metadataFile := filepath.Join(im.rootfs, metadataRelPath)
 
@@ -611,16 +611,21 @@ func (im *Image) ReleaseVersion() (string, error) {
 		fmt.Fprintf(os.Stderr, "Build metadata:\n")
 		data, err := os.ReadFile(metadataFile)
 		if err != nil {
-			return "", fmt.Errorf("failed to read build metadata file %s: %w", metadataFile, err)
+			return "", fmt.Errorf(
+				"failed to read build metadata file %s: %w", metadataFile, err)
 		}
 		fmt.Fprint(os.Stderr, string(data))
 
 		releaseVersion, err = extractSeedName(data)
 		if err != nil {
-			return "", fmt.Errorf("failed to extract release version from build metadata: %w", err)
+			return "", fmt.Errorf(
+				"failed to extract release version from build metadata: %w", err)
 		}
 	} else {
-		fmt.Fprintf(os.Stderr, "WARNING! Build metadata file not found: %s\n", metadataFile)
+		fmt.Fprintf(
+			os.Stderr,
+			"WARNING! Build metadata file not found: %s\n", metadataFile,
+		)
 	}
 
 	return releaseVersion, nil
@@ -659,7 +664,11 @@ func (im *Image) CreateImage(imagePath, imageSize string) (retErr error) {
 	}
 
 	imagesDir := filepath.Dir(imagePath)
-	fmt.Fprintf(os.Stdout, "Creating images directory: %s (if it does not exist)\n", imagesDir)
+	fmt.Fprintf(
+		os.Stdout,
+		"Creating images directory: %s (if it does not exist)\n",
+		imagesDir,
+	)
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
 		return fmt.Errorf("failed to create images directory %s: %w", imagesDir, err)
 	}
@@ -1568,7 +1577,7 @@ func (im *Image) GenerateKernelBootArgs() ([]string, error) {
 	}
 	cmdlineFile := filepath.Join(devDir, "image", "boot", ref, "cmdline.conf")
 	if filesystems.FileExists(cmdlineFile) {
-		fmt.Fprintf(os.Stdout, "Reading additional kernel cmdline params from %s ...\n", cmdlineFile)
+		fmt.Fprintf(os.Stdout, "Reading additional kernel args from %s ...\n", cmdlineFile)
 		data, err := os.ReadFile(cmdlineFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read cmdline file: %w", err)
@@ -1599,7 +1608,7 @@ func (im *Image) PackageList() ([]string, error) {
 		return nil, err
 	}
 
-	vdb := filepath.Join(strings.TrimRight(im.rootfs, "/"), roVdb)
+	vdb := filepath.Join(im.rootfs, roVdb)
 	if !filesystems.DirectoryExists(vdb) {
 		fmt.Fprintf(os.Stderr, "%s does not exist. cannot generate pkglist\n", vdb)
 		return nil, nil
@@ -1617,7 +1626,8 @@ func (im *Image) PackageList() ([]string, error) {
 		catPath := filepath.Join(vdb, cat.Name())
 		pkgs, err := os.ReadDir(catPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read category directory %s: %w", catPath, err)
+			return nil, fmt.Errorf(
+				"failed to read category directory %s: %w", catPath, err)
 		}
 		for _, pkg := range pkgs {
 			pkgList = append(pkgList, filepath.Join(cat.Name(), pkg.Name()))
