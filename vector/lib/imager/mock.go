@@ -60,6 +60,8 @@ type MockImage struct {
 	FormatEfifsCalled         bool
 	FormatBootfsCalled        bool
 	FormatRootfsCalled        bool
+	MaybeEncryptRootfsCalled  bool
+	MaybeEncryptRootfsErr     error
 	MountRootfsCalled         bool
 	MountEfifsCalled          bool
 	MountBootfsCalled         bool
@@ -187,6 +189,10 @@ func (m *MockImage) MountBootfs(mountBootfs string) error {
 	m.BootfsMount_ = mountBootfs
 	return nil
 }
+func (m *MockImage) MaybeEncryptRootfs() error {
+	m.MaybeEncryptRootfsCalled = true
+	return m.MaybeEncryptRootfsErr
+}
 func (m *MockImage) FormatRootfs() error {
 	m.FormatRootfsCalled = true
 	return nil
@@ -218,7 +224,7 @@ func (m *MockImage) InstallMemtest() error {
 	m.InstallMemtestCalled = true
 	return nil
 }
-func (m *MockImage) GenerateKernelBootArgs(physicalRootDevice string, encryptionEnabled bool) ([]string, error) {
+func (m *MockImage) GenerateKernelBootArgs() ([]string, error) {
 	return []string{"arg1=val1"}, nil
 }
 func (m *MockImage) PackageList() ([]string, error) {

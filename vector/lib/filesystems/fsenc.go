@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/runner"
@@ -22,26 +24,51 @@ type IFsenc interface {
 	OsName() (string, error)
 
 	// Operations
-	LuksEncrypt(devicePath, desiredLuksDevice string, deviceMappers *[]string) error
-	LuksBackupHeader(devicePath, mountEfifs string) error
+	LuksEncrypt(devicePath, desiredLuksDevice string) error
 	ValidateLuksVariables() error
+	Cleanup()
 }
 
 // Fsenc provides filesystem encryption operations backed by LUKS/cryptsetup.
 type Fsenc struct {
-	cfg    config.IConfig
-	runner runner.Func
+	cfg           config.IConfig
+	runner        runner.Func
+	openMappersMu sync.Mutex
+	openMappers   []string
+	opening       func(string)
+	opened        func(string)
 }
 
 // NewFsenc creates a new Fsenc instance.
-func NewFsenc(cfg config.IConfig) (*Fsenc, error) {
+func NewFsenc(cfg config.IConfig, opening, opened func(string)) (*Fsenc, error) {
 	if cfg == nil {
 		return nil, errors.New("missing config parameter")
 	}
 	return &Fsenc{
-		cfg:    cfg,
-		runner: runner.Run,
+		cfg:     cfg,
+		runner:  runner.Run,
+		opening: opening,
+		opened:  opened,
 	}, nil
+}
+
+// add adds a device-mapper name to the tracking list of opened mappers for cleanup.
+func (f *Fsenc) add(mapperName string) {
+	f.openMappersMu.Lock()
+	defer f.openMappersMu.Unlock()
+	log.Printf("Adding opened device-mapper name to tracking: %s", mapperName)
+	f.openMappers = append(f.openMappers, mapperName)
+}
+
+// Cleanup cleans up the previously opened (or in opening) device mappers.
+func (f *Fsenc) Cleanup() {
+	f.openMappersMu.Lock()
+	openMappers := make([]string, len(f.openMappers))
+	copy(openMappers, f.openMappers)
+	f.openMappers = nil
+	f.openMappersMu.Unlock()
+
+	CleanupCryptsetupDevices(openMappers)
 }
 
 // EncryptionEnabled returns whether rootfs encryption is enabled.
@@ -89,15 +116,12 @@ func (f *Fsenc) OsName() (string, error) {
 // desiredLuksDevice is the full /dev/mapper/<name> path expected after opening.
 // deviceMappers is a pointer to the caller's slice that tracks opened device-mapper
 // names for cleanup; the LUKS name is appended on success.
-func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string, deviceMappers *[]string) error {
+func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string) error {
 	if devicePath == "" {
 		return errors.New("missing devicePath parameter")
 	}
 	if desiredLuksDevice == "" {
 		return errors.New("missing desiredLuksDevice parameter")
-	}
-	if deviceMappers == nil {
-		return errors.New("missing deviceMappers parameter")
 	}
 
 	encKey, err := f.EncryptionKey()
@@ -142,8 +166,9 @@ func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string, deviceMappers 
 		stdin = nil
 	}
 
-	// Open the LUKS device.
-	fmt.Fprintf(os.Stdout, "Opening LUKS device %s ...\n", devicePath)
+	// Track the opened device-mapper name for cleanup.
+	f.add(luksName)
+	f.opening(luksName)
 	err = f.runner(
 		stdin, os.Stdout, os.Stderr,
 		"cryptsetup",
@@ -156,50 +181,13 @@ func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string, deviceMappers 
 	if err != nil {
 		return fmt.Errorf("cryptsetup open failed on %s: %w", devicePath, err)
 	}
-
-	// Track the opened device-mapper name for cleanup.
-	*deviceMappers = append(*deviceMappers, luksName)
+	f.opened(luksName)
 
 	// Wait for the device node to appear.
 	DevicesSettle()
 
 	if _, err := os.Stat(desiredLuksDevice); err != nil {
 		return fmt.Errorf("%s does not exist: cannot set up LUKS Encryption: %w", desiredLuksDevice, err)
-	}
-
-	return nil
-}
-
-// LuksBackupHeader creates a backup of the LUKS header on the EFI partition.
-//
-// devicePath is the LUKS-encrypted block device.
-// mountEfifs is the mount point of the EFI filesystem where the backup will be stored.
-func (f *Fsenc) LuksBackupHeader(devicePath, mountEfifs string) error {
-	if devicePath == "" {
-		return errors.New("missing devicePath parameter")
-	}
-	if mountEfifs == "" {
-		return errors.New("missing mountEfifs parameter")
-	}
-
-	osName, err := f.OsName()
-	if err != nil {
-		return fmt.Errorf("failed to retrieve OS name: %w", err)
-	}
-
-	backupFile := filepath.Join(mountEfifs, osName+"-rootfs-luks-header-backup.img")
-
-	fmt.Fprintln(os.Stdout, "Creating a backup of the LUKS encryption headers on the EFI partition ...")
-	err = f.runner(
-		nil, os.Stdout, os.Stderr,
-		"cryptsetup",
-		"luksHeaderBackup",
-		devicePath,
-		"--header-backup-file",
-		backupFile,
-	)
-	if err != nil {
-		return fmt.Errorf("cryptsetup luksHeaderBackup failed for %s: %w", devicePath, err)
 	}
 
 	return nil

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/config"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,7 +35,7 @@ func newTestUpgradeCommand(ot cds.IOstree, args []string) (*UpgradeCommand, erro
 
 // newTestUpgradeCommandWithConfig creates an UpgradeCommand with mock cds.IOstree and
 // a real config from a file, for tests that need config values (e.g. bootloader).
-func newTestUpgradeCommandWithConfig(ot cds.IOstree, cfg *testConfig, args []string) (*UpgradeCommand, error) {
+func newTestUpgradeCommandWithConfig(ot cds.IOstree, cfg *config.MockConfig, args []string) (*UpgradeCommand, error) {
 	cmd := &UpgradeCommand{}
 	cmd.ot = ot
 	cmd.cfg = cfg
@@ -43,28 +44,6 @@ func newTestUpgradeCommandWithConfig(ot cds.IOstree, cfg *testConfig, args []str
 		return nil, err
 	}
 	return cmd, nil
-}
-
-// testConfig is a minimal IConfig for test use. It reads values from a map.
-type testConfig struct {
-	items map[string]string
-}
-
-func (c *testConfig) Load() error { return nil }
-func (c *testConfig) GetItem(key string) (string, error) {
-	v, ok := c.items[key]
-	if !ok {
-		return "", fmt.Errorf("invalid key: %s", key)
-	}
-	return v, nil
-}
-func (c *testConfig) GetBool(key string) (bool, error) { return false, nil }
-func (c *testConfig) GetItems(key string) ([]string, error) {
-	v, ok := c.items[key]
-	if !ok {
-		return nil, nil
-	}
-	return []string{v}, nil
 }
 
 // upgradeHarness holds common test state for upgrade tests.
@@ -411,9 +390,9 @@ func TestUpgradeBootloaderSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := &testConfig{items: map[string]string{
-		"Imager.EfiRoot":                efiRoot,
-		"Imager.EfiCertificateFileName": "secureboot.crt",
+	cfg := &config.MockConfig{Items: map[string][]string{
+		"Imager.EfiRoot":                {efiRoot},
+		"Imager.EfiCertificateFileName": {"secureboot.crt"},
 	}}
 
 	cmd, err := newTestUpgradeCommandWithConfig(h.mock, cfg, []string{"-y", "--update-bootloader"})
@@ -456,7 +435,7 @@ func TestUpgradeBootloaderMissingConfig(t *testing.T) {
 	h := setupUpgradeHarness(t, mockCurrentSHA, mockNewSHA)
 	defer h.cleanup()
 
-	cfg := &testConfig{items: map[string]string{}}
+	cfg := &config.MockConfig{}
 
 	cmd, err := newTestUpgradeCommandWithConfig(h.mock, cfg, []string{"-y", "--update-bootloader"})
 	if err != nil {
@@ -469,7 +448,7 @@ func TestUpgradeBootloaderMissingConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for missing EfiRoot config, got nil")
 	}
-	if !strings.Contains(err.Error(), "invalid key") {
+	if !strings.Contains(err.Error(), "not configured") {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -479,9 +458,9 @@ func TestUpgradeBootloaderMissingCert(t *testing.T) {
 	defer h.cleanup()
 
 	efiRoot := t.TempDir()
-	cfg := &testConfig{items: map[string]string{
-		"Imager.EfiRoot":                efiRoot,
-		"Imager.EfiCertificateFileName": "nonexistent.crt",
+	cfg := &config.MockConfig{Items: map[string][]string{
+		"Imager.EfiRoot":                {efiRoot},
+		"Imager.EfiCertificateFileName": {"nonexistent.crt"},
 	}}
 
 	cmd, err := newTestUpgradeCommandWithConfig(h.mock, cfg, []string{"-y", "--update-bootloader"})

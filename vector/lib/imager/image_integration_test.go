@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/runner"
 )
 
@@ -597,7 +598,7 @@ func TestIntegrationNewImageWithOptions(t *testing.T) {
 		DevicePath: "/dev/sda",
 	}
 
-	im, err := NewImage(baseImageConfig(), &cds.MockOstree{}, opts)
+	im, err := NewImage(baseImageConfig(), &cds.MockOstree{}, filesystems.DefaultMockFsenc(), opts)
 	if err != nil {
 		t.Fatalf("NewImage failed: %v", err)
 	}
