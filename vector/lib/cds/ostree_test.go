@@ -361,8 +361,13 @@ func TestDeploy(t *testing.T) {
 		return nil
 	}
 
+	gotSysroot, err := o.Sysroot()
+	if err != nil {
+		t.Fatalf("Sysroot failed: %v", err)
+	}
+
 	// Call Deploy
-	err = o.Deploy(ref, bootArgs, false)
+	err = o.Deploy(ref, gotSysroot, bootArgs, false)
 	if err != nil {
 		t.Fatalf("Deploy failed: %v", err)
 	}
@@ -372,7 +377,7 @@ func TestDeploy(t *testing.T) {
 		fmt.Sprintf("ostree rev-parse --repo=%s %s", repoDir, ref),
 		fmt.Sprintf("ostree admin init-fs %s", sysroot),
 		fmt.Sprintf("ostree admin os-init matrixos --sysroot=%s", sysroot),
-		fmt.Sprintf("ostree pull-local --repo=%s/ostree/repo %s %s", sysroot, repoDir, fakeCommit),
+		fmt.Sprintf("ostree --repo=%s/ostree/repo pull-local %s %s", sysroot, repoDir, fakeCommit),
 		fmt.Sprintf("ostree refs --repo=%s/ostree/repo --create=origin:%s %s", sysroot, ref, fakeCommit),
 		fmt.Sprintf("ostree config --repo=%s/ostree/repo set sysroot.bootloader none", sysroot),
 		fmt.Sprintf("ostree config --repo=%s/ostree/repo set sysroot.bootprefix false", sysroot),
@@ -463,9 +468,14 @@ func TestDeployIntegration(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
+	gotSysroot, err := o.Sysroot()
+	if err != nil {
+		t.Fatalf("Sysroot failed: %v", err)
+	}
+
 	// Perform Deployment
 	// This will pull from repoDir into sysroot/ostree/repo and then deploy
-	if err := o.Deploy(branch, []string{"karg1=val1"}, false); err != nil {
+	if err := o.Deploy(branch, gotSysroot, []string{"karg1=val1"}, false); err != nil {
 		t.Fatalf("Deploy failed: %v", err)
 	}
 
@@ -1815,7 +1825,12 @@ func TestDeploy_Errors(t *testing.T) {
 				t.Fatalf("NewOstree failed: %v", err)
 			}
 
-			err = o.Deploy("ref", nil, false)
+			sysroot, err := o.Sysroot()
+			if err != nil {
+				t.Fatalf("Sysroot failed: %v", err)
+			}
+
+			err = o.Deploy("ref", sysroot, nil, false)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deploy() error = %v, wantErr %v", err, tt.wantErr)
 			}
