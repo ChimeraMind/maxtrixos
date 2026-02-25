@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"matrixos/vector/commands"
+	"matrixos/vector/lib/cds"
 	"os"
 )
 
@@ -17,9 +18,9 @@ Usage:
 
   help        - this command.
   branch      - vector branch command. Operates on matrixOS ostree branches.
-    show 		 show current matrixOS ostree branch.
-    list 		 list all the available matrixOS branches.
-    switch 		 switch to a new branch.
+    show         show current matrixOS ostree branch.
+    list         list all the available matrixOS branches.
+    switch       switch to a new branch.
   upgrade     - system upgrade tool, wraps ostree.
   setupOS     - setup tool, configures passwords, accounts, languages, etc.
   readwrite   - temporarily (until next upgrade) turn matrixOS into a (mutable) read-write system.
@@ -27,6 +28,8 @@ Usage:
   dev 	      - development toolkit command, orchestrates development workflow and tools.
     janitor      cleans up development toolkit artifacts, such as old images and downloads.
     vm           runs generated image tests using QEMU.
+  build       - build toolkit command, orchestrates building matrixOS artifacts.
+    image        generates a single matrixOS image.
 `
 )
 
@@ -36,10 +39,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Set LC_TIME=C to ensure that Cloudflare can correctly process HTTP
-	// requests coming from Vector. Otherwise Cloudflare responds with HTTP 400
-	// when the ostree command sends requests to Cloudflare backed remotes.
-	os.Setenv("LC_TIME", "C")
+	cds.SetupEnvironment()
 
 	cmds := []commands.ICommand{
 		commands.NewBranchCommand(),
@@ -48,6 +48,7 @@ func main() {
 		commands.NewSetupOSCommand(),
 		commands.NewJailbreakCommand(),
 		commands.NewDevCommand(),
+		commands.NewBuildCommand(),
 	}
 
 	cmdStr := os.Args[1]
