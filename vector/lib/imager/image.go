@@ -21,6 +21,7 @@ import (
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/runner"
+	"matrixos/vector/lib/validation"
 )
 
 type ImageMode int
@@ -108,6 +109,7 @@ type IImage interface {
 	ImageTests() (bool, error)
 
 	// Operations
+	Build(opts *BuildOptions) error
 	ExtractReleaseVersion() (string, error)
 	BuildImagePathWithReleaseVersion(releaseVersion string) (string, error)
 	CreateImage(imageSize string) error
@@ -172,12 +174,17 @@ type Image struct {
 	bootfsMount string
 	rootfsMount string
 
+	// QA validation instance.
+	qa *validation.QA
+
 	// trackedMounts records every mount point created by this Image
 	// so that Cleanup can attempt to unmount them all on failure or signal.
-	trackedMountsMu  sync.Mutex
-	trackedMounts    []string
-	trackedTmpDirsMu sync.Mutex
-	trackedTmpDirs   []string
+	trackedMountsMu      sync.Mutex
+	trackedMounts        []string
+	trackedTmpDirsMu     sync.Mutex
+	trackedTmpDirs       []string
+	trackedLoopDevicesMu sync.Mutex
+	trackedLoopDevices   []*filesystems.Loop
 }
 
 // SetStdout replaces the writer used for informational output.
@@ -230,8 +237,16 @@ func (im *Image) trackTmpDir(tmpDir string) {
 	im.trackedTmpDirs = append(im.trackedTmpDirs, tmpDir)
 }
 
+// trackLoopDevice appends a loop device to the tracked list.
+func (im *Image) trackLoopDevice(loop *filesystems.Loop) {
+	im.trackedLoopDevicesMu.Lock()
+	defer im.trackedLoopDevicesMu.Unlock()
+	im.trackedLoopDevices = append(im.trackedLoopDevices, loop)
+}
+
 // Cleanup unmounts all mount points tracked by this Image instance
-// in reverse order. It is safe to call multiple times.
+// in reverse order, detaches loop devices, syncs, and removes temp dirs.
+// It is safe to call multiple times.
 func (im *Image) Cleanup() {
 	im.trackedMountsMu.Lock()
 	mounts := slices.Clone(im.trackedMounts)
@@ -239,6 +254,21 @@ func (im *Image) Cleanup() {
 	im.trackedMountsMu.Unlock()
 
 	filesystems.CleanupMounts(mounts)
+
+	im.trackedLoopDevicesMu.Lock()
+	loops := slices.Clone(im.trackedLoopDevices)
+	im.trackedLoopDevices = nil
+	im.trackedLoopDevicesMu.Unlock()
+
+	for _, loop := range loops {
+		if err := loop.Detach(); err != nil {
+			fmt.Fprintf(im.stderr, "warning: failed to detach loop device %s: %v\n", loop.Device, err)
+		}
+	}
+
+	// Sync buffers for image files after umount.
+	cmd := exec.Command("sync")
+	_ = cmd.Run()
 
 	im.trackedTmpDirsMu.Lock()
 	tmpDirs := slices.Clone(im.trackedTmpDirs)
@@ -269,10 +299,16 @@ func NewImage(cfg config.IConfig, ot cds.IOstree, fsenc filesystems.IFsenc, opts
 		return nil, fmt.Errorf("failed to check if encryption is enabled: %w", err)
 	}
 
+	qa, err := validation.New(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize QA: %w", err)
+	}
+
 	im := &Image{
 		cfg:    cfg,
 		ostree: ot,
 		fsenc:  fsenc,
+		qa:     qa,
 		runner: runner.Run,
 		stdout: os.Stdout,
 		stderr: os.Stderr,
