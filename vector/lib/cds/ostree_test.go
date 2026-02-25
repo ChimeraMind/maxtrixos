@@ -818,7 +818,7 @@ func TestMaybeInitializeRemote(t *testing.T) {
 	}
 }
 
-func TestAddRemoteWithSysroot(t *testing.T) {
+func TestAddRemoteToRootfs(t *testing.T) {
 	var lastArgs []string
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
@@ -837,8 +837,8 @@ func TestAddRemoteWithSysroot(t *testing.T) {
 		return nil
 	}
 
-	if err := o.AddRemoteWithSysroot("/sysroot", false); err != nil {
-		t.Fatalf("AddRemoteWithSysroot failed: %v", err)
+	if err := o.AddRemoteToRootfs("/sysroot", false); err != nil {
+		t.Fatalf("AddRemoteToRootfs failed: %v", err)
 	}
 
 	// Expected: remote add --sysroot=/sysroot --force --no-gpg-verify origin http://url
@@ -850,7 +850,7 @@ func TestAddRemoteWithSysroot(t *testing.T) {
 		}
 	}
 	if !foundSysroot {
-		t.Errorf("AddRemoteWithSysroot args missing sysroot: %v", lastArgs)
+		t.Errorf("AddRemoteToRootfs args missing sysroot: %v", lastArgs)
 	}
 }
 

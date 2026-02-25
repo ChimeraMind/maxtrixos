@@ -270,7 +270,7 @@ func TestHelperProcess(t *testing.T) {
 
 func TestDeviceUUID(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		setupMockLsblk(t, map[string]string{
+		setupMockBlkid(t, map[string]string{
 			"/dev/sda1:UUID": "1234-5678",
 		})
 
@@ -291,7 +291,7 @@ func TestDeviceUUID(t *testing.T) {
 	})
 
 	t.Run("DeviceNotFound", func(t *testing.T) {
-		setupMockLsblkFail(t)
+		setupMockBlkidFail(t)
 		_, err := DeviceUUID("/dev/sda1")
 		if err == nil {
 			t.Error("Expected error for device not found in by-uuid, got nil")
@@ -299,7 +299,7 @@ func TestDeviceUUID(t *testing.T) {
 	})
 
 	t.Run("NonexistentDevice", func(t *testing.T) {
-		setupMockLsblkFail(t)
+		setupMockBlkidFail(t)
 		_, err := DeviceUUID("/dev/nonexistent_device_xyz")
 		if err == nil {
 			t.Error("Expected error for nonexistent device path, got nil")
@@ -309,7 +309,7 @@ func TestDeviceUUID(t *testing.T) {
 
 func TestDevicePartUUID(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		setupMockLsblk(t, map[string]string{
+		setupMockBlkid(t, map[string]string{
 			"/dev/sda1:PARTUUID": "abcdef-01",
 		})
 
@@ -330,7 +330,7 @@ func TestDevicePartUUID(t *testing.T) {
 	})
 
 	t.Run("DeviceNotFound", func(t *testing.T) {
-		setupMockLsblkFail(t)
+		setupMockBlkidFail(t)
 		_, err := DevicePartUUID("/dev/sda1")
 		if err == nil {
 			t.Error("Expected error for device not found in by-partuuid, got nil")
@@ -338,7 +338,7 @@ func TestDevicePartUUID(t *testing.T) {
 	})
 
 	t.Run("NonexistentDevice", func(t *testing.T) {
-		setupMockLsblkFail(t)
+		setupMockBlkidFail(t)
 		_, err := DevicePartUUID("/dev/nonexistent_device_xyz")
 		if err == nil {
 			t.Error("Expected error for nonexistent device path, got nil")
@@ -393,7 +393,7 @@ func TestMountpointToDevice(t *testing.T) {
 
 func TestMountpointToUUID(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		setupMockLsblk(t, map[string]string{
+		setupMockBlkid(t, map[string]string{
 			"/dev/sda1:UUID": "abcd-1234-ef56-7890",
 		})
 		setupMockMountInfo(t, []*MountInfoEntry{
@@ -425,7 +425,7 @@ func TestMountpointToUUID(t *testing.T) {
 	})
 
 	t.Run("NoUUID", func(t *testing.T) {
-		setupMockLsblkFail(t)
+		setupMockBlkidFail(t)
 		setupMockMountInfo(t, []*MountInfoEntry{
 			{Mountpoint: "/mnt", Source: "tmpfs", FSType: "tmpfs"},
 		})
@@ -1641,7 +1641,7 @@ func TestPartitionNumber(t *testing.T) {
 
 func TestPartitionLabel(t *testing.T) {
 	t.Run("HasLabel", func(t *testing.T) {
-		setupMockLsblk(t, map[string]string{
+		setupMockBlkid(t, map[string]string{
 			"/dev/sda1:LABEL": "MY_LABEL",
 		})
 
@@ -1655,7 +1655,7 @@ func TestPartitionLabel(t *testing.T) {
 	})
 
 	t.Run("NoLabel", func(t *testing.T) {
-		setupMockLsblkFail(t)
+		setupMockBlkidFail(t)
 
 		// No label found is not an error for PartitionLabel.
 		result, err := PartitionLabel("/dev/sdb1")
@@ -1678,7 +1678,7 @@ func TestPartitionLabel(t *testing.T) {
 func TestPartitionType(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		typeGUID := "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
-		setupMockLsblk(t, map[string]string{
+		setupMockBlkid(t, map[string]string{
 			"/dev/sda1:PARTTYPE": typeGUID,
 		})
 
@@ -1693,7 +1693,7 @@ func TestPartitionType(t *testing.T) {
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		setupMockLsblkFail(t)
+		setupMockBlkidFail(t)
 
 		_, err := PartitionType("/dev/sdb1")
 		if err == nil {

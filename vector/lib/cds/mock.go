@@ -94,7 +94,7 @@ func (m *MockOstree) Prune(string, bool) error                              { re
 func (m *MockOstree) GenerateStaticDelta(string, bool) error                { return nil }
 func (m *MockOstree) UpdateSummary(bool) error                              { return nil }
 func (m *MockOstree) AddRemote(bool) error                                  { return nil }
-func (m *MockOstree) AddRemoteWithSysroot(string, bool) error               { return nil }
+func (m *MockOstree) AddRemoteToRootfs(string, bool) error                  { return nil }
 func (m *MockOstree) LocalRefs(bool) ([]string, error)                      { return nil, nil }
 func (m *MockOstree) ListContents(string, string, bool) (*[]filesystems.PathInfo, error) {
 	return nil, nil
