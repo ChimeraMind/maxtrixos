@@ -351,14 +351,14 @@ func TestBuildImagePathWithReleaseVersion(t *testing.T) {
 	})
 }
 
-// --- BuildImagePathWithCompressorExtension Tests ---
+// --- CompressedImagePath Tests ---
 
-func TestBuildImagePathWithCompressorExtension(t *testing.T) {
+func TestCompressedImagePath(t *testing.T) {
 	t.Run("XZ", func(t *testing.T) {
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 		im.imagePath = "/tmp/test.img"
 		im.mode = ModeCreateImageFile
-		result, err := im.BuildImagePathWithCompressorExtension()
+		result, err := im.CompressedImagePath()
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
@@ -374,7 +374,7 @@ func TestBuildImagePathWithCompressorExtension(t *testing.T) {
 		im := newTestImage(cfg, &cds.MockOstree{})
 		im.imagePath = "/tmp/test.img"
 		im.mode = ModeCreateImageFile
-		result, err := im.BuildImagePathWithCompressorExtension()
+		result, err := im.CompressedImagePath()
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
@@ -386,7 +386,7 @@ func TestBuildImagePathWithCompressorExtension(t *testing.T) {
 	t.Run("EmptyPath", func(t *testing.T) {
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 		im.mode = ModeCreateImageFile
-		_, err := im.BuildImagePathWithCompressorExtension()
+		_, err := im.CompressedImagePath()
 		if err == nil {
 			t.Error("should error for empty imagePath")
 		}
@@ -398,7 +398,7 @@ func TestBuildImagePathWithCompressorExtension(t *testing.T) {
 		im := newTestImage(cfg, &cds.MockOstree{})
 		im.imagePath = "/tmp/x.img"
 		im.mode = ModeCreateImageFile
-		_, err := im.BuildImagePathWithCompressorExtension()
+		_, err := im.CompressedImagePath()
 		if err == nil {
 			t.Error("should error for empty compressor")
 		}
@@ -409,7 +409,7 @@ func TestBuildImagePathWithCompressorExtension(t *testing.T) {
 		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		im.imagePath = "/tmp/x.img"
 		im.mode = ModeCreateImageFile
-		_, err := im.BuildImagePathWithCompressorExtension()
+		_, err := im.CompressedImagePath()
 		if err == nil {
 			t.Error("should error when config fails")
 		}
@@ -1379,10 +1379,16 @@ func TestInstallBootloader(t *testing.T) {
 
 func TestShowImageTestInfo(t *testing.T) {
 	im := newTestImage(baseImageConfig(), &cds.MockOstree{})
-	// Should not panic with valid artifacts.
-	im.ShowImageTestInfo([]string{"/tmp/test.img", "/tmp/test.img.xz"})
-	// Should not panic with empty artifacts.
-	im.ShowImageTestInfo(nil)
+	im.imagePath = "/tmp/test.img"
+	im.mode = ModeCreateImageFile
+	// Should not error with valid artifacts.
+	if err := im.ShowImageTestInfo([]string{"/tmp/test.img", "/tmp/test.img.xz"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should not error with empty artifacts.
+	if err := im.ShowImageTestInfo(nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // --- ExtractPackageList Tests ---

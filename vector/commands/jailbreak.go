@@ -105,7 +105,7 @@ func defaultRunner() *jailbreakRunner {
 		stat:         os.Stat,
 		removeFile:   os.Remove,
 		removeAll:    os.RemoveAll,
-		rename:       os.Rename,
+		rename:       filesystems.Move,
 		realpath:     filepath.EvalSymlinks,
 		copyFile:     filesystems.CopyFile,
 		getMountInfo: getMountInfoFromSystem,

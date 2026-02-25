@@ -36,7 +36,6 @@ type NewImageOptions struct {
 	BootDevice string
 	RootDevice string
 	DevicePath string
-	ImagePath  string
 	Mode       ImageMode
 }
 
@@ -112,8 +111,6 @@ type IImage interface {
 	ExtractReleaseVersion() (string, error)
 	BuildImagePathWithReleaseVersion(releaseVersion string) (string, error)
 	CreateImage(imageSize string) error
-	BuildImagePathWithCompressorExtension() (string, error)
-	CompressImage() error
 	ClearPartitionTable() error
 	DatedFsLabel() string
 	PartitionDevices(efiSize, bootSize, imageSize string) error
@@ -140,8 +137,10 @@ type IImage interface {
 	FinalizeFilesystems() error
 	Qcow2ImagePath() (string, error)
 	CreateQcow2Image() error
+	CompressedImagePath() (string, error)
+	CompressImage() error
 	ShowFinalFilesystemInfo() error
-	ShowImageTestInfo(artifacts []string)
+	ShowImageTestInfo(artifacts []string) error
 	RemoveImageFile() error
 	ImageLockDir() (string, error)
 	ImageLockPath() (string, error)
@@ -150,22 +149,23 @@ type IImage interface {
 
 // Image provides image creation and manipulation operations.
 type Image struct {
-	cfg            config.IConfig
-	ostree         cds.IOstree
-	fsenc          filesystems.IFsenc
-	runner         runner.Func
-	stdout         io.Writer
-	stderr         io.Writer
-	efiDevice      string
-	bootDevice     string
-	rootDevice     string
-	realRootDevice string // if encrypted, devicePath is replaced.
-	devicePath     string
-	imagePath      string
-	mode           ImageMode
-	rootfs         string
-	ref            string
-	encrypted      bool
+	cfg                 config.IConfig
+	ostree              cds.IOstree
+	fsenc               filesystems.IFsenc
+	runner              runner.Func
+	stdout              io.Writer
+	stderr              io.Writer
+	efiDevice           string
+	bootDevice          string
+	rootDevice          string
+	realRootDevice      string // if encrypted, devicePath is replaced.
+	devicePath          string
+	imagePath           string
+	compressedImagePath string
+	mode                ImageMode
+	rootfs              string
+	ref                 string
+	encrypted           bool
 
 	// Mount points, set by Mount* methods on success.
 	efifsMount  string
@@ -262,7 +262,6 @@ func NewImage(cfg config.IConfig, ot cds.IOstree, fsenc filesystems.IFsenc, opts
 		im.rootDevice = opts.RootDevice
 		im.devicePath = opts.DevicePath
 		im.encrypted = encrypted
-		im.imagePath = opts.ImagePath
 		im.mode = opts.Mode
 	}
 	return im, nil
@@ -833,9 +832,9 @@ func (im *Image) CreateImage(imageSize string) (retErr error) {
 	return nil
 }
 
-// BuildImagePathWithCompressorExtension appends the compressor's file extension to the image path.
+// CompressedImagePath appends the compressor's file extension to the image path.
 // The extension is derived from the first word of the compressor command string.
-func (im *Image) BuildImagePathWithCompressorExtension() (string, error) {
+func (im *Image) CompressedImagePath() (string, error) {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return "", err
 	}
@@ -866,7 +865,7 @@ func (im *Image) CompressImage() error {
 		return errors.New("missing compressor parameter")
 	}
 
-	imagePathWithExt, err := im.BuildImagePathWithCompressorExtension()
+	imagePathWithExt, err := im.CompressedImagePath()
 	if err != nil {
 		return err
 	}
@@ -1642,7 +1641,7 @@ func (im *Image) InstallBootloader() error {
 
 	signedGrubx64efi := filepath.Join(im.rootfs, "usr", "lib", "grub", "grub-x86_64.efi.signed")
 	im.Print("Moving %s to %s\n", signedGrubx64efi, grubx64efi)
-	if err := os.Rename(signedGrubx64efi, grubx64efi); err != nil {
+	if err := filesystems.Move(signedGrubx64efi, grubx64efi); err != nil {
 		return fmt.Errorf("failed to move signed grub binary: %w", err)
 	}
 
@@ -1974,10 +1973,9 @@ func (im *Image) ShowFinalFilesystemInfo() error {
 }
 
 // ShowImageTestInfo prints information about generated artifacts and how to test them.
-func (im *Image) ShowImageTestInfo(artifacts []string) {
+func (im *Image) ShowImageTestInfo(artifacts []string) error {
 	if err := im.validateImageModeForCreation(); err != nil {
-		im.PrintError("show_test_info: invalid image mode: %v\n", err)
-		return
+		return err
 	}
 
 	if len(artifacts) != 0 {
@@ -1994,7 +1992,7 @@ func (im *Image) ShowImageTestInfo(artifacts []string) {
 	im.Print("To move to a USB stick:\n")
 	im.Print("    dd if=IMAGE_PATH of=/dev/sdX bs=4M conv=sparse,sync status=progress\n")
 	im.Print("\n")
-	im.Print("\nImage creation complete! > %s\n", im.ImagePath())
+	return nil
 }
 
 // RemoveImageFile removes an image file and its associated .sha256 and .asc files.

@@ -206,7 +206,7 @@ func (m *MockImage) CreateImage(imageSize string) error {
 	m.CreateImageCalled = true
 	return nil
 }
-func (m *MockImage) BuildImagePathWithCompressorExtension() (string, error) {
+func (m *MockImage) CompressedImagePath() (string, error) {
 	return m.ImagePathWithCompExt_, m.ImagePathWithCompExtErr
 }
 func (m *MockImage) CompressImage() error {
@@ -312,8 +312,9 @@ func (m *MockImage) ShowFinalFilesystemInfo() error {
 	m.ShowFinalFsInfoCalled = true
 	return nil
 }
-func (m *MockImage) ShowImageTestInfo(artifacts []string) {
+func (m *MockImage) ShowImageTestInfo(artifacts []string) error {
 	m.ShowTestInfoCalled = true
+	return nil
 }
 func (m *MockImage) RemoveImageFile() error         { return nil }
 func (m *MockImage) ImageLockDir() (string, error)  { return "", nil }
