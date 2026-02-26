@@ -120,11 +120,6 @@ func (im *Image) ExtractPackageList() ([]string, error) {
 			pkgList = append(pkgList, filepath.Join(cat.Name(), pkg.Name()))
 		}
 	}
-
-	im.Print("Generated package list:\n")
-	for _, pkg := range pkgList {
-		im.Print(">> %s\n", pkg)
-	}
 	return pkgList, nil
 }
 
