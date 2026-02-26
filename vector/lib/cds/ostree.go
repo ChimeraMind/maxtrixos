@@ -41,6 +41,12 @@ const (
 // IOstree defines the interface for ostree operations.
 // It mirrors all public methods of Ostree for testability.
 type IOstree interface {
+	// Styled output
+	SetStdout(io.Writer)
+	SetStderr(io.Writer)
+	Print(format string, a ...interface{})
+	PrintError(format string, a ...interface{})
+
 	// Config accessors
 	FullBranchSuffix() (string, error)
 	IsBranchFullSuffixed(ref string) (bool, error)
@@ -626,13 +632,33 @@ func NewOstree(opts NewOstreeOptions) (*Ostree, error) {
 	}, nil
 }
 
+// SetStdout sets the stdout writer for the Ostree instance.
+func (o *Ostree) SetStdout(w io.Writer) {
+	o.stdout = w
+}
+
+// SetStderr sets the stderr writer for the Ostree instance.
+func (o *Ostree) SetStderr(w io.Writer) {
+	o.stderr = w
+}
+
+// Print prints to stdout with the given format and arguments.
+func (o *Ostree) Print(format string, a ...interface{}) {
+	fmt.Fprintf(o.stdout, format, a...)
+}
+
+// PrintError prints to stderr with the given format and arguments.
+func (o *Ostree) PrintError(format string, a ...interface{}) {
+	fmt.Fprintf(o.stderr, format, a...)
+}
+
 // runCmd runs a command via the instance's command runner, adding --verbose
 // and the "ostree" binary name automatically.
 func (o *Ostree) runCmd(stdout, stderr io.Writer, verbose bool, args ...string) error {
 	var finalArgs []string
 	if verbose {
 		finalArgs = append(finalArgs, "--verbose")
-		fmt.Fprintf(stderr, ">> Executing: ostree --verbose %s\n", strings.Join(args, " "))
+		o.PrintError(">> Executing: ostree --verbose %s\n", strings.Join(args, " "))
 	}
 	finalArgs = append(finalArgs, args...)
 	return o.runner(nil, stdout, stderr, "ostree", finalArgs...)
@@ -646,7 +672,7 @@ func (o *Ostree) ostreeRun(verbose bool, args ...string) error {
 // ostreeRunCapture runs an ostree command and captures its stdout.
 func (o *Ostree) ostreeRunCapture(verbose bool, args ...string) (io.Reader, error) {
 	if verbose {
-		fmt.Fprintf(o.stderr, ">> Executing: ostree (stdout capture) %s\n", strings.Join(args, " "))
+		o.PrintError(">> Executing: ostree (stdout capture) %s\n", strings.Join(args, " "))
 	}
 	stdo := new(bytes.Buffer)
 	err := o.runCmd(stdo, o.stderr, false, args...)
@@ -774,7 +800,7 @@ func (o *Ostree) pullFromRepo(repoDir, remote, ref string, verbose bool) error {
 	if ref == "" {
 		return errors.New("invalid ref parameter")
 	}
-	fmt.Printf("Pulling ostree from %s %s:%s ...\n", repoDir, remote, ref)
+	o.Print("Pulling ostree from %s %s:%s ...\n", repoDir, remote, ref)
 	return o.ostreeRun(verbose, "--repo="+repoDir, "pull", remote, ref)
 }
 
@@ -789,7 +815,7 @@ func (o *Ostree) pruneFromRepo(repoDir, ref, keepObjectsYoungerThan string, verb
 	if keepObjectsYoungerThan == "" {
 		return errors.New("invalid keepObjectsYoungerThan parameter")
 	}
-	fmt.Printf("Pruning ostree repo for %s ...\n", repoDir)
+	o.Print("Pruning ostree repo for %s ...\n", repoDir)
 	return o.ostreeRun(verbose,
 		"--repo="+repoDir, "prune",
 		"--depth=5",
@@ -1127,11 +1153,11 @@ func (o *Ostree) ClientSideGpgArgs() ([]string, error) {
 
 // SetupEtc moves the /etc directory to /usr/etc.
 func (o *Ostree) SetupEtc(imageDir string) error {
-	fmt.Println("Setting up /etc...")
+	o.Print("Setting up /etc...")
 	etcDir := filepath.Join(imageDir, "etc")
 	usrEtcDir := filepath.Join(imageDir, "usr", "etc")
 
-	fmt.Printf("Moving %s to %s\n", etcDir, usrEtcDir)
+	o.Print("Moving %s to %s\n", etcDir, usrEtcDir)
 	return filesystems.Move(etcDir, usrEtcDir)
 }
 
@@ -1311,7 +1337,7 @@ func (o *Ostree) GpgSignFile(file string) error {
 		return err
 	}
 
-	fmt.Printf("GPG signature file %v created.\n", ascFile)
+	o.Print("GPG signature file %v created.\n", ascFile)
 	return nil
 }
 
@@ -1352,10 +1378,10 @@ func (o *Ostree) InitializeSigningGpg(verbose bool) error {
 		return err
 	}
 
-	fmt.Println("Signing GPG signing enabled.")
+	o.Print("GPG signing enabled.\n")
 	for _, key := range keys {
 		if !fileExists(key) {
-			fmt.Fprintf(os.Stderr, "WARNING: Signing GPG key %s not present, skipping import ...\n", key)
+			o.PrintError("WARNING: Signing GPG key %s not present, skipping import ...\n", key)
 			continue
 		}
 		if err := o.ImportGpgKey(key); err != nil {
@@ -1379,10 +1405,10 @@ func (o *Ostree) InitializeRemoteSigningGpg(remote, repoDir string, verbose bool
 		return err
 	}
 
-	fmt.Println("Remote signing GPG signing enabled.")
+	o.Print("Remote GPG signing enabled.\n")
 	for _, key := range keys {
 		if !fileExists(key) {
-			fmt.Fprintf(os.Stderr, "WARNING: Remote signing GPG key %s not present, skipping import ...\n", key)
+			o.PrintError("WARNING: Remote signing GPG key %s not present, skipping import ...\n", key)
 			continue
 		}
 		err := o.ostreeRun(verbose, "--repo="+repoDir, "remote", "gpg-import", remote, "-k", key)
@@ -1414,7 +1440,7 @@ func (o *Ostree) MaybeInitializeGpgForRepo(remote, repoDir string, verbose bool)
 		return err
 	}
 	if !gpgEnabled {
-		fmt.Println("GPG signing is disabled. Skipping GPG initialization ...")
+		o.Print("GPG signing is disabled. Skipping GPG initialization ...")
 		return nil
 	}
 
@@ -1447,13 +1473,13 @@ func (o *Ostree) MaybeInitializeRemote(verbose bool) error {
 
 	objectsDir := filepath.Join(repoDir, "objects")
 	if !directoryExists(objectsDir) {
-		fmt.Printf("Initializing local ostree repo at %v ...\n", repoDir)
+		o.Print("Initializing local ostree repo at %v ...\n", repoDir)
 		err := o.ostreeRun(verbose, "--repo="+repoDir, "init", "--mode=archive")
 		if err != nil {
 			return err
 		}
 	} else {
-		fmt.Printf("ostree repo at %v already initialized. Reusing ...\n", repoDir)
+		o.Print("ostree repo at %v already initialized. Reusing ...\n", repoDir)
 	}
 
 	remotes, err := o.listRemotesFromRepo(repoDir, verbose)
@@ -1462,9 +1488,9 @@ func (o *Ostree) MaybeInitializeRemote(verbose bool) error {
 	}
 	remoteFound := slices.Contains(remotes, remote)
 	if remoteFound {
-		fmt.Printf("Remote %v already exists, reusing ...\n", remote)
+		o.Print("Remote %v already exists, reusing ...\n", remote)
 	} else {
-		fmt.Printf("Initializing remote %v at %v ...\n", remote, repoDir)
+		o.Print("Initializing remote %v at %v ...\n", remote, repoDir)
 		gpgArgs, err := o.ClientSideGpgArgs()
 		if err != nil {
 			return err
@@ -1478,7 +1504,7 @@ func (o *Ostree) MaybeInitializeRemote(verbose bool) error {
 		}
 	}
 
-	fmt.Println("Showing current ostree remotes:")
+	o.Print("Showing current ostree remotes:")
 	err = o.ostreeRun(verbose, "--repo="+repoDir, "remote", "list", "-u")
 	return err
 }
@@ -1569,7 +1595,7 @@ func (o *Ostree) GenerateStaticDelta(ref string, verbose bool) error {
 		return err
 	}
 
-	fmt.Printf("Generating static delta for %s and ref %s ...\n", repoDir, ref)
+	o.Print("Generating static delta for %s and ref %s ...\n", repoDir, ref)
 
 	stdout, err := o.ostreeRunCapture(
 		verbose,
@@ -1656,7 +1682,7 @@ func (o *Ostree) GenerateStaticDelta(ref string, verbose bool) error {
 
 // UpdateSummary updates the summary of an ostree repository.
 func (o *Ostree) UpdateSummary(verbose bool) error {
-	fmt.Println("Updating ostree summary ...")
+	o.Print("Updating ostree summary ...")
 
 	repoDir, err := o.RepoDir()
 	if err != nil {
@@ -1837,20 +1863,15 @@ func (o *Ostree) prepareVarHome(imageDir, homeName, varHomeName string) error {
 		if info, err := os.Stat(varHomeDir); err == nil && info.IsDir() {
 			link, _ := os.Readlink(homeDir)
 			if strings.HasSuffix(link, "var/"+varHomeName) {
-				fmt.Printf("%s is a symlink and %s is a directory. All good.\n", homeDir, varHomeDir)
+				o.Print("%s is a symlink and %s is a directory. All good.\n", homeDir, varHomeDir)
 			} else {
-				fmt.Fprintf(
-					os.Stderr,
-					"%s symlink points to an unexpected path: %s\n",
-					homeDir,
-					link,
-				)
+				o.PrintError("%s symlink points to an unexpected path: %s\n", homeDir, link)
 				return fmt.Errorf("home symlink invalid")
 			}
 		}
 	} else if homeExists && homeInfo.IsDir() {
 		if pathExists(varHomeDir) { // path exists is correct.
-			fmt.Println("WARNING: removing " + varHomeDir)
+			o.PrintError("WARNING: removing %s", varHomeDir)
 			os.RemoveAll(varHomeDir)
 		}
 		if err := filesystems.Move(homeDir, varHomeDir); err != nil {
@@ -1957,12 +1978,12 @@ func prepareMachineID(imageDir string) error {
 
 // prepareVarDbPkg moves var/db/pkg to the read-only VDB location and creates
 // a relative symlink back.
-func prepareVarDbPkg(imageDir, roVdbPath string) error {
-	fmt.Println("Setting up /var/db/pkg...")
+func (o *Ostree) prepareVarDbPkg(imageDir, roVdbPath string) error {
+	o.Print("Setting up /var/db/pkg...")
 	varDbPkg := filepath.Join(imageDir, "var", "db", "pkg")
 	usrVarDbPkg := filepath.Join(imageDir, roVdbPath)
 
-	fmt.Printf("Moving %s to %s\n", varDbPkg, usrVarDbPkg)
+	o.Print("Moving %s to %s\n", varDbPkg, usrVarDbPkg)
 	if err := os.MkdirAll(filepath.Dir(usrVarDbPkg), 0755); err != nil {
 		return fmt.Errorf("failed to create parent of usrVarDbPkg: %w", err)
 	}
@@ -2066,7 +2087,7 @@ func (o *Ostree) PrepareFilesystemHierarchy(imageDir string) error {
 	if matrixOsRoVdb == "" {
 		return fmt.Errorf("config item Releaser.ReadOnlyVdb is not set")
 	}
-	if err := prepareVarDbPkg(imageDir, matrixOsRoVdb); err != nil {
+	if err := o.prepareVarDbPkg(imageDir, matrixOsRoVdb); err != nil {
 		return err
 	}
 
@@ -2082,11 +2103,11 @@ func (o *Ostree) PrepareFilesystemHierarchy(imageDir string) error {
 		return err
 	}
 
-	fmt.Println("Setting up /home ...")
+	o.Print("Setting up /home ...")
 	if err := o.prepareVarHome(imageDir, "home", "home"); err != nil {
 		return err
 	}
-	fmt.Println("Setting up /root ...")
+	o.Print("Setting up /root ...")
 	if err := o.prepareVarHome(imageDir, "root", "roothome"); err != nil {
 		return err
 	}
@@ -2098,7 +2119,7 @@ func (o *Ostree) PrepareFilesystemHierarchy(imageDir string) error {
 	if efiRoot == "" {
 		return fmt.Errorf("config item Imager.EfiRoot is not set")
 	}
-	fmt.Printf("Setting up %s...\n", efiRoot)
+	o.Print("Setting up %s...\n", efiRoot)
 	os.MkdirAll(filepath.Join(imageDir, efiRoot), 0755)
 
 	if err := prepareUsrLocal(imageDir); err != nil {
@@ -2174,7 +2195,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		return err
 	}
 
-	fmt.Printf("Creating %s ...\n", sysroot)
+	o.Print("Creating %s ...\n", sysroot)
 	if err := os.MkdirAll(sysroot, 0755); err != nil {
 		return err
 	}
@@ -2184,7 +2205,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		return fmt.Errorf("cannot get last ostree commit: %w", err)
 	}
 
-	fmt.Printf("Initializing ostree dir structure into %s ...\n", sysroot)
+	o.Print("Initializing ostree dir structure into %s ...\n", sysroot)
 	if err := o.ostreeRun(verbose, "admin", "init-fs", sysroot); err != nil {
 		return err
 	}
@@ -2194,7 +2215,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		return err
 	}
 
-	fmt.Printf("Initializing OS %s into %s...\n", osName, sysroot)
+	o.Print("Initializing OS %s into %s...\n", osName, sysroot)
 	osInitArgs := []string{
 		"admin", "os-init",
 		osName,
@@ -2205,7 +2226,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 	}
 
 	sysrootRepo := filepath.Join(sysroot, "ostree", "repo")
-	fmt.Printf("Pulling local ostree commit %s into %s ...\n", ostreeCommit, sysrootRepo)
+	o.Print("Pulling local ostree commit %s into %s ...\n", ostreeCommit, sysrootRepo)
 	pullArgs := []string{
 		"--repo=" + sysrootRepo,
 		"pull-local",
@@ -2222,12 +2243,12 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		"--create=" + remote + ":" + ref,
 		ostreeCommit,
 	}
-	fmt.Printf("ostree creating ref %s in sysroot repo ...\n", remote+":"+ref)
+	o.Print("ostree creating ref %s in sysroot repo ...\n", remote+":"+ref)
 	if err := o.ostreeRun(verbose, createRefArgs...); err != nil {
 		return err
 	}
 
-	fmt.Println("ostree setting bootloader to none (using blscfg instead) ...")
+	o.Print("ostree setting bootloader to none (using blscfg instead) ...")
 	blArgs := []string{
 		"config",
 		"--repo=" + sysrootRepo,
@@ -2239,7 +2260,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		return err
 	}
 
-	fmt.Println("ostree setting bootprefix = false, given separate boot partition ...")
+	o.Print("ostree setting bootprefix = false, given separate boot partition ...")
 	bootprefixArgs := []string{
 		"config",
 		"--repo=" + sysrootRepo,
@@ -2251,7 +2272,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		return err
 	}
 
-	fmt.Printf("Deploying %s to %s...\n", ref, sysroot)
+	o.Print("Deploying %s to %s...\n", ref, sysroot)
 	deployArgs := []string{
 		"admin", "deploy",
 		"--sysroot=" + sysroot,
@@ -2266,7 +2287,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		return err
 	}
 
-	fmt.Printf("Deployed filesystem at %s for commit %s.\n", sysroot, ostreeCommit)
+	o.Print("Deployed filesystem at %s for commit %s.\n", sysroot, ostreeCommit)
 	return nil
 }
 

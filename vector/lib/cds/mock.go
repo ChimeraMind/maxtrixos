@@ -1,6 +1,7 @@
 package cds
 
 import (
+	"io"
 	"strings"
 
 	"matrixos/vector/lib/filesystems"
@@ -40,6 +41,10 @@ type MockOstree struct {
 }
 
 // Config accessors — return zero values (not used in branch/upgrade tests).
+func (m *MockOstree) SetStdout(_ io.Writer)                                   {}
+func (m *MockOstree) SetStderr(_ io.Writer)                                   {}
+func (m *MockOstree) Print(_ string, _ ...interface{})                        {}
+func (m *MockOstree) PrintError(_ string, _ ...interface{})                   {}
 func (m *MockOstree) FullBranchSuffix() (string, error)                       { return "-full", nil }
 func (m *MockOstree) IsBranchFullSuffixed(string) (bool, error)               { return false, nil }
 func (m *MockOstree) BranchShortnameToFull(_, _, _, _ string) (string, error) { return "", nil }
