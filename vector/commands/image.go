@@ -147,6 +147,10 @@ func failFastChecks(ot cds.IOstree, im imager.IImage) error {
 
 // runImage implements the image building logic.
 func (c *ImageCommand) runImage() error {
+	// Set up styled writers for subprocess output.
+	stdoutWriter := c.SetStdout()
+	stderrWriter := c.SetStderr()
+
 	ref := c.ref
 	if cds.IsBranchShortName(ref) {
 		return fmt.Errorf("specify a complete branch name, %s is not allowed", ref)
@@ -177,6 +181,8 @@ func (c *ImageCommand) runImage() error {
 		return fmt.Errorf("failed to initialize imager: %w", err)
 	}
 	c.im = im
+	c.im.SetStdout(stdoutWriter)
+	c.im.SetStderr(stderrWriter)
 
 	// Fail fast on bad params.
 	if err := failFastChecks(c.ot, im); err != nil {
@@ -198,7 +204,8 @@ func (c *ImageCommand) runImage() error {
 	if remoted := cds.ExtractRemoteFromRef(ref); remoted != "" {
 		remote = remoted
 		ref = cds.CleanRemoteFromRef(ref)
-		fmt.Fprintf(os.Stderr, "WARNING: %s contains the remote reference, using remote=%s and ref=%s\n",
+		c.im.PrintWarning(
+			"WARNING: %s contains the remote reference, using remote=%s and ref=%s\n",
 			c.ref, remote, ref)
 
 		overlay := map[string][]string{
@@ -227,12 +234,6 @@ func (c *ImageCommand) runImage() error {
 			return err
 		}
 	}
-
-	// Set up styled writers for subprocess output.
-	stdoutWriter := c.SetStdout()
-	stderrWriter := c.SetStderr()
-	c.im.SetStdout(stdoutWriter)
-	c.im.SetStderr(stderrWriter)
 
 	// Setup image (the main work).
 	c.PushCleanup(c.im.Cleanup)
@@ -303,9 +304,9 @@ func (c *ImageCommand) initializeLocalOstree() error {
 	if err != nil {
 		return fmt.Errorf("failed to list local refs: %w", err)
 	}
-	fmt.Println("Local refs:")
+	c.im.Print("Local refs:")
 	for _, r := range refs {
-		fmt.Printf("  %s\n", r)
+		c.im.Print("  %s\n", r)
 	}
 
 	if err := c.ot.MaybeInitializeRemote(c.verbose); err != nil {
@@ -330,9 +331,9 @@ func (c *ImageCommand) initializeRemoteOstree(ref string) error {
 	if err != nil {
 		return fmt.Errorf("failed to list remote refs: %w", err)
 	}
-	fmt.Println("Remote refs:")
+	c.im.Print("Remote refs:")
 	for _, r := range refs {
-		fmt.Printf("  %s\n", r)
+		c.im.Print("  %s\n", r)
 	}
 
 	remote, err := c.ot.Remote()
@@ -340,7 +341,7 @@ func (c *ImageCommand) initializeRemoteOstree(ref string) error {
 		return err
 	}
 
-	fmt.Printf("\n%s%sPulling ostree ref %s:%s ...%s\n",
+	c.im.Print("\n%s%sPulling ostree ref %s:%s ...%s\n",
 		c.cBold, c.iconDownload, remote, ref, c.cReset)
 	if err := c.ot.Pull(remote+":"+ref, c.verbose); err != nil {
 		return fmt.Errorf("ostree pull failed: %w", err)
