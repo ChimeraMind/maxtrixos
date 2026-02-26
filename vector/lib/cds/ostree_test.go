@@ -890,13 +890,10 @@ func TestGpgSignFile(t *testing.T) {
 	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		cmds = append(cmds, strings.Join(args, " "))
 		// Mock GpgKeyID call
-		if len(args) > 0 && args[0] == "--homedir" {
-			// Check if it's the --show-keys call
-			for _, arg := range args {
-				if arg == "--show-keys" {
-					fmt.Fprintln(stdout, "pub:u:4096:1:KEYID123:1678752000:::u:::scESC:")
-					return nil
-				}
+		for _, arg := range args {
+			if arg == "--show-keys" {
+				fmt.Fprintln(stdout, "pub:u:4096:1:KEYID123:1678752000:::u:::scESC:")
+				return nil
 			}
 		}
 		return nil
@@ -1104,7 +1101,7 @@ func TestMaybeInitializeGpg(t *testing.T) {
 				ostreeImports++
 			}
 			// Check for gpg --import
-			// cmd structure: [gpg --homedir ... --batch --yes --import keyPath]
+			// cmd structure: [--status-fd=3 --homedir ... --batch --yes --import keyPath]
 			for _, arg := range cmd {
 				if arg == "--import" {
 					gpgImports++
@@ -1560,8 +1557,11 @@ func TestGpgArgsEnabled(t *testing.T) {
 	}
 
 	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
-		if len(args) > 0 && args[0] == "--homedir" {
-			fmt.Fprintln(stdout, "pub:u:4096:1:KEYID123:1678752000:::u:::scESC:")
+		for _, arg := range args {
+			if arg == "--show-keys" {
+				fmt.Fprintln(stdout, "pub:u:4096:1:KEYID123:1678752000:::u:::scESC:")
+				return nil
+			}
 		}
 		return nil
 	}
@@ -1783,6 +1783,9 @@ func TestOstreeBranchMethodsErrors(t *testing.T) {
 }
 
 func TestDeploy_Errors(t *testing.T) {
+	origRunCommand := runCommand
+	defer func() { runCommand = origRunCommand }()
+
 	// Trigger error at specific steps
 	tests := []struct {
 		name      string
@@ -1870,7 +1873,7 @@ func TestBootedStatus_Errors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+			o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 				if tt.mockErr != nil {
 					return tt.mockErr
 				}
@@ -2032,6 +2035,9 @@ func TestValidateFilesystemHierarchy(t *testing.T) {
 }
 
 func TestRemoteRefs(t *testing.T) {
+	origRunCommand := runCommand
+	defer func() { runCommand = origRunCommand }()
+
 	t.Run("Success", func(t *testing.T) {
 		root := "/myroot"
 		cfg := &config.MockConfig{
@@ -2447,6 +2453,9 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 }
 
 func TestListDeployments(t *testing.T) {
+	origRunCommand := runCommand
+	defer func() { runCommand = origRunCommand }()
+
 	fakeJSON := `{
 		"deployments": [
 			{
@@ -3281,4 +3290,138 @@ func TestComputeEtcDiffDirectories(t *testing.T) {
 
 func ptr(pi filesystems.PathInfo) *filesystems.PathInfo {
 	return &pi
+}
+
+// TestGpgIntegration is a hermetic integration test that generates a real
+// GPG key inside a temporary GNUPGHOME directory and exercises
+// ImportGpgKey, GpgKeyID, and GpgSignFile end-to-end.
+func TestGpgIntegration(t *testing.T) {
+	if _, err := exec.LookPath("gpg"); err != nil {
+		t.Skip("gpg not found in PATH, skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	gpgHome := filepath.Join(tmpDir, "gnupg")
+	if err := os.MkdirAll(gpgHome, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	// Generate a throwaway GPG key using a batch spec.
+	keySpec := filepath.Join(tmpDir, "key-spec")
+	if err := os.WriteFile(keySpec, []byte(strings.Join([]string{
+		"%echo Generating test key",
+		"Key-Type: RSA",
+		"Key-Length: 2048",
+		"Name-Real: Test Key",
+		"Name-Email: test@test.local",
+		"Expire-Date: 0",
+		"%no-protection",
+		"%commit",
+		"%echo Done",
+	}, "\n")), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	genCmd := exec.Command("gpg", "--homedir", gpgHome, "--batch", "--gen-key", keySpec)
+	genCmd.Stderr = os.Stderr
+	if err := genCmd.Run(); err != nil {
+		t.Fatalf("gpg key generation failed: %v", err)
+	}
+
+	// Export the public key so we can point the config at it.
+	pubKeyPath := filepath.Join(tmpDir, "pub.gpg")
+	exportCmd := exec.Command("gpg", "--homedir", gpgHome, "--batch", "--yes",
+		"--export", "--armor", "--output", pubKeyPath)
+	exportCmd.Stderr = os.Stderr
+	if err := exportCmd.Run(); err != nil {
+		t.Fatalf("gpg export failed: %v", err)
+	}
+
+	// Export the private key to use as GpgPrivateKey config value.
+	privKeyPath := filepath.Join(tmpDir, "priv.gpg")
+	exportPriv := exec.Command("gpg", "--homedir", gpgHome, "--batch", "--yes",
+		"--export-secret-keys", "--armor", "--output", privKeyPath)
+	exportPriv.Stderr = os.Stderr
+	if err := exportPriv.Run(); err != nil {
+		t.Fatalf("gpg secret export failed: %v", err)
+	}
+
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.DevGpgHomeDir":        {gpgHome},
+			"Ostree.GpgPublicKey":         {pubKeyPath},
+			"Ostree.GpgOfficialPublicKey": {pubKeyPath},
+			"Ostree.GpgPrivateKey":        {privKeyPath},
+		},
+		Bools: map[string]bool{
+			"Ostree.Gpg": true,
+		},
+	}
+
+	o, err := NewOstree(cfg)
+	if err != nil {
+		t.Fatalf("NewOstree failed: %v", err)
+	}
+
+	// 1. ImportGpgKey — re-import the public key (idempotent).
+	t.Run("ImportGpgKey", func(t *testing.T) {
+		if err := o.ImportGpgKey(pubKeyPath); err != nil {
+			t.Fatalf("ImportGpgKey failed: %v", err)
+		}
+	})
+
+	// 2. GpgKeyID — must return a non-empty key ID.
+	var keyID string
+	t.Run("GpgKeyID", func(t *testing.T) {
+		keyID, err = o.GpgKeyID()
+		if err != nil {
+			t.Fatalf("GpgKeyID failed: %v", err)
+		}
+		if keyID == "" {
+			t.Fatal("GpgKeyID returned empty key ID")
+		}
+		t.Logf("GpgKeyID = %s", keyID)
+	})
+
+	// 3. GpgSignFile — sign a dummy file and verify the .asc is created.
+	t.Run("GpgSignFile", func(t *testing.T) {
+		if keyID == "" {
+			t.Skip("skipping: GpgKeyID did not produce a key ID")
+		}
+		dummyFile := filepath.Join(tmpDir, "payload.bin")
+		if err := os.WriteFile(dummyFile, []byte("hello world\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := o.GpgSignFile(dummyFile); err != nil {
+			t.Fatalf("GpgSignFile failed: %v", err)
+		}
+
+		ascFile := GpgSignedFilePath(dummyFile)
+		info, err := os.Stat(ascFile)
+		if err != nil {
+			t.Fatalf("signature file not found: %v", err)
+		}
+		if info.Size() == 0 {
+			t.Fatal("signature file is empty")
+		}
+		t.Logf("signature file %s (%d bytes)", ascFile, info.Size())
+	})
+
+	// 4. GpgArgs — must return sign + homedir args.
+	t.Run("GpgArgs", func(t *testing.T) {
+		args, err := o.GpgArgs()
+		if err != nil {
+			t.Fatalf("GpgArgs failed: %v", err)
+		}
+		if len(args) != 2 {
+			t.Fatalf("Expected 2 GpgArgs, got %d: %v", len(args), args)
+		}
+		if !strings.HasPrefix(args[0], "--gpg-sign=") {
+			t.Errorf("args[0] = %q, want --gpg-sign=...", args[0])
+		}
+		if !strings.HasPrefix(args[1], "--gpg-homedir=") {
+			t.Errorf("args[1] = %q, want --gpg-homedir=...", args[1])
+		}
+	})
 }

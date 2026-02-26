@@ -1665,7 +1665,10 @@ func (im *Image) InstallBootloader() error {
 	}
 
 	// Run grub-install inside the chroot.
-	err = filesystems.ChrootRun(im.rootfs, "/usr/bin/grub-install",
+	err = filesystems.ExecChrootRun(
+		os.Stdin, im.stdout, im.stdout,
+		im.rootfs,
+		"/usr/bin/grub-install",
 		"--target=x86_64-efi",
 		"--directory=/usr/lib/grub/x86_64-efi",
 		"--efi-directory="+efiRoot,
