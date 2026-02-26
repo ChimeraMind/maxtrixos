@@ -653,12 +653,16 @@ func TestCleanupMounts(t *testing.T) {
 		setupMockMountInfo(t, []*MountInfoEntry{
 			{Mountpoint: "/mnt/test", Source: "/dev/sda1"},
 		})
-		CleanupMounts([]string{"/mnt/test"})
+		CleanupMounts(CleanupMountsOptions{
+			Mounts: []string{"/mnt/test"},
+		})
 	})
 
 	t.Run("MountNotExist", func(t *testing.T) {
 		setupMockMountInfo(t, []*MountInfoEntry{})
-		CleanupMounts([]string{"/mnt/test"})
+		CleanupMounts(CleanupMountsOptions{
+			Mounts: []string{"/mnt/test"},
+		})
 	})
 
 	t.Run("UnmountFail", func(t *testing.T) {
@@ -668,7 +672,9 @@ func TestCleanupMounts(t *testing.T) {
 		os.Setenv("MOCK_UMOUNT_FAIL", "1")
 		defer os.Unsetenv("MOCK_UMOUNT_FAIL")
 		// Should not panic or error out, just log
-		CleanupMounts([]string{"/mnt/fail"})
+		CleanupMounts(CleanupMountsOptions{
+			Mounts: []string{"/mnt/fail"},
+		})
 	})
 }
 
@@ -682,9 +688,16 @@ func TestSetupCommonRootfsMounts(t *testing.T) {
 	}
 
 	var mountingCalls, mountedCalls []string
-	mounter, err := NewCommonRootfsMounts(tmpDir,
-		func(tg string) { mountingCalls = append(mountingCalls, tg) },
-		func(tg string) { mountedCalls = append(mountedCalls, tg) },
+	mounter, err := NewCommonRootfsMounts(
+		CommonRootfsMountsOptions{
+			MountPoint: tmpDir,
+			Mounting: func(tg string) {
+				mountingCalls = append(mountingCalls, tg)
+			},
+			Mounted: func(tg string) {
+				mountedCalls = append(mountedCalls, tg)
+			},
+		},
 	)
 	if err != nil {
 		t.Fatalf("NewCommonRootfsMounts failed: %v", err)
@@ -820,7 +833,13 @@ func TestCommonRootfsMountsCleanup(t *testing.T) {
 			{Mountpoint: filepath.Join(tmpDir, "run", "lock")},
 		})
 		noop := func(string) {}
-		mounter, err := NewCommonRootfsMounts(tmpDir, noop, noop)
+		mounter, err := NewCommonRootfsMounts(
+			CommonRootfsMountsOptions{
+				MountPoint: tmpDir,
+				Mounting:   noop,
+				Mounted:    noop,
+			},
+		)
 		if err != nil {
 			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
 		}
@@ -834,7 +853,12 @@ func TestCommonRootfsMountsCleanup(t *testing.T) {
 
 	t.Run("MissingMnt", func(t *testing.T) {
 		noop := func(string) {}
-		_, err := NewCommonRootfsMounts("", noop, noop)
+		_, err := NewCommonRootfsMounts(
+			CommonRootfsMountsOptions{
+				Mounting: noop,
+				Mounted:  noop,
+			},
+		)
 		if err == nil {
 			t.Error("Expected error for missing mnt, got nil")
 		}
@@ -842,7 +866,13 @@ func TestCommonRootfsMountsCleanup(t *testing.T) {
 
 	t.Run("NonExistentMnt", func(t *testing.T) {
 		noop := func(string) {}
-		mounter, err := NewCommonRootfsMounts("/non/existent/path", noop, noop)
+		mounter, err := NewCommonRootfsMounts(
+			CommonRootfsMountsOptions{
+				MountPoint: "/non/existent/path",
+				Mounting:   noop,
+				Mounted:    noop,
+			},
+		)
 		if err != nil {
 			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
 		}
