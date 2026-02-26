@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode"
 
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/filesystems"
 )
 
@@ -305,7 +305,7 @@ func (c *UpgradeCommand) updateGrubDir_x64(efiDir, commit string) error {
 		return fmt.Errorf("failed to list deployments: %w", err)
 	}
 
-	var foundDep *cds.Deployment
+	var foundDep *ostree.Deployment
 	for _, dep := range deployments {
 		if dep.Checksum == commit {
 			foundDep = &dep
@@ -320,7 +320,7 @@ func (c *UpgradeCommand) updateGrubDir_x64(efiDir, commit string) error {
 	// we do not check other fields because we assume that the upgrade
 	// part went fine.
 
-	newRoot := cds.BuildDeploymentRootfs(
+	newRoot := ostree.BuildDeploymentRootfs(
 		root, foundDep.Stateroot, commit, foundDep.Index,
 	)
 
@@ -494,22 +494,22 @@ var pagerBinary = "less"
 
 // formatEtcChanges renders the list of EtcChange entries into a
 // human-readable string using the UI icons and colours.
-func (c *UpgradeCommand) formatEtcChanges(changes []cds.EtcChange) string {
+func (c *UpgradeCommand) formatEtcChanges(changes []ostree.EtcChange) string {
 	var b strings.Builder
 
 	// Group changes by action for a structured summary.
-	var conflicts, updates, adds, removes, userOnly []cds.EtcChange
+	var conflicts, updates, adds, removes, userOnly []ostree.EtcChange
 	for _, ch := range changes {
 		switch ch.Action {
-		case cds.EtcActionConflict:
+		case ostree.EtcActionConflict:
 			conflicts = append(conflicts, ch)
-		case cds.EtcActionUpdate:
+		case ostree.EtcActionUpdate:
 			updates = append(updates, ch)
-		case cds.EtcActionAdd:
+		case ostree.EtcActionAdd:
 			adds = append(adds, ch)
-		case cds.EtcActionRemove:
+		case ostree.EtcActionRemove:
 			removes = append(removes, ch)
-		case cds.EtcActionUserOnly:
+		case ostree.EtcActionUserOnly:
 			userOnly = append(userOnly, ch)
 		}
 	}
@@ -588,7 +588,7 @@ func (c *UpgradeCommand) formatEtcChanges(changes []cds.EtcChange) string {
 }
 
 // writeChangeDetail appends detail lines about what changed for a path.
-func (c *UpgradeCommand) writeChangeDetail(b *strings.Builder, ch cds.EtcChange) {
+func (c *UpgradeCommand) writeChangeDetail(b *strings.Builder, ch ostree.EtcChange) {
 	if ch.Old != nil && ch.New != nil {
 		oldDesc := ch.Old.String()
 		newDesc := ch.New.String()

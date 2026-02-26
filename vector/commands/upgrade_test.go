@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
 	"os"
 	"os/exec"
@@ -23,7 +23,7 @@ const (
 
 // newTestUpgradeCommand creates an UpgradeCommand with injected mock dependencies,
 // bypassing initConfig/initOstree which require real config files and ostree binary.
-func newTestUpgradeCommand(ot cds.IOstree, args []string) (*UpgradeCommand, error) {
+func newTestUpgradeCommand(ot ostree.IOstree, args []string) (*UpgradeCommand, error) {
 	cmd := &UpgradeCommand{}
 	cmd.ot = ot
 	cmd.StartUI()
@@ -33,9 +33,9 @@ func newTestUpgradeCommand(ot cds.IOstree, args []string) (*UpgradeCommand, erro
 	return cmd, nil
 }
 
-// newTestUpgradeCommandWithConfig creates an UpgradeCommand with mock cds.IOstree and
+// newTestUpgradeCommandWithConfig creates an UpgradeCommand with mock ostree.IOstree and
 // a real config from a file, for tests that need config values (e.g. bootloader).
-func newTestUpgradeCommandWithConfig(ot cds.IOstree, cfg *config.MockConfig, args []string) (*UpgradeCommand, error) {
+func newTestUpgradeCommandWithConfig(ot ostree.IOstree, cfg *config.MockConfig, args []string) (*UpgradeCommand, error) {
 	cmd := &UpgradeCommand{}
 	cmd.ot = ot
 	cmd.cfg = cfg
@@ -48,7 +48,7 @@ func newTestUpgradeCommandWithConfig(ot cds.IOstree, cfg *config.MockConfig, arg
 
 // upgradeHarness holds common test state for upgrade tests.
 type upgradeHarness struct {
-	mock    *cds.MockOstree
+	mock    *ostree.MockOstree
 	cleanup func()
 }
 
@@ -72,9 +72,9 @@ func setupUpgradeHarness(t *testing.T, currentSHA, newSHA string) *upgradeHarnes
 		return cmd
 	}
 
-	mock := &cds.MockOstree{
+	mock := &ostree.MockOstree{
 		Root_: "/",
-		Deployments: []cds.Deployment{
+		Deployments: []ostree.Deployment{
 			{
 				Booted:    true,
 				Checksum:  currentSHA,
@@ -349,7 +349,7 @@ func TestUpgradeBootloaderSuccess(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Add a non-booted deployment for the new commit (bootloader update needs it)
-	h.mock.Deployments = append(h.mock.Deployments, cds.Deployment{
+	h.mock.Deployments = append(h.mock.Deployments, ostree.Deployment{
 		Booted:    false,
 		Checksum:  mockNewSHA,
 		Stateroot: stateroot,
@@ -359,7 +359,7 @@ func TestUpgradeBootloaderSuccess(t *testing.T) {
 	h.mock.Root_ = tmpDir
 
 	// Create deployment rootfs with grub + shim files
-	newRoot := cds.BuildDeploymentRootfs(tmpDir, stateroot, mockNewSHA, 0)
+	newRoot := ostree.BuildDeploymentRootfs(tmpDir, stateroot, mockNewSHA, 0)
 	grubSrc := filepath.Join(newRoot, "usr/lib/grub/grub-x86_64.efi.signed")
 	if err := os.MkdirAll(filepath.Dir(grubSrc), 0755); err != nil {
 		t.Fatal(err)
@@ -482,7 +482,7 @@ func TestUpgradeNotRoot(t *testing.T) {
 	defer func() { getEuid = origEuid }()
 
 	cmd := &UpgradeCommand{}
-	cmd.ot = &cds.MockOstree{}
+	cmd.ot = &ostree.MockOstree{}
 	cmd.StartUI()
 	if err := cmd.parseArgs([]string{"-y"}); err != nil {
 		t.Fatalf("parseArgs failed: %v", err)

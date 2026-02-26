@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/filesystems"
 )
 
@@ -576,12 +576,12 @@ func (im *Image) maybeGenerateGpgSignatures(compressedImageCreated, qcow2Created
 		if err := im.ostree.GpgSignFile(cmpPath); err != nil {
 			return artifacts, fmt.Errorf("failed to GPG sign image: %w", err)
 		}
-		artifacts = append(artifacts, cds.GpgSignedFilePath(cmpPath))
+		artifacts = append(artifacts, ostree.GpgSignedFilePath(cmpPath))
 	} else {
 		if err := im.ostree.GpgSignFile(im.ImagePath()); err != nil {
 			return artifacts, fmt.Errorf("failed to GPG sign image: %w", err)
 		}
-		artifacts = append(artifacts, cds.GpgSignedFilePath(im.ImagePath()))
+		artifacts = append(artifacts, ostree.GpgSignedFilePath(im.ImagePath()))
 	}
 
 	if qcow2Created {
@@ -594,7 +594,7 @@ func (im *Image) maybeGenerateGpgSignatures(compressedImageCreated, qcow2Created
 		if err := im.ostree.GpgSignFile(qcow2ImagePath); err != nil {
 			return artifacts, fmt.Errorf("failed to GPG sign QCOW2: %w", err)
 		}
-		artifacts = append(artifacts, cds.GpgSignedFilePath(qcow2ImagePath))
+		artifacts = append(artifacts, ostree.GpgSignedFilePath(qcow2ImagePath))
 	}
 
 	// Store the GPG pubkey for later mirroring to CDNs.

@@ -1,0 +1,343 @@
+package ostree
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"matrixos/vector/lib/filesystems"
+)
+
+// SetupEtc moves the /etc directory to /usr/etc.
+func (o *Ostree) SetupEtc(imageDir string) error {
+	o.Print("Setting up /etc...")
+	etcDir := filepath.Join(imageDir, "etc")
+	usrEtcDir := filepath.Join(imageDir, "usr", "etc")
+
+	o.Print("Moving %s to %s\n", etcDir, usrEtcDir)
+	return filesystems.Move(etcDir, usrEtcDir)
+}
+
+func (o *Ostree) prepareVarHome(imageDir, homeName, varHomeName string) error {
+	homeDir := filepath.Join(imageDir, homeName)
+	varHomeDir := filepath.Join(imageDir, "var", varHomeName)
+
+	homeInfo, err := os.Lstat(homeDir)
+	homeExists := err == nil
+
+	if homeExists && (homeInfo.Mode()&os.ModeSymlink != 0) {
+		if info, err := os.Stat(varHomeDir); err == nil && info.IsDir() {
+			link, _ := os.Readlink(homeDir)
+			if strings.HasSuffix(link, "var/"+varHomeName) {
+				o.Print("%s is a symlink and %s is a directory. All good.\n", homeDir, varHomeDir)
+			} else {
+				o.PrintError("%s symlink points to an unexpected path: %s\n", homeDir, link)
+				return fmt.Errorf("home symlink invalid")
+			}
+		}
+	} else if homeExists && homeInfo.IsDir() {
+		if pathExists(varHomeDir) { // path exists is correct.
+			o.PrintError("WARNING: removing %s", varHomeDir)
+			os.RemoveAll(varHomeDir)
+		}
+		if err := filesystems.Move(homeDir, varHomeDir); err != nil {
+			return fmt.Errorf("failed to move home: %w", err)
+		}
+	} else if homeExists {
+		if err := os.Remove(homeDir); err != nil {
+			return fmt.Errorf("failed to remove home: %w", err)
+		}
+	}
+	if _, err := os.Stat(varHomeDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(varHomeDir, 0755); err != nil {
+			return fmt.Errorf("failed to create %v: %w", varHomeDir, err)
+		}
+	}
+	// && !os.IsExist(err) done because of the complexity of the conditions above.
+	if err := os.Symlink("var/"+varHomeName, homeDir); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("failed to symlink %v: %w", homeDir, err)
+	}
+	return nil
+}
+
+// moveDirToTargetAndSymlink moves srcDir to targetDir (if srcDir exists as a real
+// directory or removes it if it's a non-directory), ensures targetDir exists, and
+// creates a symlink at srcDir pointing to symlinkTarget.
+func moveDirToTargetAndSymlink(srcDir, targetDir, symlinkTarget string) error {
+	if info, err := os.Lstat(srcDir); err == nil {
+		if info.IsDir() {
+			if pathExists(targetDir) {
+				os.RemoveAll(targetDir)
+			}
+			fmt.Fprintf(os.Stderr, "WARNING: moving %s to %s.\n", srcDir, targetDir)
+			if err := filesystems.Move(srcDir, targetDir); err != nil {
+				return fmt.Errorf("failed to move %s: %w", srcDir, err)
+			}
+		} else {
+			if err := os.Remove(srcDir); err != nil {
+				return fmt.Errorf("failed to remove %s: %w", srcDir, err)
+			}
+		}
+	}
+
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return fmt.Errorf("failed to create %s: %w", targetDir, err)
+	}
+
+	if err := os.Symlink(symlinkTarget, srcDir); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("failed to symlink %s: %w", srcDir, err)
+	}
+	return nil
+}
+
+// prepareSysrootAndOstreeLink creates the /sysroot directory and the
+// /ostree -> sysroot/ostree symlink inside imageDir.
+func prepareSysrootAndOstreeLink(imageDir string) error {
+	if err := os.Mkdir(filepath.Join(imageDir, "sysroot"), 0755); err != nil {
+		return fmt.Errorf("failed to create sysroot: %w", err)
+	}
+
+	ostreeLink := filepath.Join(imageDir, "ostree")
+	if _, err := os.Lstat(ostreeLink); err == nil {
+		if err := os.Remove(ostreeLink); err != nil {
+			return fmt.Errorf("failed to remove existing ostree link: %w", err)
+		}
+	}
+	if err := os.Symlink("sysroot/ostree", ostreeLink); err != nil {
+		return fmt.Errorf("failed to symlink ostree: %w", err)
+	}
+	return nil
+}
+
+// prepareTmpDir moves /tmp into /sysroot/tmp and replaces it with a symlink.
+func prepareTmpDir(imageDir string) error {
+	tmpDir := filepath.Join(imageDir, "tmp")
+	sysrootTmp := filepath.Join(imageDir, "sysroot", "tmp")
+
+	// Move tmpDir only if it exists as a real directory (not a symlink).
+	if info, err := os.Lstat(tmpDir); err == nil && info.IsDir() && (info.Mode()&os.ModeSymlink == 0) {
+		if err := filesystems.Move(tmpDir, sysrootTmp); err != nil {
+			return fmt.Errorf("failed to move tmp to sysroot/tmp: %w", err)
+		}
+	}
+
+	if _, err := os.Lstat(tmpDir); err == nil {
+		os.Remove(tmpDir)
+	}
+	if err := os.Symlink("sysroot/tmp", tmpDir); err != nil {
+		return fmt.Errorf("failed to symlink tmp: %w", err)
+	}
+	return nil
+}
+
+// prepareMachineID resets /etc/machine-id to an empty file.
+func prepareMachineID(imageDir string) error {
+	machineID := filepath.Join(imageDir, "etc", "machine-id")
+	_ = os.Remove(machineID)
+	f, err := os.Create(machineID)
+	if err != nil {
+		return fmt.Errorf("failed to touch machine-id: %w", err)
+	}
+	f.Close()
+	return nil
+}
+
+// prepareVarDbPkg moves var/db/pkg to the read-only VDB location and creates
+// a relative symlink back.
+func (o *Ostree) prepareVarDbPkg(imageDir, roVdbPath string) error {
+	o.Print("Setting up /var/db/pkg...")
+	varDbPkg := filepath.Join(imageDir, "var", "db", "pkg")
+	usrVarDbPkg := filepath.Join(imageDir, roVdbPath)
+
+	o.Print("Moving %s to %s\n", varDbPkg, usrVarDbPkg)
+	if err := os.MkdirAll(filepath.Dir(usrVarDbPkg), 0755); err != nil {
+		return fmt.Errorf("failed to create parent of usrVarDbPkg: %w", err)
+	}
+	if err := filesystems.Move(varDbPkg, usrVarDbPkg); err != nil {
+		return fmt.Errorf("failed to move var/db/pkg: %w", err)
+	}
+
+	if err := os.Symlink(filepath.Join("..", "..", roVdbPath), varDbPkg); err != nil {
+		return fmt.Errorf("failed to symlink var/db/pkg: %w", err)
+	}
+	return nil
+}
+
+// prepareOpt moves /opt to /usr/opt and symlinks it.
+func prepareOpt(imageDir string) error {
+	fmt.Println("Setting up /opt...")
+	return moveDirToTargetAndSymlink(
+		filepath.Join(imageDir, "opt"),
+		filepath.Join(imageDir, "usr", "opt"),
+		"usr/opt",
+	)
+}
+
+// prepareSrv moves /srv to /var/srv and symlinks it.
+func prepareSrv(imageDir string) error {
+	fmt.Println("Setting up /srv...")
+	return moveDirToTargetAndSymlink(
+		filepath.Join(imageDir, "srv"),
+		filepath.Join(imageDir, "var", "srv"),
+		"var/srv",
+	)
+}
+
+// prepareStaticDirs creates /lab, /snap, and /usr/src directories.
+func prepareStaticDirs(imageDir string) error {
+	dirs := []struct {
+		path string
+		desc string
+	}{
+		{"lab", "Setting up /lab (for everything homelabbing and your LAN)..."},
+		{"snap", "Setting up /snap ..."},
+		{filepath.Join("usr", "src"), "Setting up /usr/src (for snap) ..."},
+	}
+	for _, d := range dirs {
+		fmt.Println(d.desc)
+		if err := os.MkdirAll(filepath.Join(imageDir, d.path), 0755); err != nil {
+			return fmt.Errorf("failed to create %s: %w", d.path, err)
+		}
+	}
+	return nil
+}
+
+// prepareUsrLocal moves /usr/local to /var/usrlocal and symlinks it.
+func prepareUsrLocal(imageDir string) error {
+	fmt.Println("Setting up /usr/local...")
+	usrLocalDir := filepath.Join(imageDir, "usr", "local")
+	relUsrLocal := "var/usrlocal"
+	imageUsrLocal := filepath.Join(imageDir, relUsrLocal)
+
+	if pathExists(usrLocalDir) {
+		if err := filesystems.Move(usrLocalDir, imageUsrLocal); err != nil {
+			return fmt.Errorf("failed to move usr/local: %w", err)
+		}
+	} else {
+		os.MkdirAll(imageUsrLocal, 0755)
+	}
+	if err := os.Symlink(filepath.Join("..", relUsrLocal), usrLocalDir); err != nil {
+		return fmt.Errorf("failed to symlink usr/local: %w", err)
+	}
+	return nil
+}
+
+// PrepareFilesystemHierarchy prepares the filesystem hierarchy for OSTree.
+// It ports the logic from ostree_lib.prepare_filesystem_hierarchy in ostree_lib.sh.
+func (o *Ostree) PrepareFilesystemHierarchy(imageDir string) error {
+	marker := filepath.Join(imageDir, "var", ".matrixos-prepared")
+	if fileExists(marker) {
+		return fmt.Errorf("filesystem hierarchy already prepared: %s exists", marker)
+	}
+
+	if err := prepareSysrootAndOstreeLink(imageDir); err != nil {
+		return err
+	}
+
+	if err := prepareTmpDir(imageDir); err != nil {
+		return err
+	}
+
+	if err := prepareMachineID(imageDir); err != nil {
+		return err
+	}
+
+	if err := o.SetupEtc(imageDir); err != nil {
+		return err
+	}
+
+	matrixOsRoVdb, err := o.cfg.GetItem("Releaser.ReadOnlyVdb")
+	if err != nil {
+		return err
+	}
+	if matrixOsRoVdb == "" {
+		return fmt.Errorf("config item Releaser.ReadOnlyVdb is not set")
+	}
+	if err := o.prepareVarDbPkg(imageDir, matrixOsRoVdb); err != nil {
+		return err
+	}
+
+	if err := prepareOpt(imageDir); err != nil {
+		return err
+	}
+
+	if err := prepareSrv(imageDir); err != nil {
+		return err
+	}
+
+	if err := prepareStaticDirs(imageDir); err != nil {
+		return err
+	}
+
+	o.Print("Setting up /home ...")
+	if err := o.prepareVarHome(imageDir, "home", "home"); err != nil {
+		return err
+	}
+	o.Print("Setting up /root ...")
+	if err := o.prepareVarHome(imageDir, "root", "roothome"); err != nil {
+		return err
+	}
+
+	efiRoot, err := o.cfg.GetItem("Imager.EfiRoot")
+	if err != nil {
+		return err
+	}
+	if efiRoot == "" {
+		return fmt.Errorf("config item Imager.EfiRoot is not set")
+	}
+	o.Print("Setting up %s...\n", efiRoot)
+	os.MkdirAll(filepath.Join(imageDir, efiRoot), 0755)
+
+	if err := prepareUsrLocal(imageDir); err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(marker, []byte("prepared"), 0644); err != nil {
+		return fmt.Errorf("failed to create marker file: %w", err)
+	}
+
+	return nil
+}
+
+// ValidateFilesystemHierarchy validates the filesystem hierarchy for OSTree.
+func (o *Ostree) ValidateFilesystemHierarchy(imageDir string) error {
+	if imageDir == "" {
+		return fmt.Errorf("missing imageDir parameter")
+	}
+
+	expected := []string{
+		"/home",
+		"/opt",
+		"/root",
+		"/srv",
+		"/tmp",
+		"/usr/local",
+	}
+
+	var issues int
+	for _, relPath := range expected {
+		fullPath := filepath.Join(imageDir, relPath)
+
+		// Check if it's a symlink and if it points to a directory.
+		// We use Lstat to check the link itself and Stat to check the target.
+		lfi, lerr := os.Lstat(fullPath)
+		if lerr == nil && lfi.Mode()&os.ModeSymlink != 0 {
+			if fi, err := os.Stat(fullPath); err == nil && fi.IsDir() {
+				continue
+			}
+		}
+
+		fmt.Fprintf(os.Stderr, "Expected %s to be a symlink to a directory.\n",
+			fullPath)
+		fmt.Fprintln(os.Stderr, "Please check the filesystem hierarchy.")
+		issues++
+	}
+
+	if issues > 0 {
+		return fmt.Errorf("filesystem hierarchy validation failed: %d issues",
+			issues)
+	}
+
+	return nil
+}

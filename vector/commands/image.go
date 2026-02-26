@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/imager"
 	"matrixos/vector/lib/validation"
@@ -125,7 +125,7 @@ func (c *ImageCommand) Run() error {
 	return c.RunWithGuard(c.runImage)
 }
 
-func failFastChecks(ot cds.IOstree, im imager.IImage) error {
+func failFastChecks(ot ostree.IOstree, im imager.IImage) error {
 	if _, err := im.CreateQcow2(); err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func failFastChecks(ot cds.IOstree, im imager.IImage) error {
 // runImage implements the image building logic.
 func (c *ImageCommand) runImage() error {
 	ref := c.ref
-	if cds.IsBranchShortName(ref) {
+	if ostree.IsBranchShortName(ref) {
 		return fmt.Errorf(
 			"specify a complete branch name, %s is not allowed",
 			ref,
@@ -209,9 +209,9 @@ func (c *ImageCommand) runImage() error {
 	}
 
 	// Check if ref contains remote.
-	if remoted := cds.ExtractRemoteFromRef(ref); remoted != "" {
+	if remoted := ostree.ExtractRemoteFromRef(ref); remoted != "" {
 		remote = remoted
-		ref = cds.CleanRemoteFromRef(ref)
+		ref = ostree.CleanRemoteFromRef(ref)
 		c.im.PrintWarning(
 			"WARNING: %s contains the remote reference, using remote=%s and ref=%s\n",
 			c.ref, remote, ref)

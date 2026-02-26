@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/filesystems"
 )
 
@@ -30,7 +30,7 @@ func (im *Image) cleanAndStripRef() (string, error) {
 	if im.ref == "" {
 		return "", errors.New("missing ref, set Ref in NewImageOptions")
 	}
-	ref := cds.CleanRemoteFromRef(im.ref)
+	ref := ostree.CleanRemoteFromRef(im.ref)
 	stripped, err := im.ostree.RemoveFullFromBranch(ref)
 	if err != nil {
 		return "", err
@@ -131,7 +131,7 @@ func (im *Image) BuildImagePath() (string, error) {
 	if im.ref == "" {
 		return "", errors.New("missing ref, set Ref in NewImageOptions")
 	}
-	ref := cds.CleanRemoteFromRef(im.ref)
+	ref := ostree.CleanRemoteFromRef(im.ref)
 	suffix := refToSuffix(ref) + ".img"
 	return im.buildImagePath(suffix)
 }
@@ -144,7 +144,7 @@ func (im *Image) BuildImagePathWithReleaseVersion(releaseVersion string) (string
 	if releaseVersion == "" {
 		return "", errors.New("missing releaseVersion parameter")
 	}
-	ref := cds.CleanRemoteFromRef(im.ref)
+	ref := ostree.CleanRemoteFromRef(im.ref)
 	suffix := refToSuffix(ref) + "-" + releaseVersion + ".img"
 	return im.buildImagePath(suffix)
 }

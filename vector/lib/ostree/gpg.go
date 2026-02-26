@@ -1,0 +1,357 @@
+package ostree
+
+import (
+	"bufio"
+	"bytes"
+	"errors"
+	"fmt"
+	"os"
+	"os/user"
+	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+// ClientSideGpgArgs returns arguments for client-side GPG verification.
+func ClientSideGpgArgs(gpgEnabled bool, pubKeyPath string) ([]string, error) {
+	var gpgArgs []string
+
+	if gpgEnabled {
+		gpgArgs = append(
+			gpgArgs,
+			"--set=gpg-verify=true",
+			"--gpg-import="+pubKeyPath,
+		)
+	} else {
+		gpgArgs = append(gpgArgs, "--no-gpg-verify")
+	}
+	return gpgArgs, nil
+}
+
+// PatchGpgHomeDir sets the correct permissions on the GPG homedir.
+func PatchGpgHomeDir(homeDir string) error {
+	if homeDir == "" {
+		return errors.New("missing homeDir parameter")
+	}
+
+	if err := os.MkdirAll(homeDir, 0700); err != nil {
+		return err
+	}
+	if err := os.Chmod(homeDir, 0700); err != nil {
+		return err
+	}
+
+	err := filepath.Walk(homeDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			if err := os.Chmod(path, 0600); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	curUser, err := user.Current()
+	if err != nil {
+		return fmt.Errorf("could not find root user: %w", err)
+	}
+	uid, _ := strconv.Atoi(curUser.Uid)
+	gid, _ := strconv.Atoi(curUser.Gid)
+
+	return filepath.Walk(homeDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chown(path, uid, gid)
+	})
+}
+
+// GpgSignedFilePath returns the path to a GPG signed file.
+func GpgSignedFilePath(filePath string) string {
+	return filePath + ".asc"
+}
+
+func (o *Ostree) getDevGpgHomeDir() (string, error) {
+	dir, err := o.cfg.GetItem("Ostree.DevGpgHomeDir")
+	if err != nil {
+		return "", err
+	}
+	if dir == "" {
+		return "", errors.New("invalid Ostree.DevGpgHomeDir")
+	}
+	return dir, nil
+}
+
+// GpgHomeDir returns the path to the GPG homedir, creating and setting permissions if needed.
+func (o *Ostree) GpgHomeDir() (string, error) {
+	devGpgHomeDir, err := o.getDevGpgHomeDir()
+	if err != nil {
+		return "", err
+	}
+	if err := PatchGpgHomeDir(devGpgHomeDir); err != nil {
+		return "", err
+	}
+	return devGpgHomeDir, nil
+}
+
+// GpgKeyID returns the GPG key ID to use for signing.
+func (o *Ostree) GpgKeyID() (string, error) {
+	homeDir, err := o.GpgHomeDir()
+	if err != nil {
+		return "", err
+	}
+	pubkeyPath, err := o.GpgBestPubKeyPath()
+	if err != nil {
+		return "", err
+	}
+
+	out := new(bytes.Buffer)
+	err = o.runner(
+		nil,
+		out,
+		o.stdout,
+		"gpg",
+		"--homedir", homeDir,
+		"--batch",
+		"--yes",
+		"--with-colons",
+		"--show-keys",
+		"--keyid-format", "LONG",
+		pubkeyPath,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	var keyID string
+	scanner := bufio.NewScanner(out)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "pub") {
+			continue
+		}
+
+		parts := strings.Split(line, ":")
+		if len(parts) >= 5 {
+			keyID = strings.TrimSpace(parts[4])
+			break
+		}
+	}
+
+	err = scanner.Err()
+	if err != nil {
+		return "", err
+	}
+
+	if keyID == "" {
+		return keyID, errors.New("cannot find gpg ostree key id.")
+	}
+	return keyID, nil
+}
+
+// ImportGpgKey imports a GPG key into the GPG homedir.
+func (o *Ostree) ImportGpgKey(keyPath string) error {
+	if keyPath == "" {
+		return errors.New("missing keyPath parameter")
+	}
+	if !fileExists(keyPath) {
+		return fmt.Errorf("file %s does not exist", keyPath)
+	}
+
+	homeDir, err := o.GpgHomeDir()
+	if err != nil {
+		return err
+	}
+
+	return o.runner(
+		nil,
+		o.stdout,
+		o.stderr,
+		"gpg",
+		"--homedir", homeDir,
+		"--batch", "--yes",
+		"--import", keyPath,
+	)
+}
+
+// GpgSignFile signs a file with GPG.
+func (o *Ostree) GpgSignFile(file string) error {
+	if file == "" {
+		return errors.New("missing file parameter")
+	}
+	if !fileExists(file) {
+		return fmt.Errorf("file %s does not exist", file)
+	}
+
+	homeDir, err := o.GpgHomeDir()
+	if err != nil {
+		return err
+	}
+
+	keyID, err := o.GpgKeyID()
+	if err != nil {
+		return err
+	}
+
+	ascFile := GpgSignedFilePath(file)
+
+	err = o.runner(
+		nil,
+		o.stdout,
+		o.stdout,
+		"gpg",
+		"--homedir", homeDir,
+		"--batch", "--yes",
+		"--local-user", keyID,
+		"--armor",
+		"--detach-sign",
+		"--output", ascFile,
+		file,
+	)
+	if err != nil {
+		return err
+	}
+
+	o.Print("GPG signature file %v created.\n", ascFile)
+	return nil
+}
+
+// GpgKeys returns the list of GPG key paths used for signing and verification.
+// The list contains the private key, the best available public key, and
+// (if different) the official public key.
+func (o *Ostree) GpgKeys() ([]string, error) {
+	var keys []string
+
+	gpgKeyPath, err := o.GpgPrivateKeyPath()
+	if err != nil {
+		return nil, err
+	}
+	keys = append(keys, gpgKeyPath)
+
+	signingPubKey, err := o.GpgBestPubKeyPath()
+	if err != nil {
+		return nil, err
+	}
+	keys = append(keys, signingPubKey)
+
+	officialPubKeyPath, err := o.GpgOfficialPubKeyPath()
+	if err != nil {
+		return nil, err
+	}
+	// if it's the same as signingPubKey, do not add a dup.
+	if signingPubKey != officialPubKeyPath {
+		keys = append(keys, officialPubKeyPath)
+	}
+
+	return keys, nil
+}
+
+// InitializeSigningGpg imports GPG keys into the local GPG keyring.
+func (o *Ostree) InitializeSigningGpg(verbose bool) error {
+	keys, err := o.GpgKeys()
+	if err != nil {
+		return err
+	}
+
+	o.Print("GPG signing enabled.\n")
+	for _, key := range keys {
+		if !fileExists(key) {
+			o.PrintError("WARNING: Signing GPG key %s not present, skipping import ...\n", key)
+			continue
+		}
+		if err := o.ImportGpgKey(key); err != nil {
+			return fmt.Errorf("failed to import gpg key %s: %w", key, err)
+		}
+	}
+	return nil
+}
+
+// InitializeRemoteSigningGpg imports GPG keys into the remote ostree repository.
+func (o *Ostree) InitializeRemoteSigningGpg(remote, repoDir string, verbose bool) error {
+	if remote == "" {
+		return errors.New("InitializeRemoteSigningGpg: missing remote parameter")
+	}
+	if repoDir == "" {
+		return errors.New("InitializeRemoteSigningGpg: missing repoDir parameter")
+	}
+
+	keys, err := o.GpgKeys()
+	if err != nil {
+		return err
+	}
+
+	o.Print("Remote GPG signing enabled.\n")
+	for _, key := range keys {
+		if !fileExists(key) {
+			o.PrintError("WARNING: Remote signing GPG key %s not present, skipping import ...\n", key)
+			continue
+		}
+		err := o.ostreeRun(verbose, "--repo="+repoDir, "remote", "gpg-import", remote, "-k", key)
+		if err != nil {
+			return fmt.Errorf("failed to import gpg key %s to remote %s: %w", key, remote, err)
+		}
+	}
+	return nil
+}
+
+// MaybeInitializeGpg initializes GPG keys for an ostree repository.
+func (o *Ostree) MaybeInitializeGpg(verbose bool) error {
+	repoDir, err := o.RepoDir()
+	if err != nil {
+		return err
+	}
+	remote, err := o.Remote()
+	if err != nil {
+		return err
+	}
+
+	return o.MaybeInitializeGpgForRepo(remote, repoDir, verbose)
+}
+
+// MaybeInitializeGpgForRepo initializes GPG keys for an ostree repository.
+func (o *Ostree) MaybeInitializeGpgForRepo(remote, repoDir string, verbose bool) error {
+	gpgEnabled, err := o.GpgEnabled()
+	if err != nil {
+		return err
+	}
+	if !gpgEnabled {
+		o.Print("GPG signing is disabled. Skipping GPG initialization ...")
+		return nil
+	}
+
+	if err := o.InitializeSigningGpg(verbose); err != nil {
+		return err
+	}
+	return o.InitializeRemoteSigningGpg(remote, repoDir, verbose)
+}
+
+// GpgArgs returns the gpg arguments for ostree commands.
+func (o *Ostree) GpgArgs() ([]string, error) {
+	gpgEnabled, err := o.GpgEnabled()
+	if err != nil {
+		return nil, err
+	}
+	if !gpgEnabled {
+		return nil, nil
+	}
+
+	keyID, err := o.GpgKeyID()
+	if err != nil {
+		return nil, err
+	}
+
+	homeDir, err := o.GpgHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	return []string{
+		"--gpg-sign=" + keyID,
+		"--gpg-homedir=" + homeDir,
+	}, nil
+}
