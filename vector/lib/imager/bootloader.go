@@ -348,7 +348,14 @@ func (im *Image) InstallBootloader() error {
 		return fmt.Errorf("failed to create %s: %w", efiChrootMount, err)
 	}
 	im.trackMount(efiChrootMount)
-	err = filesystems.BindMount(im.efifsMount, efiChrootMount)
+	efiBind, err := filesystems.NewBindMount(
+		filesystems.BindMountOptions{
+			Src:    im.efifsMount,
+			Dst:    efiChrootMount,
+			Stdout: im.stdout,
+			Stderr: im.stderr,
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("failed to bind mount EFI: %w", err)
 	}
@@ -359,7 +366,14 @@ func (im *Image) InstallBootloader() error {
 		return fmt.Errorf("failed to create %s: %w", bootChrootMount, err)
 	}
 	im.trackMount(bootChrootMount)
-	err = filesystems.BindMount(im.bootfsMount, bootChrootMount)
+	bootBind, err := filesystems.NewBindMount(
+		filesystems.BindMountOptions{
+			Src:    im.bootfsMount,
+			Dst:    bootChrootMount,
+			Stdout: im.stdout,
+			Stderr: im.stderr,
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("failed to bind mount boot: %w", err)
 	}
@@ -397,8 +411,8 @@ func (im *Image) InstallBootloader() error {
 	)
 
 	// Clean up chroot mounts regardless of grub-install result.
-	filesystems.BindUmount(bootChrootMount)
-	filesystems.BindUmount(efiChrootMount)
+	bootBind.Unmount()
+	efiBind.Unmount()
 	mounter.Cleanup()
 
 	if err != nil {
