@@ -385,6 +385,7 @@ func (c *IniConfig) Load() error {
 	privateRepoDependents := []string{
 		"Seeder.SecureBootPrivateKey",
 		"Seeder.SecureBootPublicKey",
+		"Seeder.SecureBootKekPublicKey",
 		"Ostree.GpgPrivateKey",
 		"Ostree.GpgPublicKey",
 	}

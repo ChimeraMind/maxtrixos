@@ -35,6 +35,7 @@ PortageReposDir=out/seeder/repos
 GpgKeysDir=out/seeder/gpg-keys
 SecureBootPrivateKey=sb-keys/db.key
 SecureBootPublicKey=sb-keys/db.pem
+SecureBootKekPublicKey=sb-keys/KEK.pem
 DefaultSecureBootPrivateKey=sb-keys/db.key
 DefaultSecureBootPublicKey=sb-keys/db.pem
 LocksDir=locks/seeder
@@ -113,6 +114,7 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 	// Relative to PrivateGitRepoPath
 	check("Seeder.SecureBootPrivateKey", filepath.Join(privateRepoPath, "sb-keys/db.key"))
 	check("Seeder.SecureBootPublicKey", filepath.Join(privateRepoPath, "sb-keys/db.pem"))
+	check("Seeder.SecureBootKekPublicKey", filepath.Join(privateRepoPath, "sb-keys/KEK.pem"))
 	check("Ostree.GpgPrivateKey", filepath.Join(privateRepoPath, "keys/priv.key"))
 	check("Ostree.GpgPublicKey", filepath.Join(privateRepoPath, "keys/pub.key"))
 	// Relative to DefaultPrivateGitRepoPath
