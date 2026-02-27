@@ -1538,3 +1538,442 @@ func TestListContents(t *testing.T) {
 		}
 	})
 }
+
+// --- Block device sysfs helpers ---
+
+// setupMockSysClassBlock creates a temp directory simulating /sys/class/block/
+// and redirects sysClassBlockPath to it. Returns the temp sysfs root.
+func setupMockSysClassBlock(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	origSysClassBlock := sysClassBlockPath
+	sysClassBlockPath = tmpDir
+	t.Cleanup(func() { sysClassBlockPath = origSysClassBlock })
+	return tmpDir
+}
+
+// setupMockDevDiskByLabel creates a temp directory simulating /dev/disk/by-label/
+// and redirects devDiskByLabelPath to it. Returns the temp dir.
+func setupMockDevDiskByLabel(t *testing.T) string {
+	t.Helper()
+	tmpDir := filepath.Join(t.TempDir(), "by-label")
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	orig := devDiskByLabelPath
+	devDiskByLabelPath = tmpDir
+	t.Cleanup(func() { devDiskByLabelPath = orig })
+	return tmpDir
+}
+
+// setupMockDevDiskByPartType creates a temp directory simulating /dev/disk/by-parttypeuuid/
+// and redirects devDiskByPartTypePath to it. Returns the temp dir.
+func setupMockDevDiskByPartType(t *testing.T) string {
+	t.Helper()
+	tmpDir := filepath.Join(t.TempDir(), "by-parttypeuuid")
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	orig := devDiskByPartTypePath
+	devDiskByPartTypePath = tmpDir
+	t.Cleanup(func() { devDiskByPartTypePath = orig })
+	return tmpDir
+}
+
+// createSysfsPartition creates a fake sysfs partition directory inside the
+// parent device directory with the given partition number.
+func createSysfsPartition(t *testing.T, sysClassBlock, parentName, partName string, partNum int) {
+	t.Helper()
+	partDir := filepath.Join(sysClassBlock, parentName, partName)
+	if err := os.MkdirAll(partDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	partFile := filepath.Join(partDir, "partition")
+	if err := os.WriteFile(partFile, []byte(intToStr(partNum)+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Also create the sysfs entry for the partition itself (for PartitionNumber lookups).
+	partSysfs := filepath.Join(sysClassBlock, partName)
+	if err := os.MkdirAll(partSysfs, 0755); err != nil {
+		t.Fatal(err)
+	}
+	partFileDirect := filepath.Join(partSysfs, "partition")
+	if err := os.WriteFile(partFileDirect, []byte(intToStr(partNum)+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func intToStr(n int) string {
+	return fmt.Sprintf("%d", n)
+}
+
+// --- Block device sysfs tests ---
+
+func TestBlockDeviceNthPartition(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		sysfs := setupMockSysClassBlock(t)
+
+		// Create parent device directory.
+		parentName := "sda"
+		parentDir := filepath.Join(sysfs, parentName)
+		if err := os.MkdirAll(parentDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create partitions sda1 (partition 1) and sda2 (partition 2).
+		createSysfsPartition(t, sysfs, parentName, "sda1", 1)
+		createSysfsPartition(t, sysfs, parentName, "sda2", 2)
+
+		// Look up partition 2.
+		result, err := BlockDeviceNthPartition("/dev/sda", 2)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != "/dev/sda2" {
+			t.Errorf("expected /dev/sda2, got %s", result)
+		}
+	})
+
+	t.Run("LoopDevice", func(t *testing.T) {
+		sysfs := setupMockSysClassBlock(t)
+
+		parentName := "loop0"
+		parentDir := filepath.Join(sysfs, parentName)
+		if err := os.MkdirAll(parentDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		createSysfsPartition(t, sysfs, parentName, "loop0p1", 1)
+		createSysfsPartition(t, sysfs, parentName, "loop0p2", 2)
+		createSysfsPartition(t, sysfs, parentName, "loop0p3", 3)
+
+		result, err := BlockDeviceNthPartition("/dev/loop0", 3)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != "/dev/loop0p3" {
+			t.Errorf("expected /dev/loop0p3, got %s", result)
+		}
+	})
+
+	t.Run("NvmeDevice", func(t *testing.T) {
+		sysfs := setupMockSysClassBlock(t)
+
+		parentName := "nvme0n1"
+		parentDir := filepath.Join(sysfs, parentName)
+		if err := os.MkdirAll(parentDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		createSysfsPartition(t, sysfs, parentName, "nvme0n1p1", 1)
+		createSysfsPartition(t, sysfs, parentName, "nvme0n1p2", 2)
+
+		result, err := BlockDeviceNthPartition("/dev/nvme0n1", 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != "/dev/nvme0n1p1" {
+			t.Errorf("expected /dev/nvme0n1p1, got %s", result)
+		}
+	})
+
+	t.Run("PartitionNotFound", func(t *testing.T) {
+		sysfs := setupMockSysClassBlock(t)
+
+		parentName := "sda"
+		parentDir := filepath.Join(sysfs, parentName)
+		if err := os.MkdirAll(parentDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		createSysfsPartition(t, sysfs, parentName, "sda1", 1)
+
+		_, err := BlockDeviceNthPartition("/dev/sda", 5)
+		if err == nil {
+			t.Error("expected error for non-existent partition")
+		}
+	})
+
+	t.Run("EmptyBlockDevice", func(t *testing.T) {
+		_, err := BlockDeviceNthPartition("", 1)
+		if err == nil {
+			t.Error("expected error for empty blockDevice")
+		}
+	})
+
+	t.Run("InvalidNth", func(t *testing.T) {
+		_, err := BlockDeviceNthPartition("/dev/sda", 0)
+		if err == nil {
+			t.Error("expected error for nth <= 0")
+		}
+		_, err = BlockDeviceNthPartition("/dev/sda", -1)
+		if err == nil {
+			t.Error("expected error for nth < 0")
+		}
+	})
+
+	t.Run("DeviceNotInSysfs", func(t *testing.T) {
+		setupMockSysClassBlock(t)
+		_, err := BlockDeviceNthPartition("/dev/nonexistent", 1)
+		if err == nil {
+			t.Error("expected error for device not in sysfs")
+		}
+	})
+}
+
+func TestBlockDeviceForPartition(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		sysfs := setupMockSysClassBlock(t)
+
+		// Create a sysfs structure that mimics real devices:
+		// /sys/class/block/sda1 -> ../../devices/pci/.../sda/sda1
+		// We simulate this by creating a real directory hierarchy and a symlink.
+		devicesDir := filepath.Join(sysfs, ".devices", "sda", "sda1")
+		if err := os.MkdirAll(devicesDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		// Create partition file in the real path.
+		if err := os.WriteFile(filepath.Join(devicesDir, "partition"), []byte("1\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create the sysfs symlink: sysClassBlock/sda1 -> .devices/sda/sda1
+		partSysLink := filepath.Join(sysfs, "sda1")
+		if err := os.Symlink(devicesDir, partSysLink); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := BlockDeviceForPartition("/dev/sda1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != "/dev/sda" {
+			t.Errorf("expected /dev/sda, got %s", result)
+		}
+	})
+
+	t.Run("LoopDevice", func(t *testing.T) {
+		sysfs := setupMockSysClassBlock(t)
+
+		devicesDir := filepath.Join(sysfs, ".devices", "loop0", "loop0p1")
+		if err := os.MkdirAll(devicesDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(devicesDir, "partition"), []byte("1\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		partSysLink := filepath.Join(sysfs, "loop0p1")
+		if err := os.Symlink(devicesDir, partSysLink); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := BlockDeviceForPartition("/dev/loop0p1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != "/dev/loop0" {
+			t.Errorf("expected /dev/loop0, got %s", result)
+		}
+	})
+
+	t.Run("NvmeDevice", func(t *testing.T) {
+		sysfs := setupMockSysClassBlock(t)
+
+		devicesDir := filepath.Join(sysfs, ".devices", "nvme0n1", "nvme0n1p2")
+		if err := os.MkdirAll(devicesDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(devicesDir, "partition"), []byte("2\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		partSysLink := filepath.Join(sysfs, "nvme0n1p2")
+		if err := os.Symlink(devicesDir, partSysLink); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := BlockDeviceForPartition("/dev/nvme0n1p2")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != "/dev/nvme0n1" {
+			t.Errorf("expected /dev/nvme0n1, got %s", result)
+		}
+	})
+
+	t.Run("EmptyPath", func(t *testing.T) {
+		_, err := BlockDeviceForPartition("")
+		if err == nil {
+			t.Error("expected error for empty partitionPath")
+		}
+	})
+
+	t.Run("NotAPartition", func(t *testing.T) {
+		sysfs := setupMockSysClassBlock(t)
+
+		// Create a sysfs entry without a "partition" file.
+		devDir := filepath.Join(sysfs, "sda")
+		if err := os.MkdirAll(devDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := BlockDeviceForPartition("/dev/sda")
+		if err == nil {
+			t.Error("expected error for non-partition device")
+		}
+	})
+}
+
+func TestPartitionNumber(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		sysfs := setupMockSysClassBlock(t)
+
+		partDir := filepath.Join(sysfs, "sda1")
+		if err := os.MkdirAll(partDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(partDir, "partition"), []byte("1\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := PartitionNumber("/dev/sda1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != "1" {
+			t.Errorf("expected 1, got %s", result)
+		}
+	})
+
+	t.Run("PartitionThree", func(t *testing.T) {
+		sysfs := setupMockSysClassBlock(t)
+
+		partDir := filepath.Join(sysfs, "sda3")
+		if err := os.MkdirAll(partDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(partDir, "partition"), []byte("3\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := PartitionNumber("/dev/sda3")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != "3" {
+			t.Errorf("expected 3, got %s", result)
+		}
+	})
+
+	t.Run("EmptyPath", func(t *testing.T) {
+		_, err := PartitionNumber("")
+		if err == nil {
+			t.Error("expected error for empty path")
+		}
+	})
+
+	t.Run("NonexistentDevice", func(t *testing.T) {
+		setupMockSysClassBlock(t)
+		_, err := PartitionNumber("/dev/nonexistent99")
+		if err == nil {
+			t.Error("expected error for nonexistent device")
+		}
+	})
+}
+
+func TestPartitionLabel(t *testing.T) {
+	t.Run("HasLabel", func(t *testing.T) {
+		labelDir := setupMockDevDiskByLabel(t)
+
+		// Create a device file to resolve against.
+		devFile := filepath.Join(t.TempDir(), "sda1")
+		if err := os.WriteFile(devFile, nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create a symlink: by-label/MY_LABEL -> devFile
+		if err := os.Symlink(devFile, filepath.Join(labelDir, "MY_LABEL")); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := PartitionLabel(devFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != "MY_LABEL" {
+			t.Errorf("expected MY_LABEL, got %s", result)
+		}
+	})
+
+	t.Run("NoLabel", func(t *testing.T) {
+		setupMockDevDiskByLabel(t)
+
+		devFile := filepath.Join(t.TempDir(), "sdb1")
+		if err := os.WriteFile(devFile, nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// No symlink created, so no label found.
+		result, err := PartitionLabel(devFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != "" {
+			t.Errorf("expected empty string, got %s", result)
+		}
+	})
+
+	t.Run("EmptyPath", func(t *testing.T) {
+		_, err := PartitionLabel("")
+		if err == nil {
+			t.Error("expected error for empty path")
+		}
+	})
+}
+
+func TestPartitionType(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		partTypeDir := setupMockDevDiskByPartType(t)
+
+		devFile := filepath.Join(t.TempDir(), "sda1")
+		if err := os.WriteFile(devFile, nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		typeGUID := "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
+		if err := os.Symlink(devFile, filepath.Join(partTypeDir, typeGUID)); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := PartitionType(devFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expected := "C12A7328-F81F-11D2-BA4B-00A0C93EC93B"
+		if result != expected {
+			t.Errorf("expected %s, got %s", expected, result)
+		}
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		setupMockDevDiskByPartType(t)
+
+		devFile := filepath.Join(t.TempDir(), "sdb1")
+		if err := os.WriteFile(devFile, nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := PartitionType(devFile)
+		if err == nil {
+			t.Error("expected error when partition type not found")
+		}
+	})
+
+	t.Run("EmptyPath", func(t *testing.T) {
+		_, err := PartitionType("")
+		if err == nil {
+			t.Error("expected error for empty path")
+		}
+	})
+}
