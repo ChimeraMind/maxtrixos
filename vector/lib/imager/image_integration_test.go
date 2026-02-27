@@ -67,7 +67,7 @@ func TestIntegrationCreateAndPartitionImage(t *testing.T) {
 
 	// Step 3: Partition the device.
 	mockRunner.Calls = nil // reset
-	if err := im.PartitionDevices("200M", "1G", "64M", imagePath); err != nil {
+	if err := im.PartitionDevices("200M", "1G", "64M"); err != nil {
 		t.Fatalf("PartitionDevices failed: %v", err)
 	}
 
@@ -259,7 +259,7 @@ func TestIntegrationPartitionTypeGUIDs(t *testing.T) {
 	im := newTestImageWithRunner(cfg, &cds.MockOstree{}, mockRunner)
 
 	im.devicePath = "/dev/fake"
-	if err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake"); err != nil {
+	if err := im.PartitionDevices("200M", "1G", "32G"); err != nil {
 		t.Fatalf("PartitionDevices failed: %v", err)
 	}
 
@@ -314,7 +314,7 @@ func TestIntegrationClearPartitionAndRepartition(t *testing.T) {
 	clearCalls := len(mockRunner.Calls)
 
 	// Partition.
-	if err := im.PartitionDevices("100M", "500M", "128M", imagePath); err != nil {
+	if err := im.PartitionDevices("100M", "500M", "128M"); err != nil {
 		t.Fatalf("PartitionDevices failed: %v", err)
 	}
 	partCalls := len(mockRunner.Calls) - clearCalls
@@ -431,8 +431,9 @@ func TestIntegrationPartitionDevicesConfigErrors(t *testing.T) {
 		delete(cfg.Items, "Imager.EspPartitionType")
 		mockRunner := runner.NewMockRunner()
 		im := newTestImageWithRunner(cfg, &cds.MockOstree{}, mockRunner)
+		im.devicePath = "/dev/fake"
 
-		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
+		err := im.PartitionDevices("200M", "1G", "32G")
 		if err == nil {
 			t.Fatal("Expected error for missing EspPartitionType")
 		}
@@ -443,8 +444,9 @@ func TestIntegrationPartitionDevicesConfigErrors(t *testing.T) {
 		delete(cfg.Items, "Imager.BootPartitionType")
 		mockRunner := runner.NewMockRunner()
 		im := newTestImageWithRunner(cfg, &cds.MockOstree{}, mockRunner)
+		im.devicePath = "/dev/fake"
 
-		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
+		err := im.PartitionDevices("200M", "1G", "32G")
 		if err == nil {
 			t.Fatal("Expected error for missing BootPartitionType")
 		}
@@ -455,8 +457,9 @@ func TestIntegrationPartitionDevicesConfigErrors(t *testing.T) {
 		delete(cfg.Items, "Imager.RootPartitionType")
 		mockRunner := runner.NewMockRunner()
 		im := newTestImageWithRunner(cfg, &cds.MockOstree{}, mockRunner)
+		im.devicePath = "/dev/fake"
 
-		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
+		err := im.PartitionDevices("200M", "1G", "32G")
 		if err == nil {
 			t.Fatal("Expected error for missing RootPartitionType")
 		}
@@ -469,8 +472,9 @@ func TestIntegrationPartitionDevicesSgdiskFailures(t *testing.T) {
 	t.Run("EfiPartitionFails", func(t *testing.T) {
 		mockRunner := runner.NewMockRunnerFailOnCall(0, os.ErrPermission)
 		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
+		im.devicePath = "/dev/fake"
 
-		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
+		err := im.PartitionDevices("200M", "1G", "32G")
 		if err == nil {
 			t.Fatal("Expected error when EFI sgdisk fails")
 		}
@@ -482,8 +486,9 @@ func TestIntegrationPartitionDevicesSgdiskFailures(t *testing.T) {
 	t.Run("BootPartitionFails", func(t *testing.T) {
 		mockRunner := runner.NewMockRunnerFailOnCall(1, os.ErrPermission)
 		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
+		im.devicePath = "/dev/fake"
 
-		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
+		err := im.PartitionDevices("200M", "1G", "32G")
 		if err == nil {
 			t.Fatal("Expected error when boot sgdisk fails")
 		}
@@ -495,8 +500,9 @@ func TestIntegrationPartitionDevicesSgdiskFailures(t *testing.T) {
 	t.Run("RootPartitionFails", func(t *testing.T) {
 		mockRunner := runner.NewMockRunnerFailOnCall(2, os.ErrPermission)
 		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
+		im.devicePath = "/dev/fake"
 
-		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
+		err := im.PartitionDevices("200M", "1G", "32G")
 		if err == nil {
 			t.Fatal("Expected error when root sgdisk fails")
 		}
@@ -508,8 +514,9 @@ func TestIntegrationPartitionDevicesSgdiskFailures(t *testing.T) {
 	t.Run("AutoGrowFlagFails", func(t *testing.T) {
 		mockRunner := runner.NewMockRunnerFailOnCall(3, os.ErrPermission)
 		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
+		im.devicePath = "/dev/fake"
 
-		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
+		err := im.PartitionDevices("200M", "1G", "32G")
 		if err == nil {
 			t.Fatal("Expected error when auto-grow flag fails")
 		}
@@ -521,8 +528,9 @@ func TestIntegrationPartitionDevicesSgdiskFailures(t *testing.T) {
 	t.Run("PartprobeFails", func(t *testing.T) {
 		mockRunner := runner.NewMockRunnerFailOnCall(4, os.ErrPermission)
 		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
+		im.devicePath = "/dev/fake"
 
-		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
+		err := im.PartitionDevices("200M", "1G", "32G")
 		if err == nil {
 			t.Fatal("Expected error when partprobe fails")
 		}
