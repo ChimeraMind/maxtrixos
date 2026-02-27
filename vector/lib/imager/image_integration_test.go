@@ -197,6 +197,10 @@ func TestIntegrationFormatAndMountWorkflow(t *testing.T) {
 	if _, err := os.Stat(mountEfi); os.IsNotExist(err) {
 		t.Errorf("MountEfifs: mount point directory was not created: %s", mountEfi)
 	}
+	// Verify mount point was stored.
+	if im.EfifsMount() != mountEfi {
+		t.Errorf("MountEfifs: expected efifsMount %q, got %q", mountEfi, im.EfifsMount())
+	}
 
 	// --- Mount Boot ---
 	mockRunner.Calls = nil
@@ -209,6 +213,10 @@ func TestIntegrationFormatAndMountWorkflow(t *testing.T) {
 	}
 	if mockRunner.Calls[0].Name != "mount" {
 		t.Errorf("MountBootfs: expected mount, got %q", mockRunner.Calls[0].Name)
+	}
+	// Verify mount point was stored.
+	if im.BootfsMount() != mountBoot {
+		t.Errorf("MountBootfs: expected bootfsMount %q, got %q", mountBoot, im.BootfsMount())
 	}
 
 	// --- Mount Root ---
@@ -236,6 +244,10 @@ func TestIntegrationFormatAndMountWorkflow(t *testing.T) {
 	}
 	if !foundCompress {
 		t.Errorf("MountRootfs: expected compress-force option, got %v", mockRunner.Calls[0].Args)
+	}
+	// Verify mount point was stored.
+	if im.RootfsMount() != mountRoot {
+		t.Errorf("MountRootfs: expected rootfsMount %q, got %q", mountRoot, im.RootfsMount())
 	}
 }
 
@@ -540,6 +552,9 @@ func TestIntegrationMountCreatesDirectories(t *testing.T) {
 	if _, err := os.Stat(deepEfi); os.IsNotExist(err) {
 		t.Error("MountEfifs did not create nested mount point directory")
 	}
+	if im.EfifsMount() != deepEfi {
+		t.Errorf("MountEfifs: expected efifsMount %q, got %q", deepEfi, im.EfifsMount())
+	}
 
 	deepBoot := filepath.Join(tmpDir, "x", "y", "boot")
 	if err := im.MountBootfs(deepBoot); err != nil {
@@ -548,6 +563,9 @@ func TestIntegrationMountCreatesDirectories(t *testing.T) {
 	if _, err := os.Stat(deepBoot); os.IsNotExist(err) {
 		t.Error("MountBootfs did not create nested mount point directory")
 	}
+	if im.BootfsMount() != deepBoot {
+		t.Errorf("MountBootfs: expected bootfsMount %q, got %q", deepBoot, im.BootfsMount())
+	}
 
 	deepRoot := filepath.Join(tmpDir, "r", "o", "rootfs")
 	if err := im.MountRootfs(deepRoot); err != nil {
@@ -555,6 +573,9 @@ func TestIntegrationMountCreatesDirectories(t *testing.T) {
 	}
 	if _, err := os.Stat(deepRoot); os.IsNotExist(err) {
 		t.Error("MountRootfs did not create nested mount point directory")
+	}
+	if im.RootfsMount() != deepRoot {
+		t.Errorf("MountRootfs: expected rootfsMount %q, got %q", deepRoot, im.RootfsMount())
 	}
 }
 

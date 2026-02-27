@@ -38,6 +38,11 @@ type IImage interface {
 	SetDevicePath(devicePath string)
 	SetRootfs(rootfs string)
 
+	// Mount point accessors (set after successful Mount* calls)
+	EfifsMount() string
+	BootfsMount() string
+	RootfsMount() string
+
 	// Config accessors
 	ImagesOutDir() (string, error)
 	MountDir() (string, error)
@@ -82,19 +87,19 @@ type IImage interface {
 	MountRootfs(mountRootfs string) error
 	GetKernelPath() (string, error)
 	SetupPasswords() error
-	SetupBootloaderConfig(ref, sysroot, bootDir, efibootDir, efiUUID, bootUUID string) error
-	SetupVmtestConfig(bootDir string) error
-	InstallSecurebootCerts(mountEfifs, efibootDir string) error
+	SetupBootloaderConfig(ref, efibootDir, efiUUID, bootUUID string) error
+	SetupVmtestConfig() error
+	InstallSecurebootCerts(efibootDir string) error
 	InstallMemtest(efibootDir string) error
 	GenerateKernelBootArgs(ref, physicalRootDevice string, encryptionEnabled bool) ([]string, error)
 	PackageList() ([]string, error)
 	SetupHooks(ref string) error
-	InstallBootloader(mountEfifs, mountBootfs, efibootDir string) ([]string, error)
+	InstallBootloader(efibootDir string) ([]string, error)
 	TestImage(imagePath, ref string) error
-	FinalizeFilesystems(mountRootfs, mountBootfs, mountEfifs string) error
+	FinalizeFilesystems() error
 	Qcow2ImagePath(imagePath string) (string, error)
 	CreateQcow2Image(imagePath string) error
-	ShowFinalFilesystemInfo(mountBootfs, mountEfifs string) error
+	ShowFinalFilesystemInfo() error
 	ShowTestInfo(artifacts []string)
 	RemoveImageFile(imagePath string) error
 	ImageLockDir() (string, error)
@@ -112,6 +117,11 @@ type Image struct {
 	rootDevice string
 	devicePath string
 	rootfs     string
+
+	// Mount points, set by Mount* methods on success.
+	efifsMount  string
+	bootfsMount string
+	rootfsMount string
 }
 
 // NewImage creates a new Image instance.
@@ -150,6 +160,15 @@ func (im *Image) SetDevicePath(devicePath string) { im.devicePath = devicePath }
 
 // SetRootfs sets the deployed ostree rootfs path.
 func (im *Image) SetRootfs(rootfs string) { im.rootfs = rootfs }
+
+// EfifsMount returns the EFI filesystem mount point (set by MountEfifs on success).
+func (im *Image) EfifsMount() string { return im.efifsMount }
+
+// BootfsMount returns the boot filesystem mount point (set by MountBootfs on success).
+func (im *Image) BootfsMount() string { return im.bootfsMount }
+
+// RootfsMount returns the root filesystem mount point (set by MountRootfs on success).
+func (im *Image) RootfsMount() string { return im.rootfsMount }
 
 // ImagesOutDir returns the directory where generated images are stored.
 func (im *Image) ImagesOutDir() (string, error) {
@@ -799,7 +818,11 @@ func (im *Image) MountEfifs(mountEfifs string) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "Mounting %s to %s\n", im.efiDevice, mountEfifs)
-	return im.runner(nil, os.Stdout, os.Stderr, "mount", "-t", "vfat", im.efiDevice, mountEfifs)
+	if err := im.runner(nil, os.Stdout, os.Stderr, "mount", "-t", "vfat", im.efiDevice, mountEfifs); err != nil {
+		return err
+	}
+	im.efifsMount = mountEfifs
+	return nil
 }
 
 // FormatBootfs creates a btrfs filesystem on the boot partition.
@@ -830,7 +853,11 @@ func (im *Image) MountBootfs(mountBootfs string) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "Mounting %s to %s\n", im.bootDevice, mountBootfs)
-	return im.runner(nil, os.Stdout, os.Stderr, "mount", im.bootDevice, mountBootfs)
+	if err := im.runner(nil, os.Stdout, os.Stderr, "mount", im.bootDevice, mountBootfs); err != nil {
+		return err
+	}
+	im.bootfsMount = mountBootfs
+	return nil
 }
 
 // FormatRootfs creates a btrfs filesystem on the root partition.
@@ -868,7 +895,11 @@ func (im *Image) MountRootfs(mountRootfs string) error {
 	compression := "zstd:6"
 	btrfsOpts := fmt.Sprintf("compress-force=%s,space_cache=v2,commit=120", compression)
 	fmt.Fprintf(os.Stdout, "Mounting %s to %s\n", im.rootDevice, mountRootfs)
-	return im.runner(nil, os.Stdout, os.Stderr, "mount", "-o", btrfsOpts, im.rootDevice, mountRootfs)
+	if err := im.runner(nil, os.Stdout, os.Stderr, "mount", "-o", btrfsOpts, im.rootDevice, mountRootfs); err != nil {
+		return err
+	}
+	im.rootfsMount = mountRootfs
+	return nil
 }
 
 // GetKernelPath returns the kernel version directory name from the deployed rootfs.
@@ -941,7 +972,7 @@ func (im *Image) SetupPasswords() error {
 }
 
 // SetupBootloaderConfig sets up the GRUB bootloader configuration.
-func (im *Image) SetupBootloaderConfig(ref, sysroot, bootDir, efibootDir, efiUUID, bootUUID string) error {
+func (im *Image) SetupBootloaderConfig(ref, efibootDir, efiUUID, bootUUID string) error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -952,11 +983,11 @@ func (im *Image) SetupBootloaderConfig(ref, sysroot, bootDir, efibootDir, efiUUI
 	if err != nil {
 		return fmt.Errorf("failed to clean ref: %w", err)
 	}
-	if sysroot == "" {
-		return errors.New("missing sysroot parameter")
+	if im.rootfsMount == "" {
+		return errors.New("missing rootfsMount, call MountRootfs first")
 	}
-	if bootDir == "" {
-		return errors.New("missing bootDir parameter")
+	if im.bootfsMount == "" {
+		return errors.New("missing bootfsMount, call MountBootfs first")
 	}
 	if efibootDir == "" {
 		return errors.New("missing efibootDir parameter")
@@ -974,7 +1005,7 @@ func (im *Image) SetupBootloaderConfig(ref, sysroot, bootDir, efibootDir, efiUUI
 	}
 
 	// Get the boot commit.
-	bootCommit, err := im.ostree.BootCommit(sysroot)
+	bootCommit, err := im.ostree.BootCommit(im.rootfsMount)
 	if err != nil || bootCommit == "" {
 		return fmt.Errorf("cannot determine ostree boot commit: %w", err)
 	}
@@ -1016,7 +1047,7 @@ func (im *Image) SetupBootloaderConfig(ref, sysroot, bootDir, efibootDir, efiUUI
 	themesDir := filepath.Join(im.rootfs, "usr", "share", "grub", "themes", osName+"-theme")
 	if filesystems.DirectoryExists(themesDir) {
 		fmt.Fprintf(os.Stdout, "Copying GRUB themes from %s ...\n", themesDir)
-		dstThemesDir := filepath.Join(bootDir, "grub", "themes")
+		dstThemesDir := filepath.Join(im.bootfsMount, "grub", "themes")
 		if err := os.MkdirAll(dstThemesDir, 0755); err != nil {
 			return fmt.Errorf("failed to create themes dir: %w", err)
 		}
@@ -1068,19 +1099,19 @@ func (im *Image) SetupBootloaderConfig(ref, sysroot, bootDir, efibootDir, efiUUI
 }
 
 // SetupVmtestConfig creates a VM test grub config based on the ostree boot config.
-func (im *Image) SetupVmtestConfig(bootDir string) error {
-	if bootDir == "" {
-		return errors.New("missing bootDir parameter")
+func (im *Image) SetupVmtestConfig() error {
+	if im.bootfsMount == "" {
+		return errors.New("missing bootfsMount, call MountBootfs first")
 	}
 
-	fmt.Fprintf(os.Stdout, "Setting up vmtest grub config based on the ostree boot config in %s ...\n", bootDir)
+	fmt.Fprintf(os.Stdout, "Setting up vmtest grub config based on the ostree boot config in %s ...\n", im.bootfsMount)
 
-	ostreeBootCfg := filepath.Join(bootDir, "loader", "entries", "ostree-1.conf")
+	ostreeBootCfg := filepath.Join(im.bootfsMount, "loader", "entries", "ostree-1.conf")
 	if !filesystems.FileExists(ostreeBootCfg) {
 		return fmt.Errorf("%s does not exist, cannot set up vmtest config", ostreeBootCfg)
 	}
 
-	vmtestCfgDir := filepath.Join(bootDir, ".imager.vmtest", "entries")
+	vmtestCfgDir := filepath.Join(im.bootfsMount, ".imager.vmtest", "entries")
 	if err := os.MkdirAll(vmtestCfgDir, 0755); err != nil {
 		return fmt.Errorf("failed to create vmtest config dir: %w", err)
 	}
@@ -1118,12 +1149,12 @@ func (im *Image) SetupVmtestConfig(bootDir string) error {
 }
 
 // InstallSecurebootCerts installs SecureBoot certificates on the EFI partition.
-func (im *Image) InstallSecurebootCerts(mountEfifs, efibootDir string) error {
+func (im *Image) InstallSecurebootCerts(efibootDir string) error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
-	if mountEfifs == "" {
-		return errors.New("missing mountEfifs parameter")
+	if im.efifsMount == "" {
+		return errors.New("missing efifsMount, call MountEfifs first")
 	}
 	if efibootDir == "" {
 		return errors.New("missing efibootDir parameter")
@@ -1150,14 +1181,14 @@ func (im *Image) InstallSecurebootCerts(mountEfifs, efibootDir string) error {
 	sbCert := filepath.Join(im.rootfs, "etc", "portage", "secureboot.pem")
 	if filesystems.FileExists(sbCert) {
 		fmt.Fprintln(os.Stdout, "Copying SecureBoot cert to EFI partition ...")
-		if err := filesystems.CopyFile(sbCert, filepath.Join(mountEfifs, certFileName)); err != nil {
+		if err := filesystems.CopyFile(sbCert, filepath.Join(im.efifsMount, certFileName)); err != nil {
 			return fmt.Errorf("failed to copy SecureBoot cert: %w", err)
 		}
 
 		fmt.Fprintln(os.Stdout, "Generating SecureBoot MOK ...")
 		if err := im.runner(nil, os.Stdout, os.Stderr,
 			"openssl", "x509", "-in", sbCert,
-			"-outform", "DER", "-out", filepath.Join(mountEfifs, certDerFileName)); err != nil {
+			"-outform", "DER", "-out", filepath.Join(im.efifsMount, certDerFileName)); err != nil {
 			return fmt.Errorf("openssl DER conversion failed: %w", err)
 		}
 	} else {
@@ -1168,14 +1199,14 @@ func (im *Image) InstallSecurebootCerts(mountEfifs, efibootDir string) error {
 	sbKek := filepath.Join(im.rootfs, "etc", "portage", "secureboot-kek.pem")
 	if filesystems.FileExists(sbKek) {
 		fmt.Fprintln(os.Stdout, "Copying SecureBoot KEK cert to EFI partition ...")
-		if err := filesystems.CopyFile(sbKek, filepath.Join(mountEfifs, kekFileName)); err != nil {
+		if err := filesystems.CopyFile(sbKek, filepath.Join(im.efifsMount, kekFileName)); err != nil {
 			return fmt.Errorf("failed to copy SecureBoot KEK cert: %w", err)
 		}
 
 		fmt.Fprintln(os.Stdout, "Generating SecureBoot KEK DER for convenience ...")
 		if err := im.runner(nil, os.Stdout, os.Stderr,
 			"openssl", "x509", "-in", sbKek,
-			"-outform", "DER", "-out", filepath.Join(mountEfifs, kekDerFileName)); err != nil {
+			"-outform", "DER", "-out", filepath.Join(im.efifsMount, kekDerFileName)); err != nil {
 			return fmt.Errorf("openssl KEK DER conversion failed: %w", err)
 		}
 	} else {
@@ -1210,15 +1241,15 @@ func (im *Image) InstallMemtest(efibootDir string) error {
 // unsigned GRUBX64.EFI with the signed version.
 // It returns the list of extra mounts created during the process so the caller
 // can track them for cleanup.
-func (im *Image) InstallBootloader(mountEfifs, mountBootfs, efibootDir string) ([]string, error) {
+func (im *Image) InstallBootloader(efibootDir string) ([]string, error) {
 	if im.rootfs == "" {
 		return nil, errors.New("rootfs not set, call SetRootfs first")
 	}
-	if mountEfifs == "" {
-		return nil, errors.New("missing mountEfifs parameter")
+	if im.efifsMount == "" {
+		return nil, errors.New("missing efifsMount, call MountEfifs first")
 	}
-	if mountBootfs == "" {
-		return nil, errors.New("missing mountBootfs parameter")
+	if im.bootfsMount == "" {
+		return nil, errors.New("missing bootfsMount, call MountBootfs first")
 	}
 	if im.devicePath == "" {
 		return nil, errors.New("missing devicePath, not set in NewImageOptions")
@@ -1253,7 +1284,7 @@ func (im *Image) InstallBootloader(mountEfifs, mountBootfs, efibootDir string) (
 	if err := os.MkdirAll(efiChrootMount, 0755); err != nil {
 		return extraMounts, fmt.Errorf("failed to create %s: %w", efiChrootMount, err)
 	}
-	mnt, err := filesystems.BindMount(mountEfifs, efiChrootMount)
+	mnt, err := filesystems.BindMount(im.efifsMount, efiChrootMount)
 	if err != nil {
 		return extraMounts, fmt.Errorf("failed to bind mount EFI: %w", err)
 	}
@@ -1264,7 +1295,7 @@ func (im *Image) InstallBootloader(mountEfifs, mountBootfs, efibootDir string) (
 	if err := os.MkdirAll(bootChrootMount, 0755); err != nil {
 		return extraMounts, fmt.Errorf("failed to create %s: %w", bootChrootMount, err)
 	}
-	mnt, err = filesystems.BindMount(mountBootfs, bootChrootMount)
+	mnt, err = filesystems.BindMount(im.bootfsMount, bootChrootMount)
 	if err != nil {
 		return extraMounts, fmt.Errorf("failed to bind mount boot: %w", err)
 	}
@@ -1572,23 +1603,23 @@ func (im *Image) TestImage(imagePath, ref string) error {
 
 // FinalizeFilesystems runs fstrim on the root and boot filesystems to improve
 // compression ratios for sparse image files.
-func (im *Image) FinalizeFilesystems(mountRootfs, mountBootfs, mountEfifs string) error {
-	if mountRootfs == "" {
-		return errors.New("missing mountRootfs parameter")
+func (im *Image) FinalizeFilesystems() error {
+	if im.rootfsMount == "" {
+		return errors.New("missing rootfsMount, call MountRootfs first")
 	}
-	if mountBootfs == "" {
-		return errors.New("missing mountBootfs parameter")
+	if im.bootfsMount == "" {
+		return errors.New("missing bootfsMount, call MountBootfs first")
 	}
-	if mountEfifs == "" {
-		return errors.New("missing mountEfifs parameter")
+	if im.efifsMount == "" {
+		return errors.New("missing efifsMount, call MountEfifs first")
 	}
 
-	fmt.Fprintf(os.Stdout, "Executing fstrim on %s\n", mountRootfs)
+	fmt.Fprintf(os.Stdout, "Executing fstrim on %s\n", im.rootfsMount)
 	// fstrim may fail on USB sticks, so ignore errors.
-	im.runner(nil, os.Stdout, os.Stderr, "fstrim", "-v", mountRootfs)
+	im.runner(nil, os.Stdout, os.Stderr, "fstrim", "-v", im.rootfsMount)
 
-	fmt.Fprintf(os.Stdout, "Executing fstrim on %s\n", mountBootfs)
-	im.runner(nil, os.Stdout, os.Stderr, "fstrim", "-v", mountBootfs)
+	fmt.Fprintf(os.Stdout, "Executing fstrim on %s\n", im.bootfsMount)
+	im.runner(nil, os.Stdout, os.Stderr, "fstrim", "-v", im.bootfsMount)
 
 	return nil
 }
@@ -1612,24 +1643,24 @@ func (im *Image) CreateQcow2Image(imagePath string) error {
 }
 
 // ShowFinalFilesystemInfo displays information about the final filesystem layout.
-func (im *Image) ShowFinalFilesystemInfo(mountBootfs, mountEfifs string) error {
+func (im *Image) ShowFinalFilesystemInfo() error {
 	if im.devicePath == "" {
 		return errors.New("missing devicePath, not set in NewImageOptions")
 	}
-	if mountBootfs == "" {
-		return errors.New("missing mountBootfs parameter")
+	if im.bootfsMount == "" {
+		return errors.New("missing bootfsMount, call MountBootfs first")
 	}
-	if mountEfifs == "" {
-		return errors.New("missing mountEfifs parameter")
+	if im.efifsMount == "" {
+		return errors.New("missing efifsMount, call MountEfifs first")
 	}
 
 	fmt.Fprintln(os.Stdout, "Final boot partition directory tree:")
-	if err := filesystems.PrintDirectoryTree(os.Stdout, mountBootfs); err != nil {
+	if err := filesystems.PrintDirectoryTree(os.Stdout, im.bootfsMount); err != nil {
 		fmt.Fprintf(os.Stderr, "WARNING: failed to list boot directory tree: %v\n", err)
 	}
 
 	fmt.Fprintln(os.Stdout, "Final EFI partition directory tree:")
-	if err := filesystems.PrintDirectoryTree(os.Stdout, mountEfifs); err != nil {
+	if err := filesystems.PrintDirectoryTree(os.Stdout, im.efifsMount); err != nil {
 		fmt.Fprintf(os.Stderr, "WARNING: failed to list EFI directory tree: %v\n", err)
 	}
 
