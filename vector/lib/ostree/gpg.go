@@ -271,13 +271,13 @@ func (o *Ostree) InitializeSigningGpg() error {
 	return nil
 }
 
-// InitializeRemoteSigningGpg imports GPG keys into the remote ostree repository.
-func (o *Ostree) InitializeRemoteSigningGpg(remote, repoDir string) error {
+// initializeRemoteSigningGpg imports GPG keys into the remote ostree repository.
+func (o *Ostree) initializeRemoteSigningGpg(remote, repoDir string) error {
 	if remote == "" {
-		return errors.New("InitializeRemoteSigningGpg: missing remote parameter")
+		return errors.New("initializeRemoteSigningGpg: missing remote parameter")
 	}
 	if repoDir == "" {
-		return errors.New("InitializeRemoteSigningGpg: missing repoDir parameter")
+		return errors.New("initializeRemoteSigningGpg: missing repoDir parameter")
 	}
 
 	keys, err := o.GpgKeys()
@@ -327,7 +327,7 @@ func (o *Ostree) maybeInitializeGpgForRepo(remote, repoDir string) error {
 	if err := o.InitializeSigningGpg(); err != nil {
 		return err
 	}
-	return o.InitializeRemoteSigningGpg(remote, repoDir)
+	return o.initializeRemoteSigningGpg(remote, repoDir)
 }
 
 // GpgArgs returns the gpg arguments for ostree commands.

@@ -68,7 +68,6 @@ type IOstree interface {
 	GpgSignFile(file string) error
 	GpgKeys() ([]string, error)
 	InitializeSigningGpg() error
-	InitializeRemoteSigningGpg(remote, repoDir string) error
 	MaybeInitializeGpg() error
 	MaybeInitializeRemote() error
 	Pull() error

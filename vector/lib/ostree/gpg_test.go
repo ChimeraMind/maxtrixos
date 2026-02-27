@@ -461,8 +461,8 @@ func TestInitializeRemoteSigningGpg(t *testing.T) {
 		return nil
 	}
 
-	if err := o.InitializeRemoteSigningGpg("origin", "/repo"); err != nil {
-		t.Fatalf("InitializeRemoteSigningGpg failed: %v", err)
+	if err := o.initializeRemoteSigningGpg("origin", "/repo"); err != nil {
+		t.Fatalf("initializeRemoteSigningGpg failed: %v", err)
 	}
 
 	ostreeImports := 0
@@ -479,7 +479,7 @@ func TestInitializeRemoteSigningGpg(t *testing.T) {
 	for _, cmd := range cmds {
 		for _, arg := range cmd {
 			if arg == "--import" {
-				t.Error("InitializeRemoteSigningGpg should not call gpg --import")
+				t.Error("initializeRemoteSigningGpg should not call gpg --import")
 				break
 			}
 		}
@@ -495,10 +495,10 @@ func TestInitializeRemoteSigningGpgMissingParams(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	if err := o.InitializeRemoteSigningGpg("", "/repo"); err == nil {
+	if err := o.initializeRemoteSigningGpg("", "/repo"); err == nil {
 		t.Error("Expected error for empty remote")
 	}
-	if err := o.InitializeRemoteSigningGpg("origin", ""); err == nil {
+	if err := o.initializeRemoteSigningGpg("origin", ""); err == nil {
 		t.Error("Expected error for empty repoDir")
 	}
 }
