@@ -310,11 +310,11 @@ func (o *Ostree) MaybeInitializeGpg() error {
 		return err
 	}
 
-	return o.MaybeInitializeGpgForRepo(remote, repoDir)
+	return o.maybeInitializeGpgForRepo(remote, repoDir)
 }
 
-// MaybeInitializeGpgForRepo initializes GPG keys for an ostree repository.
-func (o *Ostree) MaybeInitializeGpgForRepo(remote, repoDir string) error {
+// maybeInitializeGpgForRepo initializes GPG keys for an ostree repository.
+func (o *Ostree) maybeInitializeGpgForRepo(remote, repoDir string) error {
 	gpgEnabled, err := o.GpgEnabled()
 	if err != nil {
 		return err

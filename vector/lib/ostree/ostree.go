@@ -70,7 +70,6 @@ type IOstree interface {
 	InitializeSigningGpg() error
 	InitializeRemoteSigningGpg(remote, repoDir string) error
 	MaybeInitializeGpg() error
-	MaybeInitializeGpgForRepo(remote, repoDir string) error
 	MaybeInitializeRemote() error
 	Pull() error
 	PullWithRemote(remote string) error
