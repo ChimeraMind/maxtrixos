@@ -699,6 +699,8 @@ func TestSetupCommonRootfsMounts(t *testing.T) {
 			},
 		},
 	)
+	defer mounter.Cleanup()
+
 	if err != nil {
 		t.Fatalf("NewCommonRootfsMounts failed: %v", err)
 	}

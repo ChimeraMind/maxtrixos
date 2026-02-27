@@ -126,11 +126,11 @@ func (r *Releaser) PostCleanShrink() error {
 	if err != nil {
 		return err
 	}
+	defer mounts.Cleanup()
+
 	if err := mounts.Setup(); err != nil {
-		mounts.Cleanup() // clean up any partially-created bind mounts
 		return fmt.Errorf("failed to set up chroot mounts: %w", err)
 	}
-	defer mounts.Cleanup()
 
 	err = filesystems.ChrootRun(imageDir,
 		"emerge",
