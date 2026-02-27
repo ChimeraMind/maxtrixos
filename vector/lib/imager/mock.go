@@ -4,6 +4,11 @@ package imager
 // Only the fields/methods relevant to each test need to be configured;
 // everything else returns safe zero values.
 type MockImage struct {
+	EfiDevice_  string
+	BootDevice_ string
+	RootDevice_ string
+	DevicePath_ string
+
 	MountDir_            string
 	MountDirErr          error
 	ImagesOutDir_        string
@@ -69,6 +74,11 @@ type MockImage struct {
 	ExecuteWithImageLockErr    error
 }
 
+func (m *MockImage) SetEfiDevice(device string)  { m.EfiDevice_ = device }
+func (m *MockImage) SetBootDevice(device string) { m.BootDevice_ = device }
+func (m *MockImage) SetRootDevice(device string) { m.RootDevice_ = device }
+func (m *MockImage) SetDevicePath(devicePath string) { m.DevicePath_ = devicePath }
+
 func (m *MockImage) ImagesOutDir() (string, error) { return m.ImagesOutDir_, m.ImagesOutDirErr }
 func (m *MockImage) MountDir() (string, error)     { return m.MountDir_, m.MountDirErr }
 func (m *MockImage) ImageSize() (string, error)    { return m.ImageSize_, m.ImageSizeErr }
@@ -120,7 +130,7 @@ func (m *MockImage) CompressImage(imagePath string) error {
 	return nil
 }
 
-func (m *MockImage) ClearPartitionTable(devicePath string) error {
+func (m *MockImage) ClearPartitionTable() error {
 	m.ClearPartitionTableCalled = true
 	return nil
 }
@@ -129,28 +139,28 @@ func (m *MockImage) PartitionDevices(efiSize, bootSize, imageSize, devicePath st
 	m.PartitionDevicesCalled = true
 	return nil
 }
-func (m *MockImage) FormatEfifs(efiDevice string) error {
+func (m *MockImage) FormatEfifs() error {
 	m.FormatEfifsCalled = true
 	return nil
 }
-func (m *MockImage) MountEfifs(efiDevice, mountEfifs string) error {
+func (m *MockImage) MountEfifs(mountEfifs string) error {
 	m.MountEfifsCalled = true
 	return nil
 }
-func (m *MockImage) FormatBootfs(bootDevice string) error {
+func (m *MockImage) FormatBootfs() error {
 	m.FormatBootfsCalled = true
 	return nil
 }
-func (m *MockImage) MountBootfs(bootDevice, mountBootfs string) error {
+func (m *MockImage) MountBootfs(mountBootfs string) error {
 	m.MountBootfsCalled = true
 	return nil
 }
-func (m *MockImage) FormatRootfs(rootDevice string) error {
+func (m *MockImage) FormatRootfs() error {
 	m.FormatRootfsCalled = true
 	return nil
 }
 func (m *MockImage) RootfsKernelArgs() []string { return nil }
-func (m *MockImage) MountRootfs(rootDevice, mountRootfs string) error {
+func (m *MockImage) MountRootfs(mountRootfs string) error {
 	m.MountRootfsCalled = true
 	return nil
 }
@@ -175,7 +185,7 @@ func (m *MockImage) InstallMemtest(ostreeDeployRootfs, efibootdir string) error 
 	m.InstallMemtestCalled = true
 	return nil
 }
-func (m *MockImage) GenerateKernelBootArgs(ref, efiDevice, bootDevice, physicalRootDevice, rootDevice string, encryptionEnabled bool) ([]string, error) {
+func (m *MockImage) GenerateKernelBootArgs(ref, physicalRootDevice string, encryptionEnabled bool) ([]string, error) {
 	return []string{"arg1=val1"}, nil
 }
 func (m *MockImage) PackageList(rootfs string) ([]string, error) {
@@ -185,7 +195,7 @@ func (m *MockImage) SetupHooks(ostreeDeployRootfs, ref string) error {
 	m.SetupHooksCalled = true
 	return nil
 }
-func (m *MockImage) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, blockDevice, efibootdir string) ([]string, error) {
+func (m *MockImage) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, efibootdir string) ([]string, error) {
 	m.InstallBootloaderCalled = true
 	return m.InstallBootloaderResult, m.InstallBootloaderErr
 }
@@ -204,7 +214,7 @@ func (m *MockImage) CreateQcow2Image(imagePath string) error {
 	m.CreateQcow2ImageCalled = true
 	return nil
 }
-func (m *MockImage) ShowFinalFilesystemInfo(blockDevice, mountBootfs, mountEfifs string) error {
+func (m *MockImage) ShowFinalFilesystemInfo(mountBootfs, mountEfifs string) error {
 	m.ShowFinalFsInfoCalled = true
 	return nil
 }
