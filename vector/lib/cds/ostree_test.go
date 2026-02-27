@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 	"matrixos/vector/lib/config"
-	fslib "matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/filesystems"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -2946,9 +2946,9 @@ func TestConfigDiff_CommandError(t *testing.T) {
 
 // --- helpers for 3-way diff tests ---
 
-func mkPI(path, typ string, perms uint32, uid, gid, size uint64, link string) fslib.PathInfo {
-	return fslib.PathInfo{
-		Mode: &fslib.PathMode{Type: typ, Perms: os.FileMode(perms)},
+func mkPI(path, typ string, perms uint32, uid, gid, size uint64, link string) filesystems.PathInfo {
+	return filesystems.PathInfo{
+		Mode: &filesystems.PathMode{Type: typ, Perms: os.FileMode(perms)},
 		Uid:  uid, Gid: gid, Size: size,
 		Path: path, Link: link,
 	}
@@ -2964,9 +2964,9 @@ func findChange(changes []EtcChange, path string) *EtcChange {
 }
 
 func TestComputeEtcDiffUnchanged(t *testing.T) {
-	old := []fslib.PathInfo{mkPI("/usr/etc/passwd", "-", 0644, 0, 0, 100, "")}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/passwd", "-", 0644, 0, 0, 100, "")}
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/passwd", "-", 0644, 0, 0, 100, ""))}
+	old := []filesystems.PathInfo{mkPI("/usr/etc/passwd", "-", 0644, 0, 0, 100, "")}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/passwd", "-", 0644, 0, 0, 100, "")}
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/passwd", "-", 0644, 0, 0, 100, ""))}
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 0 {
@@ -2975,9 +2975,9 @@ func TestComputeEtcDiffUnchanged(t *testing.T) {
 }
 
 func TestComputeEtcDiffUpstreamAdd(t *testing.T) {
-	old := []fslib.PathInfo{}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/newfile", "-", 0644, 0, 0, 50, "")}
-	user := []*fslib.PathInfo{}
+	old := []filesystems.PathInfo{}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/newfile", "-", 0644, 0, 0, 50, "")}
+	user := []*filesystems.PathInfo{}
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -2993,9 +2993,9 @@ func TestComputeEtcDiffUpstreamAdd(t *testing.T) {
 }
 
 func TestComputeEtcDiffUpstreamRemove(t *testing.T) {
-	old := []fslib.PathInfo{mkPI("/usr/etc/gone", "-", 0644, 0, 0, 10, "")}
-	new_ := []fslib.PathInfo{}
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/gone", "-", 0644, 0, 0, 10, ""))}
+	old := []filesystems.PathInfo{mkPI("/usr/etc/gone", "-", 0644, 0, 0, 10, "")}
+	new_ := []filesystems.PathInfo{}
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/gone", "-", 0644, 0, 0, 10, ""))}
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -3008,9 +3008,9 @@ func TestComputeEtcDiffUpstreamRemove(t *testing.T) {
 }
 
 func TestComputeEtcDiffUpstreamUpdate(t *testing.T) {
-	old := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 200, "")} // size changed
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/cfg", "-", 0644, 0, 0, 100, ""))}
+	old := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 200, "")} // size changed
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/cfg", "-", 0644, 0, 0, 100, ""))}
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -3023,9 +3023,9 @@ func TestComputeEtcDiffUpstreamUpdate(t *testing.T) {
 }
 
 func TestComputeEtcDiffUserOnly(t *testing.T) {
-	old := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/cfg", "-", 0755, 0, 0, 100, ""))} // perms changed
+	old := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/cfg", "-", 0755, 0, 0, 100, ""))} // perms changed
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -3038,9 +3038,9 @@ func TestComputeEtcDiffUserOnly(t *testing.T) {
 }
 
 func TestComputeEtcDiffConflictBothModified(t *testing.T) {
-	old := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 200, "")}   // upstream size change
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/cfg", "-", 0755, 0, 0, 300, ""))} // user perms+size change
+	old := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 200, "")}   // upstream size change
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/cfg", "-", 0755, 0, 0, 300, ""))} // user perms+size change
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -3054,9 +3054,9 @@ func TestComputeEtcDiffConflictBothModified(t *testing.T) {
 
 func TestComputeEtcDiffConverged(t *testing.T) {
 	// old=A, new=B, user=B → both changed the same way → skip
-	old := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0755, 0, 0, 200, "")}
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/cfg", "-", 0755, 0, 0, 200, ""))}
+	old := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0755, 0, 0, 200, "")}
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/cfg", "-", 0755, 0, 0, 200, ""))}
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 0 {
@@ -3065,9 +3065,9 @@ func TestComputeEtcDiffConverged(t *testing.T) {
 }
 
 func TestComputeEtcDiffBothRemoved(t *testing.T) {
-	old := []fslib.PathInfo{mkPI("/usr/etc/gone", "-", 0644, 0, 0, 10, "")}
-	new_ := []fslib.PathInfo{}
-	user := []*fslib.PathInfo{}
+	old := []filesystems.PathInfo{mkPI("/usr/etc/gone", "-", 0644, 0, 0, 10, "")}
+	new_ := []filesystems.PathInfo{}
+	user := []*filesystems.PathInfo{}
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 0 {
@@ -3076,9 +3076,9 @@ func TestComputeEtcDiffBothRemoved(t *testing.T) {
 }
 
 func TestComputeEtcDiffConflictUpstreamRemoveUserModified(t *testing.T) {
-	old := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
-	new_ := []fslib.PathInfo{}
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/cfg", "-", 0755, 0, 0, 100, ""))} // user changed perms
+	old := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
+	new_ := []filesystems.PathInfo{}
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/cfg", "-", 0755, 0, 0, 100, ""))} // user changed perms
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -3090,9 +3090,9 @@ func TestComputeEtcDiffConflictUpstreamRemoveUserModified(t *testing.T) {
 }
 
 func TestComputeEtcDiffConflictUpstreamChangedUserRemoved(t *testing.T) {
-	old := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 200, "")} // upstream changed
-	user := []*fslib.PathInfo{}                                              // user removed
+	old := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 200, "")} // upstream changed
+	user := []*filesystems.PathInfo{}                                              // user removed
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -3104,9 +3104,9 @@ func TestComputeEtcDiffConflictUpstreamChangedUserRemoved(t *testing.T) {
 }
 
 func TestComputeEtcDiffUserRemovedUnchangedUpstream(t *testing.T) {
-	old := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")} // unchanged
-	user := []*fslib.PathInfo{}                                              // user removed
+	old := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/cfg", "-", 0644, 0, 0, 100, "")} // unchanged
+	user := []*filesystems.PathInfo{}                                              // user removed
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -3118,9 +3118,9 @@ func TestComputeEtcDiffUserRemovedUnchangedUpstream(t *testing.T) {
 }
 
 func TestComputeEtcDiffUserAdded(t *testing.T) {
-	old := []fslib.PathInfo{}
-	new_ := []fslib.PathInfo{}
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/custom", "-", 0644, 0, 0, 42, ""))}
+	old := []filesystems.PathInfo{}
+	new_ := []filesystems.PathInfo{}
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/custom", "-", 0644, 0, 0, 42, ""))}
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -3133,9 +3133,9 @@ func TestComputeEtcDiffUserAdded(t *testing.T) {
 }
 
 func TestComputeEtcDiffConflictBothAdded(t *testing.T) {
-	old := []fslib.PathInfo{}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/both", "-", 0644, 0, 0, 50, "")}
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/both", "-", 0755, 0, 0, 60, ""))} // different
+	old := []filesystems.PathInfo{}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/both", "-", 0644, 0, 0, 50, "")}
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/both", "-", 0755, 0, 0, 60, ""))} // different
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -3147,9 +3147,9 @@ func TestComputeEtcDiffConflictBothAdded(t *testing.T) {
 }
 
 func TestComputeEtcDiffBothAddedIdentical(t *testing.T) {
-	old := []fslib.PathInfo{}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/same", "-", 0644, 0, 0, 50, "")}
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/same", "-", 0644, 0, 0, 50, ""))}
+	old := []filesystems.PathInfo{}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/same", "-", 0644, 0, 0, 50, "")}
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/same", "-", 0644, 0, 0, 50, ""))}
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 0 {
@@ -3158,9 +3158,9 @@ func TestComputeEtcDiffBothAddedIdentical(t *testing.T) {
 }
 
 func TestComputeEtcDiffSymlinks(t *testing.T) {
-	old := []fslib.PathInfo{mkPI("/usr/etc/link", "l", 0777, 0, 0, 0, "old_target")}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/link", "l", 0777, 0, 0, 0, "new_target")}
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/link", "l", 0777, 0, 0, 0, "old_target"))}
+	old := []filesystems.PathInfo{mkPI("/usr/etc/link", "l", 0777, 0, 0, 0, "old_target")}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/link", "l", 0777, 0, 0, 0, "new_target")}
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/link", "l", 0777, 0, 0, 0, "old_target"))}
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -3173,19 +3173,19 @@ func TestComputeEtcDiffSymlinks(t *testing.T) {
 }
 
 func TestComputeEtcDiffMultipleChanges(t *testing.T) {
-	old := []fslib.PathInfo{
+	old := []filesystems.PathInfo{
 		mkPI("/usr/etc/keep", "-", 0644, 0, 0, 100, ""),
 		mkPI("/usr/etc/update", "-", 0644, 0, 0, 100, ""),
 		mkPI("/usr/etc/conflict", "-", 0644, 0, 0, 100, ""),
 		mkPI("/usr/etc/remove", "-", 0644, 0, 0, 100, ""),
 	}
-	new_ := []fslib.PathInfo{
+	new_ := []filesystems.PathInfo{
 		mkPI("/usr/etc/keep", "-", 0644, 0, 0, 100, ""),
 		mkPI("/usr/etc/update", "-", 0644, 0, 0, 200, ""),   // upstream changed size
 		mkPI("/usr/etc/conflict", "-", 0644, 0, 0, 300, ""), // upstream changed
 		mkPI("/usr/etc/added", "-", 0644, 0, 0, 50, ""),     // new file
 	}
-	user := []*fslib.PathInfo{
+	user := []*filesystems.PathInfo{
 		ptr(mkPI("/etc/keep", "-", 0644, 0, 0, 100, "")),
 		ptr(mkPI("/etc/update", "-", 0644, 0, 0, 100, "")),   // unchanged
 		ptr(mkPI("/etc/conflict", "-", 0755, 0, 0, 400, "")), // user also changed
@@ -3220,7 +3220,7 @@ func TestComputeEtcDiffMultipleChanges(t *testing.T) {
 
 func TestComputeEtcDiffNilInputs(t *testing.T) {
 	// nil old and new should not panic
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/custom", "-", 0644, 0, 0, 10, ""))}
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/custom", "-", 0644, 0, 0, 10, ""))}
 	changes := computeEtcDiff(nil, nil, user)
 	if len(changes) != 1 {
 		t.Fatalf("Expected 1 change, got %d", len(changes))
@@ -3231,13 +3231,13 @@ func TestComputeEtcDiffNilInputs(t *testing.T) {
 }
 
 func TestComputeEtcDiffSorted(t *testing.T) {
-	old := []fslib.PathInfo{}
-	new_ := []fslib.PathInfo{
+	old := []filesystems.PathInfo{}
+	new_ := []filesystems.PathInfo{
 		mkPI("/usr/etc/z_file", "-", 0644, 0, 0, 1, ""),
 		mkPI("/usr/etc/a_file", "-", 0644, 0, 0, 1, ""),
 		mkPI("/usr/etc/m_file", "-", 0644, 0, 0, 1, ""),
 	}
-	user := []*fslib.PathInfo{}
+	user := []*filesystems.PathInfo{}
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 3 {
@@ -3250,9 +3250,9 @@ func TestComputeEtcDiffSorted(t *testing.T) {
 }
 
 func TestComputeEtcDiffDirectories(t *testing.T) {
-	old := []fslib.PathInfo{mkPI("/usr/etc/conf.d", "d", 0755, 0, 0, 0, "")}
-	new_ := []fslib.PathInfo{mkPI("/usr/etc/conf.d", "d", 0700, 0, 0, 0, "")} // perms changed
-	user := []*fslib.PathInfo{ptr(mkPI("/etc/conf.d", "d", 0755, 0, 0, 0, ""))}
+	old := []filesystems.PathInfo{mkPI("/usr/etc/conf.d", "d", 0755, 0, 0, 0, "")}
+	new_ := []filesystems.PathInfo{mkPI("/usr/etc/conf.d", "d", 0700, 0, 0, 0, "")} // perms changed
+	user := []*filesystems.PathInfo{ptr(mkPI("/etc/conf.d", "d", 0755, 0, 0, 0, ""))}
 
 	changes := computeEtcDiff(&old, &new_, user)
 	if len(changes) != 1 {
@@ -3264,6 +3264,6 @@ func TestComputeEtcDiffDirectories(t *testing.T) {
 	}
 }
 
-func ptr(pi fslib.PathInfo) *fslib.PathInfo {
+func ptr(pi filesystems.PathInfo) *filesystems.PathInfo {
 	return &pi
 }

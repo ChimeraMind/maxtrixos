@@ -11,7 +11,7 @@ import (
 
 	"matrixos/vector/lib/cds"
 	"matrixos/vector/lib/config"
-	fslib "matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/filesystems"
 )
 
 // mountInfo holds the UUID and filesystem type for a mountpoint.
@@ -126,12 +126,12 @@ func getMountInfoFromSystem(mnt string) (*mountInfo, error) {
 		return nil, fmt.Errorf("missing mount path parameter")
 	}
 
-	uuid, err := fslib.MountpointToUUID(mnt)
+	uuid, err := filesystems.MountpointToUUID(mnt)
 	if err != nil {
 		return nil, fmt.Errorf("cannot determine UUID for %s: %w", mnt, err)
 	}
 
-	fstype, err := fslib.MountpointToFSType(mnt)
+	fstype, err := filesystems.MountpointToFSType(mnt)
 	if err != nil {
 		return nil, fmt.Errorf("cannot determine FSTYPE for %s: %w", mnt, err)
 	}
