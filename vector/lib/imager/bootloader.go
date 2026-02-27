@@ -386,6 +386,8 @@ func (im *Image) InstallBootloader() error {
 				im.trackMount(tg)
 			},
 			Mounted: func(tg string) {},
+			Stdout:  im.stdout,
+			Stderr:  im.stderr,
 		},
 	)
 	if err != nil {
