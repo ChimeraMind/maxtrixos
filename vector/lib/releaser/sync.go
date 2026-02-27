@@ -70,7 +70,7 @@ func (r *Releaser) cpReflinkCopy(src, dst string) error {
 }
 
 // rsyncCopy copies src to dst using rsync.
-func (r *Releaser) rsyncCopy(src, dst string, verbose bool) error {
+func (r *Releaser) rsyncCopy(src, dst string) error {
 	excludes, err := r.syncExcludedPaths(dst)
 	if err != nil {
 		return err
@@ -80,7 +80,7 @@ func (r *Releaser) rsyncCopy(src, dst string, verbose bool) error {
 		Src:      src,
 		Dst:      dst,
 		Excludes: excludes,
-		Verbose:  verbose,
+		Verbose:  r.verbose,
 		Stdout:   r.stdout,
 		Stderr:   r.stderr,
 	})
@@ -88,7 +88,7 @@ func (r *Releaser) rsyncCopy(src, dst string, verbose bool) error {
 
 // SyncFilesystem synchronises the chroot directory into the image directory
 // using either cp --reflink=auto or rsync.
-func (r *Releaser) SyncFilesystem(verbose bool) error {
+func (r *Releaser) SyncFilesystem() error {
 	if r.chrootDir == "" || r.imageDir == "" {
 		return errors.New("chrootDir and imageDir are required")
 	}
@@ -123,7 +123,7 @@ func (r *Releaser) SyncFilesystem(verbose bool) error {
 		}
 	} else {
 		r.Print("Using rsync copy mode ...\n")
-		if err := r.rsyncCopy(r.chrootDir, r.imageDir, verbose); err != nil {
+		if err := r.rsyncCopy(r.chrootDir, r.imageDir); err != nil {
 			return err
 		}
 	}
