@@ -155,10 +155,10 @@ func (l *Loop) Attach() error {
 	return nil
 }
 
-// Mount creates a new Loop for the given image file, attaches it to a loop
+// LoopMount creates a new Loop for the given image file, attaches it to a loop
 // device, and returns the Loop handle.  Callers can read l.Device for the
 // device path and call l.Detach() when done.
-func Mount(imagePath string) (*Loop, error) {
+func LoopMount(imagePath string) (*Loop, error) {
 	if imagePath == "" {
 		return nil, fmt.Errorf("mount: missing imagePath parameter")
 	}

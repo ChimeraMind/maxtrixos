@@ -23,8 +23,6 @@ var (
 	ExecChrootRun      runner.ChrootRunFunc      = runner.ChrootRun
 	ExecChrootOutput   runner.ChrootOutputFunc   = runner.ChrootOutput
 	devMapperPrefix                              = "/dev/mapper"
-	sysMount                                     = unix.Mount
-	sysUnmount                                   = unix.Unmount
 	sysIoctl                                     = unix.Syscall
 	sysLsetxattr                                 = unix.Lsetxattr
 	sysLgetxattr                                 = unix.Lgetxattr
@@ -309,14 +307,14 @@ func CleanupMounts(mounts []string) {
 			continue
 		}
 		log.Printf("Unmounting %s ...", mnt)
-		if err := sysUnmount(mnt, 0); err != nil {
+		if err := Unmount(mnt, 0); err != nil {
 			FlushBlockDeviceBuffers(mnt)
 			log.Printf("Unable to umount %s: %v", mnt, err)
 			if entry, mntErr := findMountByTarget(mnt); mntErr == nil {
 				log.Println(entry.String())
 			}
 			log.Printf("For safety, calling umount -l %s", mnt)
-			sysUnmount(mnt, unix.MNT_DETACH)
+			Unmount(mnt, unix.MNT_DETACH)
 			continue
 		}
 	}
@@ -488,11 +486,11 @@ func (m *CommonRootfsMounts) Setup() error {
 		}
 		m.mounting(dst)
 		m.add(dst)
-		if err := sysMount(d, dst, "", unix.MS_BIND, ""); err != nil {
+		if err := Mount(d, dst, "", unix.MS_BIND, ""); err != nil {
 			return fmt.Errorf("failed to bind mount %s: %w", d, err)
 		}
 		m.mounted(dst)
-		if err := sysMount("", dst, "", unix.MS_SLAVE, ""); err != nil {
+		if err := Mount("", dst, "", unix.MS_SLAVE, ""); err != nil {
 			return fmt.Errorf("failed to make slave %s: %w", dst, err)
 		}
 	}
@@ -504,7 +502,7 @@ func (m *CommonRootfsMounts) Setup() error {
 	const devShmFlags = unix.MS_NOSUID | unix.MS_NODEV
 	m.mounting(chrootDevShm)
 	m.add(chrootDevShm)
-	if err := sysMount("devshm", chrootDevShm, "tmpfs", devShmFlags, "mode=1777"); err != nil {
+	if err := Mount("devshm", chrootDevShm, "tmpfs", devShmFlags, "mode=1777"); err != nil {
 		return fmt.Errorf("failed to mount devshm: %w", err)
 	}
 	m.mounted(chrootDevShm)
@@ -515,7 +513,7 @@ func (m *CommonRootfsMounts) Setup() error {
 	}
 	m.mounting(chrootProc)
 	m.add(chrootProc)
-	if err := sysMount("proc", chrootProc, "proc", 0, ""); err != nil {
+	if err := Mount("proc", chrootProc, "proc", 0, ""); err != nil {
 		return fmt.Errorf("failed to mount proc: %w", err)
 	}
 	m.mounted(chrootProc)
@@ -527,7 +525,7 @@ func (m *CommonRootfsMounts) Setup() error {
 	m.mounting(runLock)
 	m.add(runLock)
 	const runLockFlags = unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC | unix.MS_RELATIME
-	if err := sysMount("none", runLock, "tmpfs", runLockFlags, "size=5120k"); err != nil {
+	if err := Mount("none", runLock, "tmpfs", runLockFlags, "size=5120k"); err != nil {
 		return fmt.Errorf("failed to mount run/lock: %w", err)
 	}
 	m.mounted(runLock)
@@ -565,10 +563,10 @@ func BindMount(src, dst string) error {
 	}
 
 	// log.Printf("Binding %s to %s", src, dst)
-	if err := sysMount(src, dst, "", unix.MS_BIND, ""); err != nil {
+	if err := Mount(src, dst, "", unix.MS_BIND, ""); err != nil {
 		return fmt.Errorf("mount bind failed: %w", err)
 	}
-	if err := sysMount("", dst, "", unix.MS_SLAVE, ""); err != nil {
+	if err := Mount("", dst, "", unix.MS_SLAVE, ""); err != nil {
 		return fmt.Errorf("mount make-slave failed: %w", err)
 	}
 	return nil

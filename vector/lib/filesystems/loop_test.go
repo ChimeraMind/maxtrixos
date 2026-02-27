@@ -526,10 +526,10 @@ func TestLoopIntegration(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Mount tests
+// LoopMount tests
 // ---------------------------------------------------------------------------
 
-func TestMount(t *testing.T) {
+func TestLoopMount(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		setupMockLoop(t)
 
@@ -557,9 +557,9 @@ func TestMount(t *testing.T) {
 		}
 		ioctlRetInt = func(fd int, req uint) (int, error) { return 7, nil }
 
-		l, err := Mount("/tmp/disk.img")
+		l, err := LoopMount("/tmp/disk.img")
 		if err != nil {
-			t.Fatalf("Mount() error: %v", err)
+			t.Fatalf("LoopMount() error: %v", err)
 		}
 		if l.Device != "/dev/loop7" {
 			t.Errorf("Expected /dev/loop7, got %q", l.Device)
@@ -570,7 +570,7 @@ func TestMount(t *testing.T) {
 	})
 
 	t.Run("EmptyImagePath", func(t *testing.T) {
-		_, err := Mount("")
+		_, err := LoopMount("")
 		if err == nil {
 			t.Error("Expected error for empty imagePath")
 		}
@@ -582,7 +582,7 @@ func TestMount(t *testing.T) {
 			return nil, errors.New("no loop-control")
 		}
 
-		_, err := Mount("/tmp/disk.img")
+		_, err := LoopMount("/tmp/disk.img")
 		if err == nil {
 			t.Error("Expected error from Attach failure")
 		}
