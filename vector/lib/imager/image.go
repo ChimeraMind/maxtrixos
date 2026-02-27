@@ -174,8 +174,10 @@ type Image struct {
 
 	// trackedMounts records every mount point created by this Image
 	// so that Cleanup can attempt to unmount them all on failure or signal.
-	trackedMountsMu sync.Mutex
-	trackedMounts   []string
+	trackedMountsMu  sync.Mutex
+	trackedMounts    []string
+	trackedTmpDirsMu sync.Mutex
+	trackedTmpDirs   []string
 }
 
 // SetStdout replaces the writer used for informational output.
@@ -221,6 +223,13 @@ func (im *Image) trackMounts(mnts []string) {
 	im.trackedMounts = append(im.trackedMounts, mnts...)
 }
 
+// trackTmpDir appends a single temporary directory to the tracked list.
+func (im *Image) trackTmpDir(tmpDir string) {
+	im.trackedTmpDirsMu.Lock()
+	defer im.trackedTmpDirsMu.Unlock()
+	im.trackedTmpDirs = append(im.trackedTmpDirs, tmpDir)
+}
+
 // Cleanup unmounts all mount points tracked by this Image instance
 // in reverse order. It is safe to call multiple times.
 func (im *Image) Cleanup() {
@@ -230,6 +239,18 @@ func (im *Image) Cleanup() {
 	im.trackedMountsMu.Unlock()
 
 	filesystems.CleanupMounts(mounts)
+
+	im.trackedTmpDirsMu.Lock()
+	tmpDirs := slices.Clone(im.trackedTmpDirs)
+	im.trackedTmpDirs = nil
+	im.trackedTmpDirsMu.Unlock()
+
+	for _, tmpDir := range tmpDirs {
+		fmt.Fprintf(im.stdout, "Removing temp dir %s\n", tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			fmt.Fprintf(im.stderr, "Warning: failed to remove temp dir %s: %v\n", tmpDir, err)
+		}
+	}
 }
 
 // NewImage creates a new Image instance.
