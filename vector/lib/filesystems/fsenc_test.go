@@ -10,6 +10,9 @@ import (
 	"testing"
 )
 
+// noop is a no-op callback for testing.
+var noop = func(string) {}
+
 func baseFsencConfig() *config.MockConfig {
 	return &config.MockConfig{
 		Items: map[string][]string{
@@ -28,7 +31,7 @@ func baseFsencConfig() *config.MockConfig {
 func TestNewFsenc(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		cfg := baseFsencConfig()
-		f, err := NewFsenc(cfg)
+		f, err := NewFsenc(cfg, noop, noop)
 		if err != nil {
 			t.Fatalf("NewFsenc() returned error: %v", err)
 		}
@@ -38,7 +41,7 @@ func TestNewFsenc(t *testing.T) {
 	})
 
 	t.Run("NilConfig", func(t *testing.T) {
-		_, err := NewFsenc(nil)
+		_, err := NewFsenc(nil, nil, nil)
 		if err == nil {
 			t.Fatal("NewFsenc(nil) should return error")
 		}
@@ -50,7 +53,7 @@ func TestNewFsenc(t *testing.T) {
 func TestEncryptionEnabled(t *testing.T) {
 	t.Run("Enabled", func(t *testing.T) {
 		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		enabled, err := f.EncryptionEnabled()
 		if err != nil {
 			t.Fatalf("EncryptionEnabled() error: %v", err)
@@ -63,7 +66,7 @@ func TestEncryptionEnabled(t *testing.T) {
 	t.Run("Disabled", func(t *testing.T) {
 		cfg := baseFsencConfig()
 		cfg.Bools["Imager.Encryption"] = false
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		enabled, err := f.EncryptionEnabled()
 		if err != nil {
 			t.Fatalf("EncryptionEnabled() error: %v", err)
@@ -75,7 +78,7 @@ func TestEncryptionEnabled(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		f, _ := NewFsenc(ec)
+		f, _ := NewFsenc(ec, noop, noop)
 		_, err := f.EncryptionEnabled()
 		if err == nil {
 			t.Error("Expected error from broken config")
@@ -86,7 +89,7 @@ func TestEncryptionEnabled(t *testing.T) {
 func TestEncryptionKey(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		key, err := f.EncryptionKey()
 		if err != nil {
 			t.Fatalf("EncryptionKey() error: %v", err)
@@ -98,7 +101,7 @@ func TestEncryptionKey(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		f, _ := NewFsenc(ec)
+		f, _ := NewFsenc(ec, noop, noop)
 		_, err := f.EncryptionKey()
 		if err == nil {
 			t.Error("Expected error from broken config")
@@ -109,7 +112,7 @@ func TestEncryptionKey(t *testing.T) {
 func TestEncryptedRootFsName(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		name, err := f.EncryptedRootFsName()
 		if err != nil {
 			t.Fatalf("EncryptedRootFsName() error: %v", err)
@@ -122,7 +125,7 @@ func TestEncryptedRootFsName(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		cfg := baseFsencConfig()
 		cfg.Items["Imager.EncryptedRootFsName"] = []string{""}
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		_, err := f.EncryptedRootFsName()
 		if err == nil {
 			t.Error("Expected error for empty EncryptedRootFsName")
@@ -131,7 +134,7 @@ func TestEncryptedRootFsName(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		f, _ := NewFsenc(ec)
+		f, _ := NewFsenc(ec, noop, noop)
 		_, err := f.EncryptedRootFsName()
 		if err == nil {
 			t.Error("Expected error from broken config")
@@ -142,7 +145,7 @@ func TestEncryptedRootFsName(t *testing.T) {
 func TestFsencOsName(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		name, err := f.OsName()
 		if err != nil {
 			t.Fatalf("OsName() error: %v", err)
@@ -155,7 +158,7 @@ func TestFsencOsName(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		cfg := baseFsencConfig()
 		cfg.Items["matrixOS.OsName"] = []string{""}
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		_, err := f.OsName()
 		if err == nil {
 			t.Error("Expected error for empty OsName")
@@ -164,7 +167,7 @@ func TestFsencOsName(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		f, _ := NewFsenc(ec)
+		f, _ := NewFsenc(ec, noop, noop)
 		_, err := f.OsName()
 		if err == nil {
 			t.Error("Expected error from broken config")
@@ -177,9 +180,8 @@ func TestFsencOsName(t *testing.T) {
 func TestLuksEncrypt(t *testing.T) {
 	t.Run("EmptyDevicePath", func(t *testing.T) {
 		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
-		var dm []string
-		err := f.LuksEncrypt("", "/dev/mapper/root", &dm)
+		f, _ := NewFsenc(cfg, noop, noop)
+		err := f.LuksEncrypt("", "/dev/mapper/root")
 		if err == nil {
 			t.Error("Expected error for empty devicePath")
 		}
@@ -187,28 +189,17 @@ func TestLuksEncrypt(t *testing.T) {
 
 	t.Run("EmptyDesiredLuksDevice", func(t *testing.T) {
 		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
-		var dm []string
-		err := f.LuksEncrypt("/dev/loop0p3", "", &dm)
+		f, _ := NewFsenc(cfg, noop, noop)
+		err := f.LuksEncrypt("/dev/loop0p3", "")
 		if err == nil {
 			t.Error("Expected error for empty desiredLuksDevice")
 		}
 	})
 
-	t.Run("NilDeviceMappers", func(t *testing.T) {
-		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
-		err := f.LuksEncrypt("/dev/loop0p3", "/dev/mapper/root", nil)
-		if err == nil {
-			t.Error("Expected error for nil deviceMappers")
-		}
-	})
-
 	t.Run("EncryptionKeyError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("key error")}
-		f, _ := NewFsenc(ec)
-		var dm []string
-		err := f.LuksEncrypt("/dev/loop0p3", "/dev/mapper/root", &dm)
+		f, _ := NewFsenc(ec, noop, noop)
+		err := f.LuksEncrypt("/dev/loop0p3", "/dev/mapper/root")
 		if err == nil {
 			t.Error("Expected error from config failure")
 		}
@@ -216,12 +207,11 @@ func TestLuksEncrypt(t *testing.T) {
 
 	t.Run("LuksFormatFails", func(t *testing.T) {
 		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		mr := runner.NewMockRunnerFailOnCall(0, errors.New("luksFormat failed"))
 		f.runner = mr.Run
 
-		var dm []string
-		err := f.LuksEncrypt("/dev/loop0p3", "/dev/mapper/matrixosroot", &dm)
+		err := f.LuksEncrypt("/dev/loop0p3", "/dev/mapper/matrixosroot")
 		if err == nil {
 			t.Fatal("Expected error from luksFormat failure")
 		}
@@ -232,12 +222,11 @@ func TestLuksEncrypt(t *testing.T) {
 
 	t.Run("CryptsetupOpenFails", func(t *testing.T) {
 		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		mr := runner.NewMockRunnerFailOnCall(1, errors.New("open failed"))
 		f.runner = mr.Run
 
-		var dm []string
-		err := f.LuksEncrypt("/dev/loop0p3", "/dev/mapper/matrixosroot", &dm)
+		err := f.LuksEncrypt("/dev/loop0p3", "/dev/mapper/matrixosroot")
 		if err == nil {
 			t.Fatal("Expected error from cryptsetup open failure")
 		}
@@ -248,22 +237,21 @@ func TestLuksEncrypt(t *testing.T) {
 
 	t.Run("DesiredLuksDeviceDoesNotExist", func(t *testing.T) {
 		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		mr := runner.NewMockRunner()
 		f.runner = mr.Run
 
-		var dm []string
 		// Use a path that won't exist.
-		err := f.LuksEncrypt("/dev/loop0p3", "/dev/mapper/nonexistent_test_device", &dm)
+		err := f.LuksEncrypt("/dev/loop0p3", "/dev/mapper/nonexistent_test_device")
 		if err == nil {
 			t.Fatal("Expected error because desired LUKS device does not exist")
 		}
 		if !strings.Contains(err.Error(), "does not exist") {
 			t.Errorf("Error should mention 'does not exist': %v", err)
 		}
-		// The device mapper name should still be tracked for cleanup.
-		if len(dm) != 1 || dm[0] != "nonexistent_test_device" {
-			t.Errorf("Expected deviceMappers to contain 'nonexistent_test_device', got %v", dm)
+		// The device mapper name should still be tracked internally for cleanup.
+		if len(f.openMappers) != 1 || f.openMappers[0] != "nonexistent_test_device" {
+			t.Errorf("Expected openMappers to contain 'nonexistent_test_device', got %v", f.openMappers)
 		}
 	})
 
@@ -274,12 +262,11 @@ func TestLuksEncrypt(t *testing.T) {
 		os.WriteFile(desiredDevice, []byte{}, 0600)
 
 		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		mr := runner.NewMockRunner()
 		f.runner = mr.Run
 
-		var dm []string
-		err := f.LuksEncrypt("/dev/loop0p3", desiredDevice, &dm)
+		err := f.LuksEncrypt("/dev/loop0p3", desiredDevice)
 		if err != nil {
 			t.Fatalf("LuksEncrypt() error: %v", err)
 		}
@@ -309,10 +296,10 @@ func TestLuksEncrypt(t *testing.T) {
 			t.Errorf("Call 1 should contain '--allow-discards': %v", mr.Calls[1].Args)
 		}
 
-		// Verify device mapper tracking.
+		// Verify internal device mapper tracking.
 		expectedName := filepath.Base(desiredDevice)
-		if len(dm) != 1 || dm[0] != expectedName {
-			t.Errorf("Expected deviceMappers to contain %q, got %v", expectedName, dm)
+		if len(f.openMappers) != 1 || f.openMappers[0] != expectedName {
+			t.Errorf("Expected openMappers to contain %q, got %v", expectedName, f.openMappers)
 		}
 	})
 
@@ -326,12 +313,11 @@ func TestLuksEncrypt(t *testing.T) {
 
 		cfg := baseFsencConfig()
 		cfg.Items["Imager.EncryptionKey"] = []string{keyFile}
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		mr := runner.NewMockRunner()
 		f.runner = mr.Run
 
-		var dm []string
-		err := f.LuksEncrypt("/dev/loop0p3", desiredDevice, &dm)
+		err := f.LuksEncrypt("/dev/loop0p3", desiredDevice)
 		if err != nil {
 			t.Fatalf("LuksEncrypt() error: %v", err)
 		}
@@ -348,87 +334,13 @@ func TestLuksEncrypt(t *testing.T) {
 	})
 }
 
-// --- LuksBackupHeader Tests ---
-
-func TestLuksBackupHeader(t *testing.T) {
-	t.Run("EmptyDevicePath", func(t *testing.T) {
-		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
-		err := f.LuksBackupHeader("", "/mnt/efi")
-		if err == nil {
-			t.Error("Expected error for empty devicePath")
-		}
-	})
-
-	t.Run("EmptyMountEfifs", func(t *testing.T) {
-		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
-		err := f.LuksBackupHeader("/dev/loop0p3", "")
-		if err == nil {
-			t.Error("Expected error for empty mountEfifs")
-		}
-	})
-
-	t.Run("OsNameError", func(t *testing.T) {
-		cfg := baseFsencConfig()
-		cfg.Items["matrixOS.OsName"] = []string{""}
-		f, _ := NewFsenc(cfg)
-		err := f.LuksBackupHeader("/dev/loop0p3", "/mnt/efi")
-		if err == nil {
-			t.Error("Expected error from empty OsName")
-		}
-	})
-
-	t.Run("RunnerFails", func(t *testing.T) {
-		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
-		mr := runner.NewMockRunnerFailOnCall(0, errors.New("backup failed"))
-		f.runner = mr.Run
-
-		err := f.LuksBackupHeader("/dev/loop0p3", "/mnt/efi")
-		if err == nil {
-			t.Fatal("Expected error from cryptsetup failure")
-		}
-		if !strings.Contains(err.Error(), "luksHeaderBackup") {
-			t.Errorf("Error should mention luksHeaderBackup: %v", err)
-		}
-	})
-
-	t.Run("Success", func(t *testing.T) {
-		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
-		mr := runner.NewMockRunner()
-		f.runner = mr.Run
-
-		err := f.LuksBackupHeader("/dev/loop0p3", "/mnt/efi")
-		if err != nil {
-			t.Fatalf("LuksBackupHeader() error: %v", err)
-		}
-
-		if len(mr.Calls) != 1 {
-			t.Fatalf("Expected 1 runner call, got %d", len(mr.Calls))
-		}
-		if mr.Calls[0].Name != "cryptsetup" {
-			t.Errorf("Expected 'cryptsetup', got %q", mr.Calls[0].Name)
-		}
-		if !containsArg(mr.Calls[0].Args, "luksHeaderBackup") {
-			t.Errorf("Should contain 'luksHeaderBackup': %v", mr.Calls[0].Args)
-		}
-
-		expectedBackup := "/mnt/efi/matrixos-rootfs-luks-header-backup.img"
-		if !containsArg(mr.Calls[0].Args, expectedBackup) {
-			t.Errorf("Should contain backup path %q: %v", expectedBackup, mr.Calls[0].Args)
-		}
-	})
-}
-
 // --- ValidateLuksVariables Tests ---
 
 func TestValidateLuksVariables(t *testing.T) {
 	t.Run("EncryptionDisabled", func(t *testing.T) {
 		cfg := baseFsencConfig()
 		cfg.Bools["Imager.Encryption"] = false
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		err := f.ValidateLuksVariables()
 		if err != nil {
 			t.Fatalf("ValidateLuksVariables() should succeed when encryption is disabled: %v", err)
@@ -437,7 +349,7 @@ func TestValidateLuksVariables(t *testing.T) {
 
 	t.Run("EncryptionEnabledAllSet", func(t *testing.T) {
 		cfg := baseFsencConfig()
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		err := f.ValidateLuksVariables()
 		if err != nil {
 			t.Fatalf("ValidateLuksVariables() error: %v", err)
@@ -447,7 +359,7 @@ func TestValidateLuksVariables(t *testing.T) {
 	t.Run("EncryptionEnabledMissingKey", func(t *testing.T) {
 		cfg := baseFsencConfig()
 		cfg.Items["Imager.EncryptionKey"] = []string{""}
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		err := f.ValidateLuksVariables()
 		if err == nil {
 			t.Error("Expected error for missing EncryptionKey")
@@ -460,7 +372,7 @@ func TestValidateLuksVariables(t *testing.T) {
 	t.Run("EncryptionEnabledMissingRootFsName", func(t *testing.T) {
 		cfg := baseFsencConfig()
 		cfg.Items["Imager.EncryptedRootFsName"] = []string{""}
-		f, _ := NewFsenc(cfg)
+		f, _ := NewFsenc(cfg, noop, noop)
 		err := f.ValidateLuksVariables()
 		if err == nil {
 			t.Error("Expected error for missing EncryptedRootFsName")
@@ -472,7 +384,7 @@ func TestValidateLuksVariables(t *testing.T) {
 
 	t.Run("EncryptionCheckConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg broken")}
-		f, _ := NewFsenc(ec)
+		f, _ := NewFsenc(ec, noop, noop)
 		err := f.ValidateLuksVariables()
 		if err == nil {
 			t.Error("Expected error from broken config")
@@ -534,7 +446,7 @@ func TestDirectoryExistsHelper(t *testing.T) {
 
 func TestFsencImplementsIFsenc(t *testing.T) {
 	cfg := baseFsencConfig()
-	f, _ := NewFsenc(cfg)
+	f, _ := NewFsenc(cfg, noop, noop)
 	// Compile-time interface check.
 	var _ IFsenc = f
 }

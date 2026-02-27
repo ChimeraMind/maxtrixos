@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,7 +29,7 @@ func (m *mockCmdRunner) SetStderr(_ io.Writer)   {}
 // bypassing initConfig/initOstree.
 func newTestJailbreakCommand(
 	ot cds.IOstree,
-	cfg *testConfig,
+	cfg *config.MockConfig,
 	runner *jailbreakRunner,
 ) (*JailbreakCommand, error) {
 	cmd := &JailbreakCommand{}
@@ -79,18 +80,18 @@ func testRunner() *jailbreakRunner {
 	}
 }
 
-func defaultTestConfig() *testConfig {
-	return &testConfig{
-		items: map[string]string{
-			"Ostree.Sysroot":                    "/sysroot",
-			"Ostree.FullBranchSuffix":           "full",
-			"Imager.BootRoot":                   "/boot",
-			"Imager.EfiRoot":                    "/efi",
-			"Releaser.ReadOnlyVdb":              "/usr/var-db-pkg",
-			"matrixOS.OsName":                   "matrixos",
-			"matrixOS.DefaultUsername":          "matrix",
-			"Jailbreak.BootLoaderEntry":         "matrixos-jailbroken.conf",
-			"Seeder.DefaultSecureBootPublicKey": "/etc/matrixos-private/secureboot/keys/db/db.pem",
+func defaultTestConfig() *config.MockConfig {
+	return &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.Sysroot":                    {"/sysroot"},
+			"Ostree.FullBranchSuffix":           {"full"},
+			"Imager.BootRoot":                   {"/boot"},
+			"Imager.EfiRoot":                    {"/efi"},
+			"Releaser.ReadOnlyVdb":              {"/usr/var-db-pkg"},
+			"matrixOS.OsName":                   {"matrixos"},
+			"matrixOS.DefaultUsername":          {"matrix"},
+			"Jailbreak.BootLoaderEntry":         {"matrixos-jailbroken.conf"},
+			"Seeder.DefaultSecureBootPublicKey": {"/etc/matrixos-private/secureboot/keys/db/db.pem"},
 		},
 	}
 }
