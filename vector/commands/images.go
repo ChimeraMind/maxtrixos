@@ -217,6 +217,7 @@ func (c *ImagesCommand) runImages() error {
 	// 3) on images only build server, where ostree repo is pulled from a remote.
 	// Case 2 and 3 are fine, we use the remote prefix and happy days.
 	// For case 1, we detect this from the absence of the remote: prefix and set remote="local".
+	var released []string
 	for _, ref := range refs {
 		// Skip full-suffixed branches unless explicitly included.
 		c.ot.SetRef(ref)
@@ -234,6 +235,13 @@ func (c *ImagesCommand) runImages() error {
 		if err := c.imageWorker(ref); err != nil {
 			return fmt.Errorf("image build failed for ref %s: %w", ref, err)
 		}
+		released = append(released, ref)
+	}
+
+	fmt.Fprintf(stdoutWriter, "Successfully built images for %d releases:\n",
+		len(released))
+	for _, r := range released {
+		fmt.Fprintf(stdoutWriter, "  %s\n", r)
 	}
 
 	return nil
