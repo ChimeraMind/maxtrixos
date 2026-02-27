@@ -748,12 +748,22 @@ func TestSetupCommonRootfsMounts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mounts, err := SetupCommonRootfsMounts(tmpDir)
+	var mountingCalls, mountedCalls []string
+	mounter, err := NewCommonRootfsMounts(tmpDir,
+		func(tg string) { mountingCalls = append(mountingCalls, tg) },
+		func(tg string) { mountedCalls = append(mountedCalls, tg) },
+	)
 	if err != nil {
-		t.Errorf("SetupCommonRootfsMounts failed: %v", err)
+		t.Fatalf("NewCommonRootfsMounts failed: %v", err)
 	}
-	if len(mounts) != 6 {
-		t.Errorf("Expected 6 mounts, got %d", len(mounts))
+	if err := mounter.Setup(); err != nil {
+		t.Errorf("Setup failed: %v", err)
+	}
+	if len(mountingCalls) != 6 {
+		t.Errorf("Expected 6 mounting calls, got %d", len(mountingCalls))
+	}
+	if len(mountedCalls) != 6 {
+		t.Errorf("Expected 6 mounted calls, got %d", len(mountedCalls))
 	}
 }
 
@@ -764,7 +774,7 @@ func TestBindMount(t *testing.T) {
 	src := t.TempDir()
 	dst := t.TempDir()
 
-	if _, err := BindMount(src, dst); err != nil {
+	if err := BindMount(src, dst); err != nil {
 		t.Errorf("BindMount failed: %v", err)
 	}
 }
@@ -1042,7 +1052,7 @@ func TestFlushBlockDeviceBuffers(t *testing.T) {
 	})
 }
 
-func TestUnsetupCommonRootfsMounts(t *testing.T) {
+func TestCommonRootfsMountsCleanup(t *testing.T) {
 	setupMockExec(t)
 	setupMockSyscalls(t)
 
@@ -1057,19 +1067,34 @@ func TestUnsetupCommonRootfsMounts(t *testing.T) {
 			{Mountpoint: filepath.Join(tmpDir, "proc")},
 			{Mountpoint: filepath.Join(tmpDir, "run", "lock")},
 		})
-		if err := UnsetupCommonRootfsMounts(tmpDir); err != nil {
-			t.Errorf("UnsetupCommonRootfsMounts failed: %v", err)
+		noop := func(string) {}
+		mounter, err := NewCommonRootfsMounts(tmpDir, noop, noop)
+		if err != nil {
+			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+		}
+		if err := mounter.Setup(); err != nil {
+			t.Fatalf("Setup failed: %v", err)
+		}
+		if err := mounter.Cleanup(); err != nil {
+			t.Errorf("Cleanup failed: %v", err)
 		}
 	})
 
 	t.Run("MissingMnt", func(t *testing.T) {
-		if err := UnsetupCommonRootfsMounts(""); err == nil {
+		noop := func(string) {}
+		_, err := NewCommonRootfsMounts("", noop, noop)
+		if err == nil {
 			t.Error("Expected error for missing mnt, got nil")
 		}
 	})
 
 	t.Run("NonExistentMnt", func(t *testing.T) {
-		if err := UnsetupCommonRootfsMounts("/non/existent/path"); err == nil {
+		noop := func(string) {}
+		mounter, err := NewCommonRootfsMounts("/non/existent/path", noop, noop)
+		if err != nil {
+			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+		}
+		if err := mounter.Setup(); err == nil {
 			t.Error("Expected error for non-existent mnt, got nil")
 		}
 	})
