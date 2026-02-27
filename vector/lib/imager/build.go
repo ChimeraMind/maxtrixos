@@ -382,13 +382,13 @@ func (im *Image) finalizeBuild(releaseVersion string, pkgList []string) error {
 
 	switch im.ImageMode() {
 	case ModeFlashToDevice:
-		im.Print("\nOn device install complete!\n")
+		im.Print("On device install complete!\n")
 		return nil
 	case ModeCreateImageFile:
 		if err := im.postImageCreation(releaseVersion, pkgList); err != nil {
 			return fmt.Errorf("post image creation failed: %w", err)
 		}
-		im.Print("\nImage creation complete!\n")
+		im.Print("Image creation complete!\n")
 		return nil
 	default:
 		return fmt.Errorf("unknown image mode: %v", im.ImageMode())

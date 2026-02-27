@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,10 +22,11 @@ const (
 )
 
 type VMDriver struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
-	reader *bufio.Reader
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	stdout  io.ReadCloser
+	reader  *bufio.Reader
+	display io.Writer // where to echo VM output (nil = discard)
 }
 
 func NewVMDriver(ctx context.Context, args []string) (*VMDriver, error) {
@@ -51,10 +51,11 @@ func NewVMDriver(ctx context.Context, args []string) (*VMDriver, error) {
 	}
 
 	return &VMDriver{
-		cmd:    cmd,
-		stdin:  stdin,
-		stdout: stdout,
-		reader: bufio.NewReader(stdout),
+		cmd:     cmd,
+		stdin:   stdin,
+		stdout:  stdout,
+		reader:  bufio.NewReader(stdout),
+		display: os.Stdout,
 	}, nil
 }
 
@@ -81,7 +82,9 @@ func (vm *VMDriver) Expect(target string, timeout time.Duration) error {
 			n, err := vm.reader.Read(buf)
 			if n > 0 {
 				chunk := string(buf[:n])
-				fmt.Print(ansiStrip.ReplaceAllString(chunk, ""))
+				if vm.display != nil {
+					fmt.Fprint(vm.display, ansiStrip.ReplaceAllString(chunk, ""))
+				}
 				matchBuf += chunk
 				if strings.Contains(matchBuf, target) {
 					resultCh <- nil
@@ -131,6 +134,7 @@ func (vm *VMDriver) Wait() error {
 // VMCommand checks matrixOS images via QEMU
 type VMCommand struct {
 	BaseCommand
+	UI
 	fs          *flag.FlagSet
 	imagePath   string
 	memory      string
@@ -143,6 +147,10 @@ type VMCommand struct {
 	interactive bool
 	audioDev    string
 	cpus        string
+
+	// Styled I/O writers
+	stdout *styledWriter
+	stderr *styledWriter
 }
 
 // NewVMCommand creates a new VMCommand
@@ -181,6 +189,9 @@ func (c *VMCommand) Init(args []string) error {
 	if err := c.fs.Parse(args); err != nil {
 		return err
 	}
+
+	c.StartUI()
+
 	return nil
 }
 
@@ -194,6 +205,14 @@ func (c *VMCommand) Run() error {
 	if !strings.Contains(c.imagePath, "amd64") {
 		return fmt.Errorf("only amd64 images are supported (image path must contain 'amd64')")
 	}
+
+	// Set up styled writers for output.
+	c.stdout = c.NewStdoutWriter("vm")
+	c.stderr = c.NewStderrWriter("vm")
+	c.SetupPrinters("vm")
+	defer c.FlushPrinters()
+	defer c.stdout.Flush()
+	defer c.stderr.Flush()
 
 	tempDir, err := os.MkdirTemp("", "matrixos-vm-")
 	if err != nil {
@@ -238,7 +257,7 @@ func (c *VMCommand) Run() error {
 		"-d", "tests/vm-suite",
 		testImageFile.Name(),
 	}
-	log.Printf("Generating test filesystem with command: %v\n", mkfsTestImgArgs)
+	c.Printf("Generating test filesystem with command: %v\n", mkfsTestImgArgs)
 	if err := exec.Command(mkfsTestImgArgs[0], mkfsTestImgArgs[1:]...).Run(); err != nil {
 		return fmt.Errorf("failed to create test image filesystem: %w", err)
 	}
@@ -282,7 +301,7 @@ func (c *VMCommand) Run() error {
 		)
 	}
 
-	log.Printf("QEMU args: %v", qemuArgs)
+	c.Printf("QEMU args: %v\n", qemuArgs)
 	if c.interactive {
 		return c.runInteractive(qemuArgs)
 	} else {
@@ -291,11 +310,12 @@ func (c *VMCommand) Run() error {
 }
 
 func (c *VMCommand) runInteractive(qemuArgs []string) error {
-	log.Println("Starting VM in interactive mode...")
+	c.Println("Starting VM in interactive mode...")
 	vm, err := NewVMDriver(context.Background(), qemuArgs)
 	if err != nil {
 		return fmt.Errorf("failed to init VM: %w", err)
 	}
+	vm.display = c.stdout
 	defer vm.Close()
 
 	if err := vm.Start(); err != nil {
@@ -308,7 +328,7 @@ func (c *VMCommand) runInteractive(qemuArgs []string) error {
 }
 
 func (c *VMCommand) runTests(qemuArgs []string) error {
-	log.Println("Starting VM Test...")
+	c.Println("Starting VM Test...")
 	// How long do we allow the whole test suite to run?
 	ctx, cancel := context.WithTimeout(context.Background(), c.maxRunTime)
 	defer cancel()
@@ -317,18 +337,19 @@ func (c *VMCommand) runTests(qemuArgs []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to init VM: %w", err)
 	}
+	vm.display = c.stdout
 	defer vm.Close()
 
 	if err := vm.Start(); err != nil {
 		return fmt.Errorf("failed to start VM: %w", err)
 	}
 
-	log.Println("Waiting for login prompt...")
+	c.Println("Waiting for login prompt...")
 	if err := vm.Expect("matrixos login:", c.waitBoot); err != nil {
 		return fmt.Errorf("boot failed: %w", err)
 	}
 
-	log.Println("Logging in...")
+	c.Println("Logging in...")
 	if err := vm.Send("root"); err != nil {
 		return err
 	}
@@ -343,7 +364,7 @@ func (c *VMCommand) runTests(qemuArgs []string) error {
 		return fmt.Errorf("login failed: %w", err)
 	}
 
-	log.Println("Starting test suite ...")
+	c.Println("Starting test suite ...")
 	if err := vm.Send(`
 mkdir -p /tmp/tests
 mount /dev/disk/by-label/TESTDATA /tmp/tests
@@ -369,7 +390,7 @@ echo "TEST_RESULT:${?}"
 		return fmt.Errorf("no time left to wait for VM shutdown: %v", waitLeft)
 	}
 
-	log.Println("Test suite passed, shutting down VM...")
+	c.Println("Test suite passed, shutting down VM...")
 	if err := vm.Send("poweroff"); err != nil {
 		return err
 	}
@@ -381,7 +402,7 @@ echo "TEST_RESULT:${?}"
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), waitLeft)
 	defer shutdownCancel()
-	log.Println("Waiting for VM to shutdown...")
+	c.Println("Waiting for VM to shutdown...")
 
 	done := make(chan error, 1)
 	go func() {
@@ -396,7 +417,7 @@ echo "TEST_RESULT:${?}"
 		}
 		// fall through to success.
 	case <-shutdownCtx.Done():
-		log.Println("VM did not shutdown in time, killing process...")
+		c.PrintErr("VM did not shutdown in time, killing process...")
 		cancel()
 
 		err = <-done // wait for the kill to complete.
@@ -410,6 +431,6 @@ echo "TEST_RESULT:${?}"
 		return fmt.Errorf("VM shutdown timed out and was killed")
 	}
 
-	log.Println("SUCCESS: Tests passed.")
+	c.Printf("\n%s%sSUCCESS: Tests passed.%s\n", c.cBold, c.cGreen, c.cReset)
 	return nil
 }

@@ -44,7 +44,7 @@ func (c *ReadWriteCommand) Run() error {
 		return fmt.Errorf("this command must be run as root")
 	}
 
-	cmd := execCommand("ostree", getSysrootFlag(sysroot), "admin", "unlock", "--hotfix")
+	cmd := execCommand("ostree", fmt.Sprintf("--sysroot=%s", sysroot), "admin", "unlock", "--hotfix")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

@@ -164,6 +164,90 @@ type UI struct {
 	iconQuestion, iconRocket, iconGear, iconDoc string
 	iconNew, iconError, iconWarn                string
 	separator                                   string
+
+	// TTY detection result (set by StartUI)
+	isTTY bool
+
+	// Per-command styled printers initialised by SetupPrinters.
+	printer    *styledWriter
+	errPrinter *styledWriter
+}
+
+// IsTTY returns whether stdout was detected as a terminal.
+func (ui *UI) IsTTY() bool {
+	return ui.isTTY
+}
+
+// NewStdoutWriter creates a styled writer for os.Stdout using the UI
+// theme.  The returned writer can be passed to sub-processes or
+// libraries that need a prefixed, TTY-aware io.Writer.
+func (ui *UI) NewStdoutWriter(name string) *styledWriter {
+	prefix := fmt.Sprintf("%s%s%s[%s]%s", ui.cBold, ui.cGreen, ui.iconGear, name, ui.cReset)
+	return newStyledWriter(os.Stdout, prefix, ui.cGreen, ui.cReset, ui.isTTY)
+}
+
+// NewStderrWriter creates a styled writer for os.Stderr using the UI
+// theme.  See NewStdoutWriter for details.
+func (ui *UI) NewStderrWriter(name string) *styledWriter {
+	prefix := fmt.Sprintf("%s%s%s[%s]%s", ui.cBold, ui.cRed, ui.iconError, name, ui.cReset)
+	return newStyledWriter(os.Stderr, prefix, ui.cYellow, ui.cReset, ui.isTTY)
+}
+
+// SetupPrinters creates the default stdout/stderr styled writers for
+// the given command name.  After calling this, Println / Printf /
+// PrintErr / PrintErrf write through these writers.
+func (ui *UI) SetupPrinters(name string) {
+	ui.printer = ui.NewStdoutWriter(name)
+	ui.errPrinter = ui.NewStderrWriter(name)
+}
+
+// Println prints a styled line to the command's stdout writer.
+// If SetupPrinters has not been called it falls back to fmt.Println.
+func (ui *UI) Println(args ...interface{}) {
+	if ui.printer == nil {
+		fmt.Println(args...)
+		return
+	}
+	fmt.Fprintln(ui.printer, fmt.Sprint(args...))
+}
+
+// Printf prints a styled formatted message to the command's stdout
+// writer.  Include a trailing \n if you want the line flushed
+// immediately.
+func (ui *UI) Printf(format string, args ...interface{}) {
+	if ui.printer == nil {
+		fmt.Printf(format, args...)
+		return
+	}
+	fmt.Fprintf(ui.printer, format, args...)
+}
+
+// PrintErr prints a styled line to the command's stderr writer.
+func (ui *UI) PrintErr(args ...interface{}) {
+	if ui.errPrinter == nil {
+		fmt.Fprintln(os.Stderr, args...)
+		return
+	}
+	fmt.Fprintln(ui.errPrinter, fmt.Sprint(args...))
+}
+
+// PrintErrf prints a styled formatted message to the command's stderr writer.
+func (ui *UI) PrintErrf(format string, args ...interface{}) {
+	if ui.errPrinter == nil {
+		fmt.Fprintf(os.Stderr, format, args...)
+		return
+	}
+	fmt.Fprintf(ui.errPrinter, format, args...)
+}
+
+// FlushPrinters flushes any buffered content in both styled writers.
+func (ui *UI) FlushPrinters() {
+	if ui.printer != nil {
+		ui.printer.Flush()
+	}
+	if ui.errPrinter != nil {
+		ui.errPrinter.Flush()
+	}
 }
 
 // StartUI initializes the UI component with environment detection
@@ -174,6 +258,7 @@ func (ui *UI) StartUI() {
 	// Check if stdout is a terminal
 	_, err := unix.IoctlGetTermios(int(os.Stdout.Fd()), unix.TCGETS)
 	isTerm := err == nil
+	ui.isTTY = isTerm
 
 	if isTerm {
 		termEnv := os.Getenv("TERM")
@@ -231,11 +316,3 @@ func (ui *UI) StartUI() {
 
 var execCommand = exec.Command
 var getEuid = os.Geteuid
-
-func getSysrootFlag(sysroot string) string {
-	return fmt.Sprintf("--sysroot=%s", sysroot)
-}
-
-func getRepoFlag(sysroot string) string {
-	return fmt.Sprintf("--repo=%s/ostree/repo", sysroot)
-}

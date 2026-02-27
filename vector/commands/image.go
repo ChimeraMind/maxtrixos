@@ -23,6 +23,10 @@ type ImageCommand struct {
 	fsenc filesystems.IFsenc
 	qa    *validation.QA
 
+	// Styled I/O writers
+	stdout *styledWriter
+	stderr *styledWriter
+
 	// Flags
 	ref            string
 	localOstree    bool
@@ -66,6 +70,20 @@ func (c *ImageCommand) Init(args []string) error {
 	c.StartUI()
 
 	return nil
+}
+
+// SetStdout creates a fancy styled stdout writer using the UI theme.
+// Every line written to it is prefixed with a bold green "[image]" label.
+func (c *ImageCommand) SetStdout() *styledWriter {
+	c.stdout = c.NewStdoutWriter("image")
+	return c.stdout
+}
+
+// SetStderr creates a fancy styled stderr writer using the UI theme.
+// Every line written to it is prefixed with a bold red/yellow "[image]" label.
+func (c *ImageCommand) SetStderr() *styledWriter {
+	c.stderr = c.NewStderrWriter("image")
+	return c.stderr
 }
 
 // parseArgs parses the command-line arguments without initializing config or ostree.
@@ -210,9 +228,19 @@ func (c *ImageCommand) runImage() error {
 		}
 	}
 
+	// Set up styled writers for subprocess output.
+	stdoutWriter := c.SetStdout()
+	stderrWriter := c.SetStderr()
+	c.im.SetStdout(stdoutWriter)
+	c.im.SetStderr(stderrWriter)
+
 	// Setup image (the main work).
 	c.PushCleanup(c.im.Cleanup)
 	c.PushCleanup(c.fsenc.Cleanup)
+	c.PushCleanup(func() {
+		stdoutWriter.Flush()
+		stderrWriter.Flush()
+	})
 	buildOpts.Verbose = c.verbose
 	return c.im.Build(buildOpts)
 }
