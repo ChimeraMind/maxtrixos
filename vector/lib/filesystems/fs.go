@@ -302,14 +302,14 @@ func CleanupMounts(mounts []string) {
 		if !mounted {
 			continue
 		}
-		log.Printf("Unmounting %s ...", mnt)
+		fmt.Printf("Unmounting %s ...\n", mnt)
 		if err := Unmount(mnt, 0); err != nil {
 			FlushBlockDeviceBuffers(mnt)
-			log.Printf("Unable to umount %s: %v", mnt, err)
+			fmt.Fprintf(os.Stderr, "Unable to umount %s: %v", mnt, err)
 			if entry, mntErr := findMountByTarget(mnt); mntErr == nil {
-				log.Println(entry.String())
+				fmt.Fprintf(os.Stderr, "%s\n", entry.String())
 			}
-			log.Printf("For safety, calling umount -l %s", mnt)
+			fmt.Fprintf(os.Stderr, "For safety, calling umount -l %s\n", mnt)
 			Unmount(mnt, unix.MNT_DETACH)
 			continue
 		}
@@ -330,12 +330,12 @@ func CleanupCryptsetupDevices(devices []string) {
 			continue
 		}
 
-		log.Printf("Closing LUKS device: %s ...", cd)
+		fmt.Printf("Closing LUKS device: %s ...\n", cd)
 		FlushBlockDeviceBuffers(cdpath)
 		if err := execRun(nil, nil, nil, "cryptsetup", "close", cd); err != nil {
-			log.Printf("Unable to cryptsetup close %s", cdpath)
+			fmt.Fprintf(os.Stderr, "Unable to cryptsetup close %s\n", cdpath)
 			if entries, mntErr := findMountsBySource(cdpath); mntErr == nil {
-				log.Println(formatMountEntries(entries))
+				fmt.Fprintf(os.Stderr, "%s\n", formatMountEntries(entries))
 			}
 			continue
 		}
@@ -355,13 +355,13 @@ func CleanupLoopDevices(devices []string) {
 			continue
 		}
 
-		log.Printf("Cleaning loop device %s ...", ld)
+		fmt.Printf("Cleaning loop device %s ...\n", ld)
 
 		if err := l.Detach(); err != nil {
 			FlushBlockDeviceBuffers(ld)
-			log.Printf("Unable to close loop device %s", ld)
+			fmt.Fprintf(os.Stderr, "Unable to close loop device %s\n", ld)
 			if entries, mntErr := findMountsBySource(ld); mntErr == nil {
-				log.Println(formatMountEntries(entries))
+				fmt.Fprintf(os.Stderr, "%s\n", formatMountEntries(entries))
 			}
 			continue
 		}
@@ -462,7 +462,7 @@ func NewCommonRootfsMounts(mnt string, mounting func(string), mounted func(strin
 
 // add adds a mount to the list of mounts to be cleaned up later.
 func (m *CommonRootfsMounts) add(mnt string) {
-	log.Printf("Mounting: %s\n", mnt)
+	fmt.Printf("Mounting: %s ...\n", mnt)
 	m.mounts = append(m.mounts, mnt)
 }
 
