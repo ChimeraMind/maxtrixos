@@ -2,8 +2,8 @@ package commands
 
 import (
 	"fmt"
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
+	"matrixos/vector/lib/ostree"
 	"strings"
 )
 
@@ -30,7 +30,24 @@ func (c *BaseCommand) shortRef(ref string) string {
 		}
 	}
 	return remote + strings.Join(srefs, "/")
+}
 
+// splitCSV splits a comma-separated string into a trimmed slice of strings.
+// Empty input returns nil.
+func SplitCSV(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }
 
 // initBaseConfig initializes the base configuration for the command.
@@ -59,6 +76,42 @@ func (c *BaseCommand) initClientConfig() error {
 	return nil
 }
 
+// resolveRefRemoteResult holds the result of resolveRefRemote.
+type resolveRefRemoteResult struct {
+	Ref    string // cleaned ref (remote prefix stripped if present)
+	Remote string // resolved remote name
+}
+
+// resolveRefRemote checks whether ref contains a remote prefix
+// (e.g. "origin:matrixos/...").  When it does the remote is extracted,
+// a warning is emitted to warnf, and the Ostree.Remote config key is
+// overridden via an overlay.  The returned result always contains the
+// cleaned ref and the resolved remote, regardless of whether the ref
+// contained an embedded remote.
+func (c *BaseCommand) resolveRefRemote(ref string, warnf func(format string, args ...any)) (*resolveRefRemoteResult, error) {
+	remote, err := c.ot.Remote()
+	if err != nil {
+		return nil, err
+	}
+
+	if remoted := ostree.ExtractRemoteFromRef(ref); remoted != "" {
+		remote = remoted
+		ref = ostree.CleanRemoteFromRef(ref)
+		warnf(
+			"WARNING: %s contains the remote reference, using remote=%s and ref=%s\n",
+			ref, remote, ref)
+
+		overlay := map[string][]string{
+			"Ostree.Remote": {remote},
+		}
+		if err := c.cfg.AddOverlay(overlay); err != nil {
+			return nil, fmt.Errorf("failed to add config overlay: %w", err)
+		}
+	}
+
+	return &resolveRefRemoteResult{Ref: ref, Remote: remote}, nil
+}
+
 // initOstree initializes the ostree client for the command.
 func (c *BaseCommand) initOstree() error {
 	if c.cfg == nil {
@@ -72,5 +125,16 @@ func (c *BaseCommand) initOstree() error {
 		return fmt.Errorf("failed to initialize ostree: %w", err)
 	}
 	c.ot = ot
+	return nil
+}
+
+// initGpg initializes the GPG keychain for the command.
+func (c *BaseCommand) initGpg() error {
+	if err := c.ot.MaybeInitializeRemote(); err != nil {
+		return fmt.Errorf("failed to initialize remote: %w", err)
+	}
+	if err := c.ot.MaybeInitializeGpg(); err != nil {
+		return fmt.Errorf("failed to initialize GPG: %w", err)
+	}
 	return nil
 }
