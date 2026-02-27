@@ -101,7 +101,6 @@ func (m *MockOstree) InitializeSigningGpg() error    { return nil }
 func (m *MockOstree) MaybeInitializeGpg() error      { return nil }
 func (m *MockOstree) MaybeInitializeRemote() error   { return nil }
 func (m *MockOstree) Pull() error                    { return nil }
-func (m *MockOstree) PullWithRemote(string) error    { return nil }
 func (m *MockOstree) Prune() error                   { return nil }
 func (m *MockOstree) GenerateStaticDelta() error     { return nil }
 func (m *MockOstree) UpdateSummary() error           { return nil }
