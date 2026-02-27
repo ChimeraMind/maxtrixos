@@ -20,8 +20,8 @@ type MockImage struct {
 
 	MountDir_            string
 	MountDirErr          error
-	ImagesOutDir_        string
-	ImagesOutDirErr      error
+	ImagesDir_           string
+	ImagesDirErr         error
 	ImageSize_           string
 	ImageSizeErr         error
 	EfiPartitionSize_    string
@@ -111,9 +111,9 @@ func (m *MockImage) EfiBootDir() (string, error) {
 func (m *MockImage) BootfsMount() string { return m.BootfsMount_ }
 func (m *MockImage) RootfsMount() string { return m.RootfsMount_ }
 
-func (m *MockImage) ImagesOutDir() (string, error) { return m.ImagesOutDir_, m.ImagesOutDirErr }
-func (m *MockImage) MountDir() (string, error)     { return m.MountDir_, m.MountDirErr }
-func (m *MockImage) ImageSize() (string, error)    { return m.ImageSize_, m.ImageSizeErr }
+func (m *MockImage) ImagesDir() (string, error) { return m.ImagesDir_, m.ImagesDirErr }
+func (m *MockImage) MountDir() (string, error)  { return m.MountDir_, m.MountDirErr }
+func (m *MockImage) ImageSize() (string, error) { return m.ImageSize_, m.ImageSizeErr }
 func (m *MockImage) EfiPartitionSize() (string, error) {
 	return m.EfiPartitionSize_, m.EfiPartitionSizeErr
 }
