@@ -14,7 +14,7 @@ import (
 	"matrixos/vector/lib/runner"
 	"matrixos/vector/lib/validation"
 
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 )
 
 type ImageMode int
@@ -145,7 +145,7 @@ type IImage interface {
 // Image provides image creation and manipulation operations.
 type Image struct {
 	cfg                 config.IConfig
-	ostree              cds.IOstree
+	ostree              ostree.IOstree
 	fsenc               filesystems.IFsenc
 	runner              runner.Func
 	stdout              io.Writer
@@ -282,7 +282,7 @@ func (im *Image) Cleanup() {
 }
 
 // NewImage creates a new Image instance.
-func NewImage(cfg config.IConfig, ot cds.IOstree, fsenc filesystems.IFsenc, opts *NewImageOptions) (*Image, error) {
+func NewImage(cfg config.IConfig, ot ostree.IOstree, fsenc filesystems.IFsenc, opts *NewImageOptions) (*Image, error) {
 	if cfg == nil {
 		return nil, errors.New("missing config parameter")
 	}

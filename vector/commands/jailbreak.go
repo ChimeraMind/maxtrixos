@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 )
@@ -374,7 +374,7 @@ func (c *JailbreakCommand) cloneToSysroot(sysroot string) error {
 	if err != nil {
 		return fmt.Errorf("failed to list deployments: %w", err)
 	}
-	var booted *cds.Deployment
+	var booted *ostree.Deployment
 	for i := range deployments {
 		if deployments[i].Booted {
 			booted = &deployments[i]

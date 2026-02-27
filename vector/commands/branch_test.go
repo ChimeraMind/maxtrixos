@@ -2,14 +2,14 @@ package commands
 
 import (
 	"bytes"
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"os"
 	"testing"
 )
 
 // newTestBranchCommand creates a BranchCommand with injected mock dependencies,
 // bypassing initConfig/initOstree which require real config files.
-func newTestBranchCommand(ot cds.IOstree) *BranchCommand {
+func newTestBranchCommand(ot ostree.IOstree) *BranchCommand {
 	cmd := &BranchCommand{}
 	cmd.ot = ot
 	return cmd
@@ -35,8 +35,8 @@ func captureStdout(t *testing.T, fn func()) string {
 }
 
 func TestBranchShow(t *testing.T) {
-	mock := &cds.MockOstree{
-		Deployments: []cds.Deployment{
+	mock := &ostree.MockOstree{
+		Deployments: []ostree.Deployment{
 			{
 				Booted:    true,
 				Checksum:  "abc123",
@@ -70,8 +70,8 @@ func TestBranchShow(t *testing.T) {
 }
 
 func TestBranchShowNoBooted(t *testing.T) {
-	mock := &cds.MockOstree{
-		Deployments: []cds.Deployment{
+	mock := &ostree.MockOstree{
+		Deployments: []ostree.Deployment{
 			{Booted: false, Stateroot: "matrixos"},
 		},
 	}
@@ -90,7 +90,7 @@ func TestBranchShowNoBooted(t *testing.T) {
 }
 
 func TestBranchList(t *testing.T) {
-	mock := &cds.MockOstree{
+	mock := &ostree.MockOstree{
 		Refs: []string{"origin:branch1", "origin:branch2"},
 	}
 	cmd := newTestBranchCommand(mock)
@@ -111,7 +111,7 @@ func TestBranchList(t *testing.T) {
 }
 
 func TestBranchSwitch(t *testing.T) {
-	mock := &cds.MockOstree{}
+	mock := &ostree.MockOstree{}
 	cmd := newTestBranchCommand(mock)
 	if err := cmd.parseArgs([]string{"switch", "new/branch"}); err != nil {
 		t.Fatalf("parseArgs failed: %v", err)
@@ -126,7 +126,7 @@ func TestBranchSwitch(t *testing.T) {
 }
 
 func TestBranchSwitchMissingArg(t *testing.T) {
-	mock := &cds.MockOstree{}
+	mock := &ostree.MockOstree{}
 	cmd := newTestBranchCommand(mock)
 	if err := cmd.parseArgs([]string{"switch"}); err != nil {
 		t.Fatalf("parseArgs failed: %v", err)
@@ -139,7 +139,7 @@ func TestBranchSwitchMissingArg(t *testing.T) {
 }
 
 func TestBranchUnknownSubcommand(t *testing.T) {
-	mock := &cds.MockOstree{}
+	mock := &ostree.MockOstree{}
 	cmd := newTestBranchCommand(mock)
 	if err := cmd.parseArgs([]string{"foo"}); err != nil {
 		t.Fatalf("parseArgs failed: %v", err)
@@ -152,7 +152,7 @@ func TestBranchUnknownSubcommand(t *testing.T) {
 }
 
 func TestBranchNoSubcommand(t *testing.T) {
-	mock := &cds.MockOstree{}
+	mock := &ostree.MockOstree{}
 	cmd := newTestBranchCommand(mock)
 	err := cmd.parseArgs([]string{})
 	if err == nil {

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
 	"os"
 	"path/filepath"
@@ -28,7 +28,7 @@ func (m *mockCmdRunner) SetStderr(_ io.Writer)   {}
 // newTestJailbreakCommand creates a JailbreakCommand with injected mocks,
 // bypassing initConfig/initOstree.
 func newTestJailbreakCommand(
-	ot cds.IOstree,
+	ot ostree.IOstree,
 	cfg *config.MockConfig,
 	runner *jailbreakRunner,
 ) (*JailbreakCommand, error) {
@@ -96,9 +96,9 @@ func defaultTestConfig() *config.MockConfig {
 	}
 }
 
-func defaultTestMockOstree() *cds.MockOstree {
-	return &cds.MockOstree{
-		Deployments: []cds.Deployment{
+func defaultTestMockOstree() *ostree.MockOstree {
+	return &ostree.MockOstree{
+		Deployments: []ostree.Deployment{
 			{
 				Booted:    true,
 				Checksum:  "abc123def456",
@@ -168,8 +168,8 @@ func TestJailbreakSanityChecksNotOnFullBranch(t *testing.T) {
 	defer func() { getEuid = origEuid }()
 
 	// Deployments on a non-full branch.
-	mock := &cds.MockOstree{
-		Deployments: []cds.Deployment{
+	mock := &ostree.MockOstree{
+		Deployments: []ostree.Deployment{
 			{
 				Booted:    true,
 				Checksum:  "abc123",
