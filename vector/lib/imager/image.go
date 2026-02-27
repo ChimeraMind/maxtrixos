@@ -9,7 +9,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"matrixos/vector/lib/cds"
@@ -77,6 +79,7 @@ type IImage interface {
 	GenerateKernelBootArgs(ref, efiDevice, bootDevice, physicalRootDevice, rootDevice string, encryptionEnabled bool) ([]string, error)
 	PackageList(rootfs string) ([]string, error)
 	SetupHooks(ostreeDeployRootfs, ref string) error
+	InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, blockDevice, efibootdir string) ([]string, error)
 	TestImage(imagePath, ref string) error
 	FinalizeFilesystems(mountRootfs, mountBootfs, mountEfifs string) error
 	Qcow2ImagePath(imagePath string) (string, error)
@@ -86,6 +89,7 @@ type IImage interface {
 	RemoveImageFile(imagePath string) error
 	ImageLockDir() (string, error)
 	ImageLockPath(ref string) (string, error)
+	ExecuteWithImageLock(ref string, fn func() error) error
 }
 
 // Image provides image creation and manipulation operations.
@@ -1160,6 +1164,119 @@ func (im *Image) InstallMemtest(ostreeDeployRootfs, efibootdir string) error {
 	return copyFile(memtestBin, filepath.Join(efibootdir, "memtest86plus.efi"))
 }
 
+// InstallBootloader installs the GRUB bootloader into the image by running
+// grub-install inside a chroot of the deployed rootfs, then replaces the
+// unsigned GRUBX64.EFI with the signed version.
+// It returns the list of extra mounts created during the process so the caller
+// can track them for cleanup.
+func (im *Image) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, blockDevice, efibootdir string) ([]string, error) {
+	if ostreeDeployRootfs == "" {
+		return nil, errors.New("missing ostreeDeployRootfs parameter")
+	}
+	if mountEfifs == "" {
+		return nil, errors.New("missing mountEfifs parameter")
+	}
+	if mountBootfs == "" {
+		return nil, errors.New("missing mountBootfs parameter")
+	}
+	if blockDevice == "" {
+		return nil, errors.New("missing blockDevice parameter")
+	}
+	if efibootdir == "" {
+		return nil, errors.New("missing efibootdir parameter")
+	}
+
+	fmt.Fprintln(os.Stdout, "Installing bootloader ...")
+
+	efiRoot, err := im.EfiRoot()
+	if err != nil {
+		return nil, err
+	}
+	bootRoot, err := im.BootRoot()
+	if err != nil {
+		return nil, err
+	}
+	osName, err := im.OsName()
+	if err != nil {
+		return nil, err
+	}
+	efiExe, err := im.EfiExecutable()
+	if err != nil {
+		return nil, err
+	}
+
+	var extraMounts []string
+
+	// Bind mount EFI into the chroot.
+	efiChrootMount := filepath.Join(ostreeDeployRootfs, efiRoot)
+	if err := os.MkdirAll(efiChrootMount, 0755); err != nil {
+		return extraMounts, fmt.Errorf("failed to create %s: %w", efiChrootMount, err)
+	}
+	mnt, err := fslib.BindMount(mountEfifs, efiChrootMount)
+	if err != nil {
+		return extraMounts, fmt.Errorf("failed to bind mount EFI: %w", err)
+	}
+	extraMounts = append(extraMounts, mnt)
+
+	// Bind mount boot into the chroot.
+	bootChrootMount := filepath.Join(ostreeDeployRootfs, bootRoot)
+	if err := os.MkdirAll(bootChrootMount, 0755); err != nil {
+		return extraMounts, fmt.Errorf("failed to create %s: %w", bootChrootMount, err)
+	}
+	mnt, err = fslib.BindMount(mountBootfs, bootChrootMount)
+	if err != nil {
+		return extraMounts, fmt.Errorf("failed to bind mount boot: %w", err)
+	}
+	extraMounts = append(extraMounts, mnt)
+
+	// Setup common rootfs mounts (dev, proc, etc.) without proc for bootloader.
+	chrootMounts, err := fslib.SetupCommonRootfsMounts(ostreeDeployRootfs)
+	if err != nil {
+		return extraMounts, fmt.Errorf("failed to setup common rootfs mounts: %w", err)
+	}
+	extraMounts = append(extraMounts, chrootMounts...)
+
+	// Run grub-install inside the chroot.
+	err = fslib.ChrootRun(ostreeDeployRootfs, "/usr/bin/grub-install",
+		"--target=x86_64-efi",
+		"--directory=/usr/lib/grub/x86_64-efi",
+		"--efi-directory="+efiRoot,
+		"--boot-directory="+bootRoot,
+		"--themes="+osName+"-theme",
+		"--removable",
+		"--modules=ext2 btrfs gzio part_gpt fat part_msdos all_video",
+		blockDevice,
+	)
+
+	// Clean up chroot mounts regardless of grub-install result.
+	fslib.BindUmount(bootChrootMount)
+	fslib.BindUmount(efiChrootMount)
+	fslib.UnsetupCommonRootfsMounts(ostreeDeployRootfs)
+
+	if err != nil {
+		return nil, fmt.Errorf("grub-install failed: %w", err)
+	}
+
+	// Verify BOOTX64.EFI was created.
+	bootx64efi := filepath.Join(efibootdir, efiExe)
+	if !fslib.PathExists(bootx64efi) {
+		return nil, fmt.Errorf("%s does not exist after grub-install", bootx64efi)
+	}
+
+	// Replace unsigned GRUBX64.EFI with the signed one.
+	grubx64efi := filepath.Join(efibootdir, "GRUBX64.EFI")
+	fmt.Fprintf(os.Stdout, "Removing existing %s as it's not signed ...\n", grubx64efi)
+	os.Remove(grubx64efi)
+
+	signedGrubx64efi := filepath.Join(ostreeDeployRootfs, "usr", "lib", "grub", "grub-x86_64.efi.signed")
+	fmt.Fprintf(os.Stdout, "Moving %s to %s\n", signedGrubx64efi, grubx64efi)
+	if err := os.Rename(signedGrubx64efi, grubx64efi); err != nil {
+		return nil, fmt.Errorf("failed to move signed grub binary: %w", err)
+	}
+
+	return nil, nil
+}
+
 // GenerateKernelBootArgs generates the kernel boot arguments for the image.
 func (im *Image) GenerateKernelBootArgs(ref, efiDevice, bootDevice, physicalRootDevice, rootDevice string, encryptionEnabled bool) ([]string, error) {
 	ref, err := im.cleanAndStripRef(ref)
@@ -1541,6 +1658,55 @@ func (im *Image) ImageLockPath(ref string) (string, error) {
 		return "", fmt.Errorf("failed to create lock file directory %s: %w", lockFileDir, err)
 	}
 	return lockFile, nil
+}
+
+// ExecuteWithImageLock acquires an exclusive file lock for the given ref,
+// executes fn under that lock, and releases the lock when fn returns.
+// If the lock cannot be acquired within the configured timeout, an error is returned.
+// If fn panics or the process crashes, the OS closes the file descriptor and
+// releases the lock automatically.
+func (im *Image) ExecuteWithImageLock(ref string, fn func() error) error {
+	lockPath, err := im.ImageLockPath(ref)
+	if err != nil {
+		return fmt.Errorf("failed to get image lock path: %w", err)
+	}
+	fmt.Fprintf(os.Stdout, "Acquiring branch %s lock via %s ...\n", ref, lockPath)
+
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open lock file %s: %w", lockPath, err)
+	}
+	defer lockFile.Close()
+
+	timeoutStr, err := im.LockWaitSeconds()
+	if err != nil {
+		return fmt.Errorf("failed to get lock wait seconds: %w", err)
+	}
+	timeoutSecs, err := strconv.Atoi(timeoutStr)
+	if err != nil {
+		return fmt.Errorf("invalid lock wait seconds %q: %w", timeoutStr, err)
+	}
+
+	// Try to acquire the exclusive lock with a timeout.
+	locked := make(chan error, 1)
+	go func() {
+		locked <- syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX)
+	}()
+
+	select {
+	case err := <-locked:
+		if err != nil {
+			return fmt.Errorf("failed to acquire lock %s: %w", lockPath, err)
+		}
+	case <-time.After(time.Duration(timeoutSecs) * time.Second):
+		return fmt.Errorf("timed out waiting for imager lock %s", lockPath)
+	}
+
+	fmt.Fprintf(os.Stdout, "Lock for imager %s, %s acquired!\n", ref, lockPath)
+
+	// Execute the function under the lock.
+	// The lock is released when lockFile is closed (deferred above).
+	return fn()
 }
 
 // --- Utility functions ---
