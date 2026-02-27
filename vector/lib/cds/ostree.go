@@ -88,7 +88,7 @@ type IOstree interface {
 	GenerateStaticDelta(ref string, verbose bool) error
 	UpdateSummary(verbose bool) error
 	AddRemote(verbose bool) error
-	AddRemoteWithSysroot(sysroot string, verbose bool) error
+	AddRemoteToRootfs(rootfs string, verbose bool) error
 	LocalRefs(verbose bool) ([]string, error)
 	RemoteRefs(verbose bool) ([]string, error)
 	ListDeployments(verbose bool) ([]Deployment, error)
@@ -1690,8 +1690,8 @@ func (o *Ostree) AddRemote(verbose bool) error {
 	return o.addRemote(opts, verbose)
 }
 
-// AddRemoteToSysroot adds a remote to an ostree sysroot.
-func (o *Ostree) AddRemoteWithSysroot(sysroot string, verbose bool) error {
+// AddRemoteToRootfs adds a remote to an ostree rootfs.
+func (o *Ostree) AddRemoteToRootfs(rootfs string, verbose bool) error {
 	gpgArgs, err := o.ClientSideGpgArgs()
 	if err != nil {
 		return err
@@ -1710,7 +1710,7 @@ func (o *Ostree) AddRemoteWithSysroot(sysroot string, verbose bool) error {
 		Remote:    remote,
 		RemoteURL: remoteURL,
 		GpgArgs:   gpgArgs,
-		Sysroot:   sysroot,
+		Sysroot:   rootfs,
 		Verbose:   verbose,
 	}
 	return o.addRemote(opts, verbose)
