@@ -97,6 +97,10 @@ type MockImage struct {
 	ExecuteWithImageLockCalled bool
 	ExecuteWithImageLockErr    error
 
+	// Build support
+	BuildCalled bool
+	BuildErr    error
+
 	// I/O writers for Print methods
 	stdout io.Writer
 	stderr io.Writer
@@ -292,6 +296,10 @@ func (m *MockImage) InstallBootloader() error {
 }
 func (m *MockImage) Cleanup() {
 	m.CleanupCalled = true
+}
+func (m *MockImage) Build(opts *BuildOptions) error {
+	m.BuildCalled = true
+	return m.BuildErr
 }
 func (m *MockImage) TestImage() error {
 	m.TestImageCalled = true
