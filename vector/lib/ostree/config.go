@@ -10,6 +10,19 @@ func (o *Ostree) GpgEnabled() (bool, error) {
 	return o.cfg.GetBool("Ostree.Gpg")
 }
 
+// SetGpg enables or disables GPG verification in the local ostree repository.
+func (o *Ostree) SetGpg(enabled bool) error {
+	repoDir, err := o.RepoDir()
+	if err != nil {
+		return err
+	}
+	val := "false"
+	if enabled {
+		val = "true"
+	}
+	return o.ostreeRun(false, "--repo="+repoDir, "config", "set", "core.gpg-verify", val)
+}
+
 // GpgPublicKeyPath returns the user defined private/ placed
 // GPG private key path.
 func (o *Ostree) GpgPrivateKeyPath() (string, error) {
