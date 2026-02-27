@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/ostree"
 )
 
 // mountInfo holds the UUID and filesystem type for a mountpoint.
@@ -289,7 +289,7 @@ func (c *JailbreakCommand) sanityChecks(sysroot, bootRoot, efiRoot, fullSuffix s
 	}
 
 	// Check we're on a -full branch.
-	deployments, err := c.ot.ListDeployments(false)
+	deployments, err := c.ot.ListDeployments()
 	if err != nil {
 		return fmt.Errorf("failed to list deployments: %w", err)
 	}
@@ -306,7 +306,7 @@ func (c *JailbreakCommand) sanityChecks(sysroot, bootRoot, efiRoot, fullSuffix s
 			fullSuffix)
 		// Show available full branches.
 		fmt.Fprintln(c.run.stderr, "Showing available full ostree branches:")
-		refs, err := c.ot.RemoteRefs(false)
+		refs, err := c.ot.RemoteRefs()
 		if err == nil {
 			for _, ref := range refs {
 				if strings.HasSuffix(ref, "-"+fullSuffix) {
@@ -370,7 +370,7 @@ func (c *JailbreakCommand) remountSysroot(sysroot string) error {
 
 func (c *JailbreakCommand) cloneToSysroot(sysroot string) error {
 	// Find currently booted deployment.
-	deployments, err := c.ot.ListDeployments(false)
+	deployments, err := c.ot.ListDeployments()
 	if err != nil {
 		return fmt.Errorf("failed to list deployments: %w", err)
 	}

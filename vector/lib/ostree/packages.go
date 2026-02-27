@@ -102,7 +102,7 @@ func ParseOstreeLsChecksumLine(line string) (*filesystems.PathInfo, error) {
 }
 
 // ListContents lists the contents of a path in a commit.
-func (o *Ostree) ListContents(commit, path string, verbose bool) (*[]filesystems.PathInfo, error) {
+func (o *Ostree) ListContents(commit, path string) (*[]filesystems.PathInfo, error) {
 	if commit == "" {
 		return nil, errors.New("missing commit parameter")
 	}
@@ -113,12 +113,11 @@ func (o *Ostree) ListContents(commit, path string, verbose bool) (*[]filesystems
 	if err != nil {
 		return nil, err
 	}
-	return o.listContentsOfPath(commit, repoDir, path, verbose)
+	return o.listContentsOfPath(commit, repoDir, path)
 }
 
-func (o *Ostree) listContentsOfPath(commit, repoDir, path string, verbose bool) (*[]filesystems.PathInfo, error) {
+func (o *Ostree) listContentsOfPath(commit, repoDir, path string) (*[]filesystems.PathInfo, error) {
 	stdout, err := o.ostreeRunCapture(
-		verbose,
 		"--repo="+repoDir,
 		"ls",
 		"-C",
@@ -155,7 +154,7 @@ func (o *Ostree) listContentsOfPath(commit, repoDir, path string, verbose bool) 
 }
 
 // ListPackages lists the packages in a commit.
-func (o *Ostree) ListPackages(commit string, verbose bool) ([]string, error) {
+func (o *Ostree) ListPackages(commit string) ([]string, error) {
 	if commit == "" {
 		return nil, errors.New("missing commit parameter")
 	}
@@ -172,19 +171,18 @@ func (o *Ostree) ListPackages(commit string, verbose bool) ([]string, error) {
 		return nil, fmt.Errorf("config item Releaser.ReadOnlyVdb is not set")
 	}
 
-	pkgs, err := o.listPackagesFromPath(root, roVdb, commit, verbose)
+	pkgs, err := o.listPackagesFromPath(root, roVdb, commit)
 	if err == nil && len(pkgs) > 0 {
 		return pkgs, nil
 	}
-	return o.listPackagesFromPath(root, "/var/db/pkg", commit, verbose)
+	return o.listPackagesFromPath(root, "/var/db/pkg", commit)
 }
 
-func (o *Ostree) listPackagesFromPath(root, path, commit string, verbose bool) ([]string, error) {
+func (o *Ostree) listPackagesFromPath(root, path, commit string) ([]string, error) {
 	repoDir := filepath.Join(root, "ostree", "repo")
 	vardbpkg := filepath.Join(root, path)
 
 	stdout, err := o.ostreeRunCapture(
-		verbose,
 		"--repo="+repoDir,
 		"ls",
 		"-C",

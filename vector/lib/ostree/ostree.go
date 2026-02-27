@@ -52,37 +52,40 @@ type IOstree interface {
 	PrepareFilesystemHierarchy(imageDir string) error
 	ValidateFilesystemHierarchy(imageDir string) error
 
+	// Verbosity
+	SetVerbose(bool)
+
 	// Repo operations
-	InitRepo(verbose bool) error
+	InitRepo() error
 	BootCommit(sysroot string) (string, error)
-	ListRemotes(verbose bool) ([]string, error)
-	LastCommit(ref string, verbose bool) (string, error)
+	ListRemotes() ([]string, error)
+	LastCommit(ref string) (string, error)
 	ImportGpgKey(keyPath string) error
 	GpgSignFile(file string) error
 	GpgKeys() ([]string, error)
-	InitializeSigningGpg(verbose bool) error
-	InitializeRemoteSigningGpg(remote, repoDir string, verbose bool) error
-	MaybeInitializeGpg(verbose bool) error
-	MaybeInitializeGpgForRepo(remote, repoDir string, verbose bool) error
-	MaybeInitializeRemote(verbose bool) error
-	Pull(ref string, verbose bool) error
-	PullWithRemote(remote, ref string, verbose bool) error
-	Prune(ref string, verbose bool) error
-	GenerateStaticDelta(ref string, verbose bool) error
-	UpdateSummary(verbose bool) error
-	AddRemote(verbose bool) error
-	AddRemoteToRootfs(rootfs string, verbose bool) error
-	LocalRefs(verbose bool) ([]string, error)
-	RemoteRefs(verbose bool) ([]string, error)
-	ListDeployments(verbose bool) ([]Deployment, error)
-	DeployedRootfs(ref string, verbose bool) (string, error)
-	BootedRef(verbose bool) (string, error)
-	BootedHash(verbose bool) (string, error)
-	Switch(ref string, verbose bool) error
-	Deploy(ref, sysroot string, bootArgs []string, verbose bool) error
-	Upgrade(args []string, verbose bool) error
-	ListPackages(commit string, verbose bool) ([]string, error)
-	ListContents(commit, path string, verbose bool) (*[]filesystems.PathInfo, error)
+	InitializeSigningGpg() error
+	InitializeRemoteSigningGpg(remote, repoDir string) error
+	MaybeInitializeGpg() error
+	MaybeInitializeGpgForRepo(remote, repoDir string) error
+	MaybeInitializeRemote() error
+	Pull(ref string) error
+	PullWithRemote(remote, ref string) error
+	Prune(ref string) error
+	GenerateStaticDelta(ref string) error
+	UpdateSummary() error
+	AddRemote() error
+	AddRemoteToRootfs(rootfs string) error
+	LocalRefs() ([]string, error)
+	RemoteRefs() ([]string, error)
+	ListDeployments() ([]Deployment, error)
+	DeployedRootfs(ref string) (string, error)
+	BootedRef() (string, error)
+	BootedHash() (string, error)
+	Switch(ref string) error
+	Deploy(ref, sysroot string, bootArgs []string) error
+	Upgrade(args []string) error
+	ListPackages(commit string) ([]string, error)
+	ListContents(commit, path string) (*[]filesystems.PathInfo, error)
 	ListEtcChanges(oldSHA, newSHA string) ([]EtcChange, error)
 }
 
@@ -132,17 +135,19 @@ func SetupEnvironment() {
 }
 
 type Ostree struct {
-	cfg    config.IConfig
-	stdout io.Writer
-	stderr io.Writer
-	runner runner.Func
+	cfg     config.IConfig
+	stdout  io.Writer
+	stderr  io.Writer
+	runner  runner.Func
+	verbose bool
 }
 
 // NewOstreeWithRunner creates a new Ostree instance with a custom command runner (for testing).
 type NewOstreeOptions struct {
-	Config config.IConfig
-	Stdout io.Writer
-	Stderr io.Writer
+	Config  config.IConfig
+	Stdout  io.Writer
+	Stderr  io.Writer
+	Verbose bool
 }
 
 // NewOstree creates a new Ostree instance.
@@ -159,10 +164,11 @@ func NewOstree(opts NewOstreeOptions) (*Ostree, error) {
 		stderr = os.Stderr
 	}
 	return &Ostree{
-		cfg:    opts.Config,
-		stdout: stdout,
-		stderr: stderr,
-		runner: runCommand,
+		cfg:     opts.Config,
+		stdout:  stdout,
+		stderr:  stderr,
+		runner:  runCommand,
+		verbose: opts.Verbose,
 	}, nil
 }
 
@@ -186,11 +192,16 @@ func (o *Ostree) PrintError(format string, a ...interface{}) {
 	fmt.Fprintf(o.stderr, format, a...)
 }
 
+// SetVerbose sets the verbose flag for the Ostree instance.
+func (o *Ostree) SetVerbose(v bool) {
+	o.verbose = v
+}
+
 // runCmd runs a command via the instance's command runner, adding --verbose
 // and the "ostree" binary name automatically.
-func (o *Ostree) runCmd(stdout, stderr io.Writer, verbose bool, args ...string) error {
+func (o *Ostree) runCmd(stdout, stderr io.Writer, args ...string) error {
 	var finalArgs []string
-	if verbose {
+	if o.verbose {
 		finalArgs = append(finalArgs, "--verbose")
 		o.PrintError(">> Executing: ostree --verbose %s\n", strings.Join(args, " "))
 	}
@@ -199,17 +210,20 @@ func (o *Ostree) runCmd(stdout, stderr io.Writer, verbose bool, args ...string) 
 }
 
 // ostreeRun runs an ostree command with stdout/stderr directed to the instance's stdout/stderr.
-func (o *Ostree) ostreeRun(verbose bool, args ...string) error {
-	return o.runCmd(o.stdout, o.stderr, verbose, args...)
+func (o *Ostree) ostreeRun(args ...string) error {
+	return o.runCmd(o.stdout, o.stderr, args...)
 }
 
 // ostreeRunCapture runs an ostree command and captures its stdout.
-func (o *Ostree) ostreeRunCapture(verbose bool, args ...string) (io.Reader, error) {
-	if verbose {
+func (o *Ostree) ostreeRunCapture(args ...string) (io.Reader, error) {
+	if o.verbose {
 		o.PrintError(">> Executing: ostree (stdout capture) %s\n", strings.Join(args, " "))
 	}
 	stdo := new(bytes.Buffer)
-	err := o.runCmd(stdo, o.stderr, false, args...)
+	verbose := o.verbose
+	o.verbose = false
+	err := o.runCmd(stdo, o.stderr, args...)
+	o.verbose = verbose
 	return stdo, err
 }
 

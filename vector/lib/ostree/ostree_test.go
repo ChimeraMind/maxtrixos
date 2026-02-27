@@ -107,7 +107,7 @@ func TestRepoOperations(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	err = o.AddRemote(false)
+	err = o.AddRemote()
 	if err != nil {
 		t.Fatalf("AddRemote failed: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestCommitAndListPackages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pkgs, err := o.ListPackages(commit, false)
+	pkgs, err := o.ListPackages(commit)
 	if err != nil {
 		t.Fatalf("ListPackages failed: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestDeploy(t *testing.T) {
 	}
 
 	// Call Deploy
-	err = o.Deploy(ref, gotSysroot, bootArgs, false)
+	err = o.Deploy(ref, gotSysroot, bootArgs)
 	if err != nil {
 		t.Fatalf("Deploy failed: %v", err)
 	}
@@ -475,13 +475,13 @@ func TestDeployIntegration(t *testing.T) {
 
 	// Perform Deployment
 	// This will pull from repoDir into sysroot/ostree/repo and then deploy
-	if err := o.Deploy(branch, gotSysroot, []string{"karg1=val1"}, false); err != nil {
+	if err := o.Deploy(branch, gotSysroot, []string{"karg1=val1"}); err != nil {
 		t.Fatalf("Deploy failed: %v", err)
 	}
 
 	// Verify that the deployment directory was created
 	// We can verify the booted ref or just check if the deployment directory exists
-	if _, err := o.DeployedRootfs(branch, false); err != nil {
+	if _, err := o.DeployedRootfs(branch); err != nil {
 		t.Errorf("DeployedRootfs failed or deployment not found: %v", err)
 	}
 }
@@ -602,7 +602,7 @@ func TestOstreeCommandsMocked(t *testing.T) {
 	}
 
 	// Pull
-	if err := o.Pull("origin:ref", false); err != nil {
+	if err := o.Pull("origin:ref"); err != nil {
 		t.Fatalf("Pull failed: %v", err)
 	}
 	if lastCmdArgs[1] != "pull" || lastCmdArgs[2] != "origin" || lastCmdArgs[3] != "ref" {
@@ -610,7 +610,7 @@ func TestOstreeCommandsMocked(t *testing.T) {
 	}
 
 	// Prune
-	if err := o.Prune("ref", false); err != nil {
+	if err := o.Prune("ref"); err != nil {
 		t.Fatalf("Prune failed: %v", err)
 	}
 	// args: --repo=/repo prune --depth=5 --refs-only --keep-younger-than=... --only-branch=ref
@@ -619,7 +619,7 @@ func TestOstreeCommandsMocked(t *testing.T) {
 	}
 
 	// GenerateStaticDelta
-	if err := o.GenerateStaticDelta("ref", false); err != nil {
+	if err := o.GenerateStaticDelta("ref"); err != nil {
 		t.Fatalf("GenerateStaticDelta failed: %v", err)
 	}
 	// First it calls rev-parse, then static-delta generate
@@ -629,7 +629,7 @@ func TestOstreeCommandsMocked(t *testing.T) {
 	}
 
 	// UpdateSummary
-	if err := o.UpdateSummary(false); err != nil {
+	if err := o.UpdateSummary(); err != nil {
 		t.Fatalf("UpdateSummary failed: %v", err)
 	}
 	if lastCmdArgs[1] != "summary" || lastCmdArgs[2] != "--update" {
@@ -637,7 +637,7 @@ func TestOstreeCommandsMocked(t *testing.T) {
 	}
 
 	// Upgrade
-	if err := o.Upgrade([]string{"--check"}, false); err != nil {
+	if err := o.Upgrade([]string{"--check"}); err != nil {
 		t.Fatalf("Upgrade failed: %v", err)
 	}
 	if lastCmdArgs[1] != "upgrade" || lastCmdArgs[3] != "--check" {
@@ -676,7 +676,7 @@ func TestBootedStatus(t *testing.T) {
 		return nil
 	}
 
-	ref, err := o.BootedRef(false)
+	ref, err := o.BootedRef()
 	if err != nil {
 		t.Fatalf("BootedRef failed: %v", err)
 	}
@@ -684,7 +684,7 @@ func TestBootedStatus(t *testing.T) {
 		t.Errorf("BootedRef = %q, want origin:branch", ref)
 	}
 
-	hash, err := o.BootedHash(false)
+	hash, err := o.BootedHash()
 	if err != nil {
 		t.Fatalf("BootedHash failed: %v", err)
 	}
@@ -816,7 +816,7 @@ func TestMaybeInitializeRemote(t *testing.T) {
 		return nil
 	}
 
-	if err := o.MaybeInitializeRemote(false); err != nil {
+	if err := o.MaybeInitializeRemote(); err != nil {
 		t.Fatalf("MaybeInitializeRemote failed: %v", err)
 	}
 
@@ -847,7 +847,7 @@ func TestAddRemoteToRootfs(t *testing.T) {
 		return nil
 	}
 
-	if err := o.AddRemoteToRootfs("/sysroot", false); err != nil {
+	if err := o.AddRemoteToRootfs("/sysroot"); err != nil {
 		t.Fatalf("AddRemoteToRootfs failed: %v", err)
 	}
 
@@ -1082,7 +1082,7 @@ func TestMaybeInitializeGpg(t *testing.T) {
 		return nil
 	}
 
-	if err := o.MaybeInitializeGpg(false); err != nil {
+	if err := o.MaybeInitializeGpg(); err != nil {
 		t.Fatalf("MaybeInitializeGpg failed: %v", err)
 	}
 
@@ -1224,7 +1224,7 @@ func TestInitializeSigningGpg(t *testing.T) {
 		return nil
 	}
 
-	if err := o.InitializeSigningGpg(false); err != nil {
+	if err := o.InitializeSigningGpg(); err != nil {
 		t.Fatalf("InitializeSigningGpg failed: %v", err)
 	}
 
@@ -1278,7 +1278,7 @@ func TestInitializeRemoteSigningGpg(t *testing.T) {
 		return nil
 	}
 
-	if err := o.InitializeRemoteSigningGpg("origin", "/repo", false); err != nil {
+	if err := o.InitializeRemoteSigningGpg("origin", "/repo"); err != nil {
 		t.Fatalf("InitializeRemoteSigningGpg failed: %v", err)
 	}
 
@@ -1312,10 +1312,10 @@ func TestInitializeRemoteSigningGpgMissingParams(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	if err := o.InitializeRemoteSigningGpg("", "/repo", false); err == nil {
+	if err := o.InitializeRemoteSigningGpg("", "/repo"); err == nil {
 		t.Error("Expected error for empty remote")
 	}
-	if err := o.InitializeRemoteSigningGpg("origin", "", false); err == nil {
+	if err := o.InitializeRemoteSigningGpg("origin", ""); err == nil {
 		t.Error("Expected error for empty repoDir")
 	}
 }
@@ -1337,7 +1337,7 @@ func TestPullWithRemoteExplicit(t *testing.T) {
 		return nil
 	}
 
-	if err := o.PullWithRemote("myremote", "myref", false); err != nil {
+	if err := o.PullWithRemote("myremote", "myref"); err != nil {
 		t.Fatalf("PullWithRemote failed: %v", err)
 	}
 
@@ -1420,7 +1420,7 @@ func TestMaybeInitializeRemoteIdempotency(t *testing.T) {
 		return nil
 	}
 
-	if err := o.MaybeInitializeRemote(false); err != nil {
+	if err := o.MaybeInitializeRemote(); err != nil {
 		t.Fatalf("MaybeInitializeRemote failed: %v", err)
 	}
 
@@ -1505,7 +1505,7 @@ func TestListPackagesErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
-	if _, err := o.ListPackages("commit", false); err == nil {
+	if _, err := o.ListPackages("commit"); err == nil {
 		t.Error("ListPackages should fail if ReadOnlyVdb is missing")
 	}
 
@@ -1516,7 +1516,7 @@ func TestListPackagesErrors(t *testing.T) {
 	}
 	o, _ = NewOstree(NewOstreeOptions{Config: cfg})
 	// Sysroot does not exist
-	if _, err := o.ListPackages("commit", false); err == nil {
+	if _, err := o.ListPackages("commit"); err == nil {
 		t.Error("ListPackages should fail if sysroot/var/db/pkg does not exist")
 	}
 }
@@ -1531,7 +1531,7 @@ func TestPullInvalidRef(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
-	if err := o.Pull("invalid-ref", false); err == nil {
+	if err := o.Pull("invalid-ref"); err == nil {
 		t.Error("Pull should fail for ref without remote prefix")
 	}
 }
@@ -1695,10 +1695,10 @@ func TestOstreeWrappers(t *testing.T) {
 		return nil
 	}
 
-	if _, err := o.ListRemotes(false); err != nil {
+	if _, err := o.ListRemotes(); err != nil {
 		t.Error(err)
 	}
-	if _, err := o.LocalRefs(false); err != nil {
+	if _, err := o.LocalRefs(); err != nil {
 		t.Error(err)
 	}
 }
@@ -1730,7 +1730,7 @@ d00755 0 0 0 abc abc /var/db/pkg/cat/other
 	sysroot := t.TempDir()
 	os.MkdirAll(filepath.Join(sysroot, "var/db/pkg"), 0755)
 
-	pkgs, err := o.ListPackages("commit", false)
+	pkgs, err := o.ListPackages("commit")
 	if err != nil {
 		t.Fatalf("ListPackages failed: %v", err)
 	}
@@ -1833,7 +1833,7 @@ func TestDeploy_Errors(t *testing.T) {
 				t.Fatalf("Sysroot failed: %v", err)
 			}
 
-			err = o.Deploy("ref", sysroot, nil, false)
+			err = o.Deploy("ref", sysroot, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deploy() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -1881,7 +1881,7 @@ func TestBootedStatus_Errors(t *testing.T) {
 				return nil
 			}
 
-			_, err := o.BootedRef(false)
+			_, err := o.BootedRef()
 			if (err != nil) != tt.wantRefErr {
 				t.Errorf("BootedRef() error = %v, wantErr %v", err, tt.wantRefErr)
 			}
@@ -1900,19 +1900,19 @@ func TestMiscWrappers_Errors(t *testing.T) {
 		return fmt.Errorf("cmd error")
 	}
 
-	if err := o.Pull("ref", false); err == nil {
+	if err := o.Pull("ref"); err == nil {
 		t.Error("Pull should fail on cmd error")
 	}
-	if err := o.Prune("ref", false); err == nil {
+	if err := o.Prune("ref"); err == nil {
 		t.Error("Prune should fail on cmd error")
 	}
-	if err := o.UpdateSummary(false); err == nil {
+	if err := o.UpdateSummary(); err == nil {
 		t.Error("UpdateSummary should fail on cmd error")
 	}
-	if err := o.GenerateStaticDelta("ref", false); err == nil {
+	if err := o.GenerateStaticDelta("ref"); err == nil {
 		t.Error("GenerateStaticDelta should fail on cmd error")
 	}
-	if err := o.Upgrade(nil, false); err == nil {
+	if err := o.Upgrade(nil); err == nil {
 		t.Error("Upgrade should fail on cmd error")
 	}
 }
@@ -1958,7 +1958,7 @@ func TestAddRemote_Error(t *testing.T) {
 	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		return fmt.Errorf("error")
 	}
-	if err := o.AddRemote(false); err == nil {
+	if err := o.AddRemote(); err == nil {
 		t.Error("AddRemote should fail on error")
 	}
 }
@@ -2056,7 +2056,7 @@ func TestRemoteRefs(t *testing.T) {
 			return nil
 		}
 
-		refs, err := o.RemoteRefs(false)
+		refs, err := o.RemoteRefs()
 		if err != nil {
 			t.Fatalf("RemoteRefs failed: %v", err)
 		}
@@ -2094,7 +2094,7 @@ func TestRemoteRefs(t *testing.T) {
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		_, err = o.RemoteRefs(false)
+		_, err = o.RemoteRefs()
 		if err != nil {
 			t.Fatalf("RemoteRefs failed: %v", err)
 		}
@@ -2129,7 +2129,7 @@ func TestRemoteRefs(t *testing.T) {
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		_, err = o.RemoteRefs(false)
+		_, err = o.RemoteRefs()
 		if err == nil {
 			t.Error("expected error for empty repoDir, got nil")
 		}
@@ -2147,7 +2147,7 @@ func TestRemoteRefs(t *testing.T) {
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		_, err = o.RemoteRefs(false)
+		_, err = o.RemoteRefs()
 		if err == nil {
 			t.Error("expected error for empty remote, got nil")
 		}
@@ -2170,7 +2170,7 @@ func TestRemoteRefs(t *testing.T) {
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		refs, err := o.RemoteRefs(false)
+		refs, err := o.RemoteRefs()
 		if err != nil {
 			t.Fatalf("RemoteRefs failed: %v", err)
 		}
@@ -2196,7 +2196,7 @@ func TestRemoteRefs(t *testing.T) {
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		_, err = o.RemoteRefs(false)
+		_, err = o.RemoteRefs()
 		if err == nil {
 			t.Error("expected error when ostree command fails, got nil")
 		}
@@ -2227,7 +2227,7 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			return nil
 		}
 
-		pis, err := o.ListContents("abc123", "/etc", false)
+		pis, err := o.ListContents("abc123", "/etc")
 		if err != nil {
 			t.Fatalf("ListContents failed: %v", err)
 		}
@@ -2286,7 +2286,7 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		_, err = o.ListContents("", "/etc", false)
+		_, err = o.ListContents("", "/etc")
 		if err == nil {
 			t.Error("expected error for empty commit, got nil")
 		}
@@ -2303,7 +2303,7 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		_, err = o.ListContents("abc123", "", false)
+		_, err = o.ListContents("abc123", "")
 		if err == nil {
 			t.Error("expected error for empty path, got nil")
 		}
@@ -2318,7 +2318,7 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		_, err = o.ListContents("abc123", "/etc", false)
+		_, err = o.ListContents("abc123", "/etc")
 		if err == nil {
 			t.Error("expected error for missing RepoDir, got nil")
 		}
@@ -2339,7 +2339,7 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			return fmt.Errorf("ostree ls failed")
 		}
 
-		_, err = o.ListContents("abc123", "/etc", false)
+		_, err = o.ListContents("abc123", "/etc")
 		if err == nil {
 			t.Error("expected error when command fails, got nil")
 		}
@@ -2361,7 +2361,7 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			return nil
 		}
 
-		pis, err := o.ListContents("abc123", "/etc", false)
+		pis, err := o.ListContents("abc123", "/etc")
 		if err != nil {
 			t.Fatalf("ListContents failed: %v", err)
 		}
@@ -2387,7 +2387,7 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			return nil
 		}
 
-		_, err = o.ListContents("commitABC", "/usr/bin", false)
+		_, err = o.ListContents("commitABC", "/usr/bin")
 		if err != nil {
 			t.Fatalf("ListContents failed: %v", err)
 		}
@@ -2445,7 +2445,7 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			return nil
 		}
 
-		_, err = o.ListContents("abc123", "/etc", false)
+		_, err = o.ListContents("abc123", "/etc")
 		if err == nil {
 			t.Error("expected error for malformed output, got nil")
 		}
@@ -2500,7 +2500,7 @@ func TestListDeployments(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	deployments, err := o.ListDeployments(false)
+	deployments, err := o.ListDeployments()
 	if err != nil {
 		t.Fatalf("ListDeployments failed: %v", err)
 	}
@@ -2558,7 +2558,7 @@ func TestListDeployments_EmptyRoot(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	_, err = o.ListDeployments(false)
+	_, err = o.ListDeployments()
 	if err == nil {
 		t.Error("expected error for empty root, got nil")
 	}
@@ -2581,7 +2581,7 @@ func TestListDeployments_NoDeployments(t *testing.T) {
 		return nil
 	}
 
-	deployments, err := o.ListDeployments(false)
+	deployments, err := o.ListDeployments()
 	if err != nil {
 		t.Fatalf("ListDeployments failed: %v", err)
 	}
@@ -2606,7 +2606,7 @@ func TestListDeployments_CommandError(t *testing.T) {
 		return fmt.Errorf("ostree command failed")
 	}
 
-	_, err = o.ListDeployments(false)
+	_, err = o.ListDeployments()
 	if err == nil {
 		t.Error("expected error when ostree command fails, got nil")
 	}
@@ -2629,7 +2629,7 @@ func TestListDeployments_InvalidJSON(t *testing.T) {
 		return nil
 	}
 
-	_, err = o.ListDeployments(false)
+	_, err = o.ListDeployments()
 	if err == nil {
 		t.Error("expected error for invalid JSON, got nil")
 	}
@@ -2655,7 +2655,7 @@ func TestSwitch(t *testing.T) {
 		return nil
 	}
 
-	err = o.Switch(ref, false)
+	err = o.Switch(ref)
 	if err != nil {
 		t.Fatalf("Switch failed: %v", err)
 	}
@@ -2680,7 +2680,7 @@ func TestSwitch_MissingSysroot(t *testing.T) {
 		return nil
 	}
 
-	err = o.Switch("ref", false)
+	err = o.Switch("ref")
 	if err == nil {
 		t.Fatal("Switch should fail when Ostree.Sysroot is missing")
 	}
@@ -2702,7 +2702,7 @@ func TestSwitch_CommandError(t *testing.T) {
 		return fmt.Errorf("ostree admin switch failed")
 	}
 
-	err = o.Switch("ref", false)
+	err = o.Switch("ref")
 	if err == nil {
 		t.Fatal("Switch should propagate command error")
 	}
@@ -2728,7 +2728,8 @@ func TestSwitch_Verbose(t *testing.T) {
 		return nil
 	}
 
-	err = o.Switch(ref, true)
+	o.SetVerbose(true)
+	err = o.Switch(ref)
 	if err != nil {
 		t.Fatalf("Switch failed: %v", err)
 	}
@@ -2768,7 +2769,7 @@ A    ostree
 		return nil
 	}
 
-	result, err := o.ConfigDiff(false)
+	result, err := o.ConfigDiff()
 	if err != nil {
 		t.Fatalf("ConfigDiff failed: %v", err)
 	}
@@ -2859,7 +2860,7 @@ func TestConfigDiff_CommandArgs(t *testing.T) {
 		return nil
 	}
 
-	_, err = o.ConfigDiff(false)
+	_, err = o.ConfigDiff()
 	if err != nil {
 		t.Fatalf("ConfigDiff failed: %v", err)
 	}
@@ -2890,7 +2891,7 @@ func TestConfigDiff_Verbose(t *testing.T) {
 		return nil
 	}
 
-	_, err = o.ConfigDiff(true)
+	_, err = o.ConfigDiff()
 	if err != nil {
 		t.Fatalf("ConfigDiff failed: %v", err)
 	}
@@ -2920,7 +2921,7 @@ func TestConfigDiff_EmptyOutput(t *testing.T) {
 		return nil
 	}
 
-	result, err := o.ConfigDiff(false)
+	result, err := o.ConfigDiff()
 	if err != nil {
 		t.Fatalf("ConfigDiff failed: %v", err)
 	}
@@ -2939,7 +2940,7 @@ func TestConfigDiff_MissingRoot(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	_, err = o.ConfigDiff(false)
+	_, err = o.ConfigDiff()
 	if err == nil {
 		t.Fatal("ConfigDiff should fail when Root is not configured")
 	}
@@ -2962,7 +2963,7 @@ func TestConfigDiff_CommandError(t *testing.T) {
 		return fmt.Errorf("command failed")
 	}
 
-	_, err = o.ConfigDiff(false)
+	_, err = o.ConfigDiff()
 	if err == nil {
 		t.Fatal("ConfigDiff should propagate command error")
 	}

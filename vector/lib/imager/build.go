@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/ostree"
 )
 
 const (
@@ -22,7 +22,6 @@ type BuildOptions struct {
 	BootDevice  string
 	RootDevice  string
 	WholeDevice string
-	Verbose     bool
 }
 
 // Build implements the core image setup logic.
@@ -43,7 +42,7 @@ func (im *Image) Build(opts *BuildOptions) error {
 		return err
 	}
 
-	if err := im.deployOstree(mountRootfs, rootDeviceUUID, opts.Verbose); err != nil {
+	if err := im.deployOstree(mountRootfs, rootDeviceUUID); err != nil {
 		return err
 	}
 
@@ -283,7 +282,7 @@ func (im *Image) formatAndMountFilesystems(mountRootfs string) (string, error) {
 
 // deployOstree generates kernel boot arguments, deploys the ostree ref
 // into the mounted rootfs, and verifies the deployed environment.
-func (im *Image) deployOstree(mountRootfs, rootDeviceUUID string, verbose bool) error {
+func (im *Image) deployOstree(mountRootfs, rootDeviceUUID string) error {
 	kernelBootArgs, err := im.GenerateKernelBootArgs()
 	if err != nil {
 		return fmt.Errorf("failed to generate kernel boot args: %w", err)
@@ -298,19 +297,19 @@ func (im *Image) deployOstree(mountRootfs, rootDeviceUUID string, verbose bool) 
 
 	im.Print("\nDeploying ostree into %s ...\n", mountRootfs)
 
-	if err := im.ostree.AddRemote(verbose); err != nil {
+	if err := im.ostree.AddRemote(); err != nil {
 		return fmt.Errorf("failed to add ostree remote: %w", err)
 	}
 
-	if err := im.ostree.Deploy(im.Ref(), mountRootfs, bootArgs, verbose); err != nil {
+	if err := im.ostree.Deploy(im.Ref(), mountRootfs, bootArgs); err != nil {
 		return fmt.Errorf("ostree deploy failed: %w", err)
 	}
 
-	if err := im.ostree.AddRemoteToRootfs(mountRootfs, verbose); err != nil {
+	if err := im.ostree.AddRemoteToRootfs(mountRootfs); err != nil {
 		return fmt.Errorf("failed to add remote to rootfs: %w", err)
 	}
 
-	rootfs, err := im.ostree.DeployedRootfs(im.Ref(), verbose)
+	rootfs, err := im.ostree.DeployedRootfs(im.Ref())
 	if err != nil {
 		return fmt.Errorf("failed to get deployed rootfs: %w", err)
 	}
@@ -563,8 +562,7 @@ func (im *Image) maybeGenerateGpgSignatures(compressedImageCreated, qcow2Created
 	}
 
 	im.Print("%s exists, creating GPG signatures ...\n", gpgKeyPath)
-	verbose := false // GPG signing doesn't need verbose from build opts
-	if err := im.ostree.InitializeSigningGpg(verbose); err != nil {
+	if err := im.ostree.InitializeSigningGpg(); err != nil {
 		return artifacts, fmt.Errorf("failed to initialize signing GPG: %w", err)
 	}
 
