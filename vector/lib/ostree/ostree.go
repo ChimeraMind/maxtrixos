@@ -48,9 +48,9 @@ type IOstree interface {
 	SetGpg(enabled bool) error
 
 	// Filesystem operations
-	SetupEtc(imageDir string) error
-	PrepareFilesystemHierarchy(imageDir string) error
-	ValidateFilesystemHierarchy(imageDir string) error
+	SetupEtc(rootfs string) error
+	PrepareFilesystemHierarchy(rootfs string) error
+	ValidateFilesystemHierarchy(rootfs string) error
 
 	// Verbosity
 	SetVerbose(bool)

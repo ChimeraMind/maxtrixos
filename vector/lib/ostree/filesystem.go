@@ -10,10 +10,10 @@ import (
 )
 
 // SetupEtc moves the /etc directory to /usr/etc.
-func (o *Ostree) SetupEtc(imageDir string) error {
+func (o *Ostree) SetupEtc(rootfs string) error {
 	o.Print("Setting up /etc...")
-	etcDir := filepath.Join(imageDir, "etc")
-	usrEtcDir := filepath.Join(imageDir, "usr", "etc")
+	etcDir := filepath.Join(rootfs, "etc")
+	usrEtcDir := filepath.Join(rootfs, "usr", "etc")
 
 	o.Print("Moving %s to %s\n", etcDir, usrEtcDir)
 	return filesystems.Move(etcDir, usrEtcDir)
@@ -225,25 +225,25 @@ func prepareUsrLocal(imageDir string) error {
 
 // PrepareFilesystemHierarchy prepares the filesystem hierarchy for OSTree.
 // It ports the logic from ostree_lib.prepare_filesystem_hierarchy in ostree_lib.sh.
-func (o *Ostree) PrepareFilesystemHierarchy(imageDir string) error {
-	marker := filepath.Join(imageDir, "var", ".matrixos-prepared")
+func (o *Ostree) PrepareFilesystemHierarchy(rootfs string) error {
+	marker := filepath.Join(rootfs, "var", ".matrixos-prepared")
 	if fileExists(marker) {
 		return fmt.Errorf("filesystem hierarchy already prepared: %s exists", marker)
 	}
 
-	if err := prepareSysrootAndOstreeLink(imageDir); err != nil {
+	if err := prepareSysrootAndOstreeLink(rootfs); err != nil {
 		return err
 	}
 
-	if err := prepareTmpDir(imageDir); err != nil {
+	if err := prepareTmpDir(rootfs); err != nil {
 		return err
 	}
 
-	if err := prepareMachineID(imageDir); err != nil {
+	if err := prepareMachineID(rootfs); err != nil {
 		return err
 	}
 
-	if err := o.SetupEtc(imageDir); err != nil {
+	if err := o.SetupEtc(rootfs); err != nil {
 		return err
 	}
 
@@ -254,28 +254,28 @@ func (o *Ostree) PrepareFilesystemHierarchy(imageDir string) error {
 	if matrixOsRoVdb == "" {
 		return fmt.Errorf("config item Releaser.ReadOnlyVdb is not set")
 	}
-	if err := o.prepareVarDbPkg(imageDir, matrixOsRoVdb); err != nil {
+	if err := o.prepareVarDbPkg(rootfs, matrixOsRoVdb); err != nil {
 		return err
 	}
 
-	if err := prepareOpt(imageDir); err != nil {
+	if err := prepareOpt(rootfs); err != nil {
 		return err
 	}
 
-	if err := prepareSrv(imageDir); err != nil {
+	if err := prepareSrv(rootfs); err != nil {
 		return err
 	}
 
-	if err := prepareStaticDirs(imageDir); err != nil {
+	if err := prepareStaticDirs(rootfs); err != nil {
 		return err
 	}
 
 	o.Print("Setting up /home ...")
-	if err := o.prepareVarHome(imageDir, "home", "home"); err != nil {
+	if err := o.prepareVarHome(rootfs, "home", "home"); err != nil {
 		return err
 	}
 	o.Print("Setting up /root ...")
-	if err := o.prepareVarHome(imageDir, "root", "roothome"); err != nil {
+	if err := o.prepareVarHome(rootfs, "root", "roothome"); err != nil {
 		return err
 	}
 
@@ -287,9 +287,9 @@ func (o *Ostree) PrepareFilesystemHierarchy(imageDir string) error {
 		return fmt.Errorf("config item Imager.EfiRoot is not set")
 	}
 	o.Print("Setting up %s...\n", efiRoot)
-	os.MkdirAll(filepath.Join(imageDir, efiRoot), 0755)
+	os.MkdirAll(filepath.Join(rootfs, efiRoot), 0755)
 
-	if err := prepareUsrLocal(imageDir); err != nil {
+	if err := prepareUsrLocal(rootfs); err != nil {
 		return err
 	}
 
@@ -301,9 +301,9 @@ func (o *Ostree) PrepareFilesystemHierarchy(imageDir string) error {
 }
 
 // ValidateFilesystemHierarchy validates the filesystem hierarchy for OSTree.
-func (o *Ostree) ValidateFilesystemHierarchy(imageDir string) error {
-	if imageDir == "" {
-		return fmt.Errorf("missing imageDir parameter")
+func (o *Ostree) ValidateFilesystemHierarchy(rootfs string) error {
+	if rootfs == "" {
+		return fmt.Errorf("missing rootfs parameter")
 	}
 
 	expected := []string{
@@ -317,7 +317,7 @@ func (o *Ostree) ValidateFilesystemHierarchy(imageDir string) error {
 
 	var issues int
 	for _, relPath := range expected {
-		fullPath := filepath.Join(imageDir, relPath)
+		fullPath := filepath.Join(rootfs, relPath)
 
 		// Check if it's a symlink and if it points to a directory.
 		// We use Lstat to check the link itself and Stat to check the target.
