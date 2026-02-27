@@ -2,11 +2,14 @@ package releaser
 
 import (
 	"bytes"
+	"io"
 	"sync"
 	"testing"
 
 	"matrixos/vector/lib/config"
+	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
+	"matrixos/vector/lib/runner"
 )
 
 // newTestReleaser builds a Releaser with mock dependencies for unit tests.
@@ -18,6 +21,35 @@ func newTestReleaser() *Releaser {
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}
+}
+
+// mockMountSyscalls replaces filesystems.Mount/Unmount and ExecChrootRun
+// with no-op fakes so tests never perform real bind mounts or chroot
+// execution. Originals are restored via t.Cleanup.
+func mockMountSyscalls(t *testing.T) {
+	t.Helper()
+
+	origMount := filesystems.Mount
+	origUnmount := filesystems.Unmount
+	origChrootRun := filesystems.ExecChrootRun
+
+	filesystems.Mount = func(source, target, fstype string, flags uintptr, data string) error {
+		return nil
+	}
+	filesystems.Unmount = func(target string, flags int) error {
+		return nil
+	}
+	filesystems.ExecChrootRun = runner.ChrootRunFunc(
+		func(stdin io.Reader, stdout, stderr io.Writer, chrootDir, chrootExec string, args ...string) error {
+			return nil
+		},
+	)
+
+	t.Cleanup(func() {
+		filesystems.Mount = origMount
+		filesystems.Unmount = origUnmount
+		filesystems.ExecChrootRun = origChrootRun
+	})
 }
 
 func TestTrackMount_AppendsInOrder(t *testing.T) {
