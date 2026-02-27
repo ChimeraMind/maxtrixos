@@ -36,6 +36,7 @@ type IImage interface {
 	SetBootDevice(device string)
 	SetRootDevice(device string)
 	SetDevicePath(devicePath string)
+	SetRootfs(rootfs string)
 
 	// Config accessors
 	ImagesOutDir() (string, error)
@@ -63,7 +64,7 @@ type IImage interface {
 	BuildMetadataFile() (string, error)
 
 	// Operations
-	ReleaseVersion(rootfs string) (string, error)
+	ReleaseVersion() (string, error)
 	ImagePath(ref string) (string, error)
 	ImagePathWithReleaseVersion(ref, releaseVersion string) (string, error)
 	CreateImage(imagePath, imageSize string) error
@@ -79,16 +80,16 @@ type IImage interface {
 	FormatRootfs() error
 	RootfsKernelArgs() []string
 	MountRootfs(mountRootfs string) error
-	GetKernelPath(ostreeDeployRootfs string) (string, error)
-	SetupPasswords(ostreeDeployRootfs string) error
-	SetupBootloaderConfig(ref, ostreeDeployRootfs, sysroot, bootDir, efibootDir, efiUUID, bootUUID string) error
+	GetKernelPath() (string, error)
+	SetupPasswords() error
+	SetupBootloaderConfig(ref, sysroot, bootDir, efibootDir, efiUUID, bootUUID string) error
 	SetupVmtestConfig(bootDir string) error
-	InstallSecurebootCerts(ostreeDeployRootfs, mountEfifs, efibootDir string) error
-	InstallMemtest(ostreeDeployRootfs, efibootDir string) error
+	InstallSecurebootCerts(mountEfifs, efibootDir string) error
+	InstallMemtest(efibootDir string) error
 	GenerateKernelBootArgs(ref, physicalRootDevice string, encryptionEnabled bool) ([]string, error)
-	PackageList(rootfs string) ([]string, error)
-	SetupHooks(ostreeDeployRootfs, ref string) error
-	InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, efibootDir string) ([]string, error)
+	PackageList() ([]string, error)
+	SetupHooks(ref string) error
+	InstallBootloader(mountEfifs, mountBootfs, efibootDir string) ([]string, error)
 	TestImage(imagePath, ref string) error
 	FinalizeFilesystems(mountRootfs, mountBootfs, mountEfifs string) error
 	Qcow2ImagePath(imagePath string) (string, error)
@@ -110,6 +111,7 @@ type Image struct {
 	bootDevice string
 	rootDevice string
 	devicePath string
+	rootfs     string
 }
 
 // NewImage creates a new Image instance.
@@ -145,6 +147,9 @@ func (im *Image) SetRootDevice(device string) { im.rootDevice = device }
 
 // SetDevicePath sets the block device path (whole device or loop device).
 func (im *Image) SetDevicePath(devicePath string) { im.devicePath = devicePath }
+
+// SetRootfs sets the deployed ostree rootfs path.
+func (im *Image) SetRootfs(rootfs string) { im.rootfs = rootfs }
 
 // ImagesOutDir returns the directory where generated images are stored.
 func (im *Image) ImagesOutDir() (string, error) {
@@ -525,9 +530,9 @@ func extractSeedName(data []byte) (string, error) {
 // ReleaseVersion extracts or generates a release version string for an image.
 // It attempts to read a build metadata file from the rootfs for the version;
 // if unavailable, falls back to the current date (YYYYMMDD).
-func (im *Image) ReleaseVersion(rootfs string) (string, error) {
-	if rootfs == "" {
-		return "", errors.New("missing rootfs parameter")
+func (im *Image) ReleaseVersion() (string, error) {
+	if im.rootfs == "" {
+		return "", errors.New("rootfs not set, call SetRootfs first")
 	}
 
 	releaseVersion := time.Now().Format("20060102")
@@ -536,7 +541,7 @@ func (im *Image) ReleaseVersion(rootfs string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to determine build metadata file path: %w", err)
 	}
-	metadataFile := filepath.Join(rootfs, metadataRelPath)
+	metadataFile := filepath.Join(im.rootfs, metadataRelPath)
 
 	if filesystems.FileExists(metadataFile) {
 		fmt.Fprintf(os.Stderr, "Build metadata:\n")
@@ -867,12 +872,12 @@ func (im *Image) MountRootfs(mountRootfs string) error {
 }
 
 // GetKernelPath returns the kernel version directory name from the deployed rootfs.
-func (im *Image) GetKernelPath(ostreeDeployRootfs string) (string, error) {
-	if ostreeDeployRootfs == "" {
-		return "", errors.New("missing ostreeDeployRootfs parameter")
+func (im *Image) GetKernelPath() (string, error) {
+	if im.rootfs == "" {
+		return "", errors.New("rootfs not set, call SetRootfs first")
 	}
 
-	modulesDir := filepath.Join(ostreeDeployRootfs, "usr", "lib", "modules")
+	modulesDir := filepath.Join(im.rootfs, "usr", "lib", "modules")
 	entries, err := os.ReadDir(modulesDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to read modules directory %s: %w", modulesDir, err)
@@ -892,12 +897,12 @@ func (im *Image) GetKernelPath(ostreeDeployRootfs string) (string, error) {
 }
 
 // SetupPasswords sets default passwords for the matrix and root users.
-func (im *Image) SetupPasswords(ostreeDeployRootfs string) error {
-	if ostreeDeployRootfs == "" {
-		return errors.New("missing ostreeDeployRootfs parameter")
+func (im *Image) SetupPasswords() error {
+	if im.rootfs == "" {
+		return errors.New("rootfs not set, call SetRootfs first")
 	}
 
-	shadowFile := filepath.Join(ostreeDeployRootfs, "etc", "shadow")
+	shadowFile := filepath.Join(im.rootfs, "etc", "shadow")
 
 	cmd := exec.Command("openssl", "passwd", "-6", "matrix")
 	out, err := cmd.Output()
@@ -936,16 +941,16 @@ func (im *Image) SetupPasswords(ostreeDeployRootfs string) error {
 }
 
 // SetupBootloaderConfig sets up the GRUB bootloader configuration.
-func (im *Image) SetupBootloaderConfig(ref, ostreeDeployRootfs, sysroot, bootDir, efibootDir, efiUUID, bootUUID string) error {
+func (im *Image) SetupBootloaderConfig(ref, sysroot, bootDir, efibootDir, efiUUID, bootUUID string) error {
+	if im.rootfs == "" {
+		return errors.New("rootfs not set, call SetRootfs first")
+	}
 	if ref == "" {
 		return errors.New("missing ref parameter")
 	}
 	ref, err := im.cleanAndStripRef(ref)
 	if err != nil {
 		return fmt.Errorf("failed to clean ref: %w", err)
-	}
-	if ostreeDeployRootfs == "" {
-		return errors.New("missing ostreeDeployRootfs parameter")
 	}
 	if sysroot == "" {
 		return errors.New("missing sysroot parameter")
@@ -964,7 +969,7 @@ func (im *Image) SetupBootloaderConfig(ref, ostreeDeployRootfs, sysroot, bootDir
 	}
 
 	// Verify kernel exists.
-	if _, err := im.GetKernelPath(ostreeDeployRootfs); err != nil {
+	if _, err := im.GetKernelPath(); err != nil {
 		return fmt.Errorf("failed to determine kernel version: %w", err)
 	}
 
@@ -1008,7 +1013,7 @@ func (im *Image) SetupBootloaderConfig(ref, ostreeDeployRootfs, sysroot, bootDir
 	if err != nil {
 		return err
 	}
-	themesDir := filepath.Join(ostreeDeployRootfs, "usr", "share", "grub", "themes", osName+"-theme")
+	themesDir := filepath.Join(im.rootfs, "usr", "share", "grub", "themes", osName+"-theme")
 	if filesystems.DirectoryExists(themesDir) {
 		fmt.Fprintf(os.Stdout, "Copying GRUB themes from %s ...\n", themesDir)
 		dstThemesDir := filepath.Join(bootDir, "grub", "themes")
@@ -1031,7 +1036,7 @@ func (im *Image) SetupBootloaderConfig(ref, ostreeDeployRootfs, sysroot, bootDir
 		return err
 	}
 
-	envDir := filepath.Join(ostreeDeployRootfs, "etc", "environment.d")
+	envDir := filepath.Join(im.rootfs, "etc", "environment.d")
 	if err := os.MkdirAll(envDir, 0755); err != nil {
 		return fmt.Errorf("failed to create environment.d dir: %w", err)
 	}
@@ -1113,9 +1118,9 @@ func (im *Image) SetupVmtestConfig(bootDir string) error {
 }
 
 // InstallSecurebootCerts installs SecureBoot certificates on the EFI partition.
-func (im *Image) InstallSecurebootCerts(ostreeDeployRootfs, mountEfifs, efibootDir string) error {
-	if ostreeDeployRootfs == "" {
-		return errors.New("missing ostreeDeployRootfs parameter")
+func (im *Image) InstallSecurebootCerts(mountEfifs, efibootDir string) error {
+	if im.rootfs == "" {
+		return errors.New("rootfs not set, call SetRootfs first")
 	}
 	if mountEfifs == "" {
 		return errors.New("missing mountEfifs parameter")
@@ -1142,7 +1147,7 @@ func (im *Image) InstallSecurebootCerts(ostreeDeployRootfs, mountEfifs, efibootD
 	}
 
 	// SecureBoot certificate (db).
-	sbCert := filepath.Join(ostreeDeployRootfs, "etc", "portage", "secureboot.pem")
+	sbCert := filepath.Join(im.rootfs, "etc", "portage", "secureboot.pem")
 	if filesystems.FileExists(sbCert) {
 		fmt.Fprintln(os.Stdout, "Copying SecureBoot cert to EFI partition ...")
 		if err := filesystems.CopyFile(sbCert, filepath.Join(mountEfifs, certFileName)); err != nil {
@@ -1160,7 +1165,7 @@ func (im *Image) InstallSecurebootCerts(ostreeDeployRootfs, mountEfifs, efibootD
 	}
 
 	// SecureBoot KEK certificate.
-	sbKek := filepath.Join(ostreeDeployRootfs, "etc", "portage", "secureboot-kek.pem")
+	sbKek := filepath.Join(im.rootfs, "etc", "portage", "secureboot-kek.pem")
 	if filesystems.FileExists(sbKek) {
 		fmt.Fprintln(os.Stdout, "Copying SecureBoot KEK cert to EFI partition ...")
 		if err := filesystems.CopyFile(sbKek, filepath.Join(mountEfifs, kekFileName)); err != nil {
@@ -1178,21 +1183,21 @@ func (im *Image) InstallSecurebootCerts(ostreeDeployRootfs, mountEfifs, efibootD
 	}
 
 	// Copy the shim binaries.
-	shimDir := filepath.Join(ostreeDeployRootfs, "usr", "share", "shim")
+	shimDir := filepath.Join(im.rootfs, "usr", "share", "shim")
 	fmt.Fprintf(os.Stdout, "Copying shim for Secureboot from %s to %s ...\n", shimDir, efibootDir)
 	return im.runner(nil, os.Stdout, os.Stderr, "cp", "-v", shimDir+"/.", efibootDir+"/")
 }
 
 // InstallMemtest installs the memtest86+ EFI binary to the EFI boot directory.
-func (im *Image) InstallMemtest(ostreeDeployRootfs, efibootDir string) error {
-	if ostreeDeployRootfs == "" {
-		return errors.New("missing ostreeDeployRootfs parameter")
+func (im *Image) InstallMemtest(efibootDir string) error {
+	if im.rootfs == "" {
+		return errors.New("rootfs not set, call SetRootfs first")
 	}
 	if efibootDir == "" {
 		return errors.New("missing efibootDir parameter")
 	}
 
-	memtestBin := filepath.Join(ostreeDeployRootfs, "usr", "share", "memtest86+", "memtest.efi64")
+	memtestBin := filepath.Join(im.rootfs, "usr", "share", "memtest86+", "memtest.efi64")
 	if !filesystems.PathExists(memtestBin) {
 		fmt.Fprintf(os.Stderr, "WARNING: %s not available, please install memtest86+\n", memtestBin)
 		return nil
@@ -1205,9 +1210,9 @@ func (im *Image) InstallMemtest(ostreeDeployRootfs, efibootDir string) error {
 // unsigned GRUBX64.EFI with the signed version.
 // It returns the list of extra mounts created during the process so the caller
 // can track them for cleanup.
-func (im *Image) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, efibootDir string) ([]string, error) {
-	if ostreeDeployRootfs == "" {
-		return nil, errors.New("missing ostreeDeployRootfs parameter")
+func (im *Image) InstallBootloader(mountEfifs, mountBootfs, efibootDir string) ([]string, error) {
+	if im.rootfs == "" {
+		return nil, errors.New("rootfs not set, call SetRootfs first")
 	}
 	if mountEfifs == "" {
 		return nil, errors.New("missing mountEfifs parameter")
@@ -1244,7 +1249,7 @@ func (im *Image) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, 
 	var extraMounts []string
 
 	// Bind mount EFI into the chroot.
-	efiChrootMount := filepath.Join(ostreeDeployRootfs, efiRoot)
+	efiChrootMount := filepath.Join(im.rootfs, efiRoot)
 	if err := os.MkdirAll(efiChrootMount, 0755); err != nil {
 		return extraMounts, fmt.Errorf("failed to create %s: %w", efiChrootMount, err)
 	}
@@ -1255,7 +1260,7 @@ func (im *Image) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, 
 	extraMounts = append(extraMounts, mnt)
 
 	// Bind mount boot into the chroot.
-	bootChrootMount := filepath.Join(ostreeDeployRootfs, bootRoot)
+	bootChrootMount := filepath.Join(im.rootfs, bootRoot)
 	if err := os.MkdirAll(bootChrootMount, 0755); err != nil {
 		return extraMounts, fmt.Errorf("failed to create %s: %w", bootChrootMount, err)
 	}
@@ -1266,14 +1271,14 @@ func (im *Image) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, 
 	extraMounts = append(extraMounts, mnt)
 
 	// Setup common rootfs mounts (dev, proc, etc.) without proc for bootloader.
-	chrootMounts, err := filesystems.SetupCommonRootfsMounts(ostreeDeployRootfs)
+	chrootMounts, err := filesystems.SetupCommonRootfsMounts(im.rootfs)
 	if err != nil {
 		return extraMounts, fmt.Errorf("failed to setup common rootfs mounts: %w", err)
 	}
 	extraMounts = append(extraMounts, chrootMounts...)
 
 	// Run grub-install inside the chroot.
-	err = filesystems.ChrootRun(ostreeDeployRootfs, "/usr/bin/grub-install",
+	err = filesystems.ChrootRun(im.rootfs, "/usr/bin/grub-install",
 		"--target=x86_64-efi",
 		"--directory=/usr/lib/grub/x86_64-efi",
 		"--efi-directory="+efiRoot,
@@ -1287,7 +1292,7 @@ func (im *Image) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, 
 	// Clean up chroot mounts regardless of grub-install result.
 	filesystems.BindUmount(bootChrootMount)
 	filesystems.BindUmount(efiChrootMount)
-	filesystems.UnsetupCommonRootfsMounts(ostreeDeployRootfs)
+	filesystems.UnsetupCommonRootfsMounts(im.rootfs)
 
 	if err != nil {
 		return nil, fmt.Errorf("grub-install failed: %w", err)
@@ -1304,7 +1309,7 @@ func (im *Image) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, 
 	fmt.Fprintf(os.Stdout, "Removing existing %s as it's not signed ...\n", grubx64efi)
 	os.Remove(grubx64efi)
 
-	signedGrubx64efi := filepath.Join(ostreeDeployRootfs, "usr", "lib", "grub", "grub-x86_64.efi.signed")
+	signedGrubx64efi := filepath.Join(im.rootfs, "usr", "lib", "grub", "grub-x86_64.efi.signed")
 	fmt.Fprintf(os.Stdout, "Moving %s to %s\n", signedGrubx64efi, grubx64efi)
 	if err := os.Rename(signedGrubx64efi, grubx64efi); err != nil {
 		return nil, fmt.Errorf("failed to move signed grub binary: %w", err)
@@ -1393,9 +1398,9 @@ func (im *Image) GenerateKernelBootArgs(ref, physicalRootDevice string, encrypti
 }
 
 // PackageList returns the list of packages installed in a rootfs.
-func (im *Image) PackageList(rootfs string) ([]string, error) {
-	if rootfs == "" {
-		return nil, errors.New("missing rootfs parameter")
+func (im *Image) PackageList() ([]string, error) {
+	if im.rootfs == "" {
+		return nil, errors.New("rootfs not set, call SetRootfs first")
 	}
 
 	roVdb, err := im.ReadOnlyVdb()
@@ -1403,7 +1408,7 @@ func (im *Image) PackageList(rootfs string) ([]string, error) {
 		return nil, err
 	}
 
-	vdb := filepath.Join(strings.TrimRight(rootfs, "/"), roVdb)
+	vdb := filepath.Join(strings.TrimRight(im.rootfs, "/"), roVdb)
 	if !filesystems.DirectoryExists(vdb) {
 		fmt.Fprintf(os.Stderr, "%s does not exist. cannot generate pkglist\n", vdb)
 		return nil, nil
@@ -1436,9 +1441,9 @@ func (im *Image) PackageList(rootfs string) ([]string, error) {
 }
 
 // SetupHooks runs image-specific hook scripts.
-func (im *Image) SetupHooks(ostreeDeployRootfs, ref string) error {
-	if ostreeDeployRootfs == "" {
-		return errors.New("missing ostreeDeployRootfs parameter")
+func (im *Image) SetupHooks(ref string) error {
+	if im.rootfs == "" {
+		return errors.New("rootfs not set, call SetRootfs first")
 	}
 	if ref == "" {
 		return errors.New("missing ref parameter")
@@ -1479,7 +1484,7 @@ func (im *Image) SetupHooks(ostreeDeployRootfs, ref string) error {
 	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(),
 		"MATRIXOS_DEV_DIR="+devDir,
-		"ROOTFS="+ostreeDeployRootfs,
+		"ROOTFS="+im.rootfs,
 		"REF="+ref,
 	)
 	return cmd.Run()
