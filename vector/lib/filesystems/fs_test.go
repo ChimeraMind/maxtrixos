@@ -720,8 +720,18 @@ func TestBindMount(t *testing.T) {
 	src := t.TempDir()
 	dst := t.TempDir()
 
-	if err := BindMount(src, dst); err != nil {
-		t.Errorf("BindMount failed: %v", err)
+	bm, err := NewBindMount(BindMountOptions{
+		Src: src,
+		Dst: dst,
+	})
+	if err != nil {
+		t.Errorf("NewBindMount failed: %v", err)
+	}
+	if bm == nil {
+		t.Fatal("NewBindMount returned nil")
+	}
+	if bm.Dst() != dst {
+		t.Errorf("Dst() = %q, want %q", bm.Dst(), dst)
 	}
 }
 
@@ -891,20 +901,58 @@ func TestBindUmount(t *testing.T) {
 		setupMockMountInfo(t, []*MountInfoEntry{
 			{Mountpoint: tmpDir},
 		})
-		if err := BindUmount(tmpDir); err != nil {
-			t.Errorf("BindUmount failed: %v", err)
+		src := t.TempDir()
+		bm, err := NewBindMount(BindMountOptions{
+			Src: src,
+			Dst: tmpDir,
+		})
+		if err != nil {
+			t.Fatalf("NewBindMount failed: %v", err)
+		}
+		if err := bm.Unmount(); err != nil {
+			t.Errorf("Unmount failed: %v", err)
+		}
+		// Double unmount should be a no-op.
+		if err := bm.Unmount(); err != nil {
+			t.Errorf("second Unmount failed: %v", err)
 		}
 	})
 
-	t.Run("MissingMnt", func(t *testing.T) {
-		if err := BindUmount(""); err == nil {
-			t.Error("Expected error for missing mnt, got nil")
+	t.Run("MissingSrc", func(t *testing.T) {
+		_, err := NewBindMount(BindMountOptions{
+			Dst: "/tmp",
+		})
+		if err == nil {
+			t.Error("Expected error for missing src, got nil")
 		}
 	})
 
-	t.Run("NonExistentMnt", func(t *testing.T) {
-		if err := BindUmount("/non/existent/path"); err == nil {
-			t.Error("Expected error for non-existent mnt, got nil")
+	t.Run("MissingDst", func(t *testing.T) {
+		_, err := NewBindMount(BindMountOptions{
+			Src: "/tmp",
+		})
+		if err == nil {
+			t.Error("Expected error for missing dst, got nil")
+		}
+	})
+
+	t.Run("NonExistentSrc", func(t *testing.T) {
+		_, err := NewBindMount(BindMountOptions{
+			Src: "/non/existent/path",
+			Dst: t.TempDir(),
+		})
+		if err == nil {
+			t.Error("Expected error for non-existent src, got nil")
+		}
+	})
+
+	t.Run("NonExistentDst", func(t *testing.T) {
+		_, err := NewBindMount(BindMountOptions{
+			Src: t.TempDir(),
+			Dst: "/non/existent/path",
+		})
+		if err == nil {
+			t.Error("Expected error for non-existent dst, got nil")
 		}
 	})
 }
@@ -916,8 +964,21 @@ func TestBindMountDistdir(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		distfilesDir := t.TempDir()
 		rootfs := t.TempDir()
-		if _, err := BindMountDistdir(distfilesDir, rootfs); err != nil {
+		bm, err := BindMountDistdir(BindMountDistdirOptions{
+			DistfilesDir: distfilesDir,
+			Rootfs:       rootfs,
+		})
+		if err != nil {
 			t.Errorf("BindMountDistdir failed: %v", err)
+		}
+		if bm == nil {
+			t.Fatal("BindMountDistdir returned nil")
+		}
+		expected := filepath.Join(
+			rootfs, "var", "cache", "distfiles",
+		)
+		if bm.Dst() != expected {
+			t.Errorf("Dst() = %q, want %q", bm.Dst(), expected)
 		}
 	})
 }
@@ -928,16 +989,19 @@ func TestBindUmountDistdir(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		rootfs := t.TempDir()
-		distfilesDir := filepath.Join(rootfs, "var", "cache", "distfiles")
-		if err := os.MkdirAll(distfilesDir, 0755); err != nil {
-			t.Fatal(err)
+		distfilesDir := t.TempDir()
+		bm, err := BindMountDistdir(BindMountDistdirOptions{
+			DistfilesDir: distfilesDir,
+			Rootfs:       rootfs,
+		})
+		if err != nil {
+			t.Fatalf("BindMountDistdir failed: %v", err)
 		}
 		setupMockMountInfo(t, []*MountInfoEntry{
-			{Mountpoint: distfilesDir},
+			{Mountpoint: bm.Dst()},
 		})
-
-		if err := BindUmountDistdir(rootfs); err != nil {
-			t.Errorf("BindUmountDistdir failed: %v", err)
+		if err := bm.Unmount(); err != nil {
+			t.Errorf("Unmount failed: %v", err)
 		}
 	})
 }
@@ -949,8 +1013,21 @@ func TestBindMountBinpkgs(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		binpkgsDir := t.TempDir()
 		rootfs := t.TempDir()
-		if _, err := BindMountBinpkgs(binpkgsDir, rootfs); err != nil {
+		bm, err := BindMountBinpkgs(BindMountBinpkgsOptions{
+			BinpkgsDir: binpkgsDir,
+			Rootfs:     rootfs,
+		})
+		if err != nil {
 			t.Errorf("BindMountBinpkgs failed: %v", err)
+		}
+		if bm == nil {
+			t.Fatal("BindMountBinpkgs returned nil")
+		}
+		expected := filepath.Join(
+			rootfs, "var", "cache", "binpkgs",
+		)
+		if bm.Dst() != expected {
+			t.Errorf("Dst() = %q, want %q", bm.Dst(), expected)
 		}
 	})
 }
@@ -961,16 +1038,19 @@ func TestBindUmountBinpkgs(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		rootfs := t.TempDir()
-		binpkgsDir := filepath.Join(rootfs, "var", "cache", "binpkgs")
-		if err := os.MkdirAll(binpkgsDir, 0755); err != nil {
-			t.Fatal(err)
+		binpkgsDir := t.TempDir()
+		bm, err := BindMountBinpkgs(BindMountBinpkgsOptions{
+			BinpkgsDir: binpkgsDir,
+			Rootfs:     rootfs,
+		})
+		if err != nil {
+			t.Fatalf("BindMountBinpkgs failed: %v", err)
 		}
 		setupMockMountInfo(t, []*MountInfoEntry{
-			{Mountpoint: binpkgsDir},
+			{Mountpoint: bm.Dst()},
 		})
-
-		if err := BindUmountBinpkgs(rootfs); err != nil {
-			t.Errorf("BindUmountBinpkgs failed: %v", err)
+		if err := bm.Unmount(); err != nil {
+			t.Errorf("Unmount failed: %v", err)
 		}
 	})
 }
