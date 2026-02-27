@@ -103,22 +103,6 @@ func materializeBody(opts *CommitOptions) (tmpPath string, err error) {
 	return f.Name(), nil
 }
 
-// Commit performs an ostree commit using the package-level Run function.
-// This is useful when the caller does not have an Ostree instance.
-func Commit(opts CommitOptions, verbose bool) error {
-	tmp, err := materializeBody(&opts)
-	if tmp != "" {
-		defer os.Remove(tmp)
-	}
-	if err != nil {
-		return err
-	}
-	if err := opts.validate(); err != nil {
-		return err
-	}
-	return Run(verbose, opts.args(verbose)...)
-}
-
 // Commit performs an ostree commit using the instance runner.
 func (o *Ostree) Commit(opts CommitOptions) error {
 	tmp, err := materializeBody(&opts)
