@@ -366,11 +366,13 @@ func (im *Image) InstallBootloader() error {
 
 	// Setup common rootfs mounts (dev, proc, etc.) without proc for bootloader.
 	mounter, err := filesystems.NewCommonRootfsMounts(
-		im.rootfs,
-		func(tg string) {
-			im.trackMount(tg)
+		filesystems.CommonRootfsMountsOptions{
+			MountPoint: im.rootfs,
+			Mounting: func(tg string) {
+				im.trackMount(tg)
+			},
+			Mounted: func(tg string) {},
 		},
-		func(tg string) {},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create common rootfs mounter: %w", err)

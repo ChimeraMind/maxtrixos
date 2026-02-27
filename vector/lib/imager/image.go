@@ -246,7 +246,12 @@ func (im *Image) Cleanup() {
 	im.trackedMounts = nil
 	im.trackedMountsMu.Unlock()
 
-	filesystems.CleanupMounts(mounts)
+	copts := filesystems.CleanupMountsOptions{
+		Stdout: im.stdout,
+		Stderr: im.stderr,
+		Mounts: mounts,
+	}
+	filesystems.CleanupMounts(copts)
 
 	im.trackedLoopDevicesMu.Lock()
 	loops := slices.Clone(im.trackedLoopDevices)
