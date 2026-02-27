@@ -54,14 +54,9 @@ type IImage interface {
 	ImagePath(ref string) (string, error)
 	ImagePathWithReleaseVersion(ref, releaseVersion string) (string, error)
 	CreateImage(imagePath, imageSize string) error
-	ImagePathWithCompressorExtension(imagePath, compressor string) (string, error)
-	CompressImage(imagePath, compressor string) error
-	BlockDeviceNthPartitionPath(blockDevice string, nth int) (string, error)
-	BlockDeviceForPartitionPath(partitionPath string) (string, error)
-	PartitionNumber(partitionPath string) (string, error)
-	PartitionLabel(partitionPath string) (string, error)
+	ImagePathWithCompressorExtension(imagePath string) (string, error)
+	CompressImage(imagePath string) error
 	ClearPartitionTable(devicePath string) error
-	GetPartitionType(devicePath string) (string, error)
 	DatedFsLabel() string
 	PartitionDevices(efiSize, bootSize, imageSize, devicePath string) error
 	FormatEfifs(efiDevice string) error
@@ -402,6 +397,39 @@ func (im *Image) BuildMetadataFile() (string, error) {
 
 // --- Helpers ---
 
+// parseHumanSize converts a human-readable size string (e.g. "32G", "200M", "1T")
+// to bytes. Supports K, M, G, T suffixes (case-insensitive). Without a suffix,
+// the value is treated as bytes.
+func parseHumanSize(s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, errors.New("empty size string")
+	}
+
+	multiplier := int64(1)
+	suffix := s[len(s)-1]
+	switch suffix {
+	case 'k', 'K':
+		multiplier = 1024
+		s = s[:len(s)-1]
+	case 'm', 'M':
+		multiplier = 1024 * 1024
+		s = s[:len(s)-1]
+	case 'g', 'G':
+		multiplier = 1024 * 1024 * 1024
+		s = s[:len(s)-1]
+	case 't', 'T':
+		multiplier = 1024 * 1024 * 1024 * 1024
+		s = s[:len(s)-1]
+	}
+
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid size %q: %w", s, err)
+	}
+	return n * multiplier, nil
+}
+
 // imagePath builds the full image file path from a suffix.
 func (im *Image) imagePath(suffix string) (string, error) {
 	outDir, err := im.ImagesOutDir()
@@ -536,38 +564,70 @@ func (im *Image) CreateImage(imagePath, imageSize string) (retErr error) {
 		return err
 	}
 
+	sizeBytes, err := parseHumanSize(imageSize)
+	if err != nil {
+		return fmt.Errorf("failed to parse image size %q: %w", imageSize, err)
+	}
+
 	fmt.Fprintf(os.Stdout, "Creating block device image file: %s\n", imagePath)
-	return im.runner(nil, os.Stdout, os.Stderr, "truncate", "-s", imageSize, imagePath)
+	f, err := os.Create(imagePath)
+	if err != nil {
+		return fmt.Errorf("failed to create image file %s: %w", imagePath, err)
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil && retErr == nil {
+			retErr = cerr
+		}
+	}()
+
+	if err := f.Truncate(sizeBytes); err != nil {
+		return fmt.Errorf("failed to truncate image file %s to %d bytes: %w", imagePath, sizeBytes, err)
+	}
+	return nil
 }
 
 // ImagePathWithCompressorExtension appends the compressor's file extension to the image path.
 // The extension is derived from the first word of the compressor command string.
-func (im *Image) ImagePathWithCompressorExtension(imagePath, compressor string) (string, error) {
+func (im *Image) ImagePathWithCompressorExtension(imagePath string) (string, error) {
 	if imagePath == "" {
 		return "", errors.New("missing imagePath parameter")
+	}
+	compressor, err := im.Compressor()
+	if err != nil {
+		return "", fmt.Errorf("failed to get compressor: %w", err)
 	}
 	if compressor == "" {
 		return "", errors.New("missing compressor parameter")
 	}
 	parts := strings.Fields(compressor)
+	if len(parts) == 0 {
+		return "", errors.New("invalid compressor parameters: empty command")
+	}
 	return imagePath + "." + parts[0], nil
 }
 
 // CompressImage compresses an image file using the configured compressor.
-func (im *Image) CompressImage(imagePath, compressor string) error {
+func (im *Image) CompressImage(imagePath string) error {
 	if imagePath == "" {
 		return errors.New("missing imagePath parameter")
+	}
+	compressor, err := im.Compressor()
+	if err != nil {
+		return fmt.Errorf("failed to get compressor: %w", err)
 	}
 	if compressor == "" {
 		return errors.New("missing compressor parameter")
 	}
 
-	imagePathWithExt, err := im.ImagePathWithCompressorExtension(imagePath, compressor)
+	imagePathWithExt, err := im.ImagePathWithCompressorExtension(imagePath)
 	if err != nil {
 		return err
 	}
 
 	parts := strings.Fields(compressor)
+	if len(parts) == 0 {
+		return errors.New("invalid compressor parameters: empty command")
+	}
 	args := append(parts[1:], imagePath)
 	if err := im.runner(nil, os.Stdout, os.Stderr, parts[0], args...); err != nil {
 		return fmt.Errorf("compression failed: %w", err)
@@ -577,75 +637,6 @@ func (im *Image) CompressImage(imagePath, compressor string) error {
 		return fmt.Errorf("compressed image was not created at the expected path: %s", imagePathWithExt)
 	}
 	return nil
-}
-
-// BlockDeviceNthPartitionPath returns the path of the nth partition of a block device.
-func (im *Image) BlockDeviceNthPartitionPath(blockDevice string, nth int) (string, error) {
-	if blockDevice == "" {
-		return "", errors.New("missing blockDevice parameter")
-	}
-	if nth <= 0 {
-		return "", errors.New("invalid nth parameter")
-	}
-
-	cmd := exec.Command("lsblk", "-nr", "-o", "PATH,PARTN", blockDevice)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("lsblk failed for %s: %w", blockDevice, err)
-	}
-
-	nthStr := fmt.Sprintf("%d", nth)
-	scanner := bufio.NewScanner(strings.NewReader(string(out)))
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) >= 2 && fields[1] == nthStr {
-			return fields[0], nil
-		}
-	}
-	return "", fmt.Errorf("partition %d not found on %s", nth, blockDevice)
-}
-
-// BlockDeviceForPartitionPath returns the parent block device for a partition path.
-func (im *Image) BlockDeviceForPartitionPath(partitionPath string) (string, error) {
-	if partitionPath == "" {
-		return "", errors.New("missing partitionPath parameter")
-	}
-	cmd := exec.Command("lsblk", "-no", "PKNAME", "-p", partitionPath)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("lsblk failed for %s: %w", partitionPath, err)
-	}
-	result := strings.TrimSpace(string(out))
-	if result == "" {
-		return "", fmt.Errorf("no parent block device found for %s", partitionPath)
-	}
-	return result, nil
-}
-
-// PartitionNumber returns the partition number of a partition path.
-func (im *Image) PartitionNumber(partitionPath string) (string, error) {
-	if partitionPath == "" {
-		return "", errors.New("missing partitionPath parameter")
-	}
-	cmd := exec.Command("lsblk", "-no", "PARTN", "-p", partitionPath)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("lsblk failed for %s: %w", partitionPath, err)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-// PartitionLabel returns the label of a partition.
-func (im *Image) PartitionLabel(partitionPath string) (string, error) {
-	if partitionPath == "" {
-		return "", errors.New("missing partitionPath parameter")
-	}
-	cmd := exec.Command("lsblk", "-no", "LABEL", "-p", partitionPath)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("lsblk failed for %s: %w", partitionPath, err)
-	}
-	return strings.TrimSpace(string(out)), nil
 }
 
 // ClearPartitionTable clears the partition table on a device using sgdisk.
@@ -659,19 +650,6 @@ func (im *Image) ClearPartitionTable(devicePath string) error {
 		return fmt.Errorf("sgdisk -g -o failed on %s: %w", devicePath, err)
 	}
 	return im.runner(nil, os.Stdout, os.Stderr, "sgdisk", "-Z", devicePath)
-}
-
-// GetPartitionType returns the partition type GUID (uppercased) for a device.
-func (im *Image) GetPartitionType(devicePath string) (string, error) {
-	if devicePath == "" {
-		return "", errors.New("missing devicePath parameter")
-	}
-	cmd := exec.Command("lsblk", "-no", "PARTTYPE", devicePath)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("lsblk failed for %s: %w", devicePath, err)
-	}
-	return strings.ToUpper(strings.TrimSpace(string(out))), nil
 }
 
 // DatedFsLabel returns a filesystem label based on the current date (YYYYMMDD).
