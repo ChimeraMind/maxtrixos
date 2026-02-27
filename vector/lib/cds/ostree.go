@@ -581,28 +581,47 @@ func Prune(repoDir, ref, keepObjectsYoungerThan string, verbose bool) error {
 	}
 
 	fmt.Printf("Pruning ostree repo for %s ...\n", repoDir)
-	err := Run(verbose,
-		"--repo="+repoDir, "prune",
+	return Run(verbose,
+		"--repo="+repoDir,
+		"prune",
 		"--depth=5",
 		"--refs-only",
 		"--keep-younger-than="+keepObjectsYoungerThan,
 		"--only-branch="+ref,
 	)
-	return err
 }
 
 type Ostree struct {
 	cfg    config.IConfig
+	stdout io.Writer
+	stderr io.Writer
 	runner runner.Func
 }
 
+// NewOstreeWithRunner creates a new Ostree instance with a custom command runner (for testing).
+type NewOstreeOptions struct {
+	Config config.IConfig
+	Stdout io.Writer
+	Stderr io.Writer
+}
+
 // NewOstree creates a new Ostree instance.
-func NewOstree(cfg config.IConfig) (*Ostree, error) {
-	if cfg == nil {
+func NewOstree(opts NewOstreeOptions) (*Ostree, error) {
+	if opts.Config == nil {
 		return nil, errors.New("missing config parameter")
 	}
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
 	return &Ostree{
-		cfg:    cfg,
+		cfg:    opts.Config,
+		stdout: stdout,
+		stderr: stderr,
 		runner: runCommand,
 	}, nil
 }
@@ -619,18 +638,18 @@ func (o *Ostree) runCmd(stdout, stderr io.Writer, verbose bool, args ...string) 
 	return o.runner(nil, stdout, stderr, "ostree", finalArgs...)
 }
 
-// ostreeRun runs an ostree command with stdout/stderr directed to os.Stdout/os.Stderr.
+// ostreeRun runs an ostree command with stdout/stderr directed to the instance's stdout/stderr.
 func (o *Ostree) ostreeRun(verbose bool, args ...string) error {
-	return o.runCmd(os.Stdout, os.Stderr, verbose, args...)
+	return o.runCmd(o.stdout, o.stderr, verbose, args...)
 }
 
 // ostreeRunCapture runs an ostree command and captures its stdout.
 func (o *Ostree) ostreeRunCapture(verbose bool, args ...string) (io.Reader, error) {
 	if verbose {
-		fmt.Fprintf(os.Stderr, ">> Executing: ostree (stdout capture) %s\n", strings.Join(args, " "))
+		fmt.Fprintf(o.stderr, ">> Executing: ostree (stdout capture) %s\n", strings.Join(args, " "))
 	}
 	stdo := new(bytes.Buffer)
-	err := o.runCmd(stdo, os.Stderr, false, args...)
+	err := o.runCmd(stdo, o.stderr, false, args...)
 	return stdo, err
 }
 
@@ -1189,7 +1208,7 @@ func (o *Ostree) GpgKeyID() (string, error) {
 	err = o.runner(
 		nil,
 		out,
-		os.Stdout,
+		o.stdout,
 		"gpg",
 		"--homedir", homeDir,
 		"--batch",
@@ -1245,8 +1264,8 @@ func (o *Ostree) ImportGpgKey(keyPath string) error {
 
 	return o.runner(
 		nil,
-		os.Stdout,
-		os.Stdout,
+		o.stdout,
+		o.stderr,
 		"gpg",
 		"--homedir", homeDir,
 		"--batch", "--yes",
@@ -1277,8 +1296,8 @@ func (o *Ostree) GpgSignFile(file string) error {
 
 	err = o.runner(
 		nil,
-		os.Stdout,
-		os.Stdout,
+		o.stdout,
+		o.stdout,
 		"gpg",
 		"--homedir", homeDir,
 		"--batch", "--yes",
