@@ -56,6 +56,12 @@ type MockImage struct {
 	ReleaseVersionErr            error
 	PackageList_                 []string
 	PackageListErr               error
+	CreateQcow2_                 bool
+	CreateQcow2Err               error
+	Productionize_               bool
+	ProductionizeErr             error
+	ImageTests_                  bool
+	ImageTestsErr                error
 	InstallBootloaderResult      []string
 	InstallBootloaderErr         error
 	Mode_                        ImageMode
@@ -132,6 +138,7 @@ func (m *MockImage) SetImagePath(imagePath string)   { m.ImagePath_ = imagePath 
 func (m *MockImage) SetRootfs(rootfs string)         { m.Rootfs_ = rootfs }
 func (m *MockImage) Rootfs() string                  { return m.Rootfs_ }
 func (m *MockImage) Ref() string                     { return m.Ref_ }
+func (m *MockImage) SetRef(ref string)               { m.Ref_ = ref }
 
 func (m *MockImage) EfifsMount() string { return m.EfifsMount_ }
 func (m *MockImage) EfiBootDir() (string, error) {
@@ -176,7 +183,7 @@ func (m *MockImage) LockDir() (string, error)                      { return "", 
 func (m *MockImage) LockWaitSeconds() (string, error)              { return "", nil }
 func (m *MockImage) BuildMetadataFile() (string, error)            { return "", nil }
 
-func (m *MockImage) ReleaseVersion() (string, error) {
+func (m *MockImage) ExtractReleaseVersion() (string, error) {
 	return m.ReleaseVersion_, m.ReleaseVersionErr
 }
 func (m *MockImage) ImagePath() string {
@@ -272,7 +279,7 @@ func (m *MockImage) InstallMemtest() error {
 func (m *MockImage) GenerateKernelBootArgs() ([]string, error) {
 	return []string{"arg1=val1"}, nil
 }
-func (m *MockImage) PackageList() ([]string, error) {
+func (m *MockImage) ExtractPackageList() ([]string, error) {
 	return m.PackageList_, m.PackageListErr
 }
 func (m *MockImage) SetupHooks() error {
@@ -305,12 +312,15 @@ func (m *MockImage) ShowFinalFilesystemInfo() error {
 	m.ShowFinalFsInfoCalled = true
 	return nil
 }
-func (m *MockImage) ShowTestInfo(artifacts []string) {
+func (m *MockImage) ShowImageTestInfo(artifacts []string) {
 	m.ShowTestInfoCalled = true
 }
 func (m *MockImage) RemoveImageFile() error         { return nil }
 func (m *MockImage) ImageLockDir() (string, error)  { return "", nil }
 func (m *MockImage) ImageLockPath() (string, error) { return "", nil }
+func (m *MockImage) CreateQcow2() (bool, error)     { return m.CreateQcow2_, m.CreateQcow2Err }
+func (m *MockImage) Productionize() (bool, error)   { return m.Productionize_, m.ProductionizeErr }
+func (m *MockImage) ImageTests() (bool, error)      { return m.ImageTests_, m.ImageTestsErr }
 
 // ExecuteWithImageLock either calls fn directly or returns the configured error.
 func (m *MockImage) ExecuteWithImageLock(fn func() error) error {
