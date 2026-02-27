@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,6 +35,17 @@ type NewImageOptions struct {
 // IImage defines the interface for image operations.
 // It mirrors all public methods of Image for testability.
 type IImage interface {
+	// I/O writers – override to customise output rendering.
+	SetStdout(w io.Writer)
+	SetStderr(w io.Writer)
+	Stdout() io.Writer
+	Stderr() io.Writer
+
+	// Structured output helpers.
+	Print(format string, args ...any)
+	PrintWarning(format string, args ...any)
+	PrintError(format string, args ...any)
+
 	// Device setters
 	SetEfiDevice(device string)
 	EfiDevice() string
@@ -125,6 +137,8 @@ type Image struct {
 	ostree         cds.IOstree
 	fsenc          filesystems.IFsenc
 	runner         runner.Func
+	stdout         io.Writer
+	stderr         io.Writer
 	efiDevice      string
 	bootDevice     string
 	rootDevice     string
@@ -143,6 +157,35 @@ type Image struct {
 	// so that Cleanup can attempt to unmount them all on failure or signal.
 	trackedMountsMu sync.Mutex
 	trackedMounts   []string
+}
+
+// SetStdout replaces the writer used for informational output.
+// Pass a custom writer to capture or restyle messages from the
+// calling command layer.
+func (im *Image) SetStdout(w io.Writer) { im.stdout = w }
+
+// SetStderr replaces the writer used for warnings and errors.
+func (im *Image) SetStderr(w io.Writer) { im.stderr = w }
+
+// Stdout returns the current informational output writer.
+func (im *Image) Stdout() io.Writer { return im.stdout }
+
+// Stderr returns the current warning/error output writer.
+func (im *Image) Stderr() io.Writer { return im.stderr }
+
+// Print writes a formatted informational message to stdout.
+func (im *Image) Print(format string, args ...any) {
+	fmt.Fprintf(im.stdout, format, args...)
+}
+
+// PrintWarning writes a formatted warning message to stderr.
+func (im *Image) PrintWarning(format string, args ...any) {
+	fmt.Fprintf(im.stderr, format, args...)
+}
+
+// PrintError writes a formatted error/diagnostic message to stderr.
+func (im *Image) PrintError(format string, args ...any) {
+	fmt.Fprintf(im.stderr, format, args...)
 }
 
 // trackMount appends a single mount point to the tracked list.
@@ -191,6 +234,8 @@ func NewImage(cfg config.IConfig, ot cds.IOstree, fsenc filesystems.IFsenc, opts
 		ostree: ot,
 		fsenc:  fsenc,
 		runner: runner.Run,
+		stdout: os.Stdout,
+		stderr: os.Stderr,
 	}
 	if opts != nil {
 		im.efiDevice = opts.EfiDevice
@@ -564,7 +609,7 @@ func refToSuffix(ref string) string {
 
 // --- Operations ---
 
-func extractSeedName(data []byte) (string, error) {
+func (im *Image) extractSeedName(data []byte) (string, error) {
 	// Extract version from SEED_NAME= line.
 	var releaseVersion string
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -578,9 +623,9 @@ func extractSeedName(data []byte) (string, error) {
 		// Version is the part after the last '-'.
 		if idx := strings.LastIndex(seedName, "-"); idx >= 0 {
 			releaseVersion = seedName[idx+1:]
-			fmt.Fprintf(os.Stderr, "Extracted release version: %s\n", releaseVersion)
+			im.Print("Extracted release version: %s\n", releaseVersion)
 		} else {
-			fmt.Fprintf(os.Stderr, "WARNING: SEED_NAME= value has no '-' separator\n")
+			im.PrintWarning("WARNING: SEED_NAME= value has no '-' separator\n")
 		}
 		break
 
@@ -608,22 +653,21 @@ func (im *Image) ReleaseVersion() (string, error) {
 	metadataFile := filepath.Join(im.rootfs, metadataRelPath)
 
 	if filesystems.FileExists(metadataFile) {
-		fmt.Fprintf(os.Stderr, "Build metadata:\n")
+		im.PrintError("Build metadata:\n")
 		data, err := os.ReadFile(metadataFile)
 		if err != nil {
 			return "", fmt.Errorf(
 				"failed to read build metadata file %s: %w", metadataFile, err)
 		}
-		fmt.Fprint(os.Stderr, string(data))
+		im.PrintError("%s", string(data))
 
-		releaseVersion, err = extractSeedName(data)
+		releaseVersion, err = im.extractSeedName(data)
 		if err != nil {
 			return "", fmt.Errorf(
 				"failed to extract release version from build metadata: %w", err)
 		}
 	} else {
-		fmt.Fprintf(
-			os.Stderr,
+		im.PrintWarning(
 			"WARNING! Build metadata file not found: %s\n", metadataFile,
 		)
 	}
@@ -664,8 +708,7 @@ func (im *Image) CreateImage(imagePath, imageSize string) (retErr error) {
 	}
 
 	imagesDir := filepath.Dir(imagePath)
-	fmt.Fprintf(
-		os.Stdout,
+	im.Print(
 		"Creating images directory: %s (if it does not exist)\n",
 		imagesDir,
 	)
@@ -683,7 +726,7 @@ func (im *Image) CreateImage(imagePath, imageSize string) (retErr error) {
 		return fmt.Errorf("failed to parse image size %q: %w", imageSize, err)
 	}
 
-	fmt.Fprintf(os.Stdout, "Creating block device image file: %s\n", imagePath)
+	im.Print("Creating block device image file: %s\n", imagePath)
 	f, err := os.Create(imagePath)
 	if err != nil {
 		return fmt.Errorf("failed to create image file %s: %w", imagePath, err)
@@ -743,7 +786,7 @@ func (im *Image) CompressImage(imagePath string) error {
 		return errors.New("invalid compressor parameters: empty command")
 	}
 	args := append(parts[1:], imagePath)
-	if err := im.runner(nil, os.Stdout, os.Stderr, parts[0], args...); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, parts[0], args...); err != nil {
 		return fmt.Errorf("compression failed: %w", err)
 	}
 
@@ -759,11 +802,11 @@ func (im *Image) ClearPartitionTable() error {
 		return errors.New("missing devicePath, not set in NewImageOptions")
 	}
 
-	fmt.Fprintf(os.Stdout, "Clearing partition table on %s ...\n", im.devicePath)
-	if err := im.runner(nil, os.Stdout, os.Stderr, "sgdisk", "-g", "-o", im.devicePath); err != nil {
+	im.Print("Clearing partition table on %s ...\n", im.devicePath)
+	if err := im.runner(nil, im.stdout, im.stderr, "sgdisk", "-g", "-o", im.devicePath); err != nil {
 		return fmt.Errorf("sgdisk -g -o failed on %s: %w", im.devicePath, err)
 	}
-	return im.runner(nil, os.Stdout, os.Stderr, "sgdisk", "-Z", im.devicePath)
+	return im.runner(nil, im.stdout, im.stderr, "sgdisk", "-Z", im.devicePath)
 }
 
 // DatedFsLabel returns a filesystem label based on the current date (YYYYMMDD).
@@ -799,10 +842,10 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stdout, "Partitioning %s:\n", im.devicePath)
-	fmt.Fprintf(os.Stdout, " --> p1 (EFI: %s)\n", efiSize)
-	fmt.Fprintf(os.Stdout, " --> p2 (BOOT: %s)\n", bootSize)
-	fmt.Fprintf(os.Stdout, " --> p3 (ROOT: Remainder of %s, plus autogrow)\n", imageSize)
+	im.Print("Partitioning %s:\n", im.devicePath)
+	im.Print(" --> p1 (EFI: %s)\n", efiSize)
+	im.Print(" --> p2 (BOOT: %s)\n", bootSize)
+	im.Print(" --> p3 (ROOT: Remainder of %s, plus autogrow)\n", imageSize)
 
 	// Create EFI partition.
 	epArgs := []string{
@@ -811,7 +854,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 		"-t", fmt.Sprintf("1:%s", espPartType),
 		im.devicePath,
 	}
-	if err := im.runner(nil, os.Stdout, os.Stderr, epArgs[0], epArgs[1:]...); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, epArgs[0], epArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk EFI partition failed: %w", err)
 	}
 
@@ -822,7 +865,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 		"-t", fmt.Sprintf("2:%s", bootPartType),
 		im.devicePath,
 	}
-	if err := im.runner(nil, os.Stdout, os.Stderr, bpArgs[0], bpArgs[1:]...); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, bpArgs[0], bpArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk boot partition failed: %w", err)
 	}
 
@@ -833,7 +876,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 		"-t", fmt.Sprintf("3:%s", rootPartType),
 		im.devicePath,
 	}
-	if err := im.runner(nil, os.Stdout, os.Stderr, rpArgs[0], rpArgs[1:]...); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, rpArgs[0], rpArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk root partition failed: %w", err)
 	}
 
@@ -841,15 +884,15 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	agArgs := []string{
 		"sgdisk", "-A", "3:set:59", im.devicePath,
 	}
-	if err := im.runner(nil, os.Stdout, os.Stderr, agArgs[0], agArgs[1:]...); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, agArgs[0], agArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk set auto-grow flag failed: %w", err)
 	}
 
-	fmt.Fprintln(os.Stdout, "Refreshing partition table ...")
+	im.Print("Refreshing partition table ...\n")
 	args := []string{
 		"partprobe", "-s", im.devicePath,
 	}
-	if err := im.runner(nil, os.Stdout, os.Stderr, args[0], args[1:]...); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...); err != nil {
 		return fmt.Errorf("partprobe failed: %w", err)
 	}
 
@@ -863,7 +906,7 @@ func (im *Image) FormatEfifs() error {
 		return errors.New("missing efiDevice, not set in NewImageOptions")
 	}
 
-	fmt.Fprintf(os.Stdout, "Creating EFI partition on %s\n", im.efiDevice)
+	im.Print("Creating EFI partition on %s\n", im.efiDevice)
 	label := "ME" + im.DatedFsLabel()
 	args := []string{
 		"mkfs.vfat",
@@ -871,7 +914,7 @@ func (im *Image) FormatEfifs() error {
 		"-n", label,
 		im.efiDevice,
 	}
-	return im.runner(nil, os.Stdout, os.Stderr, args[0], args[1:]...)
+	return im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...)
 }
 
 // MountEfifs mounts the EFI partition.
@@ -884,15 +927,15 @@ func (im *Image) MountEfifs(mountEfifs string) error {
 	}
 
 	if !filesystems.DirectoryExists(mountEfifs) {
-		fmt.Fprintf(os.Stdout, "Creating %s ...\n", mountEfifs)
+		im.Print("Creating %s ...\n", mountEfifs)
 		if err := os.MkdirAll(mountEfifs, 0755); err != nil {
 			return fmt.Errorf("failed to create mount point %s: %w", mountEfifs, err)
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "Mounting %s to %s\n", im.efiDevice, mountEfifs)
+	im.Print("Mounting %s to %s\n", im.efiDevice, mountEfifs)
 	im.trackMount(mountEfifs)
-	if err := im.runner(nil, os.Stdout, os.Stderr, "mount", "-t", "vfat", im.efiDevice, mountEfifs); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, "mount", "-t", "vfat", im.efiDevice, mountEfifs); err != nil {
 		return err
 	}
 	im.efifsMount = mountEfifs
@@ -920,14 +963,14 @@ func (im *Image) FormatBootfs() error {
 	}
 
 	label := "MB" + im.DatedFsLabel()
-	fmt.Fprintf(os.Stdout, "Creating btrfs on %s (boot)\n", im.bootDevice)
+	im.Print("Creating btrfs on %s (boot)\n", im.bootDevice)
 	args := []string{
 		"mkfs.btrfs",
 		"-f",
 		"-L", label,
 		im.bootDevice,
 	}
-	return im.runner(nil, os.Stdout, os.Stderr, args[0], args[1:]...)
+	return im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...)
 }
 
 // MountBootfs mounts the boot partition.
@@ -940,15 +983,15 @@ func (im *Image) MountBootfs(mountBootfs string) error {
 	}
 
 	if !filesystems.DirectoryExists(mountBootfs) {
-		fmt.Fprintf(os.Stdout, "Creating %s ...\n", mountBootfs)
+		im.Print("Creating %s ...\n", mountBootfs)
 		if err := os.MkdirAll(mountBootfs, 0755); err != nil {
 			return fmt.Errorf("failed to create mount point %s: %w", mountBootfs, err)
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "Mounting %s to %s\n", im.bootDevice, mountBootfs)
+	im.Print("Mounting %s to %s\n", im.bootDevice, mountBootfs)
 	im.trackMount(mountBootfs)
-	if err := im.runner(nil, os.Stdout, os.Stderr, "mount", im.bootDevice, mountBootfs); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, "mount", im.bootDevice, mountBootfs); err != nil {
 		return err
 	}
 	im.bootfsMount = mountBootfs
@@ -978,7 +1021,7 @@ func (im *Image) MaybeEncryptRootfs() error {
 		return fmt.Errorf("LUKS encryption failed: %w", err)
 	}
 	im.SetRootDevice(luksDevice)
-	fmt.Printf("New encrypted rootfs partition: %s\n", luksDevice)
+	im.Print("New encrypted rootfs partition: %s\n", luksDevice)
 	return nil
 }
 
@@ -989,14 +1032,14 @@ func (im *Image) FormatRootfs() error {
 	}
 
 	label := "MR" + im.DatedFsLabel()
-	fmt.Fprintf(os.Stdout, "Creating btrfs on %s (root)\n", im.rootDevice)
+	im.Print("Creating btrfs on %s (root)\n", im.rootDevice)
 	args := []string{
 		"mkfs.btrfs",
 		"-f",
 		"-L", label,
 		im.rootDevice,
 	}
-	return im.runner(nil, os.Stdout, os.Stderr, args[0], args[1:]...)
+	return im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...)
 }
 
 // RootfsKernelArgs returns the default kernel arguments for the root filesystem.
@@ -1014,7 +1057,7 @@ func (im *Image) MountRootfs(mountRootfs string) error {
 	}
 
 	if !filesystems.DirectoryExists(mountRootfs) {
-		fmt.Fprintf(os.Stdout, "Creating %s ...\n", mountRootfs)
+		im.Print("Creating %s ...\n", mountRootfs)
 		if err := os.MkdirAll(mountRootfs, 0755); err != nil {
 			return fmt.Errorf("failed to create mount point %s: %w", mountRootfs, err)
 		}
@@ -1022,7 +1065,7 @@ func (im *Image) MountRootfs(mountRootfs string) error {
 
 	compression := "zstd:6"
 	btrfsOpts := fmt.Sprintf("compress-force=%s,space_cache=v2,commit=120", compression)
-	fmt.Fprintf(os.Stdout, "Mounting %s to %s\n", im.rootDevice, mountRootfs)
+	im.Print("Mounting %s to %s\n", im.rootDevice, mountRootfs)
 
 	im.trackMount(mountRootfs)
 	args := []string{
@@ -1031,7 +1074,7 @@ func (im *Image) MountRootfs(mountRootfs string) error {
 		im.rootDevice,
 		mountRootfs,
 	}
-	if err := im.runner(nil, os.Stdout, os.Stderr, args[0], args[1:]...); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...); err != nil {
 		return err
 	}
 	im.rootfsMount = mountRootfs
@@ -1100,9 +1143,9 @@ func (im *Image) SetupPasswords() error {
 		return fmt.Sprintf("%s:%s:%s:0:99999:7:::", user, passHash, lastChange)
 	}
 
-	fmt.Fprintln(os.Stdout, "Setting the default password of matrix to matrix ...")
+	im.Print("Setting the default password of matrix to matrix ...\n")
 	lines = append(lines, shadowEntry("matrix"))
-	fmt.Fprintln(os.Stdout, "Setting the default password of root to matrix ...")
+	im.Print("Setting the default password of root to matrix ...\n")
 	lines = append(lines, shadowEntry("root"))
 
 	return os.WriteFile(shadowFile, []byte(strings.Join(lines, "\n")+"\n"), 0640)
@@ -1158,7 +1201,7 @@ func (im *Image) SetupBootloaderConfig() error {
 	if err != nil || bootCommit == "" {
 		return fmt.Errorf("cannot determine ostree boot commit: %w", err)
 	}
-	fmt.Fprintf(os.Stdout, "Found boot commit: %s\n", bootCommit)
+	im.Print("Found boot commit: %s\n", bootCommit)
 
 	devDir, err := im.DevDir()
 	if err != nil {
@@ -1175,7 +1218,7 @@ func (im *Image) SetupBootloaderConfig() error {
 	if !filesystems.FileExists(srcGrubCfg) {
 		return fmt.Errorf("grub config %s does not exist", srcGrubCfg)
 	}
-	fmt.Fprintf(os.Stdout, "Using grub config from %s\n", srcGrubCfg)
+	im.Print("Using grub config from %s\n", srcGrubCfg)
 
 	// Ensure efibootDir exists.
 	if err := os.MkdirAll(efibootDir, 0755); err != nil {
@@ -1183,7 +1226,7 @@ func (im *Image) SetupBootloaderConfig() error {
 	}
 
 	dstGrubCfg := filepath.Join(efibootDir, "grub.cfg")
-	fmt.Fprintf(os.Stdout, "Copying grub: %s -> %s\n", srcGrubCfg, dstGrubCfg)
+	im.Print("Copying grub: %s -> %s\n", srcGrubCfg, dstGrubCfg)
 	if err := filesystems.CopyFile(srcGrubCfg, dstGrubCfg); err != nil {
 		return fmt.Errorf("failed to copy grub config: %w", err)
 	}
@@ -1199,7 +1242,7 @@ func (im *Image) SetupBootloaderConfig() error {
 		"themes", osName+"-theme",
 	)
 	if filesystems.DirectoryExists(themesDir) {
-		fmt.Fprintf(os.Stdout, "Copying GRUB themes from %s ...\n", themesDir)
+		im.Print("Copying GRUB themes from %s ...\n", themesDir)
 		dstThemesDir := filepath.Join(im.bootfsMount, "grub", "themes")
 
 		if err := os.MkdirAll(dstThemesDir, 0755); err != nil {
@@ -1247,8 +1290,8 @@ func (im *Image) SetupBootloaderConfig() error {
 		return fmt.Errorf("failed to write substituted grub config: %w", err)
 	}
 
-	fmt.Fprintln(os.Stdout, "Current grub.cfg:")
-	fmt.Fprintln(os.Stdout, grubContent)
+	im.Print("Current grub.cfg:\n")
+	im.Print("%s\n", grubContent)
 
 	return nil
 }
@@ -1259,7 +1302,7 @@ func (im *Image) SetupVmtestConfig() error {
 		return errors.New("missing bootfsMount, call MountBootfs first")
 	}
 
-	fmt.Fprintf(os.Stdout, "Setting up vmtest grub config based on the ostree boot config in %s ...\n", im.bootfsMount)
+	im.Print("Setting up vmtest grub config based on the ostree boot config in %s ...\n", im.bootfsMount)
 
 	ostreeBootCfg := filepath.Join(im.bootfsMount, "loader", "entries", "ostree-1.conf")
 	if !filesystems.FileExists(ostreeBootCfg) {
@@ -1295,9 +1338,9 @@ func (im *Image) SetupVmtestConfig() error {
 		return fmt.Errorf("failed to write vmtest config: %w", err)
 	}
 
-	fmt.Fprintf(os.Stdout, "Set up vmtest grub config at %s\n", vmtestBootCfg)
-	fmt.Fprintln(os.Stdout, "Current vmtest grub config:")
-	fmt.Fprintln(os.Stdout, content)
+	im.Print("Set up vmtest grub config at %s\n", vmtestBootCfg)
+	im.Print("Current vmtest grub config:\n")
+	im.Print("%s\n", content)
 
 	return nil
 }
@@ -1335,42 +1378,42 @@ func (im *Image) InstallSecurebootCerts() error {
 	// SecureBoot certificate (db).
 	sbCert := filepath.Join(im.rootfs, "etc", "portage", "secureboot.pem")
 	if filesystems.FileExists(sbCert) {
-		fmt.Fprintln(os.Stdout, "Copying SecureBoot cert to EFI partition ...")
+		im.Print("Copying SecureBoot cert to EFI partition ...\n")
 		if err := filesystems.CopyFile(sbCert, filepath.Join(im.efifsMount, certFileName)); err != nil {
 			return fmt.Errorf("failed to copy SecureBoot cert: %w", err)
 		}
 
-		fmt.Fprintln(os.Stdout, "Generating SecureBoot MOK ...")
-		if err := im.runner(nil, os.Stdout, os.Stderr,
+		im.Print("Generating SecureBoot MOK ...\n")
+		if err := im.runner(nil, im.stdout, im.stderr,
 			"openssl", "x509", "-in", sbCert,
 			"-outform", "DER", "-out", filepath.Join(im.efifsMount, certDerFileName)); err != nil {
 			return fmt.Errorf("openssl DER conversion failed: %w", err)
 		}
 	} else {
-		fmt.Fprintf(os.Stderr, "NO SECUREBOOT CERT AT: %s -- ignoring.\n", sbCert)
+		im.PrintWarning("NO SECUREBOOT CERT AT: %s -- ignoring.\n", sbCert)
 	}
 
 	// SecureBoot KEK certificate.
 	sbKek := filepath.Join(im.rootfs, "etc", "portage", "secureboot-kek.pem")
 	if filesystems.FileExists(sbKek) {
-		fmt.Fprintln(os.Stdout, "Copying SecureBoot KEK cert to EFI partition ...")
+		im.Print("Copying SecureBoot KEK cert to EFI partition ...\n")
 		if err := filesystems.CopyFile(sbKek, filepath.Join(im.efifsMount, kekFileName)); err != nil {
 			return fmt.Errorf("failed to copy SecureBoot KEK cert: %w", err)
 		}
 
-		fmt.Fprintln(os.Stdout, "Generating SecureBoot KEK DER for convenience ...")
-		if err := im.runner(nil, os.Stdout, os.Stderr,
+		im.Print("Generating SecureBoot KEK DER for convenience ...\n")
+		if err := im.runner(nil, im.stdout, im.stderr,
 			"openssl", "x509", "-in", sbKek,
 			"-outform", "DER", "-out", filepath.Join(im.efifsMount, kekDerFileName)); err != nil {
 			return fmt.Errorf("openssl KEK DER conversion failed: %w", err)
 		}
 	} else {
-		fmt.Fprintf(os.Stderr, "NO SECUREBOOT CERT AT: %s -- ignoring.\n", sbKek)
+		im.PrintWarning("NO SECUREBOOT CERT AT: %s -- ignoring.\n", sbKek)
 	}
 
 	// Copy the shim binaries.
 	shimDir := filepath.Join(im.rootfs, "usr", "share", "shim")
-	fmt.Fprintf(os.Stdout, "Copying shim for Secureboot from %s to %s ...\n", shimDir, efibootDir)
+	im.Print("Copying shim for Secureboot from %s to %s ...\n", shimDir, efibootDir)
 	return filesystems.CopyDirPreserve(shimDir, efibootDir)
 }
 
@@ -1386,7 +1429,7 @@ func (im *Image) InstallMemtest() error {
 
 	memtestBin := filepath.Join(im.rootfs, "usr", "share", "memtest86+", "memtest.efi64")
 	if !filesystems.PathExists(memtestBin) {
-		fmt.Fprintf(os.Stderr, "WARNING: %s not available, please install memtest86+\n", memtestBin)
+		im.PrintWarning("WARNING: %s not available, please install memtest86+\n", memtestBin)
 		return nil
 	}
 	return filesystems.CopyFile(memtestBin, filepath.Join(efibootDir, "memtest86plus.efi"))
@@ -1415,7 +1458,7 @@ func (im *Image) InstallBootloader() error {
 		return fmt.Errorf("failed to determine EFI boot directory: %w", err)
 	}
 
-	fmt.Fprintln(os.Stdout, "Installing bootloader ...")
+	im.Print("Installing bootloader ...\n")
 
 	efiRoot, err := im.EfiRoot()
 	if err != nil {
@@ -1500,11 +1543,11 @@ func (im *Image) InstallBootloader() error {
 
 	// Replace unsigned GRUBX64.EFI with the signed one.
 	grubx64efi := filepath.Join(efibootDir, "GRUBX64.EFI")
-	fmt.Fprintf(os.Stdout, "Removing existing %s as it's not signed ...\n", grubx64efi)
+	im.Print("Removing existing %s as it's not signed ...\n", grubx64efi)
 	os.Remove(grubx64efi)
 
 	signedGrubx64efi := filepath.Join(im.rootfs, "usr", "lib", "grub", "grub-x86_64.efi.signed")
-	fmt.Fprintf(os.Stdout, "Moving %s to %s\n", signedGrubx64efi, grubx64efi)
+	im.Print("Moving %s to %s\n", signedGrubx64efi, grubx64efi)
 	if err := os.Rename(signedGrubx64efi, grubx64efi); err != nil {
 		return fmt.Errorf("failed to move signed grub binary: %w", err)
 	}
@@ -1577,7 +1620,7 @@ func (im *Image) GenerateKernelBootArgs() ([]string, error) {
 	}
 	cmdlineFile := filepath.Join(devDir, "image", "boot", ref, "cmdline.conf")
 	if filesystems.FileExists(cmdlineFile) {
-		fmt.Fprintf(os.Stdout, "Reading additional kernel args from %s ...\n", cmdlineFile)
+		im.Print("Reading additional kernel args from %s ...\n", cmdlineFile)
 		data, err := os.ReadFile(cmdlineFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read cmdline file: %w", err)
@@ -1591,7 +1634,7 @@ func (im *Image) GenerateKernelBootArgs() ([]string, error) {
 			bootArgs = append(bootArgs, line)
 		}
 	} else {
-		fmt.Fprintf(os.Stderr, "WARNING: no additional kernel cmdline params available, %s does not exist.\n", cmdlineFile)
+		im.PrintWarning("WARNING: no additional kernel cmdline params available, %s does not exist.\n", cmdlineFile)
 	}
 
 	return bootArgs, nil
@@ -1610,7 +1653,7 @@ func (im *Image) PackageList() ([]string, error) {
 
 	vdb := filepath.Join(im.rootfs, roVdb)
 	if !filesystems.DirectoryExists(vdb) {
-		fmt.Fprintf(os.Stderr, "%s does not exist. cannot generate pkglist\n", vdb)
+		im.PrintError("%s does not exist. cannot generate pkglist\n", vdb)
 		return nil, nil
 	}
 
@@ -1634,9 +1677,9 @@ func (im *Image) PackageList() ([]string, error) {
 		}
 	}
 
-	fmt.Fprintln(os.Stdout, "Generated package list:")
+	im.Print("Generated package list:\n")
 	for _, pkg := range pkgList {
-		fmt.Fprintf(os.Stdout, ">> %s\n", pkg)
+		im.Print(">> %s\n", pkg)
 	}
 	return pkgList, nil
 }
@@ -1659,13 +1702,13 @@ func (im *Image) SetupHooks() error {
 
 	hooksSrcDir := filepath.Join(devDir, "image", "hooks")
 	if !filesystems.DirectoryExists(hooksSrcDir) {
-		fmt.Fprintf(os.Stderr, "hooks source dir %s does not exist\n", hooksSrcDir)
+		im.PrintError("hooks source dir %s does not exist\n", hooksSrcDir)
 		return nil
 	}
 
 	hookExec := filepath.Join(hooksSrcDir, ref+".sh")
 	if !filesystems.FileExists(hookExec) {
-		fmt.Fprintf(os.Stderr, "hook script %s does not exist\n", hookExec)
+		im.PrintError("hook script %s does not exist\n", hookExec)
 		return nil
 	}
 
@@ -1678,8 +1721,8 @@ func (im *Image) SetupHooks() error {
 	}
 
 	cmd := exec.Command(hookExec)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = im.stdout
+	cmd.Stderr = im.stderr
 	cmd.Env = append(os.Environ(),
 		"MATRIXOS_DEV_DIR="+devDir,
 		"ROOTFS="+im.rootfs,
@@ -1706,7 +1749,7 @@ func (im *Image) TestImage(imagePath string) error {
 
 	testDir := filepath.Join(devDir, "image", "tests", ref)
 	if !filesystems.DirectoryExists(testDir) {
-		fmt.Fprintf(os.Stderr, "test dir %s does not exist, skipping test\n", testDir)
+		im.PrintError("test dir %s does not exist, skipping test\n", testDir)
 		return nil
 	}
 
@@ -1723,7 +1766,7 @@ func (im *Image) TestImage(imagePath string) error {
 
 	imageName := filepath.Base(imagePath)
 	testImagePath := filepath.Join(imageTempDir, imageName)
-	fmt.Fprintf(os.Stdout, "Copying image to %s for testing ...\n", testImagePath)
+	im.Print("Copying image to %s for testing ...\n", testImagePath)
 	if err := filesystems.CopyFileReflink(imagePath, testImagePath); err != nil {
 		return fmt.Errorf("failed to copy image for testing: %w", err)
 	}
@@ -1744,14 +1787,14 @@ func (im *Image) TestImage(imagePath string) error {
 			continue
 		}
 		if !info.Mode().IsRegular() || info.Mode()&0111 == 0 {
-			fmt.Fprintf(os.Stderr, "Skipping non-executable test script %s\n", ts)
+			im.PrintError("Skipping non-executable test script %s\n", ts)
 			continue
 		}
 
-		fmt.Fprintf(os.Stdout, "Running test script %s ...\n", ts)
+		im.Print("Running test script %s ...\n", ts)
 		cmd := exec.Command(ts)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		cmd.Stdout = im.stdout
+		cmd.Stderr = im.stderr
 		cmd.Env = append(os.Environ(),
 			"MATRIXOS_DEV_DIR="+devDir,
 			"MATRIXOS_LOGS_DIR="+logsDir,
@@ -1779,7 +1822,7 @@ func (im *Image) FinalizeFilesystems() error {
 	}
 
 	// fstrim may fail on USB sticks, so errors are intentionally ignored.
-	filesystems.FstrimAll(im.runner, os.Stdout, os.Stderr, im.rootfsMount, im.bootfsMount)
+	filesystems.FstrimAll(im.runner, im.stdout, im.stderr, im.rootfsMount, im.bootfsMount)
 
 	return nil
 }
@@ -1798,7 +1841,7 @@ func (im *Image) CreateQcow2Image(imagePath string) error {
 		return errors.New("missing imagePath parameter")
 	}
 	qcow2Path, _ := im.Qcow2ImagePath(imagePath)
-	return im.runner(nil, os.Stdout, os.Stderr,
+	return im.runner(nil, im.stdout, im.stderr,
 		"qemu-img", "convert", "-c", "-O", "qcow2", "-p", imagePath, qcow2Path)
 }
 
@@ -1814,44 +1857,44 @@ func (im *Image) ShowFinalFilesystemInfo() error {
 		return errors.New("missing efifsMount, call MountEfifs first")
 	}
 
-	fmt.Fprintln(os.Stdout, "Final boot partition directory tree:")
-	if err := filesystems.PrintDirectoryTree(os.Stdout, im.bootfsMount); err != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: failed to list boot directory tree: %v\n", err)
+	im.Print("Final boot partition directory tree:\n")
+	if err := filesystems.PrintDirectoryTree(im.stdout, im.bootfsMount); err != nil {
+		im.PrintWarning("WARNING: failed to list boot directory tree: %v\n", err)
 	}
 
-	fmt.Fprintln(os.Stdout, "Final EFI partition directory tree:")
-	if err := filesystems.PrintDirectoryTree(os.Stdout, im.efifsMount); err != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: failed to list EFI directory tree: %v\n", err)
+	im.Print("Final EFI partition directory tree:\n")
+	if err := filesystems.PrintDirectoryTree(im.stdout, im.efifsMount); err != nil {
+		im.PrintWarning("WARNING: failed to list EFI directory tree: %v\n", err)
 	}
 
-	fmt.Fprintf(os.Stdout, "Block devices on %s:\n", im.devicePath)
-	if err := filesystems.PrintBlockDeviceInfo(os.Stdout, im.devicePath); err != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: failed to get block device info: %v\n", err)
+	im.Print("Block devices on %s:\n", im.devicePath)
+	if err := filesystems.PrintBlockDeviceInfo(im.stdout, im.devicePath); err != nil {
+		im.PrintWarning("WARNING: failed to get block device info: %v\n", err)
 	}
 
-	fmt.Fprintln(os.Stdout, "Filesystem setup complete!")
+	im.Print("Filesystem setup complete!\n")
 	return nil
 }
 
 // ShowTestInfo prints information about generated artifacts and how to test them.
 func (im *Image) ShowTestInfo(artifacts []string) {
 	if len(artifacts) == 0 {
-		fmt.Fprintln(os.Stderr, "show_test_info: missing artifacts array parameter")
+		im.PrintError("show_test_info: missing artifacts array parameter\n")
 		return
 	}
 
-	fmt.Fprintln(os.Stdout, "Generated artifacts:")
+	im.Print("Generated artifacts:\n")
 	for _, a := range artifacts {
-		fmt.Fprintf(os.Stdout, ">> %s\n", a)
+		im.Print(">> %s\n", a)
 	}
 
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintln(os.Stdout, "How to test:")
-	fmt.Fprintln(os.Stdout, "$ vector dev vm -image IMAGE_PATH -memory 8G -interactive")
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintln(os.Stdout, "To move to a USB stick:")
-	fmt.Fprintln(os.Stdout, "    dd if=IMAGE_PATH of=/dev/sdX bs=4M conv=sparse,sync status=progress")
-	fmt.Fprintln(os.Stdout)
+	im.Print("\n")
+	im.Print("How to test:\n")
+	im.Print("$ vector dev vm -image IMAGE_PATH -memory 8G -interactive\n")
+	im.Print("\n")
+	im.Print("To move to a USB stick:\n")
+	im.Print("    dd if=IMAGE_PATH of=/dev/sdX bs=4M conv=sparse,sync status=progress\n")
+	im.Print("\n")
 }
 
 // RemoveImageFile removes an image file and its associated .sha256 and .asc files.
@@ -1860,7 +1903,7 @@ func (im *Image) RemoveImageFile(imagePath string) error {
 		return errors.New("missing imagePath parameter")
 	}
 
-	fmt.Fprintf(os.Stdout, "Removing %s ...\n", imagePath)
+	im.Print("Removing %s ...\n", imagePath)
 	for _, path := range []string{imagePath, imagePath + ".sha256", imagePath + ".asc"} {
 		os.Remove(path) // Ignore errors (file may not exist).
 	}
@@ -1908,7 +1951,7 @@ func (im *Image) ExecuteWithImageLock(fn func() error) error {
 	if err != nil {
 		return fmt.Errorf("failed to get image lock path: %w", err)
 	}
-	fmt.Fprintf(os.Stdout, "Acquiring branch %s lock via %s ...\n", im.ref, lockPath)
+	im.Print("Acquiring branch %s lock via %s ...\n", im.ref, lockPath)
 
 	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -1940,7 +1983,7 @@ func (im *Image) ExecuteWithImageLock(fn func() error) error {
 		return fmt.Errorf("timed out waiting for imager lock %s", lockPath)
 	}
 
-	fmt.Fprintf(os.Stdout, "Lock for imager %s, %s acquired!\n", im.ref, lockPath)
+	im.Print("Lock for imager %s, %s acquired!\n", im.ref, lockPath)
 
 	// Execute the function under the lock.
 	// The lock is released when lockFile is closed (deferred above).
