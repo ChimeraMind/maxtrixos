@@ -55,11 +55,15 @@ finish() {
     if [ -n "${ARG_HELP}" ]; then
         return "${exit_code}"
     fi
+
+    local build_name=
+    build_name=$(_build_name_flag)
+
     local subject=
     if [ "${exit_code}" -eq "0" ]; then
-        subject="[${ARG_BUILD_NAME}] SUCCESSFUL execution at $(date +%Y%m%d)"
+        subject="[${build_name}] SUCCESSFUL execution at $(date +%Y%m%d)"
     else
-        subject="[${ARG_BUILD_NAME}] FAILED execution at $(date +%Y%m%d)"
+        subject="[${build_name}] FAILED execution at $(date +%Y%m%d)"
     fi
 
     local mail_dest=
@@ -277,6 +281,10 @@ _cdn_pusher_flag() {
 
 _build_id_flag() {
     echo "${ARG_BUILD_ID}"
+}
+
+_build_name_flag() {
+    echo "${ARG_BUILD_NAME}"
 }
 
 
