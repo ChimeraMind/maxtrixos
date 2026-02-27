@@ -26,30 +26,29 @@ func setupMockMountInfoFail(t *testing.T) {
 	t.Cleanup(func() { readMountInfo = orig })
 }
 
-// setupMockDevDisk creates temp directories simulating /dev/disk/by-uuid/ and
-// /dev/disk/by-partuuid/, and sets the package-level variables to point to them.
-// Returns the uuid and partuuid directory paths.
-func setupMockDevDisk(t *testing.T) (uuidDir, partuuidDir string) {
-	tmpDir := t.TempDir()
-	uuidDir = filepath.Join(tmpDir, "by-uuid")
-	partuuidDir = filepath.Join(tmpDir, "by-partuuid")
-	if err := os.MkdirAll(uuidDir, 0755); err != nil {
-		t.Fatal(err)
+// setupMockLsblk replaces lsblkLookup with a function backed by the given map.
+// The map keys are "devPath:tag" strings, values are the results.
+func setupMockLsblk(t *testing.T, results map[string]string) {
+	t.Helper()
+	orig := lsblkLookup
+	lsblkLookup = func(devPath, tag string) (string, error) {
+		key := devPath + ":" + tag
+		if val, ok := results[key]; ok {
+			return val, nil
+		}
+		return "", fmt.Errorf("no %s found for device %s", tag, devPath)
 	}
-	if err := os.MkdirAll(partuuidDir, 0755); err != nil {
-		t.Fatal(err)
+	t.Cleanup(func() { lsblkLookup = orig })
+}
+
+// setupMockLsblkFail replaces lsblkLookup with a function that always fails.
+func setupMockLsblkFail(t *testing.T) {
+	t.Helper()
+	orig := lsblkLookup
+	lsblkLookup = func(devPath, tag string) (string, error) {
+		return "", fmt.Errorf("no %s found for device %s", tag, devPath)
 	}
-
-	origUUID := devDiskByUUIDPath
-	origPartUUID := devDiskByPartUUIDPath
-	devDiskByUUIDPath = uuidDir
-	devDiskByPartUUIDPath = partuuidDir
-
-	t.Cleanup(func() {
-		devDiskByUUIDPath = origUUID
-		devDiskByPartUUIDPath = origPartUUID
-	})
-	return uuidDir, partuuidDir
+	t.Cleanup(func() { lsblkLookup = orig })
 }
 
 func TestParseMountInfoLine(t *testing.T) {
@@ -418,60 +417,81 @@ func TestIsMounted(t *testing.T) {
 
 func TestResolveDeviceAttribute(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		attrDir := filepath.Join(t.TempDir(), "by-uuid")
-		if err := os.MkdirAll(attrDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-		devFile := filepath.Join(t.TempDir(), "device")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:UUID": "1234-5678",
+		})
 
-		expectedUUID := "1234-5678"
-		if err := os.Symlink(devFile, filepath.Join(attrDir, expectedUUID)); err != nil {
-			t.Fatal(err)
-		}
-
-		uuid, err := resolveDeviceAttribute(devFile, attrDir)
+		uuid, err := resolveDeviceAttribute("/dev/sda1", "UUID")
 		if err != nil {
 			t.Fatalf("resolveDeviceAttribute failed: %v", err)
 		}
-		if uuid != expectedUUID {
-			t.Errorf("Expected %s, got %s", expectedUUID, uuid)
+		if uuid != "1234-5678" {
+			t.Errorf("Expected 1234-5678, got %s", uuid)
 		}
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		attrDir := filepath.Join(t.TempDir(), "by-uuid")
-		if err := os.MkdirAll(attrDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-		devFile := filepath.Join(t.TempDir(), "device")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
+		setupMockLsblkFail(t)
 
-		_, err := resolveDeviceAttribute(devFile, attrDir)
+		_, err := resolveDeviceAttribute("/dev/sda1", "UUID")
 		if err == nil {
 			t.Error("Expected error for device not found")
 		}
 	})
 
-	t.Run("DirNotExist", func(t *testing.T) {
-		_, err := resolveDeviceAttribute("/dev/null", "/nonexistent/dir")
-		if err == nil {
-			t.Error("Expected error for missing attribute dir")
+	t.Run("PARTUUID", func(t *testing.T) {
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:PARTUUID": "aaaa-bbbb-cccc",
+		})
+
+		partuuid, err := resolveDeviceAttribute("/dev/sda1", "PARTUUID")
+		if err != nil {
+			t.Fatalf("resolveDeviceAttribute failed: %v", err)
+		}
+		if partuuid != "aaaa-bbbb-cccc" {
+			t.Errorf("Expected aaaa-bbbb-cccc, got %s", partuuid)
 		}
 	})
 
-	t.Run("DeviceNotExist", func(t *testing.T) {
-		attrDir := filepath.Join(t.TempDir(), "by-uuid")
-		if err := os.MkdirAll(attrDir, 0755); err != nil {
-			t.Fatal(err)
+	t.Run("LABEL", func(t *testing.T) {
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:LABEL": "MY_DISK",
+		})
+
+		label, err := resolveDeviceAttribute("/dev/sda1", "LABEL")
+		if err != nil {
+			t.Fatalf("resolveDeviceAttribute failed: %v", err)
 		}
-		_, err := resolveDeviceAttribute("/dev/nonexistent_device_xyz", attrDir)
-		if err == nil {
-			t.Error("Expected error for nonexistent device path")
+		if label != "MY_DISK" {
+			t.Errorf("Expected MY_DISK, got %s", label)
+		}
+	})
+
+	t.Run("PARTTYPE", func(t *testing.T) {
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:PARTTYPE": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b",
+		})
+
+		pt, err := resolveDeviceAttribute("/dev/sda1", "PARTTYPE")
+		if err != nil {
+			t.Fatalf("resolveDeviceAttribute failed: %v", err)
+		}
+		if pt != "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" {
+			t.Errorf("Expected type GUID, got %s", pt)
+		}
+	})
+
+	t.Run("LoopDevice", func(t *testing.T) {
+		setupMockLsblk(t, map[string]string{
+			"/dev/loop7p3:UUID": "abcd-ef01",
+		})
+
+		uuid, err := resolveDeviceAttribute("/dev/loop7p3", "UUID")
+		if err != nil {
+			t.Fatalf("resolveDeviceAttribute failed: %v", err)
+		}
+		if uuid != "abcd-ef01" {
+			t.Errorf("Expected abcd-ef01, got %s", uuid)
 		}
 	})
 }

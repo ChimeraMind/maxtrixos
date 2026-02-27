@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
+	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -13,17 +13,11 @@ var (
 	// mountInfoPath is the path to the mountinfo file.
 	mountInfoPath = "/proc/self/mountinfo"
 
-	// devDiskByUUIDPath is the directory containing UUID symlinks to devices.
-	devDiskByUUIDPath = "/dev/disk/by-uuid"
-
-	// devDiskByPartUUIDPath is the directory containing PARTUUID symlinks to devices.
-	devDiskByPartUUIDPath = "/dev/disk/by-partuuid"
-
 	// readMountInfo reads and parses the system mount info. Replaceable for testing.
 	readMountInfo = defaultReadMountInfo
 
-	// resolveDeviceLink resolves a path through any symlinks. Replaceable for testing.
-	resolveDeviceLink = defaultResolveDeviceLink
+	// lsblkLookup queries a device attribute via lsblk. Replaceable for testing.
+	lsblkLookup = defaultLsblkLookup
 )
 
 // MountInfoEntry represents a parsed line from /proc/self/mountinfo.
@@ -48,10 +42,6 @@ func (e *MountInfoEntry) String() string {
 
 func defaultReadMountInfo() ([]*MountInfoEntry, error) {
 	return parseMountInfoFile(mountInfoPath)
-}
-
-func defaultResolveDeviceLink(path string) (string, error) {
-	return filepath.EvalSymlinks(path)
 }
 
 // parseMountInfoFile parses a mountinfo-formatted file.
@@ -245,28 +235,23 @@ func formatMountEntries(entries []*MountInfoEntry) string {
 	return strings.Join(lines, "\n")
 }
 
+// defaultLsblkLookup queries a single device attribute via lsblk.
+// tag is the lsblk column name: UUID, PARTUUID, LABEL, PARTTYPE, etc.
+func defaultLsblkLookup(devPath, tag string) (string, error) {
+	out, err := exec.Command("lsblk", "-n", "-d", "-o", tag, devPath).Output()
+	if err != nil {
+		return "", fmt.Errorf("lsblk lookup failed for %s tag %s: %w", devPath, tag, err)
+	}
+	val := strings.TrimSpace(string(out))
+	if val == "" {
+		return "", fmt.Errorf("no %s found for device %s", tag, devPath)
+	}
+	return val, nil
+}
+
 // resolveDeviceAttribute looks up a device attribute (UUID, PARTUUID, etc.)
-// by scanning a /dev/disk/by-* directory for a symlink resolving to the device.
-func resolveDeviceAttribute(devPath, attrDir string) (string, error) {
-	devReal, err := resolveDeviceLink(devPath)
-	if err != nil {
-		return "", fmt.Errorf("cannot resolve device path %s: %w", devPath, err)
-	}
-
-	entries, err := os.ReadDir(attrDir)
-	if err != nil {
-		return "", fmt.Errorf("cannot read %s: %w", attrDir, err)
-	}
-
-	for _, e := range entries {
-		link := filepath.Join(attrDir, e.Name())
-		linkReal, err := resolveDeviceLink(link)
-		if err != nil {
-			continue
-		}
-		if linkReal == devReal {
-			return e.Name(), nil
-		}
-	}
-	return "", fmt.Errorf("no match for device %s in %s", devPath, attrDir)
+// for a block device using lsblk. The tag parameter is the lsblk column name
+// (e.g. "UUID", "PARTUUID", "LABEL", "PARTTYPE").
+func resolveDeviceAttribute(devPath, tag string) (string, error) {
+	return lsblkLookup(devPath, tag)
 }
