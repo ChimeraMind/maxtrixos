@@ -12,11 +12,12 @@
 set -e
 source "${MATRIXOS_DEV_DIR}/headers/env.include.sh"
 
-source "${MATRIXOS_DEV_DIR}/lib/fs_lib.sh"
+source "${MATRIXOS_DEV_DIR}/release/hooks/matrixos/amd64/common.sh"
+
 
 setup_gnome_shell() {
     local imagedir="${1}"
-    fs_lib.chroot "${imagedir}" \
+    release_common.chroot "${imagedir}" \
         eselect gnome-shell-extensions enable \
             dash-to-panel@jderose9.github.com
 }
@@ -54,8 +55,24 @@ SystemAccount=false" > "${user_cfg}"
 }
 
 main() {
-    setup_gnome_shell "${CHROOT_DIR}"
-    setup_gnome_accounts "${CHROOT_DIR}"
+    local funcs=(
+        setup_gnome_shell
+        setup_gnome_accounts
+        release_common.check_nvidia_module
+        release_common.check_ryzen_smu_module
+    )
+    local exit_code=0
+    for func in "${funcs[@]}"; do
+        if ! "${func}" "${CHROOT_DIR}"; then
+            echo "${func} failed, exiting with error." >&2
+            exit_code=1
+        else
+            echo "${func} completed successfully."
+        fi
+    done
+    if [ "${exit_code}" != "0" ]; then
+        return "${exit_code}"
+    fi
 }
 
 main "${@}"
