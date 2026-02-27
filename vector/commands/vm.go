@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"matrixos/vector/lib/filesystems"
 )
 
 const (
@@ -206,13 +208,13 @@ func (c *VMCommand) Run() error {
 
 	codeSrc := filepath.Join(mroot, "vector/tests/data/OVMF_CODE.fd")
 	codeDst := filepath.Join(tempDir, "OVMF_CODE.fd")
-	if err := copyFile(codeSrc, codeDst); err != nil {
+	if err := filesystems.CopyFile(codeSrc, codeDst); err != nil {
 		return fmt.Errorf("failed to copy OVMF_CODE.fd: %w", err)
 	}
 
 	varsSrc := filepath.Join(mroot, "vector/tests/data/OVMF_VARS.fd")
 	varsDst := filepath.Join(tempDir, "OVMF_VARS.fd")
-	if err := copyFile(varsSrc, varsDst); err != nil {
+	if err := filesystems.CopyFile(varsSrc, varsDst); err != nil {
 		return fmt.Errorf("failed to copy OVMF_VARS.fd: %w", err)
 	}
 

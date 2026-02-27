@@ -802,6 +802,59 @@ func TestCleanupLoopDevices(t *testing.T) {
 	CleanupLoopDevices([]string{f.Name()})
 }
 
+func TestCopyFile(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		src := filepath.Join(tmpDir, "src.txt")
+		dst := filepath.Join(tmpDir, "dst.txt")
+		content := []byte("hello world")
+		if err := os.WriteFile(src, content, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyFile(src, dst); err != nil {
+			t.Fatalf("CopyFile failed: %v", err)
+		}
+
+		data, err := os.ReadFile(dst)
+		if err != nil {
+			t.Fatalf("Failed to read dst: %v", err)
+		}
+		if string(data) != string(content) {
+			t.Errorf("got %q, want %q", data, content)
+		}
+	})
+
+	t.Run("EmptyFile", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		src := filepath.Join(tmpDir, "src_empty.txt")
+		dst := filepath.Join(tmpDir, "dst_empty.txt")
+		if err := os.WriteFile(src, nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyFile(src, dst); err != nil {
+			t.Fatalf("CopyFile failed: %v", err)
+		}
+
+		info, err := os.Stat(dst)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Size() != 0 {
+			t.Errorf("expected empty file, got size %d", info.Size())
+		}
+	})
+
+	t.Run("SrcNotFound", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		err := CopyFile(filepath.Join(tmpDir, "nonexistent"), filepath.Join(tmpDir, "dst"))
+		if err == nil {
+			t.Error("expected error for nonexistent source")
+		}
+	})
+}
+
 func TestCopyFilePreserveXattrs(t *testing.T) {
 	dir := t.TempDir()
 
@@ -813,8 +866,8 @@ func TestCopyFilePreserveXattrs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := copyFilePreserveXattrs(src, dst); err != nil {
-			t.Fatalf("copyFilePreserveXattrs failed: %v", err)
+		if err := CopyFilePreserveXattrs(src, dst); err != nil {
+			t.Fatalf("CopyFilePreserveXattrs failed: %v", err)
 		}
 
 		got, err := os.ReadFile(dst)
@@ -847,8 +900,8 @@ func TestCopyFilePreserveXattrs(t *testing.T) {
 			t.Skipf("filesystem does not support user xattrs: %v", err)
 		}
 
-		if err := copyFilePreserveXattrs(src, dst); err != nil {
-			t.Fatalf("copyFilePreserveXattrs failed: %v", err)
+		if err := CopyFilePreserveXattrs(src, dst); err != nil {
+			t.Fatalf("CopyFilePreserveXattrs failed: %v", err)
 		}
 
 		// Verify xattr was copied
@@ -884,8 +937,8 @@ func TestCopyFilePreserveXattrs(t *testing.T) {
 			}
 		}
 
-		if err := copyFilePreserveXattrs(src, dst); err != nil {
-			t.Fatalf("copyFilePreserveXattrs failed: %v", err)
+		if err := CopyFilePreserveXattrs(src, dst); err != nil {
+			t.Fatalf("CopyFilePreserveXattrs failed: %v", err)
 		}
 
 		for k, want := range attrs {
@@ -909,8 +962,8 @@ func TestCopyFilePreserveXattrs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := copyFilePreserveXattrs(src, dst); err != nil {
-			t.Fatalf("copyFilePreserveXattrs failed: %v", err)
+		if err := CopyFilePreserveXattrs(src, dst); err != nil {
+			t.Fatalf("CopyFilePreserveXattrs failed: %v", err)
 		}
 
 		info, err := os.Stat(dst)
@@ -923,7 +976,7 @@ func TestCopyFilePreserveXattrs(t *testing.T) {
 	})
 
 	t.Run("SrcNotExist", func(t *testing.T) {
-		err := copyFilePreserveXattrs("/nonexistent/file", filepath.Join(dir, "dst_noexist"))
+		err := CopyFilePreserveXattrs("/nonexistent/file", filepath.Join(dir, "dst_noexist"))
 		if err == nil {
 			t.Error("expected error for nonexistent source")
 		}

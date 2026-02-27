@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -877,7 +876,7 @@ func (im *Image) SetupPasswords(ostreeDeployRootfs string) error {
 	}
 
 	var lines []string
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
 		line := scanner.Text()
 		// Remove existing matrix: and root: lines.
@@ -963,7 +962,7 @@ func (im *Image) SetupBootloaderConfig(ref, ostreeDeployRootfs, sysroot, bootdir
 
 	dstGrubCfg := filepath.Join(efibootdir, "grub.cfg")
 	fmt.Fprintf(os.Stdout, "Copying grub: %s -> %s\n", srcGrubCfg, dstGrubCfg)
-	if err := copyFile(srcGrubCfg, dstGrubCfg); err != nil {
+	if err := filesystems.CopyFile(srcGrubCfg, dstGrubCfg); err != nil {
 		return fmt.Errorf("failed to copy grub config: %w", err)
 	}
 
@@ -1047,7 +1046,7 @@ func (im *Image) SetupVmtestConfig(bootdir string) error {
 	envParams := "systemd.setenv=SYSTEMD_COLORS=0 systemd.setenv=SYSTEMD_URLIFY=0"
 	bootParams := consoleParams + " " + systemdParams + " " + envParams
 
-	if err := copyFile(ostreeBootCfg, vmtestBootCfg); err != nil {
+	if err := filesystems.CopyFile(ostreeBootCfg, vmtestBootCfg); err != nil {
 		return fmt.Errorf("failed to copy vmtest config: %w", err)
 	}
 
@@ -1105,7 +1104,7 @@ func (im *Image) InstallSecurebootCerts(ostreeDeployRootfs, mountEfifs, efibootd
 	sbCert := filepath.Join(ostreeDeployRootfs, "etc", "portage", "secureboot.pem")
 	if filesystems.FileExists(sbCert) {
 		fmt.Fprintln(os.Stdout, "Copying SecureBoot cert to EFI partition ...")
-		if err := copyFile(sbCert, filepath.Join(mountEfifs, certFileName)); err != nil {
+		if err := filesystems.CopyFile(sbCert, filepath.Join(mountEfifs, certFileName)); err != nil {
 			return fmt.Errorf("failed to copy SecureBoot cert: %w", err)
 		}
 
@@ -1123,7 +1122,7 @@ func (im *Image) InstallSecurebootCerts(ostreeDeployRootfs, mountEfifs, efibootd
 	sbKek := filepath.Join(ostreeDeployRootfs, "etc", "portage", "secureboot-kek.pem")
 	if filesystems.FileExists(sbKek) {
 		fmt.Fprintln(os.Stdout, "Copying SecureBoot KEK cert to EFI partition ...")
-		if err := copyFile(sbKek, filepath.Join(mountEfifs, kekFileName)); err != nil {
+		if err := filesystems.CopyFile(sbKek, filepath.Join(mountEfifs, kekFileName)); err != nil {
 			return fmt.Errorf("failed to copy SecureBoot KEK cert: %w", err)
 		}
 
@@ -1157,7 +1156,7 @@ func (im *Image) InstallMemtest(ostreeDeployRootfs, efibootdir string) error {
 		fmt.Fprintf(os.Stderr, "WARNING: %s not available, please install memtest86+\n", memtestBin)
 		return nil
 	}
-	return copyFile(memtestBin, filepath.Join(efibootdir, "memtest86plus.efi"))
+	return filesystems.CopyFile(memtestBin, filepath.Join(efibootdir, "memtest86plus.efi"))
 }
 
 // InstallBootloader installs the GRUB bootloader into the image by running
@@ -1337,7 +1336,7 @@ func (im *Image) GenerateKernelBootArgs(ref, efiDevice, bootDevice, physicalRoot
 		if err != nil {
 			return nil, fmt.Errorf("failed to read cmdline file: %w", err)
 		}
-		scanner := bufio.NewScanner(strings.NewReader(string(data)))
+		scanner := bufio.NewScanner(bytes.NewReader(data))
 		for scanner.Scan() {
 			line := strings.TrimSpace(scanner.Text())
 			if line == "" || strings.HasPrefix(line, "#") {
@@ -1579,13 +1578,19 @@ func (im *Image) ShowFinalFilesystemInfo(blockDevice, mountBootfs, mountEfifs st
 	}
 
 	fmt.Fprintln(os.Stdout, "Final boot partition directory tree:")
-	im.runner(nil, os.Stdout, os.Stderr, "find", mountBootfs)
+	if err := filesystems.PrintDirectoryTree(os.Stdout, mountBootfs); err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: failed to list boot directory tree: %v\n", err)
+	}
 
 	fmt.Fprintln(os.Stdout, "Final EFI partition directory tree:")
-	im.runner(nil, os.Stdout, os.Stderr, "find", mountEfifs)
+	if err := filesystems.PrintDirectoryTree(os.Stdout, mountEfifs); err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: failed to list EFI directory tree: %v\n", err)
+	}
 
 	fmt.Fprintf(os.Stdout, "Block devices on %s:\n", blockDevice)
-	im.runner(nil, os.Stdout, os.Stderr, "blkid", blockDevice)
+	if err := filesystems.PrintBlockDeviceInfo(os.Stdout, blockDevice); err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: failed to get block device info: %v\n", err)
+	}
 
 	fmt.Fprintln(os.Stdout, "Filesystem setup complete!")
 	return nil
@@ -1703,30 +1708,4 @@ func (im *Image) ExecuteWithImageLock(ref string, fn func() error) error {
 	// Execute the function under the lock.
 	// The lock is released when lockFile is closed (deferred above).
 	return fn()
-}
-
-// --- Utility functions ---
-
-// copyFile copies src to dst, preserving content. It creates dst if it doesn't exist.
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := out.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	if _, err := io.Copy(out, in); err != nil {
-		return err
-	}
-	return nil
 }
