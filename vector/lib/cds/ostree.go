@@ -96,7 +96,7 @@ type IOstree interface {
 	BootedRef(verbose bool) (string, error)
 	BootedHash(verbose bool) (string, error)
 	Switch(ref string, verbose bool) error
-	Deploy(ref string, bootArgs []string, verbose bool) error
+	Deploy(ref, sysroot string, bootArgs []string, verbose bool) error
 	Upgrade(args []string, verbose bool) error
 	ListPackages(commit string, verbose bool) ([]string, error)
 	ListContents(commit, path string, verbose bool) (*[]filesystems.PathInfo, error)
@@ -2145,11 +2145,7 @@ func (o *Ostree) Switch(ref string, verbose bool) error {
 }
 
 // Deploy deploys an ostree commit.
-func (o *Ostree) Deploy(ref string, bootArgs []string, verbose bool) error {
-	sysroot, err := o.Sysroot()
-	if err != nil {
-		return err
-	}
+func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) error {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return err
@@ -2179,31 +2175,64 @@ func (o *Ostree) Deploy(ref string, bootArgs []string, verbose bool) error {
 		return err
 	}
 
-	fmt.Println("ostree os-init ...")
-	if err := o.ostreeRun(verbose, "admin", "os-init", osName, "--sysroot="+sysroot); err != nil {
+	fmt.Printf("Initializing OS %s into %s...\n", osName, sysroot)
+	osInitArgs := []string{
+		"admin", "os-init",
+		osName,
+		"--sysroot=" + sysroot,
+	}
+	if err := o.ostreeRun(verbose, osInitArgs...); err != nil {
 		return err
 	}
 
 	sysrootRepo := filepath.Join(sysroot, "ostree", "repo")
-	fmt.Println("ostree pull-local ...")
-	if err := o.ostreeRun(verbose, "pull-local", "--repo="+sysrootRepo, repoDir, ostreeCommit); err != nil {
+	fmt.Printf("Pulling local ostree commit %s into %s ...\n", ostreeCommit, sysrootRepo)
+	pullArgs := []string{
+		"--repo=" + sysrootRepo,
+		"pull-local",
+		repoDir,
+		ostreeCommit,
+	}
+	if err := o.ostreeRun(verbose, pullArgs...); err != nil {
 		return err
 	}
-	if err := o.ostreeRun(verbose, "refs", "--repo="+sysrootRepo, "--create="+remote+":"+ref, ostreeCommit); err != nil {
+
+	createRefArgs := []string{
+		"refs",
+		"--repo=" + sysrootRepo,
+		"--create=" + remote + ":" + ref,
+		ostreeCommit,
+	}
+	fmt.Printf("ostree creating ref %s in sysroot repo ...\n", remote+":"+ref)
+	if err := o.ostreeRun(verbose, createRefArgs...); err != nil {
 		return err
 	}
 
 	fmt.Println("ostree setting bootloader to none (using blscfg instead) ...")
-	if err := o.ostreeRun(verbose, "config", "--repo="+sysrootRepo, "set", "sysroot.bootloader", "none"); err != nil {
+	blArgs := []string{
+		"config",
+		"--repo=" + sysrootRepo,
+		"set",
+		"sysroot.bootloader",
+		"none",
+	}
+	if err := o.ostreeRun(verbose, blArgs...); err != nil {
 		return err
 	}
 
 	fmt.Println("ostree setting bootprefix = false, given separate boot partition ...")
-	if err := o.ostreeRun(verbose, "config", "--repo="+sysrootRepo, "set", "sysroot.bootprefix", "false"); err != nil {
+	bootprefixArgs := []string{
+		"config",
+		"--repo=" + sysrootRepo,
+		"set",
+		"sysroot.bootprefix",
+		"false",
+	}
+	if err := o.ostreeRun(verbose, bootprefixArgs...); err != nil {
 		return err
 	}
 
-	fmt.Println("ostree admin deploy ...")
+	fmt.Printf("Deploying %s to %s...\n", ref, sysroot)
 	deployArgs := []string{
 		"admin", "deploy",
 		"--sysroot=" + sysroot,
@@ -2218,7 +2247,7 @@ func (o *Ostree) Deploy(ref string, bootArgs []string, verbose bool) error {
 		return err
 	}
 
-	fmt.Printf("ostree commit deployed: %s.\n", ostreeCommit)
+	fmt.Printf("Deployed filesystem at %s for commit %s.\n", sysroot, ostreeCommit)
 	return nil
 }
 
