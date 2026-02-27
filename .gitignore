@@ -1,11 +1,11 @@
 /ostree/
-out/
-locks/
-logs/
+/out/
+/locks/
+/logs/
 **/*.img*
 
 # Local image testing with qemu
-dev/my_vars.fd
+/dev/my_vars.fd
 
 # matrixos-private.git repo location
-private/
+/private/
