@@ -101,7 +101,6 @@ func ParseOstreeLsChecksumLine(line string) (*filesystems.PathInfo, error) {
 	return pi, nil
 }
 
-// ListContents lists the contents of a path in a commit.
 func (o *Ostree) ListContents(commit, path string) (*[]filesystems.PathInfo, error) {
 	if commit == "" {
 		return nil, errors.New("missing commit parameter")
@@ -153,7 +152,6 @@ func (o *Ostree) listContentsOfPath(commit, repoDir, path string) (*[]filesystem
 	return &pis, nil
 }
 
-// ListPackages lists the packages in a commit.
 func (o *Ostree) ListPackages(commit string) ([]string, error) {
 	if commit == "" {
 		return nil, errors.New("missing commit parameter")

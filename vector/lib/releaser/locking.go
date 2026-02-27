@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 )
-// ReleaseLockDir returns the lock directory, creating it if necessary.
+
 func (r *Releaser) ReleaseLockDir() (string, error) {
 	lockDir, err := r.LockDir()
 	if err != nil {
@@ -21,7 +21,6 @@ func (r *Releaser) ReleaseLockDir() (string, error) {
 	return lockDir, nil
 }
 
-// ReleaseLockPath returns the lock file path for the given release name.
 func (r *Releaser) ReleaseLockPath(name string) (string, error) {
 	if name == "" {
 		return "", errors.New("missing release name")
@@ -39,11 +38,6 @@ func (r *Releaser) ReleaseLockPath(name string) (string, error) {
 	return lockFile, nil
 }
 
-// ExecuteWithReleaseLock acquires an exclusive file lock for the given release name,
-// executes fn under that lock, and releases the lock when fn returns.
-// If the lock cannot be acquired within the configured timeout, an error is returned.
-// If fn panics or the process crashes, the OS closes the file descriptor and
-// releases the lock automatically.
 func (r *Releaser) ExecuteWithReleaseLock(name string, fn func() error) error {
 	lockPath, err := r.ReleaseLockPath(name)
 	if err != nil {

@@ -9,10 +9,13 @@ import (
 	"time"
 )
 
-// ICleaner defines the interface for a janitor cleaner
+// ICleaner defines the interface for a janitor cleaner.
 type ICleaner interface {
+	// Name returns the human-readable name of the cleaner.
 	Name() string
+	// Init initialises the cleaner with the given configuration.
 	Init(cfg config.IConfig) error
+	// Run executes the cleaner's cleanup logic.
 	Run() error
 }
 

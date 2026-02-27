@@ -13,7 +13,6 @@ const (
 	imagerPortageSecureBootKek = "etc/portage/secureboot-kek.pem"
 )
 
-// CleanRootfs cleans the image directory rootfs for release.
 func (r *Releaser) CleanRootfs() error {
 	imageDir := r.imageDir
 
@@ -97,7 +96,6 @@ func (r *Releaser) CleanRootfs() error {
 	return nil
 }
 
-// PostCleanShrink removes unnecessary development artifacts to save space.
 func (r *Releaser) PostCleanShrink() error {
 	imageDir := r.imageDir
 
