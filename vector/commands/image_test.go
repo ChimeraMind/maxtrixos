@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/imager"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/validation"
 )
 
@@ -379,6 +379,7 @@ func TestInitializeOstreeRemote(t *testing.T) {
 		Refs:    []string{"remote:branch1"},
 		Remote_: "remote",
 	}
+	mock.SetRef("mybranch")
 	cfg := defaultImageTestConfig()
 
 	cmd, err := newTestImageCommand(
@@ -390,7 +391,7 @@ func TestInitializeOstreeRemote(t *testing.T) {
 	}
 
 	output, err := runCaptureStdout(func() error {
-		return cmd.initializeRemoteOstree("mybranch")
+		return cmd.initializeRemoteOstree()
 	})
 	if err != nil {
 		t.Fatalf("initializeRemoteOstree failed: %v", err)

@@ -368,17 +368,18 @@ func (o *Ostree) ListRemotes() ([]string, error) {
 	return o.listRemotesFromRepo(repoDir)
 }
 
-// LastCommit returns the last commit for a given ref.
-func (o *Ostree) LastCommit(ref string) (string, error) {
+// LastCommit returns the last commit for the instance ref.
+func (o *Ostree) LastCommit() (string, error) {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return "", err
 	}
-	return o.lastCommitFromRepo(repoDir, ref)
+	return o.lastCommitFromRepo(repoDir, o.ref)
 }
 
-// Pull pulls an ostree ref from a remote.
-func (o *Ostree) Pull(ref string) error {
+// Pull pulls the instance ref from its configured remote.
+func (o *Ostree) Pull() error {
+	ref := o.ref
 	if ref == "" {
 		return errors.New("invalid ref parameter")
 	}
@@ -386,20 +387,20 @@ func (o *Ostree) Pull(ref string) error {
 	if err != nil {
 		return err
 	}
-	remote := ExtractRemoteFromRef(ref)
-	if remote == "" {
-		return fmt.Errorf("%v does not contain the remote: prefix (e.g. origin:)", ref)
+	remote, err := o.Remote()
+	if err != nil {
+		return err
 	}
-	ref = CleanRemoteFromRef(ref)
 	return o.pullFromRepo(repoDir, remote, ref)
 }
 
-// PullWithRemote runs `ostree pull` assuming that the provided ref is
-// clean from the remote prefix.
-func (o *Ostree) PullWithRemote(remote, ref string) error {
+// PullWithRemote runs `ostree pull` with the provided remote for
+// the instance ref.
+func (o *Ostree) PullWithRemote(remote string) error {
 	if remote == "" {
 		return errors.New("invalid remote parameter")
 	}
+	ref := o.ref
 	if ref == "" {
 		return errors.New("invalid ref parameter")
 	}
@@ -410,8 +411,9 @@ func (o *Ostree) PullWithRemote(remote, ref string) error {
 	return o.pullFromRepo(repoDir, remote, ref)
 }
 
-// Prune prunes the ostree repo for the given ref.
-func (o *Ostree) Prune(ref string) error {
+// Prune prunes the ostree repo for the instance ref.
+func (o *Ostree) Prune() error {
+	ref := o.ref
 	if ref == "" {
 		return errors.New("invalid ref parameter")
 	}
@@ -427,7 +429,8 @@ func (o *Ostree) Prune(ref string) error {
 }
 
 // GenerateStaticDelta generates a static delta for an ostree repository.
-func (o *Ostree) GenerateStaticDelta(ref string) error {
+func (o *Ostree) GenerateStaticDelta() error {
+	ref := o.ref
 	if ref == "" {
 		return errors.New("invalid ref parameter")
 	}

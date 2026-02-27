@@ -190,12 +190,13 @@ func (o *Ostree) ListDeployments() ([]Deployment, error) {
 }
 
 // DeployedRootfs returns the path to the deployed rootfs.
-func (o *Ostree) DeployedRootfs(ref string) (string, error) {
+func (o *Ostree) DeployedRootfs() (string, error) {
 	sysroot, err := o.Sysroot()
 	if err != nil {
 		return "", err
 	}
 
+	ref := o.ref
 	if ref == "" {
 		return "", errors.New("invalid ref parameter")
 	}
@@ -204,7 +205,7 @@ func (o *Ostree) DeployedRootfs(ref string) (string, error) {
 		return "", err
 	}
 
-	ostreeCommit, err := o.LastCommit(ref)
+	ostreeCommit, err := o.LastCommit()
 	if err != nil {
 		return "", fmt.Errorf("cannot get last ostree commit: %w", err)
 	}
@@ -249,17 +250,18 @@ func (o *Ostree) BootedHash() (string, error) {
 	return "", errors.New("no booted deployment found")
 }
 
-// Switch runs `ostree admin switch` to switch to the given ref.
-func (o *Ostree) Switch(ref string) error {
+// Switch runs `ostree admin switch` to switch to the instance ref.
+func (o *Ostree) Switch() error {
 	sysroot, err := o.Sysroot()
 	if err != nil {
 		return err
 	}
-	return o.ostreeRun("admin", "switch", "--sysroot="+sysroot, ref)
+	return o.ostreeRun("admin", "switch", "--sysroot="+sysroot, o.ref)
 }
 
 // Deploy deploys an ostree commit.
-func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string) error {
+func (o *Ostree) Deploy(sysroot string, bootArgs []string) error {
+	ref := o.ref
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return err

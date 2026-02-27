@@ -31,7 +31,8 @@ func (im *Image) cleanAndStripRef() (string, error) {
 		return "", errors.New("missing ref, set Ref in NewImageOptions")
 	}
 	ref := ostree.CleanRemoteFromRef(im.ref)
-	stripped, err := im.ostree.RemoveFullFromBranch(ref)
+	im.ostree.SetRef(ref)
+	stripped, err := im.ostree.RemoveFullFromBranch()
 	if err != nil {
 		return "", err
 	}

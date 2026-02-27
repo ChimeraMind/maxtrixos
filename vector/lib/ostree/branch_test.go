@@ -81,26 +81,32 @@ func TestFullBranchHelpers(t *testing.T) {
 	}
 
 	// IsBranchFullSuffixed
-	if isFull, _ := o.IsBranchFullSuffixed("branch-full"); !isFull {
+	o.SetRef("branch-full")
+	if isFull, _ := o.IsBranchFullSuffixed(); !isFull {
 		t.Error("IsBranchFullSuffixed(branch-full) = false, want true")
 	}
-	if isFull, _ := o.IsBranchFullSuffixed("branch"); isFull {
+	o.SetRef("branch")
+	if isFull, _ := o.IsBranchFullSuffixed(); isFull {
 		t.Error("IsBranchFullSuffixed(branch) = true, want false")
 	}
 
 	// BranchToFull
-	if full, _ := o.BranchToFull("branch"); full != "branch-full" {
+	o.SetRef("branch")
+	if full, _ := o.BranchToFull(); full != "branch-full" {
 		t.Errorf("BranchToFull(branch) = %q, want branch-full", full)
 	}
-	if full, _ := o.BranchToFull("branch-full"); full != "branch-full" {
+	o.SetRef("branch-full")
+	if full, _ := o.BranchToFull(); full != "branch-full" {
 		t.Errorf("BranchToFull(branch-full) = %q, want branch-full", full)
 	}
 
 	// RemoveFullFromBranch
-	if clean, _ := o.RemoveFullFromBranch("branch-full"); clean != "branch" {
+	o.SetRef("branch-full")
+	if clean, _ := o.RemoveFullFromBranch(); clean != "branch" {
 		t.Errorf("RemoveFullFromBranch(branch-full) = %q, want branch", clean)
 	}
-	if clean, _ := o.RemoveFullFromBranch("branch"); clean != "branch" {
+	o.SetRef("branch")
+	if clean, _ := o.RemoveFullFromBranch(); clean != "branch" {
 		t.Errorf("RemoveFullFromBranch(branch) = %q, want branch", clean)
 	}
 
@@ -141,16 +147,16 @@ func TestOstreeBranchMethodsErrors(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	if _, err := o.IsBranchFullSuffixed(""); err == nil {
+	if _, err := o.IsBranchFullSuffixed(); err == nil {
 		t.Error("IsBranchFullSuffixed should fail empty ref")
 	}
 	if _, err := o.BranchShortnameToFull("", "stage", "os", "arch"); err == nil {
 		t.Error("BranchShortnameToFull should fail empty shortname")
 	}
-	if _, err := o.BranchToFull(""); err == nil {
+	if _, err := o.BranchToFull(); err == nil {
 		t.Error("BranchToFull should fail empty ref")
 	}
-	if _, err := o.RemoveFullFromBranch(""); err == nil {
+	if _, err := o.RemoveFullFromBranch(); err == nil {
 		t.Error("RemoveFullFromBranch should fail empty ref")
 	}
 }

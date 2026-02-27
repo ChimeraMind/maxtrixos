@@ -97,9 +97,9 @@ func (c *BranchCommand) Run() error {
 		if len(c.args) < 1 {
 			return fmt.Errorf("switch command requires a branch/ref name")
 		}
-		ref := c.args[0]
+		c.ot.SetRef(c.args[0])
 		c.ot.SetVerbose(false) // ostree's own verbose flag, separate from ours.
-		return c.ot.Switch(ref)
+		return c.ot.Switch()
 
 	default:
 		return fmt.Errorf("unknown subcommand: %s", c.sub)

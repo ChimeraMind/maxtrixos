@@ -82,13 +82,14 @@ func TestOstreeCommandsMocked(t *testing.T) {
 		Items: map[string][]string{
 			"Ostree.RepoDir":                {"/repo"},
 			"Ostree.Root":                   {"/"},
+			"Ostree.Remote":                 {"origin"},
 			"Ostree.KeepObjectsYoungerThan": {"2023-01-01"},
 		},
 		Bools: map[string]bool{
 			"Ostree.Gpg": false,
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "ref"})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
@@ -103,7 +104,7 @@ func TestOstreeCommandsMocked(t *testing.T) {
 	}
 
 	// Pull
-	if err := o.Pull("origin:ref"); err != nil {
+	if err := o.Pull(); err != nil {
 		t.Fatalf("Pull failed: %v", err)
 	}
 	if lastCmdArgs[1] != "pull" || lastCmdArgs[2] != "origin" || lastCmdArgs[3] != "ref" {
@@ -111,7 +112,7 @@ func TestOstreeCommandsMocked(t *testing.T) {
 	}
 
 	// Prune
-	if err := o.Prune("ref"); err != nil {
+	if err := o.Prune(); err != nil {
 		t.Fatalf("Prune failed: %v", err)
 	}
 	// args: --repo=/repo prune --depth=5 --refs-only --keep-younger-than=... --only-branch=ref
@@ -120,7 +121,7 @@ func TestOstreeCommandsMocked(t *testing.T) {
 	}
 
 	// GenerateStaticDelta
-	if err := o.GenerateStaticDelta("ref"); err != nil {
+	if err := o.GenerateStaticDelta(); err != nil {
 		t.Fatalf("GenerateStaticDelta failed: %v", err)
 	}
 	// First it calls rev-parse, then static-delta generate
@@ -221,7 +222,7 @@ func TestPullWithRemoteExplicit(t *testing.T) {
 			"Ostree.RepoDir": {"/repo"},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "myref"})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
@@ -231,7 +232,7 @@ func TestPullWithRemoteExplicit(t *testing.T) {
 		return nil
 	}
 
-	if err := o.PullWithRemote("myremote", "myref"); err != nil {
+	if err := o.PullWithRemote("myremote"); err != nil {
 		t.Fatalf("PullWithRemote failed: %v", err)
 	}
 
@@ -251,8 +252,8 @@ func TestPullInvalidRef(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
-	if err := o.Pull("invalid-ref"); err == nil {
-		t.Error("Pull should fail for ref without remote prefix")
+	if err := o.Pull(); err == nil {
+		t.Error("Pull should fail for empty ref")
 	}
 }
 
@@ -373,7 +374,7 @@ func TestListRemotes_Errors(t *testing.T) {
 
 func TestMiscWrappers_Errors(t *testing.T) {
 	cfg := &config.MockConfig{Items: map[string][]string{"Ostree.RepoDir": {"/repo"}}}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "ref"})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
@@ -382,16 +383,16 @@ func TestMiscWrappers_Errors(t *testing.T) {
 		return fmt.Errorf("cmd error")
 	}
 
-	if err := o.Pull("ref"); err == nil {
+	if err := o.Pull(); err == nil {
 		t.Error("Pull should fail on cmd error")
 	}
-	if err := o.Prune("ref"); err == nil {
+	if err := o.Prune(); err == nil {
 		t.Error("Prune should fail on cmd error")
 	}
 	if err := o.UpdateSummary(); err == nil {
 		t.Error("UpdateSummary should fail on cmd error")
 	}
-	if err := o.GenerateStaticDelta("ref"); err == nil {
+	if err := o.GenerateStaticDelta(); err == nil {
 		t.Error("GenerateStaticDelta should fail on cmd error")
 	}
 	if err := o.Upgrade(nil); err == nil {

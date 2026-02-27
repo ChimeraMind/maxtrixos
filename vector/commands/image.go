@@ -232,6 +232,7 @@ func (c *ImageCommand) runImage() error {
 	}
 
 	c.im.SetRef(ref)
+	c.ot.SetRef(ref)
 
 	// Initialize ostree.
 	if c.localOstree {
@@ -239,7 +240,7 @@ func (c *ImageCommand) runImage() error {
 			return err
 		}
 	} else {
-		if err := c.initializeRemoteOstree(ref); err != nil {
+		if err := c.initializeRemoteOstree(); err != nil {
 			return err
 		}
 	}
@@ -327,7 +328,7 @@ func (c *ImageCommand) initializeLocalOstree() error {
 }
 
 // initializeRemoteOstree sets up the ostree remote and pulls the specified ref.
-func (c *ImageCommand) initializeRemoteOstree(ref string) error {
+func (c *ImageCommand) initializeRemoteOstree() error {
 	if err := c.ot.MaybeInitializeRemote(); err != nil {
 		return fmt.Errorf("failed to initialize remote: %w", err)
 	}
@@ -350,8 +351,8 @@ func (c *ImageCommand) initializeRemoteOstree(ref string) error {
 	}
 
 	c.im.Print("\n%s%sPulling ostree ref %s:%s ...%s\n",
-		c.cBold, c.iconDownload, remote, ref, c.cReset)
-	if err := c.ot.Pull(remote + ":" + ref); err != nil {
+		c.cBold, c.iconDownload, remote, c.ot.Ref(), c.cReset)
+	if err := c.ot.Pull(); err != nil {
 		return fmt.Errorf("ostree pull failed: %w", err)
 	}
 	return nil

@@ -301,7 +301,7 @@ func (im *Image) deployOstree(mountRootfs, rootDeviceUUID string) error {
 		return fmt.Errorf("failed to add ostree remote: %w", err)
 	}
 
-	if err := im.ostree.Deploy(im.Ref(), mountRootfs, bootArgs); err != nil {
+	if err := im.ostree.Deploy(mountRootfs, bootArgs); err != nil {
 		return fmt.Errorf("ostree deploy failed: %w", err)
 	}
 
@@ -309,7 +309,7 @@ func (im *Image) deployOstree(mountRootfs, rootDeviceUUID string) error {
 		return fmt.Errorf("failed to add remote to rootfs: %w", err)
 	}
 
-	rootfs, err := im.ostree.DeployedRootfs(im.Ref())
+	rootfs, err := im.ostree.DeployedRootfs()
 	if err != nil {
 		return fmt.Errorf("failed to get deployed rootfs: %w", err)
 	}
