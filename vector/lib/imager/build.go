@@ -512,8 +512,15 @@ func (im *Image) productionizeImage(releaseVersion string, pkgList []string) ([]
 				"failed to determine if compression is enabled: %w", err)
 		}
 		compressedImageCreated = true
+
+		cmpPath, err := im.CompressedImagePath()
+		if err != nil {
+			return artifacts, err
+		}
+		artifacts = append(artifacts, cmpPath)
+	} else {
+		artifacts = append(artifacts, im.ImagePath())
 	}
-	artifacts = append(artifacts, im.ImagePath())
 
 	if productionize {
 		sha256Paths, err := im.buildSha256sums(compressedImageCreated, qcow2Created)
