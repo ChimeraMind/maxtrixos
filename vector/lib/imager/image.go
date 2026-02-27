@@ -87,7 +87,7 @@ type IImage interface {
 	MountRootfs(mountRootfs string) error
 	GetKernelPath() (string, error)
 	SetupPasswords() error
-	SetupBootloaderConfig(ref, efibootDir, efiUUID, bootUUID string) error
+	SetupBootloaderConfig(ref, efibootDir string) error
 	SetupVmtestConfig() error
 	InstallSecurebootCerts(efibootDir string) error
 	InstallMemtest(efibootDir string) error
@@ -972,7 +972,7 @@ func (im *Image) SetupPasswords() error {
 }
 
 // SetupBootloaderConfig sets up the GRUB bootloader configuration.
-func (im *Image) SetupBootloaderConfig(ref, efibootDir, efiUUID, bootUUID string) error {
+func (im *Image) SetupBootloaderConfig(ref, efibootDir string) error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -992,11 +992,21 @@ func (im *Image) SetupBootloaderConfig(ref, efibootDir, efiUUID, bootUUID string
 	if efibootDir == "" {
 		return errors.New("missing efibootDir parameter")
 	}
-	if efiUUID == "" {
-		return errors.New("missing efiUUID parameter")
+
+	if im.efiDevice == "" {
+		return errors.New("missing efiDevice, not set in NewImageOptions")
 	}
-	if bootUUID == "" {
-		return errors.New("missing bootUUID parameter")
+	efiDeviceUUID, err := filesystems.DeviceUUID(im.efiDevice)
+	if err != nil {
+		return fmt.Errorf("unable to get UUID for %s: %w", im.efiDevice, err)
+	}
+
+	if im.bootDevice == "" {
+		return errors.New("missing bootDevice, not set in NewImageOptions")
+	}
+	bootDeviceUUID, err := filesystems.DeviceUUID(im.bootDevice)
+	if err != nil {
+		return fmt.Errorf("unable to get UUID for %s: %w", im.bootDevice, err)
 	}
 
 	// Verify kernel exists.
@@ -1084,8 +1094,8 @@ func (im *Image) SetupBootloaderConfig(ref, efibootDir, efiUUID, bootUUID string
 		return fmt.Errorf("failed to read grub config for substitution: %w", err)
 	}
 	grubContent := string(grubData)
-	grubContent = strings.ReplaceAll(grubContent, "%BOOTUUID%", bootUUID)
-	grubContent = strings.ReplaceAll(grubContent, "%EFIUUID%", efiUUID)
+	grubContent = strings.ReplaceAll(grubContent, "%BOOTUUID%", bootDeviceUUID)
+	grubContent = strings.ReplaceAll(grubContent, "%EFIUUID%", efiDeviceUUID)
 	grubContent = strings.ReplaceAll(grubContent, "%OSNAME%", osName)
 	if err := os.WriteFile(dstGrubCfg, []byte(grubContent), 0644); err != nil {
 		return fmt.Errorf("failed to write substituted grub config: %w", err)
