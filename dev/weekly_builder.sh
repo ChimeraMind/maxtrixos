@@ -40,6 +40,8 @@ ARG_FORCE_IMAGES=
 ARG_SKIP_IMAGES=
 ARG_ON_BUILD_SERVER=
 ARG_RESUME_SEEDERS=
+ARG_BUILD_NAME="matrixOS weekly builder"
+ARG_BUILD_ID="weekly"
 ARG_SEEDER_ARGS=()
 ARG_RELEASER_ARGS=()
 ARG_RUN_JANITOR=1  # default.
@@ -55,9 +57,9 @@ finish() {
     fi
     local subject=
     if [ "${exit_code}" -eq "0" ]; then
-        subject="[matrixOS weekly builder] SUCCESSFUL execution at $(date +%Y%m%d)"
+        subject="[${ARG_BUILD_NAME}] SUCCESSFUL execution at $(date +%Y%m%d)"
     else
-        subject="[matrixOS weekly builder] FAILED execution at $(date +%Y%m%d)"
+        subject="[${ARG_BUILD_NAME}] FAILED execution at $(date +%Y%m%d)"
     fi
 
     local mail_dest=
@@ -111,6 +113,32 @@ parse_args() {
         ARG_ON_BUILD_SERVER=1
 
         shift
+        ;;
+
+        -bn|--build-name|--build-name=*)
+        local vals=
+        if [[ "${1}" =~ --build-name=.* ]]; then
+            vals=${1/--build-name=/}
+            shift
+
+        else
+            vals="${2}"
+            shift 2
+        fi
+        ARG_BUILD_NAME="${vals}"
+        ;;
+
+        -bi|--build-id|--build-id=*)
+        local vals=
+        if [[ "${1}" =~ --build-id=.* ]]; then
+            vals=${1/--build-id=/}
+            shift
+
+        else
+            vals="${2}"
+            shift 2
+        fi
+        ARG_BUILD_ID="${vals}"
         ;;
 
         -no-sm|--disable-send-mail)
@@ -187,6 +215,8 @@ parse_args() {
         echo -e "-fi, --force-images  \t\t force images creation for all branches, after the seeder and releaser executed." >&2
         echo -e "-si, --skip-images  \t\t skip images generation for all branches, after the seeder and releaser executed." >&2
         echo -e "-bs, --on-build-server  \t optimize execution if seeding, release and imaging happens on the same machine." >&2
+        echo -e "-bn, --build-name  \t\t specify the name of the build." >&2
+        echo -e "-bi, --build-id  \t\t specify the ID of the build." >&2
         echo -e "--no-sm, --disable-send-mail \t disable email sending (to root) at the end of the build." >&2
         echo -e "-rs, --resume \t\t\t allow seeder to resume seeds (chroots) build from a checkpoint." >&2
         echo -e "-s, --skip-seeders  \t\t comma separated list of seeders to skip (by name)." >&2
@@ -245,6 +275,10 @@ _cdn_pusher_flag() {
     echo "${ARG_CDN_PUSHER}"
 }
 
+_build_id_flag() {
+    echo "${ARG_BUILD_ID}"
+}
+
 
 main() {
     trap finish EXIT
@@ -260,25 +294,32 @@ main() {
         exit 1
     fi
 
-    local locks_dir="${MATRIXOS_LOCKS_DIR}/weekly-builder"
+    local build_id=
+    build_id=$(_build_id_flag)
+    if [ -z "${build_id}" ]; then
+        echo "Build ID cannot be empty." >&2
+        exit 1
+    fi
+
+    local locks_dir="${MATRIXOS_LOCKS_DIR}/${build_id}-builder"
     mkdir -p "${locks_dir}"
-    local lock_file="${locks_dir}/weekly-builder.lock"
+    local lock_file="${locks_dir}/${build_id}-builder.lock"
 
     exec 9> "${lock_file}"
     flock -x -w 600 9
     if [ "${?}" != "0" ]; then
-        echo "Failed to acquire the lock to build matrixOS weekly. Another weekly builder running?" >&2
+        echo "Failed to acquire the lock to build matrixOS ${build_id}. Another builder running?" >&2
         exit 1
     fi
 
-    local log_dir="${MATRIXOS_LOGS_DIR}/weekly-builder"
+    local log_dir="${MATRIXOS_LOGS_DIR}/${build_id}-builder"
     mkdir -p "${log_dir}"
     LOGFILE="${log_dir}/build-$(date +%Y%m%d-%H%M%S).log"
 
     echo "Logfile at: ${LOGFILE}"
-    BUILT_SEEDERS_FILE=$(mktemp -p "${locks_dir}" "matrixos.weekly.builder.seeds.done.file.XXXXXXX")
+    BUILT_SEEDERS_FILE=$(mktemp -p "${locks_dir}" "matrixos.${build_id}.builder.seeds.done.file.XXXXXXX")
     echo "Tracking newly built seeds at: ${BUILT_SEEDERS_FILE}"
-    BUILT_RELEASES_FILE=$(mktemp -p "${locks_dir}" "matrixos.weekly.builder.releases.done.file.XXXXXXX")
+    BUILT_RELEASES_FILE=$(mktemp -p "${locks_dir}" "matrixos.${build_id}.builder.releases.done.file.XXXXXXX")
     echo "Tracking newly built releases at: ${BUILT_RELEASES_FILE}"
 
     (
