@@ -36,8 +36,8 @@ type Loop struct {
 
 // NewLoop returns a Loop for the given image path.
 // Use Attach() to associate it with a loop device.
-func NewLoop(imagePath string) *Loop {
-	return &Loop{Path: imagePath}
+func NewLoop(imagePath string) (*Loop, error) {
+	return &Loop{Path: imagePath}, nil
 }
 
 // NewLoopFromDevice returns a Loop for an already-attached loop device.
@@ -153,20 +153,4 @@ func (l *Loop) Attach() error {
 	l.Device = loopPath
 	l.attached = true
 	return nil
-}
-
-// LoopMount creates a new Loop for the given image file, attaches it to a loop
-// device, and returns the Loop handle.  Callers can read l.Device for the
-// device path and call l.Detach() when done.
-func LoopMount(imagePath string) (*Loop, error) {
-	if imagePath == "" {
-		return nil, fmt.Errorf("mount: missing imagePath parameter")
-	}
-
-	l := NewLoop(imagePath)
-	if err := l.Attach(); err != nil {
-		return nil, fmt.Errorf("unable to set up loop device for %s: %w", imagePath, err)
-	}
-
-	return l, nil
 }

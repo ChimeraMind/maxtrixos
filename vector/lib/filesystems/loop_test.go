@@ -96,7 +96,10 @@ func TestLoopBackingFile(t *testing.T) {
 	})
 
 	t.Run("NoDeviceSet", func(t *testing.T) {
-		l := NewLoop("/some/image.img")
+		l, err := NewLoop("/some/image.img")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		got := l.BackingFile()
 		if got != "" {
 			t.Errorf("expected empty string when Device is unset, got %q", got)
@@ -140,7 +143,10 @@ func TestLoopDetach(t *testing.T) {
 	})
 
 	t.Run("NotAttached", func(t *testing.T) {
-		l := NewLoop("/some/image.img")
+		l, err := NewLoop("/some/image.img")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if err := l.Detach(); err == nil {
 			t.Error("expected error when not attached")
 		}
@@ -255,7 +261,10 @@ func TestLoopAttach(t *testing.T) {
 		}
 
 		devPrefix = "/dev"
-		l := NewLoop("/tmp/disk.img")
+		l, err := NewLoop("/tmp/disk.img")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if err := l.Attach(); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -293,7 +302,10 @@ func TestLoopAttach(t *testing.T) {
 		}
 		ioctlRetInt = func(fd int, req uint) (int, error) { return 0, nil }
 
-		l := NewLoop("/tmp/disk.img")
+		l, err := NewLoop("/tmp/disk.img")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if err := l.Attach(); err != nil {
 			t.Fatalf("first attach failed: %v", err)
 		}
@@ -306,7 +318,10 @@ func TestLoopAttach(t *testing.T) {
 		openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
 			return nil, errors.New("no loop-control")
 		}
-		l := NewLoop("/tmp/disk.img")
+		l, err := NewLoop("/tmp/disk.img")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if err := l.Attach(); err == nil {
 			t.Error("expected error when loop-control open fails")
 		}
@@ -326,7 +341,10 @@ func TestLoopAttach(t *testing.T) {
 			return 0, errors.New("no free loop")
 		}
 
-		l := NewLoop("/tmp/disk.img")
+		l, err := NewLoop("/tmp/disk.img")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if err := l.Attach(); err == nil {
 			t.Error("expected error when LOOP_CTL_GET_FREE fails")
 		}
@@ -347,7 +365,10 @@ func TestLoopAttach(t *testing.T) {
 		}
 		ioctlRetInt = func(fd int, req uint) (int, error) { return 0, nil }
 
-		l := NewLoop("/tmp/disk.img")
+		l, err := NewLoop("/tmp/disk.img")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if err := l.Attach(); err == nil {
 			t.Error("expected error when image open fails")
 		}
@@ -379,7 +400,10 @@ func TestLoopAttach(t *testing.T) {
 			return nil
 		}
 
-		l := NewLoop("/tmp/disk.img")
+		l, err := NewLoop("/tmp/disk.img")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if err := l.Attach(); err == nil {
 			t.Error("expected error when LOOP_SET_FD fails")
 		}
@@ -416,7 +440,10 @@ func TestLoopAttach(t *testing.T) {
 			return nil
 		}
 
-		l := NewLoop("/tmp/disk.img")
+		l, err := NewLoop("/tmp/disk.img")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if err := l.Attach(); err == nil {
 			t.Error("expected error when LOOP_SET_STATUS64 fails")
 		}
@@ -434,7 +461,10 @@ func TestLoopAttach(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNewLoop(t *testing.T) {
-	l := NewLoop("/tmp/test.img")
+	l, err := NewLoop("/tmp/test.img")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if l.Path != "/tmp/test.img" {
 		t.Errorf("expected /tmp/test.img, got %q", l.Path)
 	}
@@ -479,7 +509,10 @@ func TestLoopIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	l := NewLoop(absImg)
+	l, err := NewLoop(absImg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// --- Attach ---
 	if err := l.Attach(); err != nil {
@@ -523,68 +556,4 @@ func TestLoopIntegration(t *testing.T) {
 	if err := l.Detach(); err == nil {
 		t.Error("double Detach() should return an error")
 	}
-}
-
-// ---------------------------------------------------------------------------
-// LoopMount tests
-// ---------------------------------------------------------------------------
-
-func TestLoopMount(t *testing.T) {
-	t.Run("Success", func(t *testing.T) {
-		setupMockLoop(t)
-
-		ctlFile, _ := os.CreateTemp("", "ctl")
-		imgFile, _ := os.CreateTemp("", "img")
-		loopFile, _ := os.CreateTemp("", "loop")
-		t.Cleanup(func() {
-			os.Remove(ctlFile.Name())
-			os.Remove(imgFile.Name())
-			os.Remove(loopFile.Name())
-		})
-
-		callN := 0
-		openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
-			callN++
-			switch callN {
-			case 1:
-				return ctlFile, nil
-			case 2:
-				return imgFile, nil
-			case 3:
-				return loopFile, nil
-			}
-			return nil, errors.New("unexpected open")
-		}
-		ioctlRetInt = func(fd int, req uint) (int, error) { return 7, nil }
-
-		l, err := LoopMount("/tmp/disk.img")
-		if err != nil {
-			t.Fatalf("LoopMount() error: %v", err)
-		}
-		if l.Device != "/dev/loop7" {
-			t.Errorf("Expected /dev/loop7, got %q", l.Device)
-		}
-		if l.Path != "/tmp/disk.img" {
-			t.Errorf("Expected /tmp/disk.img, got %q", l.Path)
-		}
-	})
-
-	t.Run("EmptyImagePath", func(t *testing.T) {
-		_, err := LoopMount("")
-		if err == nil {
-			t.Error("Expected error for empty imagePath")
-		}
-	})
-
-	t.Run("AttachFail", func(t *testing.T) {
-		setupMockLoop(t)
-		openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
-			return nil, errors.New("no loop-control")
-		}
-
-		_, err := LoopMount("/tmp/disk.img")
-		if err == nil {
-			t.Error("Expected error from Attach failure")
-		}
-	})
 }
