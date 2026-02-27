@@ -74,15 +74,15 @@ func (c *ImageCommand) Init(args []string) error {
 
 // SetStdout creates a fancy styled stdout writer using the UI theme.
 // Every line written to it is prefixed with a bold green "[image]" label.
-func (c *ImageCommand) SetStdout() *styledWriter {
-	c.stdout = c.NewStdoutWriter("image")
+func (c *ImageCommand) SetStdout(ref string) *styledWriter {
+	c.stdout = c.NewStdoutWriter(fmt.Sprintf("image:%s", c.shortRef(ref)))
 	return c.stdout
 }
 
 // SetStderr creates a fancy styled stderr writer using the UI theme.
 // Every line written to it is prefixed with a bold red/yellow "[image]" label.
-func (c *ImageCommand) SetStderr() *styledWriter {
-	c.stderr = c.NewStderrWriter("image")
+func (c *ImageCommand) SetStderr(ref string) *styledWriter {
+	c.stderr = c.NewStderrWriter(fmt.Sprintf("image:%s", c.shortRef(ref)))
 	return c.stderr
 }
 
@@ -147,22 +147,30 @@ func failFastChecks(ot cds.IOstree, im imager.IImage) error {
 
 // runImage implements the image building logic.
 func (c *ImageCommand) runImage() error {
-	// Set up styled writers for subprocess output.
-	stdoutWriter := c.SetStdout()
-	stderrWriter := c.SetStderr()
-
 	ref := c.ref
 	if cds.IsBranchShortName(ref) {
-		return fmt.Errorf("specify a complete branch name, %s is not allowed", ref)
+		return fmt.Errorf(
+			"specify a complete branch name, %s is not allowed",
+			ref,
+		)
 	}
+	// Set up styled writers for subprocess output.
+	stdoutWriter := c.SetStdout(ref)
+	stderrWriter := c.SetStderr(ref)
+
+	// Pass the styled writers to ostree for consistent output styling.
+	c.ot.SetStdout(stdoutWriter)
+	c.ot.SetStderr(stderrWriter)
 
 	fsenc, err := filesystems.NewFsenc(
 		c.cfg,
 		func(mapperName string) {
-			fmt.Printf("Opening encrypted rootfs as %s ...\n", mapperName)
+			fmt.Fprintf(
+				stdoutWriter, "Opening encrypted rootfs as %s ...\n", mapperName)
 		},
 		func(mapperName string) {
-			fmt.Printf("Closing encrypted rootfs as %s ...\n", mapperName)
+			fmt.Fprintf(
+				stdoutWriter, "Closing encrypted rootfs as %s ...\n", mapperName)
 		},
 	)
 	if err != nil {
