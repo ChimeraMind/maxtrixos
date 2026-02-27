@@ -185,7 +185,7 @@ func NewIniConfigFromPath(params *ConfigFromPathParams) (*IniConfig, error) {
 // Clone creates a deep copy of the IniConfig instance.
 // This is useful for forking off configs with overlays,
 // without mutating the original config.
-func (c *IniConfig) Clone() *IniConfig {
+func (c *IniConfig) Clone() IConfig {
 	if c == nil {
 		return nil
 	}

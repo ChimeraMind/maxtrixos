@@ -1,5 +1,7 @@
 package config
 
+import "slices"
+
 // MockConfig is a test-only implementation of IConfig backed by in-memory maps.
 // It is exported so that other packages can use it in their tests without
 // duplicating the mock.
@@ -21,6 +23,37 @@ type MockConfig struct {
 
 // Load is a no-op for the mock.
 func (m *MockConfig) Load() error { return nil }
+
+// Clone returns a deep copy of the mock config.
+func (m *MockConfig) Clone() IConfig {
+	// Create a deep copy of the MockConfig, including its internal maps.
+	newItems := make(map[string][]string)
+	for k, v := range m.Items {
+		newItems[k] = slices.Clone(v)
+	}
+
+	newBools := make(map[string]bool)
+	for k, v := range m.Bools {
+		newBools[k] = v
+	}
+
+	return &MockConfig{
+		Items: newItems,
+		Bools: newBools,
+	}
+}
+
+// AddOverlay adds an overlay of config values that take precedence over the loaded config file.
+func (m *MockConfig) AddOverlay(overlay map[string][]string) error {
+	for k, v := range overlay {
+		if vals, ok := m.Items[k]; ok {
+			m.Items[k] = append(vals, v...)
+		} else {
+			m.Items[k] = v
+		}
+	}
+	return nil
+}
 
 // GetItem returns the last value from the Items map for the given key,
 // or "" if the key is absent. This matches the real config behavior where
@@ -62,6 +95,12 @@ type ErrConfig struct{ Err error }
 
 // Load returns the configured error.
 func (e *ErrConfig) Load() error { return e.Err }
+
+// Clone returns a new ErrConfig with the same error.
+func (e *ErrConfig) Clone() IConfig { return &ErrConfig{Err: e.Err} }
+
+// AddOverlay is a no-op for the error config.
+func (e *ErrConfig) AddOverlay(map[string][]string) error { return nil }
 
 // GetItem returns ("", Err).
 func (e *ErrConfig) GetItem(string) (string, error) { return "", e.Err }

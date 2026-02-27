@@ -726,12 +726,13 @@ func TestIniConfig_Clone(t *testing.T) {
 	}
 
 	clone := original.Clone()
+	cloneConcrete := clone.(*IniConfig)
 
 	// Clone must not be the same pointer.
 	if clone == original {
 		t.Fatal("Clone returned the same pointer")
 	}
-	if clone.sp == original.sp {
+	if cloneConcrete.sp == original.sp {
 		t.Fatal("Clone shares the same searchPath pointer")
 	}
 
@@ -802,8 +803,15 @@ func TestIniConfig_Clone_Empty(t *testing.T) {
 	if clone == nil {
 		t.Fatal("Clone of empty config should not be nil")
 	}
-	if len(clone.cfg) != 0 {
-		t.Errorf("Clone cfg should be empty, got %v", clone.cfg)
+	cloneConcrete := clone.(*IniConfig)
+	if cloneConcrete.sp == nil {
+		t.Fatal("Clone searchPath should not be nil")
+	}
+	if cloneConcrete.sp.fileName != "a.conf" || cloneConcrete.sp.dirPath != "/d" || cloneConcrete.sp.defaultRoot != "/r" {
+		t.Errorf("Clone searchPath mismatch: got %+v", cloneConcrete.sp)
+	}
+	if len(cloneConcrete.cfg) != 0 {
+		t.Errorf("Clone cfg should be empty, got %v", cloneConcrete.cfg)
 	}
 }
 
