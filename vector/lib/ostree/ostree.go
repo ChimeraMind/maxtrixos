@@ -22,12 +22,16 @@ type IOstree interface {
 	Print(format string, a ...interface{})
 	PrintError(format string, a ...interface{})
 
+	// Ref
+	Ref() string
+	SetRef(ref string)
+
 	// Config accessors
 	FullBranchSuffix() (string, error)
-	IsBranchFullSuffixed(ref string) (bool, error)
+	IsBranchFullSuffixed() (bool, error)
 	BranchShortnameToFull(shortName, relStage, osName, arch string) (string, error)
-	BranchToFull(ref string) (string, error)
-	RemoveFullFromBranch(ref string) (string, error)
+	BranchToFull() (string, error)
+	RemoveFullFromBranch() (string, error)
 	GpgEnabled() (bool, error)
 	GpgPrivateKeyPath() (string, error)
 	GpgPublicKeyPath() (string, error)
@@ -59,7 +63,7 @@ type IOstree interface {
 	InitRepo() error
 	BootCommit(sysroot string) (string, error)
 	ListRemotes() ([]string, error)
-	LastCommit(ref string) (string, error)
+	LastCommit() (string, error)
 	ImportGpgKey(keyPath string) error
 	GpgSignFile(file string) error
 	GpgKeys() ([]string, error)
@@ -68,21 +72,21 @@ type IOstree interface {
 	MaybeInitializeGpg() error
 	MaybeInitializeGpgForRepo(remote, repoDir string) error
 	MaybeInitializeRemote() error
-	Pull(ref string) error
-	PullWithRemote(remote, ref string) error
-	Prune(ref string) error
-	GenerateStaticDelta(ref string) error
+	Pull() error
+	PullWithRemote(remote string) error
+	Prune() error
+	GenerateStaticDelta() error
 	UpdateSummary() error
 	AddRemote() error
 	AddRemoteToRootfs(rootfs string) error
 	LocalRefs() ([]string, error)
 	RemoteRefs() ([]string, error)
 	ListDeployments() ([]Deployment, error)
-	DeployedRootfs(ref string) (string, error)
+	DeployedRootfs() (string, error)
 	BootedRef() (string, error)
 	BootedHash() (string, error)
-	Switch(ref string) error
-	Deploy(ref, sysroot string, bootArgs []string) error
+	Switch() error
+	Deploy(sysroot string, bootArgs []string) error
 	Upgrade(args []string) error
 	ListPackages(commit string) ([]string, error)
 	ListContents(commit, path string) (*[]filesystems.PathInfo, error)
@@ -140,6 +144,7 @@ type Ostree struct {
 	stderr  io.Writer
 	runner  runner.Func
 	verbose bool
+	ref     string
 }
 
 // NewOstreeWithRunner creates a new Ostree instance with a custom command runner (for testing).
@@ -148,6 +153,7 @@ type NewOstreeOptions struct {
 	Stdout  io.Writer
 	Stderr  io.Writer
 	Verbose bool
+	Ref     string
 }
 
 // NewOstree creates a new Ostree instance.
@@ -169,6 +175,7 @@ func NewOstree(opts NewOstreeOptions) (*Ostree, error) {
 		stderr:  stderr,
 		runner:  runCommand,
 		verbose: opts.Verbose,
+		ref:     opts.Ref,
 	}, nil
 }
 
@@ -195,6 +202,16 @@ func (o *Ostree) PrintError(format string, a ...interface{}) {
 // SetVerbose sets the verbose flag for the Ostree instance.
 func (o *Ostree) SetVerbose(v bool) {
 	o.verbose = v
+}
+
+// Ref returns the ref for the Ostree instance.
+func (o *Ostree) Ref() string {
+	return o.ref
+}
+
+// SetRef sets the ref for the Ostree instance.
+func (o *Ostree) SetRef(ref string) {
+	o.ref = ref
 }
 
 // runCmd runs a command via the instance's command runner, adding --verbose
