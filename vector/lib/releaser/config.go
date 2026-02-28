@@ -22,6 +22,10 @@ func (r *Releaser) HooksDir() (string, error) {
 	return r.configItem("Releaser.HooksDir")
 }
 
+func (r *Releaser) DevDir() (string, error) {
+	return r.configItem("matrixOS.Root")
+}
+
 func (r *Releaser) UseCpReflink() (bool, error) {
 	return r.cfg.GetBool("Releaser.UseCpReflinkModeInsteadOfRsync")
 }

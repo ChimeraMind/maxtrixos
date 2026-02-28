@@ -191,6 +191,11 @@ func (r *Releaser) ReleaseHook() error {
 		return err
 	}
 
+	devDir, err := r.DevDir()
+	if err != nil {
+		return err
+	}
+
 	hookPath := filepath.Join(hooksDir, ref+".sh")
 	if !filesystems.FileExists(hookPath) {
 		r.PrintWarning("Release hook %s does not exist. Skipping ...\n", hookPath)
@@ -199,7 +204,11 @@ func (r *Releaser) ReleaseHook() error {
 
 	r.Print("Running release hook %s ...\n", hookPath)
 	cmd := exec.Command(hookPath)
-	cmd.Env = append(os.Environ(), "CHROOT_DIR="+r.imageDir)
+	cmd.Env = append(
+		os.Environ(),
+		"CHROOT_DIR="+r.imageDir,
+		"MATRIXOS_DEV_DIR="+devDir,
+	)
 	cmd.Stdout = r.stdout
 	cmd.Stderr = r.stderr
 	return cmd.Run()
