@@ -12,6 +12,9 @@ import (
 )
 
 func (r *Releaser) SetupHostname() error {
+	if err := checkImageDir(r.imageDir); err != nil {
+		return err
+	}
 	hostname, err := r.Hostname()
 	if err != nil {
 		return err
@@ -58,6 +61,9 @@ func parseServicesFile(path string) ([]serviceAction, error) {
 }
 
 func (r *Releaser) SetupServices() error {
+	if err := checkImageDir(r.imageDir); err != nil {
+		return err
+	}
 	imageDir := r.imageDir
 	ref := r.ref
 
@@ -202,6 +208,9 @@ func (r *Releaser) SetupServices() error {
 }
 
 func (r *Releaser) ReleaseHook() error {
+	if err := checkImageDir(r.imageDir); err != nil {
+		return err
+	}
 	ref := r.ref
 
 	hooksDir, err := r.HooksDir()

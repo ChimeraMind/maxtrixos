@@ -209,17 +209,8 @@ func NewReleaser(cfg config.IConfig, ot ostree.IOstree, opts *NewReleaserOptions
 	if opts == nil {
 		return nil, errors.New("missing options parameter")
 	}
-	if opts.ChrootDir == "" {
-		return nil, errors.New("missing ChrootDir in options")
-	}
-	if opts.ImageDir == "" {
-		return nil, errors.New("missing ImageDir in options")
-	}
 	if opts.Ref == "" {
 		return nil, errors.New("missing Ref in options")
-	}
-	if err := checkImageDir(opts.ImageDir); err != nil {
-		return nil, fmt.Errorf("invalid ImageDir: %w", err)
 	}
 
 	qa, err := validation.New(cfg)
@@ -341,6 +332,17 @@ func checkImageDir(imageDir string) error {
 	}
 	if !filesystems.DirectoryExists(imageDir) {
 		return errors.New("imageDir not found")
+	}
+	return nil
+}
+
+// checkChrootDir validates that chrootDir is a non-empty existing directory.
+func checkChrootDir(chrootDir string) error {
+	if chrootDir == "" {
+		return errors.New("chrootDir is empty")
+	}
+	if !filesystems.DirectoryExists(chrootDir) {
+		return errors.New("chrootDir not found")
 	}
 	return nil
 }

@@ -16,8 +16,8 @@ const (
 func (r *Releaser) CleanRootfs() error {
 	imageDir := r.imageDir
 
-	if imageDir == "" {
-		return fmt.Errorf("imageDir is not set")
+	if err := checkImageDir(imageDir); err != nil {
+		return err
 	}
 	if err := filesystems.CheckDirIsRoot(imageDir); err != nil {
 		return err
@@ -99,8 +99,8 @@ func (r *Releaser) CleanRootfs() error {
 func (r *Releaser) PostCleanShrink() error {
 	imageDir := r.imageDir
 
-	if imageDir == "" {
-		return fmt.Errorf("imageDir is not set")
+	if err := checkImageDir(imageDir); err != nil {
+		return err
 	}
 	if err := filesystems.CheckDirIsRoot(imageDir); err != nil {
 		return err
