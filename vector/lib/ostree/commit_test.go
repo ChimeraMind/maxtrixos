@@ -1,13 +1,13 @@
 package ostree
 
 import (
-	"io"
 	"matrixos/vector/lib/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"matrixos/vector/lib/runner"
 )
 
 // ---------------------------------------------------------------------------
@@ -136,7 +136,8 @@ func TestOstreeCommit_MockedRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOstree: %v", err)
 	}
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, name := cmd.Args, cmd.Name
 		captured = append([]string{name}, args...)
 		return nil
 	}
@@ -184,7 +185,8 @@ func TestCommitBody_MockedRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOstree: %v", err)
 	}
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, name := cmd.Args, cmd.Name
 		captured = append([]string{name}, args...)
 		return nil
 	}
@@ -220,7 +222,8 @@ func TestCommitEmptyBody_MockedRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOstree: %v", err)
 	}
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, name := cmd.Args, cmd.Name
 		captured = append([]string{name}, args...)
 		return nil
 	}

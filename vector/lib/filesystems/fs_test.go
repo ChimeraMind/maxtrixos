@@ -2,7 +2,7 @@ package filesystems
 
 import (
 	"fmt"
-	"io"
+	"matrixos/vector/lib/runner"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -69,58 +69,64 @@ func fakeExecCommand(command string, args ...string) *exec.Cmd {
 }
 
 // fakeExecRun wraps fakeExecCommand to implement runner.Func.
-func fakeExecRun(stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
-	cmd := fakeExecCommand(name, args...)
-	cmd.Stdin = stdin
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
+func fakeExecRun(c *runner.Cmd) error {
+	cmd := fakeExecCommand(c.Name, c.Args...)
+	cmd.Stdin = c.Stdin
+	cmd.Stdout = c.Stdout
+	cmd.Stderr = c.Stderr
 	return cmd.Run()
 }
 
 // fakeExecOutput wraps fakeExecCommand to implement runner.OutputFunc.
-func fakeExecOutput(name string, args ...string) ([]byte, error) {
-	return fakeExecCommand(name, args...).Output()
+func fakeExecOutput(c *runner.Cmd) ([]byte, error) {
+	return fakeExecCommand(c.Name, c.Args...).Output()
 }
 
 // fakeExecCombinedOutput wraps fakeExecCommand to implement runner.CombinedOutputFunc.
-func fakeExecCombinedOutput(name string, args ...string) ([]byte, error) {
-	return fakeExecCommand(name, args...).CombinedOutput()
+func fakeExecCombinedOutput(c *runner.Cmd) ([]byte, error) {
+	return fakeExecCommand(c.Name, c.Args...).CombinedOutput()
 }
 
 // fakeChrootRun wraps fakeExecCommand to implement runner.ChrootRunFunc.
-func fakeChrootRun(stdin io.Reader, stdout, stderr io.Writer, chrootDir, chrootExec string, args ...string) error {
-	if chrootDir == "" {
+func fakeChrootRun(c *runner.ChrootCmd) error {
+	if c.ChrootDir == "" {
 		return fmt.Errorf("missing chrootDir parameter")
 	}
-	if chrootExec == "" {
-		return fmt.Errorf("missing chrootExec parameter")
+	if c.Name == "" {
+		return fmt.Errorf("missing Name parameter")
 	}
 	// Build the same unshare args that runner.chrootArgs would build,
 	// then delegate to fakeExecRun so TestHelperProcess handles "unshare".
 	cmdArgs := []string{
 		"--pid", "--fork", "--kill-child", "--mount", "--uts", "--ipc",
-		fmt.Sprintf("--mount-proc=%s/proc", chrootDir),
-		"chroot", chrootDir, chrootExec,
+		fmt.Sprintf("--mount-proc=%s/proc", c.ChrootDir),
+		"chroot", c.ChrootDir, c.Name,
 	}
-	cmdArgs = append(cmdArgs, args...)
-	return fakeExecRun(stdin, stdout, stderr, "unshare", cmdArgs...)
+	cmdArgs = append(cmdArgs, c.Args...)
+	return fakeExecRun(&runner.Cmd{
+		Name:   "unshare",
+		Args:   cmdArgs,
+		Stdin:  c.Stdin,
+		Stdout: c.Stdout,
+		Stderr: c.Stderr,
+	})
 }
 
 // fakeChrootOutput wraps fakeExecCommand to implement runner.ChrootOutputFunc.
-func fakeChrootOutput(chrootDir, chrootExec string, args ...string) ([]byte, error) {
-	if chrootDir == "" {
+func fakeChrootOutput(c *runner.ChrootCmd) ([]byte, error) {
+	if c.ChrootDir == "" {
 		return nil, fmt.Errorf("missing chrootDir parameter")
 	}
-	if chrootExec == "" {
-		return nil, fmt.Errorf("missing chrootExec parameter")
+	if c.Name == "" {
+		return nil, fmt.Errorf("missing Name parameter")
 	}
 	cmdArgs := []string{
 		"--pid", "--fork", "--kill-child", "--mount", "--uts", "--ipc",
-		fmt.Sprintf("--mount-proc=%s/proc", chrootDir),
-		"chroot", chrootDir, chrootExec,
+		fmt.Sprintf("--mount-proc=%s/proc", c.ChrootDir),
+		"chroot", c.ChrootDir, c.Name,
 	}
-	cmdArgs = append(cmdArgs, args...)
-	return fakeExecOutput("unshare", cmdArgs...)
+	cmdArgs = append(cmdArgs, c.Args...)
+	return fakeExecOutput(&runner.Cmd{Name: "unshare", Args: cmdArgs})
 }
 
 // setupMockExec swaps all execution vars with fakes and registers cleanup.

@@ -2,15 +2,15 @@ package imager
 
 import (
 	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/ostree"
+	"matrixos/vector/lib/runner"
 )
 
 // --- Cleanup tracking tests ---
@@ -130,8 +130,8 @@ func TestProductionizeImageBasic(t *testing.T) {
 	im.SetStderr(&bytes.Buffer{})
 
 	// Mock runner: simulate xz creating the compressed file.
-	im.runner = func(_ io.Reader, _, _ io.Writer, name string, args ...string) error {
-		for _, a := range args {
+	im.runner = func(cmd *runner.Cmd) error {
+		for _, a := range cmd.Args {
 			if strings.HasSuffix(a, ".img") {
 				os.WriteFile(a+".xz", []byte("compressed"), 0644)
 			}
@@ -212,8 +212,8 @@ func TestProductionizeImageWithCompression(t *testing.T) {
 	im.SetStderr(&bytes.Buffer{})
 
 	// Mock runner that creates the compressed file xz would produce.
-	im.runner = func(_ io.Reader, _, _ io.Writer, name string, args ...string) error {
-		for _, a := range args {
+	im.runner = func(cmd *runner.Cmd) error {
+		for _, a := range cmd.Args {
 			if strings.HasSuffix(a, ".img") {
 				os.WriteFile(a+".xz", []byte("compressed"), 0644)
 			}
@@ -336,18 +336,18 @@ func TestProductionizeImageWithQcow2(t *testing.T) {
 	im.SetStderr(&bytes.Buffer{})
 
 	// Mock runner: simulate xz (compression) and qemu-img (qcow2 creation).
-	im.runner = func(_ io.Reader, _, _ io.Writer, name string, args ...string) error {
-		switch name {
+	im.runner = func(cmd *runner.Cmd) error {
+		switch cmd.Name {
 		case "qemu-img":
 			// qemu-img convert -c -O qcow2 -p <input> <output>
 			// The last arg is the output qcow2 path.
-			if len(args) >= 2 {
-				qcow2Path := args[len(args)-1]
+			if len(cmd.Args) >= 2 {
+				qcow2Path := cmd.Args[len(cmd.Args)-1]
 				os.WriteFile(qcow2Path, []byte("qcow2 data"), 0644)
 			}
 		default:
 			// xz or other compressor: create compressed file.
-			for _, a := range args {
+			for _, a := range cmd.Args {
 				if strings.HasSuffix(a, ".img") {
 					os.WriteFile(a+".xz", []byte("compressed"), 0644)
 				}

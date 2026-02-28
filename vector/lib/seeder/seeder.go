@@ -103,15 +103,61 @@ type ISeeder interface {
 	// If fn panics or the process crashes, the OS closes the file descriptor and
 	// releases the lock automatically.
 	ExecuteWithSeederLock(name string, fn func() error) error
+
+	// GitCloneArgs returns the git clone arguments configured for the seeder.
+	GitCloneArgs() (string, error)
+
+	// DownloadsDir returns the path where seeder downloads are stored.
+	DownloadsDir() (string, error)
+	// DistfilesDir returns the path where distfiles are stored.
+	DistfilesDir() (string, error)
+	// BinpkgsDir returns the path where binary packages are stored.
+	BinpkgsDir() (string, error)
+	// GpgKeysDir returns the path where Gentoo releng GPG keys are kept.
+	GpgKeysDir() (string, error)
+	// DevDir returns the matrixOS toolkit root directory (matrixOS.Root).
+	DevDir() (string, error)
+	// DefaultDevDir returns the default matrixOS root inside chroots.
+	DefaultDevDir() (string, error)
+	// GitRepo returns the matrixOS git repository URL.
+	GitRepo() (string, error)
+	// DefaultPrivateGitRepoPath returns the private repo path inside chroots.
+	DefaultPrivateGitRepoPath() (string, error)
+
+	// SeederDoneFlagFile computes the done-flag file path for a seeder.
+	SeederDoneFlagFile(name, chrootDir string) (string, error)
+	// IsSeederDone checks whether the seeder done-flag file exists.
+	IsSeederDone(name, chrootDir string) (bool, error)
+	// MarkSeederDone creates the done-flag file for the given seeder.
+	MarkSeederDone(name, chrootDir string) error
+	// ParseSeederParams sources a seeder params.sh and extracts the
+	// required variables (SEEDER_CHROOT_NAME, etc.).
+	ParseSeederParams(paramsPath string) (*SeederParams, error)
+	// ImportGentooGpgKeys imports Gentoo release engineering GPG keys.
+	ImportGentooGpgKeys() error
+	// ExecutePrepper runs the prepper script with required env vars.
+	ExecutePrepper(
+		info SeederInfo, params *SeederParams, opts *PrepperOptions,
+	) error
+	// SetupChrootMounts sets up all mounts for a seeder chroot.
+	// Returns a cleanup function that unmounts everything.
+	SetupChrootMounts(chrootDir string) (func(), error)
+	// SetupChrootDNS copies /etc/resolv.conf into the chroot.
+	SetupChrootDNS(chrootDir string) error
+	// SetupChrootDirs creates phase dirs and clones the dev toolkit.
+	SetupChrootDirs(chrootDir string) error
+	// ExecuteInChroot runs the seeder script inside the chroot.
+	ExecuteInChroot(chrootDir string, info SeederInfo) error
+	// CleanTemporaryArtifact removes a temporary artifact directory.
+	CleanTemporaryArtifact(dir string) error
 }
 
 // Seeder provides seed detection and manipulation operations.
 type Seeder struct {
-	cfg       config.IConfig
-	runner    runner.Func
-	dirRunner runner.DirRunFunc
-	stdout    io.Writer
-	stderr    io.Writer
+	cfg    config.IConfig
+	runner runner.Func
+	stdout io.Writer
+	stderr io.Writer
 
 	verbose bool
 }
@@ -125,11 +171,10 @@ func NewSeeder(cfg config.IConfig, opts *NewSeederOptions) (*Seeder, error) {
 		opts = &NewSeederOptions{}
 	}
 	return &Seeder{
-		cfg:       cfg,
-		runner:    runner.Run,
-		dirRunner: runner.DirRun,
-		stdout:    os.Stdout,
-		stderr:    os.Stderr,
-		verbose:   opts.Verbose,
+		cfg:     cfg,
+		runner:  runner.Run,
+		stdout:  os.Stdout,
+		stderr:  os.Stderr,
+		verbose: opts.Verbose,
 	}, nil
 }

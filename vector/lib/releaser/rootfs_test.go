@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -519,7 +518,7 @@ func TestPostCleanShrink_ChrootRunFailure(t *testing.T) {
 	}
 
 	chrootRunCalled := false
-	filesystems.ExecChrootRun = runner.ChrootRunFunc(func(stdin io.Reader, stdout, stderr io.Writer, chrootDir, chrootExec string, args ...string) error {
+	filesystems.ExecChrootRun = runner.ChrootRunFunc(func(c *runner.ChrootCmd) error {
 		chrootRunCalled = true
 		return errors.New("fake chroot error")
 	})

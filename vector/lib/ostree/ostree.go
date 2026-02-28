@@ -157,6 +157,17 @@ type IOstree interface {
 // runCommand runs a generic binary with args and stdout/stderr handling.
 var runCommand runner.Func = runner.Run
 
+// newOstreeCmd creates a runner.Cmd for the "ostree" binary with the given
+// stdout/stderr writers and arguments.
+func newOstreeCmd(stdout, stderr io.Writer, args ...string) *runner.Cmd {
+	return &runner.Cmd{
+		Name:   "ostree",
+		Args:   args,
+		Stdout: stdout,
+		Stderr: stderr,
+	}
+}
+
 func readerToList(reader io.Reader) ([]string, error) {
 	var elements []string
 	scanner := bufio.NewScanner(reader)
@@ -277,7 +288,7 @@ func (o *Ostree) runCmd(stdout, stderr io.Writer, args ...string) error {
 		o.PrintError(">> Executing: ostree --verbose %s\n", strings.Join(args, " "))
 	}
 	finalArgs = append(finalArgs, args...)
-	return o.runner(nil, stdout, stderr, "ostree", finalArgs...)
+	return o.runner(newOstreeCmd(stdout, stderr, finalArgs...))
 }
 
 // ostreeRun runs an ostree command with stdout/stderr directed to the instance's stdout/stderr.
@@ -305,7 +316,7 @@ func run(stdout, stderr io.Writer, verbose bool, args ...string) error {
 		fmt.Fprintf(stderr, ">> Executing: ostree --verbose %s\n", strings.Join(args, " "))
 	}
 	finalArgs = append(finalArgs, args...)
-	return runCommand(nil, stdout, stderr, "ostree", finalArgs...)
+	return runCommand(newOstreeCmd(stdout, stderr, finalArgs...))
 }
 
 // Run runs an ostree command with --verbose if requested.

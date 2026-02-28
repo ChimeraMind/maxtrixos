@@ -2,11 +2,11 @@ package ostree
 
 import (
 	"fmt"
-	"io"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"os"
 	"testing"
+	"matrixos/vector/lib/runner"
 )
 
 // --- helpers for 3-way diff tests ---
@@ -55,7 +55,8 @@ A    vconsole.conf
 A    ostree
 `
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		stdout := cmd.Stdout
 		stdout.Write([]byte(mockOutput))
 		return nil
 	}
@@ -146,7 +147,8 @@ func TestConfigDiff_CommandArgs(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, name := cmd.Args, cmd.Name
 		lastCmdArgs = append([]string{name}, args...)
 		return nil
 	}
@@ -183,7 +185,8 @@ func TestConfigDiff_Verbose(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, name := cmd.Args, cmd.Name
 		lastCmdArgs = append([]string{name}, args...)
 		return nil
 	}
@@ -220,7 +223,7 @@ func TestConfigDiff_EmptyOutput(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
 		return nil
 	}
 
@@ -262,7 +265,7 @@ func TestConfigDiff_CommandError(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
 		return fmt.Errorf("command failed")
 	}
 

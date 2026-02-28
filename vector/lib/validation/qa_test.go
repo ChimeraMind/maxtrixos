@@ -35,18 +35,18 @@ func fakeExecCommand(command string, args ...string) *exec.Cmd {
 }
 
 // fakeExecChrootOutput mocks filesystems.ExecChrootOutput for tests.
-func fakeExecChrootOutput(chrootDir, chrootExec string, args ...string) ([]byte, error) {
-	allArgs := strings.Join(args, " ")
-	if chrootExec == "modinfo" && strings.Contains(allArgs, "-F sig_key") {
+func fakeExecChrootOutput(c *runner.ChrootCmd) ([]byte, error) {
+	allArgs := strings.Join(c.Args, " ")
+	if c.Name == "modinfo" && strings.Contains(allArgs, "-F sig_key") {
 		return []byte(os.Getenv("MOCK_SIG_KEY")), nil
 	}
-	if chrootExec == "modinfo" && strings.Contains(allArgs, "-F vermagic") {
+	if c.Name == "modinfo" && strings.Contains(allArgs, "-F vermagic") {
 		return []byte("5.15.0 SMP mod_unload"), nil
 	}
-	if chrootExec == "which" {
-		return []byte("/usr/bin/" + args[len(args)-1]), nil
+	if c.Name == "which" {
+		return []byte("/usr/bin/" + c.Args[len(c.Args)-1]), nil
 	}
-	return nil, fmt.Errorf("unknown mock chroot command: %s %s", chrootExec, allArgs)
+	return nil, fmt.Errorf("unknown mock chroot command: %s %s", c.Name, allArgs)
 }
 
 func setupMockChrootOutput(t *testing.T) {

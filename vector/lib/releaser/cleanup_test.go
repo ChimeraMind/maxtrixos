@@ -2,7 +2,6 @@ package releaser
 
 import (
 	"bytes"
-	"io"
 	"sync"
 	"testing"
 
@@ -40,7 +39,7 @@ func mockMountSyscalls(t *testing.T) {
 		return nil
 	}
 	filesystems.ExecChrootRun = runner.ChrootRunFunc(
-		func(stdin io.Reader, stdout, stderr io.Writer, chrootDir, chrootExec string, args ...string) error {
+		func(c *runner.ChrootCmd) error {
 			return nil
 		},
 	)

@@ -7,12 +7,18 @@ import (
 	"time"
 
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/runner"
 )
 
 func (s *Seeder) RetryableCmd(tries int, name string, args ...string) error {
 	var lastErr error
 	for attempt := 1; attempt <= tries; attempt++ {
-		lastErr = s.runner(nil, s.stdout, s.stderr, name, args...)
+		lastErr = s.runner(&runner.Cmd{
+			Name:   name,
+			Args:   args,
+			Stdout: s.stdout,
+			Stderr: s.stderr,
+		})
 		if lastErr == nil {
 			return nil
 		}
@@ -80,7 +86,12 @@ func (s *Seeder) cloneRepo(repoPath, gitURL string) error {
 	gitArgs = append(gitArgs, cloneArgs...)
 	gitArgs = append(gitArgs, gitURL, repoPath)
 
-	if err := s.runner(nil, s.stdout, s.stderr, "git", gitArgs...); err != nil {
+	if err := s.runner(&runner.Cmd{
+		Name:   "git",
+		Args:   gitArgs,
+		Stdout: s.stdout,
+		Stderr: s.stderr,
+	}); err != nil {
 		return fmt.Errorf("git clone failed: %w", err)
 	}
 
@@ -99,7 +110,9 @@ func (s *Seeder) gitCloneArgs() ([]string, error) {
 
 // runMakeInDir runs ./make.sh inside the given directory.
 func (s *Seeder) runMakeInDir(dir string) error {
-	return s.dirRunner(dir, nil, s.stdout, s.stderr, "./make.sh")
+	cmd := &runner.Cmd{Name: "./make.sh", Stdout: s.stdout, Stderr: s.stderr}
+	cmd.Dir = dir
+	return s.runner(cmd)
 }
 
 // dirIsEmpty returns true when dir exists but contains no entries.
