@@ -16,12 +16,14 @@ func TestIniConfig_Load_Expansion(t *testing.T) {
 
 	// Define absolute paths for roots to ensure deterministic testsd
 	rootPath := "/tmp/matrixos-root"
+	defaultRootPath := "/tmp/matrixos-default-root"
 	privateRepoPath := "/tmp/matrixos-private"
 	defaultPrivateRepoPath := "/tmp/matrixos-default-private"
 
 	configContent := `
 [matrixOS]
 Root=` + rootPath + `
+DefaultRoot=` + defaultRootPath + `
 PrivateGitRepoPath=` + privateRepoPath + `
 DefaultPrivateGitRepoPath=` + defaultPrivateRepoPath + `
 LogsDir=/var/log/matrixos
@@ -39,6 +41,7 @@ SecureBootKekPublicKey=sb-keys/KEK.pem
 DefaultSecureBootPrivateKey=sb-keys/db.key
 DefaultSecureBootPublicKey=sb-keys/db.pem
 LocksDir=locks/seeder
+ChrootSeedersDir=build/seeders
 
 [Releaser]
 LocksDir=locks/releaser
@@ -120,6 +123,10 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 	// Relative to DefaultPrivateGitRepoPath
 	check("Seeder.DefaultSecureBootPrivateKey", filepath.Join(defaultPrivateRepoPath, "sb-keys/db.key"))
 	check("Seeder.DefaultSecureBootPublicKey", filepath.Join(defaultPrivateRepoPath, "sb-keys/db.pem"))
+
+	// Relative to DefaultRoot
+	check("matrixOS.DefaultRoot", defaultRootPath)
+	check("Seeder.ChrootSeedersDir", filepath.Join(defaultRootPath, "build/seeders"))
 }
 
 func TestIniConfig_Defaults(t *testing.T) {
