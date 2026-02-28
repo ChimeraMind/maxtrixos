@@ -89,7 +89,6 @@ type MockSeeder struct {
 	ParseSeederParamsErr      error
 	ImportGentooGpgKeysErr    error
 	ExecutePrepperErr         error
-	SetupChrootMountsCleanup  func()
 	SetupChrootMountsErr      error
 	SetupChrootDNSErr         error
 	SetupChrootDirsErr        error
@@ -103,6 +102,7 @@ type MockSeeder struct {
 	ImportGentooGpgKeysCalled        bool
 	ExecutePrepperCalled             bool
 	SetupChrootMountsCalled          bool
+	CleanupCalled                    bool
 	SetupChrootDNSCalled             bool
 	SetupChrootDirsCalled            bool
 	ExecuteInChrootCalled            bool
@@ -273,18 +273,12 @@ func (m *MockSeeder) ExecutePrepper(
 	m.ExecutePrepperCalled = true
 	return m.ExecutePrepperErr
 }
-func (m *MockSeeder) SetupChrootMounts(
-	chrootDir string,
-) (func(), error) {
+func (m *MockSeeder) SetupChrootMounts(chrootDir string) error {
 	m.SetupChrootMountsCalled = true
-	if m.SetupChrootMountsErr != nil {
-		return nil, m.SetupChrootMountsErr
-	}
-	cleanup := m.SetupChrootMountsCleanup
-	if cleanup == nil {
-		cleanup = func() {}
-	}
-	return cleanup, nil
+	return m.SetupChrootMountsErr
+}
+func (m *MockSeeder) Cleanup() {
+	m.CleanupCalled = true
 }
 func (m *MockSeeder) SetupChrootDNS(chrootDir string) error {
 	m.SetupChrootDNSCalled = true
