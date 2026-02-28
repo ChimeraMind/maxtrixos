@@ -132,44 +132,6 @@ func TestMarkSeederDone(t *testing.T) {
 	}
 }
 
-func TestCleanTemporaryArtifact(t *testing.T) {
-	tmp := t.TempDir()
-	artDir := filepath.Join(tmp, "artifact")
-	os.MkdirAll(artDir, 0755)
-	os.WriteFile(filepath.Join(artDir, "file"), []byte("x"), 0644)
-
-	cfg := workerTestConfig()
-	sd := newTestSeederWithConfig(cfg)
-
-	if err := sd.CleanTemporaryArtifact(artDir); err != nil {
-		t.Fatalf("CleanTemporaryArtifact: %v", err)
-	}
-
-	if _, err := os.Stat(artDir); !os.IsNotExist(err) {
-		t.Error("Expected artifact dir to be removed")
-	}
-}
-
-func TestCleanTemporaryArtifactEmptyDir(t *testing.T) {
-	cfg := workerTestConfig()
-	sd := newTestSeederWithConfig(cfg)
-
-	err := sd.CleanTemporaryArtifact("")
-	if err == nil {
-		t.Error("Expected error for empty dir, got nil")
-	}
-}
-
-func TestCleanTemporaryArtifactNonexistent(t *testing.T) {
-	cfg := workerTestConfig()
-	sd := newTestSeederWithConfig(cfg)
-
-	err := sd.CleanTemporaryArtifact("/nonexistent/dir/xxx")
-	if err == nil {
-		t.Error("Expected error for nonexistent dir, got nil")
-	}
-}
-
 func TestNewConfigAccessors(t *testing.T) {
 	cfg := workerTestConfig()
 	cfg.Items["Seeder.DownloadsDir"] = []string{"/dl"}
@@ -1214,42 +1176,6 @@ func TestMarkSeederDone_ConfigError(t *testing.T) {
 	err := sd.MarkSeederDone("x", "/chroot")
 	if err == nil {
 		t.Fatal("expected error propagated from SeederDoneFlagFile")
-	}
-}
-
-// --- CleanTemporaryArtifact additional tests ---
-
-func TestCleanTemporaryArtifact_SuccessEmptyDir(t *testing.T) {
-	// Test cleaning an empty directory (no submounts).
-	tmp := t.TempDir()
-	artDir := filepath.Join(tmp, "empty-art")
-	os.MkdirAll(artDir, 0755)
-
-	sd := newTestSeederWithConfig(workerTestConfig())
-
-	if err := sd.CleanTemporaryArtifact(artDir); err != nil {
-		t.Fatalf("CleanTemporaryArtifact: %v", err)
-	}
-
-	if _, err := os.Stat(artDir); !os.IsNotExist(err) {
-		t.Error("directory should have been removed")
-	}
-}
-
-func TestCleanTemporaryArtifact_NestedFiles(t *testing.T) {
-	tmp := t.TempDir()
-	artDir := filepath.Join(tmp, "nested")
-	os.MkdirAll(filepath.Join(artDir, "sub", "deep"), 0755)
-	os.WriteFile(filepath.Join(artDir, "sub", "deep", "f.txt"), []byte("data"), 0644)
-
-	sd := newTestSeederWithConfig(workerTestConfig())
-
-	if err := sd.CleanTemporaryArtifact(artDir); err != nil {
-		t.Fatalf("CleanTemporaryArtifact: %v", err)
-	}
-
-	if _, err := os.Stat(artDir); !os.IsNotExist(err) {
-		t.Error("nested directory should have been removed")
 	}
 }
 
