@@ -18,7 +18,8 @@ type BuildCommand struct {
 // NewBuildCommand creates a new BuildCommand
 func NewBuildCommand() *BuildCommand {
 	subcommands := map[string]func() ICommand{
-		"image": NewImageCommand,
+		"image":   NewImageCommand,
+		"release": NewReleaseCommand,
 	}
 	return &BuildCommand{
 		fs:          flag.NewFlagSet("build", flag.ExitOnError),
