@@ -152,11 +152,6 @@ type IRelease interface {
 	// Release commits the image directory to the ostree repository.
 	Release(opts CommitOptions) error
 
-	// DetectLocalReleases lists local ostree refs, filtered by skip and only functions.
-	DetectLocalReleases(skip, only RefFilterFunc) ([]string, error)
-	// DetectRemoteReleases lists remote ostree refs, filtered by skip and only functions.
-	DetectRemoteReleases(skip, only RefFilterFunc) ([]string, error)
-
 	// ReleaseLockDir returns the lock directory, creating it if necessary.
 	ReleaseLockDir() (string, error)
 	// ReleaseLockPath returns the lock file path for the given release name.
@@ -190,35 +185,6 @@ type Releaser struct {
 	// so that Cleanup can attempt to unmount them all on failure or signal.
 	trackedMountsMu sync.Mutex
 	trackedMounts   []string
-}
-
-// NewMinimalReleaserForImagesOptions contains options for creating a new minimal Releaser for image creation.
-type NewMinimalReleaserForImagesOptions struct {
-	Verbose bool
-}
-
-// NewMinimalReleaser creates a new Releaser instance for image creation with minimal options.
-func NewMinimalReleaser(cfg config.IConfig, ot ostree.IOstree, opts *NewMinimalReleaserForImagesOptions) (*Releaser, error) {
-	if cfg == nil {
-		return nil, errors.New("missing config parameter")
-	}
-	if ot == nil {
-		return nil, errors.New("missing ostree parameter")
-	}
-	qa, err := validation.New(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize QA: %w", err)
-	}
-
-	return &Releaser{
-		cfg:     cfg,
-		ostree:  ot,
-		runner:  runner.Run,
-		qa:      qa,
-		stdout:  os.Stdout,
-		stderr:  os.Stderr,
-		verbose: opts.Verbose,
-	}, nil
 }
 
 // NewReleaser creates a new Releaser instance.
