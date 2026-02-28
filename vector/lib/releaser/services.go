@@ -11,7 +11,6 @@ import (
 	"matrixos/vector/lib/filesystems"
 )
 
-// SetupHostname configures the hostname inside the image directory.
 func (r *Releaser) SetupHostname() error {
 	hostname, err := r.Hostname()
 	if err != nil {
@@ -58,8 +57,6 @@ func parseServicesFile(path string) ([]serviceAction, error) {
 	return actions, scanner.Err()
 }
 
-// SetupServices configures systemd services inside the image directory
-// based on the per-ref services configuration file.
 func (r *Releaser) SetupServices() error {
 	imageDir := r.imageDir
 	ref := r.ref
@@ -186,7 +183,6 @@ func (r *Releaser) SetupServices() error {
 	return nil
 }
 
-// ReleaseHook runs the per-ref release hook script, if one exists.
 func (r *Releaser) ReleaseHook() error {
 	ref := r.ref
 

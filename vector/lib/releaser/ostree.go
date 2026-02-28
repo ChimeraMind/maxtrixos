@@ -12,21 +12,16 @@ import (
 	"matrixos/vector/lib/ostree"
 )
 
-// SymlinkEtc creates a /etc -> usr/etc symlink in the image directory
-// to prevent emerge from recreating /etc during post-clean.
 func (r *Releaser) SymlinkEtc() error {
 	r.Print("Symlinking /etc to prevent emerge packages recreating it ...\n")
 	return os.Symlink("usr/etc", filepath.Join(r.imageDir, "etc"))
 }
 
-// UnlinkEtc removes the /etc symlink before an ostree commit.
 func (r *Releaser) UnlinkEtc() error {
 	r.Print("Removing /etc symlink before ostree commit ...\n")
 	return os.Remove(filepath.Join(r.imageDir, "etc"))
 }
 
-// AddExtraDotDotToUsrEtcPortage adjusts the /usr/etc/portage symlink
-// after /etc has been moved to /usr/etc, adding an extra "../" prefix.
 func (r *Releaser) AddExtraDotDotToUsrEtcPortage() error {
 	r.Print("Fixing /usr/etc/portage symlink after move of /etc to /usr/etc ...\n")
 	etcPortageDir := filepath.Join(r.imageDir, "usr/etc/portage")
@@ -53,8 +48,6 @@ func (r *Releaser) AddExtraDotDotToUsrEtcPortage() error {
 	return nil
 }
 
-// RemoveExtraDotDotFromUsrEtcPortage removes the extra "../" prefix from the
-// /usr/etc/portage symlink so it works after client-side deployment.
 func (r *Releaser) RemoveExtraDotDotFromUsrEtcPortage() error {
 	r.Print("Removing extra ../ from /usr/etc/portage so that it works after client deployment.\n")
 	etcPortageDir := filepath.Join(r.imageDir, "usr/etc/portage")
@@ -81,7 +74,6 @@ func (r *Releaser) RemoveExtraDotDotFromUsrEtcPortage() error {
 	return nil
 }
 
-// OstreePrepare prepares and validates the filesystem hierarchy for OSTree.
 func (r *Releaser) OstreePrepare() error {
 	if err := r.ostree.PrepareFilesystemHierarchy(r.imageDir); err != nil {
 		return err
@@ -89,7 +81,6 @@ func (r *Releaser) OstreePrepare() error {
 	return r.ostree.ValidateFilesystemHierarchy(r.imageDir)
 }
 
-// MaybeOstreeInit initialises the local ostree repository if it does not already exist.
 func (r *Releaser) MaybeOstreeInit() error {
 	repoDir, err := r.ostree.RepoDir()
 	if err != nil {
@@ -119,7 +110,6 @@ func (r *Releaser) MaybeOstreeInit() error {
 	return r.ostree.SetGpg(gpgEnabled)
 }
 
-// Release commits the image directory to the ostree repository.
 func (r *Releaser) Release(opts CommitOptions) error {
 	imageDir := r.imageDir
 	repoDir, err := r.ostree.RepoDir()

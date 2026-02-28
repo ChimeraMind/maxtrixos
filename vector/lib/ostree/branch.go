@@ -86,12 +86,10 @@ func (o *Ostree) isBranchFullSuffixed(ref string) (bool, error) {
 	return strings.HasSuffix(ref, "-"+val), nil
 }
 
-// IsBranchFullSuffixed checks if the instance ref is a "full" branch.
 func (o *Ostree) IsBranchFullSuffixed() (bool, error) {
 	return o.isBranchFullSuffixed(o.ref)
 }
 
-// BranchShortnameToFull converts a short branch name to a full one.
 func (o *Ostree) BranchShortnameToFull(shortName, relStage, osName, arch string) (string, error) {
 	if shortName == "" {
 		return "", errors.New("invalid shortName parameter")
@@ -122,7 +120,6 @@ func (o *Ostree) BranchShortnameToFull(shortName, relStage, osName, arch string)
 	return BranchShortnameToNormal(relStage, shortName, osName, arch)
 }
 
-// BranchToFull converts a normal branch name to a full one.
 func (o *Ostree) BranchToFull() (string, error) {
 	ref := o.ref
 	if ref == "" {
@@ -145,7 +142,6 @@ func (o *Ostree) BranchToFull() (string, error) {
 	return fmt.Sprintf("%s-%s", ref, suffix), nil
 }
 
-// RemoveFullFromBranch removes the "-full" suffix from a branch name.
 func (o *Ostree) RemoveFullFromBranch() (string, error) {
 	ref := o.ref
 	if ref == "" {

@@ -103,7 +103,6 @@ func materializeBody(opts *CommitOptions) (tmpPath string, err error) {
 	return f.Name(), nil
 }
 
-// Commit performs an ostree commit using the instance runner.
 func (o *Ostree) Commit(opts CommitOptions) error {
 	tmp, err := materializeBody(&opts)
 	if tmp != "" {

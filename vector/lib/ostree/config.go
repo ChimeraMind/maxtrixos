@@ -5,12 +5,10 @@ import (
 	"fmt"
 )
 
-// GpgEnabled returns whether GPG signing and verification is enabled.
 func (o *Ostree) GpgEnabled() (bool, error) {
 	return o.cfg.GetBool("Ostree.Gpg")
 }
 
-// SetGpg enables or disables GPG verification in the local ostree repository.
 func (o *Ostree) SetGpg(enabled bool) error {
 	repoDir, err := o.RepoDir()
 	if err != nil {
@@ -23,8 +21,6 @@ func (o *Ostree) SetGpg(enabled bool) error {
 	return o.ostreeRun("--repo="+repoDir, "config", "set", "core.gpg-verify", val)
 }
 
-// GpgPublicKeyPath returns the user defined private/ placed
-// GPG private key path.
 func (o *Ostree) GpgPrivateKeyPath() (string, error) {
 	pk, err := o.cfg.GetItem("Ostree.GpgPrivateKey")
 	if err != nil {
@@ -36,8 +32,6 @@ func (o *Ostree) GpgPrivateKeyPath() (string, error) {
 	return pk, nil
 }
 
-// GpgPublicKeyPath returns the user defined private/ placed
-// GPG public key path.
 func (o *Ostree) GpgPublicKeyPath() (string, error) {
 	pk, err := o.cfg.GetItem("Ostree.GpgPublicKey")
 	if err != nil {
@@ -49,8 +43,6 @@ func (o *Ostree) GpgPublicKeyPath() (string, error) {
 	return pk, nil
 }
 
-// GpgOfficialPubKeyPath returns the official, git repository distributed
-// GPG public key path.
 func (o *Ostree) GpgOfficialPubKeyPath() (string, error) {
 	pk, err := o.cfg.GetItem("Ostree.GpgOfficialPublicKey")
 	if err != nil {
@@ -62,7 +54,6 @@ func (o *Ostree) GpgOfficialPubKeyPath() (string, error) {
 	return pk, nil
 }
 
-// OsName returns the name of the OS as defined in the config.
 func (o *Ostree) OsName() (string, error) {
 	name, err := o.cfg.GetItem("matrixOS.OsName")
 	if err != nil {
@@ -74,7 +65,6 @@ func (o *Ostree) OsName() (string, error) {
 	return name, nil
 }
 
-// FancyOsName returns the fancy (display) name of the OS as defined in the config.
 func (o *Ostree) FancyOsName() (string, error) {
 	name, err := o.cfg.GetItem("matrixOS.FancyOsName")
 	if err != nil {
@@ -86,7 +76,6 @@ func (o *Ostree) FancyOsName() (string, error) {
 	return name, nil
 }
 
-// Arch returns the build architecture as defined in the config.
 func (o *Ostree) Arch() (string, error) {
 	arch, err := o.cfg.GetItem("matrixOS.Arch")
 	if err != nil {
@@ -98,7 +87,6 @@ func (o *Ostree) Arch() (string, error) {
 	return arch, nil
 }
 
-// RepoDir returns the path to the ostree repository.
 func (o *Ostree) RepoDir() (string, error) {
 	repoDir, err := o.cfg.GetItem("Ostree.RepoDir")
 	if err != nil {
@@ -110,7 +98,6 @@ func (o *Ostree) RepoDir() (string, error) {
 	return repoDir, nil
 }
 
-// Sysroot returns the path to the ostree sysroot directory. Usually /sysroot.
 func (o *Ostree) Sysroot() (string, error) {
 	sysroot, err := o.cfg.GetItem("Ostree.Sysroot")
 	if err != nil {
@@ -122,8 +109,6 @@ func (o *Ostree) Sysroot() (string, error) {
 	return sysroot, nil
 }
 
-// Root returns the path to the root filesystem directory used as root for
-// ostree operations (i.e. --sysroot).
 func (o *Ostree) Root() (string, error) {
 	root, err := o.cfg.GetItem("Ostree.Root")
 	if err != nil {
@@ -135,7 +120,6 @@ func (o *Ostree) Root() (string, error) {
 	return root, nil
 }
 
-// Remote returns the name of the remote.
 func (o *Ostree) Remote() (string, error) {
 	remote, err := o.cfg.GetItem("Ostree.Remote")
 	if err != nil {
@@ -147,7 +131,6 @@ func (o *Ostree) Remote() (string, error) {
 	return remote, nil
 }
 
-// RemoteURL returns the URL of the remote.
 func (o *Ostree) RemoteURL() (string, error) {
 	url, err := o.cfg.GetItem("Ostree.RemoteUrl")
 	if err != nil {
@@ -159,8 +142,6 @@ func (o *Ostree) RemoteURL() (string, error) {
 	return url, nil
 }
 
-// AvailableGpgPubKeyPaths returns the list of available (file exists)
-// GPG public key paths.
 func (o *Ostree) AvailableGpgPubKeyPaths() ([]string, error) {
 	var candidates []string
 	privatePubKeyPath, err := o.GpgPublicKeyPath()
@@ -189,8 +170,6 @@ func (o *Ostree) AvailableGpgPubKeyPaths() ([]string, error) {
 	return paths, nil
 }
 
-// GpgBestPubKeyPath returns the path to the GPG public key to use.
-// It prefers the private key path over the official one.
 func (o *Ostree) GpgBestPubKeyPath() (string, error) {
 	paths, err := o.AvailableGpgPubKeyPaths()
 	if err != nil {
@@ -200,7 +179,6 @@ func (o *Ostree) GpgBestPubKeyPath() (string, error) {
 	return paths[0], nil
 }
 
-// ClientSideGpgArgs returns arguments for client-side GPG verification.
 func (o *Ostree) ClientSideGpgArgs() ([]string, error) {
 	gpgEnabled, err := o.GpgEnabled()
 	if err != nil {

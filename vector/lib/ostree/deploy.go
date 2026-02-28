@@ -163,7 +163,6 @@ func (o *Ostree) listDeploymentsFromSysroot(sysroot string) ([]Deployment, error
 	return deployments.Deployments, nil
 }
 
-// BootCommit returns the boot commit from an ostree sysroot.
 func (o *Ostree) BootCommit(sysroot string) (string, error) {
 	osName, err := o.OsName()
 	if err != nil {
@@ -180,7 +179,6 @@ func (o *Ostree) BootCommit(sysroot string) (string, error) {
 	return files[0].Name(), nil
 }
 
-// ListDeployments lists the deployments in the / filesystem.
 func (o *Ostree) ListDeployments() ([]Deployment, error) {
 	root, err := o.Root()
 	if err != nil {
@@ -189,7 +187,6 @@ func (o *Ostree) ListDeployments() ([]Deployment, error) {
 	return o.listDeploymentsFromSysroot(root)
 }
 
-// DeployedRootfs returns the path to the deployed rootfs.
 func (o *Ostree) DeployedRootfs() (string, error) {
 	sysroot, err := o.Sysroot()
 	if err != nil {
@@ -214,7 +211,6 @@ func (o *Ostree) DeployedRootfs() (string, error) {
 	return rootfs, nil
 }
 
-// BootedRef returns the ref of the booted deployment.
 func (o *Ostree) BootedRef() (string, error) {
 	root, err := o.Root()
 	if err != nil {
@@ -232,7 +228,6 @@ func (o *Ostree) BootedRef() (string, error) {
 	return "", errors.New("no booted deployment found")
 }
 
-// BootedHash returns the commit hash of the booted deployment.
 func (o *Ostree) BootedHash() (string, error) {
 	root, err := o.Root()
 	if err != nil {
@@ -250,7 +245,6 @@ func (o *Ostree) BootedHash() (string, error) {
 	return "", errors.New("no booted deployment found")
 }
 
-// Switch runs `ostree admin switch` to switch to the instance ref.
 func (o *Ostree) Switch() error {
 	sysroot, err := o.Sysroot()
 	if err != nil {
@@ -259,7 +253,6 @@ func (o *Ostree) Switch() error {
 	return o.ostreeRun("admin", "switch", "--sysroot="+sysroot, o.ref)
 }
 
-// Deploy deploys an ostree commit.
 func (o *Ostree) Deploy(sysroot string, bootArgs []string) error {
 	ref := o.ref
 	repoDir, err := o.RepoDir()
@@ -367,7 +360,6 @@ func (o *Ostree) Deploy(sysroot string, bootArgs []string) error {
 	return nil
 }
 
-// Upgrade runs `ostree admin upgrade`.
 func (o *Ostree) Upgrade(args []string) error {
 	root, err := o.Root()
 	if err != nil {
