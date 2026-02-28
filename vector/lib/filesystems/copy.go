@@ -336,6 +336,9 @@ func RsyncCopy(opts RsyncCopyOptions) error {
 
 	args := []string{
 		"--archive",
+		"--hard-links",
+		"--acls",
+		"--xattrs",
 		"--no-D",
 		"--numeric-ids",
 		"--delete-during",
