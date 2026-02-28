@@ -189,6 +189,77 @@ func TestCopyFilePreserveXattrs(t *testing.T) {
 			t.Error("expected error for nonexistent source")
 		}
 	})
+
+	t.Run("SetxattrError", func(t *testing.T) {
+		origLsetxattr := sysLsetxattr
+		origLgetxattr := sysLgetxattr
+		origLlistxattr := sysLlistxattr
+
+		xattrStore := map[string]map[string][]byte{}
+
+		// Set a real xattr on the source via the mock
+		sysLsetxattr = func(path, attr string, data []byte, flags int) error {
+			// Allow setting on src, fail on dst
+			if strings.HasSuffix(path, "_xfail_dst") {
+				return unix.EPERM
+			}
+			if _, ok := xattrStore[path]; !ok {
+				xattrStore[path] = make(map[string][]byte)
+			}
+			val := make([]byte, len(data))
+			copy(val, data)
+			xattrStore[path][attr] = val
+			return nil
+		}
+		sysLgetxattr = func(path, attr string, dest []byte) (int, error) {
+			fa, ok := xattrStore[path]
+			if !ok {
+				return 0, unix.ENODATA
+			}
+			v, ok := fa[attr]
+			if !ok {
+				return 0, unix.ENODATA
+			}
+			if dest == nil {
+				return len(v), nil
+			}
+			return copy(dest, v), nil
+		}
+		sysLlistxattr = func(path string, dest []byte) (int, error) {
+			fa, ok := xattrStore[path]
+			if !ok {
+				return 0, nil
+			}
+			var packed []byte
+			for name := range fa {
+				packed = append(packed, []byte(name)...)
+				packed = append(packed, 0)
+			}
+			if dest == nil {
+				return len(packed), nil
+			}
+			return copy(dest, packed), nil
+		}
+		t.Cleanup(func() {
+			sysLsetxattr = origLsetxattr
+			sysLgetxattr = origLgetxattr
+			sysLlistxattr = origLlistxattr
+		})
+
+		src := filepath.Join(dir, "src_xfail")
+		dst := filepath.Join(dir, "src_xfail_dst")
+		if err := os.WriteFile(src, []byte("data"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Set an xattr on the source
+		sysLsetxattr(src, "user.test", []byte("val"), 0)
+
+		err := CopyFilePreserveXattrs(src, dst)
+		if err == nil {
+			t.Error("expected error when sysLsetxattr fails on destination")
+		}
+	})
 }
 
 func TestCheckHardlinkPreservation(t *testing.T) {

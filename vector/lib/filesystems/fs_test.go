@@ -472,15 +472,116 @@ func TestCheckDirIsRoot(t *testing.T) {
 }
 
 func TestCheckFsCapabilitySupport(t *testing.T) {
-	setupMockXattr(t)
+	tmpDir := t.TempDir()
+
+	t.Run("Supported", func(t *testing.T) {
+		origRun := execRun
+		origCombinedOutput := execCombinedOutput
+
+		execRun = func(c *runner.Cmd) error {
+			// setcap and cp -a succeed
+			if c.Name == "cp" && len(c.Args) >= 3 {
+				// Actually create the copy file so defer os.Remove works
+				src := c.Args[1]
+				dst := c.Args[2]
+				data, _ := os.ReadFile(src)
+				os.WriteFile(dst, data, 0644)
+			}
+			return nil
+		}
+		execCombinedOutput = func(c *runner.Cmd) ([]byte, error) {
+			// getcap returns the capability string
+			if c.Name == "getcap" {
+				return []byte(c.Args[0] + " cap_net_raw=ep\n"), nil
+			}
+			return nil, nil
+		}
+		t.Cleanup(func() {
+			execRun = origRun
+			execCombinedOutput = origCombinedOutput
+		})
+
+		supported, err := CheckFsCapabilitySupport(tmpDir)
+		if err != nil {
+			t.Fatalf("CheckFsCapabilitySupport failed: %v", err)
+		}
+		if !supported {
+			t.Error("Expected capability support to be true")
+		}
+	})
+
+	t.Run("SetcapFails", func(t *testing.T) {
+		origRun := execRun
+		execRun = func(c *runner.Cmd) error {
+			if c.Name == "setcap" {
+				return fmt.Errorf("setcap failed")
+			}
+			return nil
+		}
+		t.Cleanup(func() { execRun = origRun })
+
+		supported, err := CheckFsCapabilitySupport(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if supported {
+			t.Error("expected false when setcap fails")
+		}
+	})
+
+	t.Run("GetcapShowsNoCap", func(t *testing.T) {
+		origRun := execRun
+		origCombinedOutput := execCombinedOutput
+
+		execRun = func(c *runner.Cmd) error {
+			if c.Name == "cp" && len(c.Args) >= 3 {
+				src := c.Args[1]
+				dst := c.Args[2]
+				data, _ := os.ReadFile(src)
+				os.WriteFile(dst, data, 0644)
+			}
+			return nil
+		}
+		execCombinedOutput = func(c *runner.Cmd) ([]byte, error) {
+			// getcap returns empty — capability not preserved
+			return []byte(""), nil
+		}
+		t.Cleanup(func() {
+			execRun = origRun
+			execCombinedOutput = origCombinedOutput
+		})
+
+		supported, err := CheckFsCapabilitySupport(tmpDir)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if supported {
+			t.Error("expected false when getcap shows no capability")
+		}
+	})
+}
+
+func TestCheckFsCapabilitySupportIntegration(t *testing.T) {
+	// Integration test: exercises real setcap/getcap/cp -a binaries.
+	// Requires root (CAP_SETFCAP) and setcap/getcap in PATH.
+	if os.Getuid() != 0 {
+		t.Skip("skipping: requires root")
+	}
+	if _, err := exec.LookPath("setcap"); err != nil {
+		t.Skip("skipping: setcap not found in PATH")
+	}
+	if _, err := exec.LookPath("getcap"); err != nil {
+		t.Skip("skipping: getcap not found in PATH")
+	}
 
 	tmpDir := t.TempDir()
-	supported, err := CheckFsCapabilitySupport(tmpDir)
+	supported, err := checkFsCapabilitySupport(tmpDir)
 	if err != nil {
-		t.Errorf("CheckFsCapabilitySupport failed: %v", err)
+		t.Fatalf("checkFsCapabilitySupport failed: %v", err)
 	}
+	// On a normal ext4/btrfs/xfs tmpdir as root, capabilities should work.
 	if !supported {
-		t.Error("Expected capability support to be true with mock")
+		t.Log("WARNING: filesystem does not support capabilities (may be expected on some FS types)")
 	}
 }
 
