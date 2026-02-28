@@ -152,14 +152,28 @@ func (c *SeedsCommand) Run() error {
 	return c.RunWithGuard(c.runSeeds)
 }
 
+// updateStdWriters updates the stdout and stderr writers with the given label
+// and propagates them to the seeder library.
+func (c *SeedsCommand) updateStdWriters(name string) (*styledWriter, *styledWriter) {
+	stdoutWriter := c.SetStdout(name)
+	stderrWriter := c.SetStderr(name)
+	c.sd.SetStdout(stdoutWriter)
+	c.sd.SetStderr(stderrWriter)
+	return stdoutWriter, stderrWriter
+}
+
 // runSeeds implements the seeder workflow, mirroring the bash seeder
 // script's main() function.
 func (c *SeedsCommand) runSeeds() error {
-	stdoutWriter := c.SetStdout("all")
-	stderrWriter := c.SetStderr("all")
 
-	c.sd.SetStdout(stdoutWriter)
-	c.sd.SetStderr(stderrWriter)
+	writerSetup := func() {
+		stdoutWriter, stderrWriter := c.updateStdWriters("main")
+		c.PushCleanup(func() {
+			stdoutWriter.Flush()
+			stderrWriter.Flush()
+		})
+	}
+	writerSetup()
 
 	// Verify seeder environment.
 	if err := c.qa.VerifySeederEnvironmentSetup("/"); err != nil {
@@ -168,12 +182,7 @@ func (c *SeedsCommand) runSeeds() error {
 		)
 	}
 
-	// Register cleanup.
-	c.PushCleanup(func() {
-		stdoutWriter.Flush()
-		stderrWriter.Flush()
-		c.sd.Cleanup()
-	})
+	c.PushCleanup(c.sd.Cleanup)
 
 	// Import Gentoo GPG keys.
 	if err := c.sd.ImportGentooGpgKeys(); err != nil {
@@ -213,18 +222,19 @@ func (c *SeedsCommand) runSeeds() error {
 
 	// Execute each seeder under its lock.
 	for _, info := range seeders {
-		info := info // capture loop variable
 		err := c.sd.ExecuteWithSeederLock(
 			info.Name,
 			func() error { return c.seederWorker(info) },
 		)
 		if err != nil {
+			writerSetup()
 			return fmt.Errorf(
 				"seeder %s failed: %w", info.Name, err,
 			)
 		}
 	}
 
+	writerSetup()
 	c.sd.Print("Seeds build complete:\n")
 	for _, info := range seeders {
 		c.sd.Print("  [%s] %s done.\n", info.Name, info.ChrootExec)
@@ -239,6 +249,12 @@ func (c *SeedsCommand) seederWorker(info seeder.SeederInfo) error {
 	c.sd.Print(
 		"[%s] Accepted seeder for execution\n", info.Name,
 	)
+
+	stdoutWriter, stderrWriter := c.updateStdWriters(info.Name)
+	c.PushCleanup(func() {
+		stdoutWriter.Flush()
+		stderrWriter.Flush()
+	})
 
 	// Parse seeder params.
 	paramsName, err := c.sd.ParamsExecutableName()
