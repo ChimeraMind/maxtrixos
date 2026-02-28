@@ -2,10 +2,11 @@ package runner
 
 // MockRunnerCall records a single command invocation.
 type MockRunnerCall struct {
-	Name string
-	Args []string
-	Dir  string
-	Env  []string
+	Name      string
+	Args      []string
+	Dir       string
+	Env       []string
+	ChrootDir string // set only by ChrootRun / ChrootOutput
 }
 
 // MockRunner records calls and returns configurable errors.
@@ -70,6 +71,7 @@ func (mr *MockRunner) CombinedOutput(c *Cmd) ([]byte, error) {
 func (mr *MockRunner) ChrootRun(c *ChrootCmd) error {
 	mr.Calls = append(mr.Calls, MockRunnerCall{
 		Name: "chroot:" + c.Name, Args: c.Args,
+		Dir: c.Dir, Env: c.Env, ChrootDir: c.ChrootDir,
 	})
 	return mr.errForCall()
 }
@@ -78,6 +80,7 @@ func (mr *MockRunner) ChrootRun(c *ChrootCmd) error {
 func (mr *MockRunner) ChrootOutput(c *ChrootCmd) ([]byte, error) {
 	mr.Calls = append(mr.Calls, MockRunnerCall{
 		Name: "chroot:" + c.Name, Args: c.Args,
+		Dir: c.Dir, Env: c.Env, ChrootDir: c.ChrootDir,
 	})
 	return mr.outputForCall(), mr.errForCall()
 }
