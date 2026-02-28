@@ -1,8 +1,8 @@
 package ostree
 
 import (
-	"bytes"
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -53,6 +53,7 @@ type IOstree interface {
 	ValidateFilesystemHierarchy(imageDir string) error
 
 	// Repo operations
+	InitRepo(verbose bool) error
 	BootCommit(sysroot string) (string, error)
 	ListRemotes(verbose bool) ([]string, error)
 	LastCommit(ref string, verbose bool) (string, error)
