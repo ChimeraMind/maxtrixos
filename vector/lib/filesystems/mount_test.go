@@ -235,6 +235,7 @@ func TestSetupCommonRootfsMounts(t *testing.T) {
 	mounter, err := NewCommonRootfsMounts(
 		CommonRootfsMountsOptions{
 			MountPoint: tmpDir,
+			MountProc:  true,
 			Mounting: func(tg string) {
 				mountingCalls = append(mountingCalls, tg)
 			},
@@ -256,6 +257,51 @@ func TestSetupCommonRootfsMounts(t *testing.T) {
 	}
 	if len(mountedCalls) != 6 {
 		t.Errorf("Expected 6 mounted calls, got %d", len(mountedCalls))
+	}
+}
+
+func TestSetupCommonRootfsMountsProcDisabled(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	var mountingCalls, mountedCalls []string
+	mounter, err := NewCommonRootfsMounts(
+		CommonRootfsMountsOptions{
+			MountPoint: tmpDir,
+			MountProc:  false,
+			Mounting: func(tg string) {
+				mountingCalls = append(mountingCalls, tg)
+			},
+			Mounted: func(tg string) {
+				mountedCalls = append(mountedCalls, tg)
+			},
+		},
+	)
+	defer mounter.Cleanup()
+
+	if err != nil {
+		t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+	}
+	if err := mounter.Setup(); err != nil {
+		t.Errorf("Setup failed: %v", err)
+	}
+	// Without MountProc, expect 5 mounts: /dev, /dev/pts, /sys, dev/shm, run/lock
+	if len(mountingCalls) != 5 {
+		t.Errorf("Expected 5 mounting calls, got %d", len(mountingCalls))
+	}
+	if len(mountedCalls) != 5 {
+		t.Errorf("Expected 5 mounted calls, got %d", len(mountedCalls))
+	}
+	// Verify proc was not mounted
+	for _, call := range mountingCalls {
+		if filepath.Base(call) == "proc" {
+			t.Error("proc should not be mounted when MountProc is false")
+		}
 	}
 }
 
@@ -493,6 +539,37 @@ func TestCommonRootfsMountsCleanup(t *testing.T) {
 		mounter, err := NewCommonRootfsMounts(
 			CommonRootfsMountsOptions{
 				MountPoint: tmpDir,
+				MountProc:  true,
+				Mounting:   noop,
+				Mounted:    noop,
+			},
+		)
+		if err != nil {
+			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+		}
+		if err := mounter.Setup(); err != nil {
+			t.Fatalf("Setup failed: %v", err)
+		}
+		if err := mounter.Cleanup(); err != nil {
+			t.Errorf("Cleanup failed: %v", err)
+		}
+	})
+
+	t.Run("SuccessProcDisabled", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		// Mock mounts without proc
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: filepath.Join(tmpDir, "dev")},
+			{Mountpoint: filepath.Join(tmpDir, "dev", "pts")},
+			{Mountpoint: filepath.Join(tmpDir, "sys")},
+			{Mountpoint: filepath.Join(tmpDir, "dev", "shm")},
+			{Mountpoint: filepath.Join(tmpDir, "run", "lock")},
+		})
+		noop := func(string) {}
+		mounter, err := NewCommonRootfsMounts(
+			CommonRootfsMountsOptions{
+				MountPoint: tmpDir,
+				MountProc:  false,
 				Mounting:   noop,
 				Mounted:    noop,
 			},
