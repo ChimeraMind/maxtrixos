@@ -25,7 +25,6 @@ ARG_BUILT_SEEDERS_FILE=
 ARG_STAGE3_FILE=
 ARG_SKIP_SEEDERS=()
 ARG_ONLY_SEEDERS=()
-ARG_OVERRIDE_CHROOTS=()
 ARG_POSITIONALS=()
 MOUNTS=()
 TEMPORARY_ARTIFACTS=()
@@ -61,20 +60,6 @@ parse_args() {
             shift 2
         fi
         ARG_CHROOT_DIR="${vals}"
-        ;;
-
-        -och|--override-chroot-dir|--override-chroot-dir=*)
-        local val=
-        if [[ "${1}" =~ --override-chroot-dir=.* ]]; then
-            val=${1/--override-chroot-dir=/}
-            shift
-        else
-            val="${2}"
-            shift 2
-        fi
-        readarray -d ',' -t ARG_OVERRIDE_CHROOTS <<< "${vals}"
-        # Important: readarray keeps the delimiter unless you trim it.
-        ARG_OVERRIDE_CHROOTS[-1]="${ARG_OVERRIDE_CHROOTS[-1]%$'\n'}"
         ;;
 
         -s|--skip-seeders|--skip-seeders=*)
@@ -166,8 +151,6 @@ parse_args() {
         echo >&2
         echo -e "Arguments:" >&2
         echo -e "-d, --chroot-dir  \t\t use the provided directory as chroot directory." >&2
-        echo -e "-och, --override-chroot-dir  \t override the chroot dir for a given seeder name." >&2
-        echo -e "    \t\t\t\t\t Example: (00-bedrock:/path/to/chroot,10-server:/path/to/chroot)." >&2
         echo -e "-s, --skip-seeders  \t\t comma separated list of seeders to skip (by name). Example: (00-bedrock,01-server)." >&2
         echo -e "-o, --only-seeders  \t\t comma separated allow-list of seeders to accept (by name). Example: (00-bedrock,01-blah)." >&2
         echo -e "-r, --resume  \t\t\t try resuming seeder work inside chroot, if -d is passed too." >&2
@@ -354,19 +337,6 @@ bind_mount_binpkgs() {
     fs_lib.bind_mount_binpkgs "MOUNTS" "$(_get_binpkgs_dir)" "${chroot_dir}"
 }
 
-find_chroot_dir_override() {
-    local seeder_name="${1}"
-    local ovr=
-    for ovr in "${ARG_OVERRIDE_CHROOTS[@]}"; do
-        local sn="${ovr%:*}"
-        local path="${ovr#*:}"
-        if [ "${sn}" = "${seeder_name}" ]; then
-            echo "${path}"
-            return 0
-        fi
-    done
-}
-
 _mount_special_ro() {
     local src="${1}"
     local dst="${2}"
@@ -508,20 +478,14 @@ seeder_worker() {
         return 1
     fi
 
-    local chroot_dir
-    chroot_dir=$(find_chroot_dir_override "${seeder_name}")
-    if [ -n "${chroot_dir}" ]; then
-        echo "[${seeder_name}] Found --chroot-dir override: ${chroot_dir}" >&2
-    else
-        local chroot_dir="${ARG_CHROOT_DIR}"
-        if [ -z "${chroot_dir}" ]; then
-            chroot_dir="${PREFERRED_SEEDER_CHROOT_DIR}"
-            echo "[${seeder_name}] --chroot-dir unset, using the chroot path from config: ${chroot_dir}" >&2
-        elif [ -n "${ARG_CLEAN_ARTIFACTS}" ]; then
-            # If the temp artifacts cleanup is active, this can erase the whole
-            # to-be-built chroot!
-            TEMPORARY_ARTIFACTS+=( "${chroot_dir}" )
-        fi
+    local chroot_dir="${ARG_CHROOT_DIR}"
+    if [ -z "${chroot_dir}" ]; then
+        chroot_dir="${PREFERRED_SEEDER_CHROOT_DIR}"
+        echo "[${seeder_name}] --chroot-dir unset, using the chroot path from config: ${chroot_dir}" >&2
+    elif [ -n "${ARG_CLEAN_ARTIFACTS}" ]; then
+        # If the temp artifacts cleanup is active, this can erase the whole
+        # to-be-built chroot!
+        TEMPORARY_ARTIFACTS+=( "${chroot_dir}" )
     fi
 
     local chroot_done_flag_file=

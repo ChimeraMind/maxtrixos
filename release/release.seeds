@@ -26,7 +26,6 @@ ARG_RELEASE_STAGE=dev
 RELEASE_MAIN_ARGS=()
 ARG_SKIP_SEEDERS=()
 ARG_ONLY_SEEDERS=()
-ARG_OVERRIDE_CHROOTS=()
 ARG_BUILT_RELEASES_FILE=
 
 
@@ -45,21 +44,6 @@ parse_args() {
         fi
         release_lib.validate_release_stage "${val}"
         ARG_RELEASE_STAGE="${val}"
-        ;;
-
-        -och|--override-chroot-dir|--override-chroot-dir=*)
-        local val=
-        if [[ "${1}" =~ --override-chroot-dir=.* ]]; then
-            val=${1/--override-chroot-dir=/}
-            shift
-        else
-            val="${2}"
-            shift 2
-        fi
-
-        readarray -d ',' -t ARG_OVERRIDE_CHROOTS <<< "${vals}"
-        # Important: readarray keeps the delimiter unless you trim it.
-        ARG_OVERRIDE_CHROOTS[-1]="${ARG_OVERRIDE_CHROOTS[-1]%$'\n'}"
         ;;
 
         -s|--skip-seeders|--skip-seeders=*)
@@ -108,8 +92,6 @@ parse_args() {
         echo >&2
         echo -e "Arguments:" >&2
         echo -e "-rs, --release-stage  \t\t\t pick between (dev and prod)." >&2
-        echo -e "-och, --override-chroot-dir  \t\t override the chroot dir for a given seeder name." >&2
-        echo -e "\t\t\t\t\t\t Example: (00-bedrock:/path/to/chroot,10-server:/path/to/chroot)." >&2
         echo -e "-s, --skip-seeders  \t\t\t comma separated list of seeders to skip (by name)." >&2
         echo -e "\t\t\t\t\t\t Example: (00-bedrock,01-server)." >&2
         echo -e "-o, --only-seeders  \t\t\t comma separated allow-list of seeders to accept (by name)." >&2
@@ -142,19 +124,6 @@ find_chroot_dir() {
         source "${params_path}"
         "${branch_shortname}_params.find_latest_chroot_dir" "${seeder_name}"
     )
-}
-
-find_chroot_dir_override() {
-    local seeder_name="${1}"
-    local ovr=
-    for ovr in "${ARG_OVERRIDE_CHROOTS[@]}"; do
-        local sn="${ovr%:*}"
-        local path="${ovr#*:}"
-        if [ "${sn}" = "${seeder_name}" ]; then
-            echo "${path}"
-            return 0
-        fi
-    done
 }
 
 chroot_dir_for_image_dir() {
@@ -227,13 +196,8 @@ release_worker() {
     fi
 
     local chroot_dir=
-    chroot_dir=$(find_chroot_dir_override "${seeder_name}")
-    if [ -n "${chroot_dir}" ]; then
-        echo "Requested override for seeder: ${seeder_name} to ${chroot_dir}"
-    else
-        chroot_dir=$(find_chroot_dir "${seeder_name}" "${branch_shortname}")
-        echo "Selected chroot dir: ${chroot_dir} for seeder: ${seeder_name}"
-    fi
+    chroot_dir=$(find_chroot_dir "${seeder_name}" "${branch_shortname}")
+    echo "Selected chroot dir: ${chroot_dir} for seeder: ${seeder_name}"
 
     if [ -z "${chroot_dir}" ]; then
         echo "Unable to find chroot dir for ${branch_shortname}" >&2
