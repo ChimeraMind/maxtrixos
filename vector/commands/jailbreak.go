@@ -196,7 +196,6 @@ func (c *JailbreakCommand) configStr(key string) (string, error) {
 	return val, nil
 }
 
-// Run executes the jailbreak operation.
 func (c *JailbreakCommand) Run() error {
 	if getEuid() != 0 {
 		return fmt.Errorf("this command must be run as root")

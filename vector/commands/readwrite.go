@@ -18,12 +18,10 @@ func NewReadWriteCommand() *ReadWriteCommand {
 	}
 }
 
-// Name returns the name of the command
 func (c *ReadWriteCommand) Name() string {
 	return c.fs.Name()
 }
 
-// Init initializes the command
 func (c *ReadWriteCommand) Init(args []string) error {
 	c.fs.Usage = func() {
 		fmt.Printf("Usage: vector %s\n", c.Name())
@@ -32,7 +30,6 @@ func (c *ReadWriteCommand) Init(args []string) error {
 	return c.fs.Parse(args)
 }
 
-// Run runs the command
 func (c *ReadWriteCommand) Run() error {
 	sysroot := os.Getenv("ROOT")
 	if sysroot == "" {

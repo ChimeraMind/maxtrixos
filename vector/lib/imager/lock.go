@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-// ImageLockDir returns the image lock directory, creating it if necessary.
 func (im *Image) ImageLockDir() (string, error) {
 	lockDir, err := im.LockDir()
 	if err != nil {
@@ -22,7 +21,6 @@ func (im *Image) ImageLockDir() (string, error) {
 	return lockDir, nil
 }
 
-// ImageLockPath returns the lock file path for the stored ref.
 func (im *Image) ImageLockPath() (string, error) {
 	if im.ref == "" {
 		return "", errors.New("missing ref, set Ref in NewImageOptions")
@@ -41,11 +39,6 @@ func (im *Image) ImageLockPath() (string, error) {
 	return lockFile, nil
 }
 
-// ExecuteWithImageLock acquires an exclusive file lock for the given ref,
-// executes fn under that lock, and releases the lock when fn returns.
-// If the lock cannot be acquired within the configured timeout, an error is returned.
-// If fn panics or the process crashes, the OS closes the file descriptor and
-// releases the lock automatically.
 func (im *Image) ExecuteWithImageLock(fn func() error) error {
 	lockPath, err := im.ImageLockPath()
 	if err != nil {

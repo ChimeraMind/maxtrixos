@@ -12,7 +12,6 @@ import (
 	"matrixos/vector/lib/filesystems"
 )
 
-// SetupBootloaderConfig sets up the GRUB bootloader configuration.
 func (im *Image) SetupBootloaderConfig() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -157,7 +156,6 @@ func (im *Image) SetupBootloaderConfig() error {
 	return nil
 }
 
-// SetupVmtestConfig creates a VM test grub config based on the ostree boot config.
 func (im *Image) SetupVmtestConfig() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
@@ -210,7 +208,6 @@ func (im *Image) SetupVmtestConfig() error {
 	return nil
 }
 
-// InstallSecurebootCerts installs SecureBoot certificates on the EFI partition.
 func (im *Image) InstallSecurebootCerts() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -282,7 +279,6 @@ func (im *Image) InstallSecurebootCerts() error {
 	return filesystems.CopyDirPreserve(shimDir, efibootDir)
 }
 
-// InstallMemtest installs the memtest86+ EFI binary to the EFI boot directory.
 func (im *Image) InstallMemtest() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -300,11 +296,6 @@ func (im *Image) InstallMemtest() error {
 	return filesystems.CopyFile(memtestBin, filepath.Join(efibootDir, "memtest86plus.efi"))
 }
 
-// InstallBootloader installs the GRUB bootloader into the image by running
-// grub-install inside a chroot of the deployed rootfs, then replaces the
-// unsigned GRUBX64.EFI with the signed version.
-// It returns the list of extra mounts created during the process so the caller
-// can track them for cleanup.
 func (im *Image) InstallBootloader() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -444,7 +435,6 @@ func (im *Image) InstallBootloader() error {
 	return nil
 }
 
-// GenerateKernelBootArgs generates the kernel boot arguments for the image.
 func (im *Image) GenerateKernelBootArgs() ([]string, error) {
 	ref, err := im.cleanAndStripRef()
 	if err != nil {

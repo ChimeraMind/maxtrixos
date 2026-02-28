@@ -88,9 +88,6 @@ func (im *Image) extractSeedName(data []byte) (string, error) {
 	return releaseVersion, nil
 }
 
-// ExtractReleaseVersion extracts or generates a release version string for an image.
-// It attempts to read a build metadata file from the rootfs for the version;
-// if unavailable, falls back to the current date (YYYYMMDD).
 func (im *Image) ExtractReleaseVersion() (string, error) {
 	if im.rootfs == "" {
 		return "", errors.New("rootfs not set, call SetRootfs first")
@@ -127,7 +124,6 @@ func (im *Image) ExtractReleaseVersion() (string, error) {
 	return releaseVersion, nil
 }
 
-// BuildImagePath returns the image file path for the stored ostree ref.
 func (im *Image) BuildImagePath() (string, error) {
 	if im.ref == "" {
 		return "", errors.New("missing ref, set Ref in NewImageOptions")
@@ -137,7 +133,6 @@ func (im *Image) BuildImagePath() (string, error) {
 	return im.buildImagePath(suffix)
 }
 
-// BuildImagePathWithReleaseVersion returns the image file path with an embedded release version.
 func (im *Image) BuildImagePathWithReleaseVersion(releaseVersion string) (string, error) {
 	if im.ref == "" {
 		return "", errors.New("missing ref, set Ref in NewImageOptions")
@@ -150,8 +145,6 @@ func (im *Image) BuildImagePathWithReleaseVersion(releaseVersion string) (string
 	return im.buildImagePath(suffix)
 }
 
-// CompressedImagePath appends the compressor's file extension to the image path.
-// The extension is derived from the first word of the compressor command string.
 func (im *Image) CompressedImagePath() (string, error) {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return "", err
@@ -170,7 +163,6 @@ func (im *Image) CompressedImagePath() (string, error) {
 	return im.imagePath + "." + parts[0], nil
 }
 
-// CompressImage compresses an image file using the configured compressor.
 func (im *Image) CompressImage() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
@@ -203,7 +195,6 @@ func (im *Image) CompressImage() error {
 	return nil
 }
 
-// Qcow2ImagePath returns the qcow2 image path for a given .img path.
 func (im *Image) Qcow2ImagePath() (string, error) {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return "", err
@@ -211,7 +202,6 @@ func (im *Image) Qcow2ImagePath() (string, error) {
 	return im.imagePath + ".qcow2", nil
 }
 
-// CreateQcow2Image creates a compressed qcow2 image from a raw image.
 func (im *Image) CreateQcow2Image() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
@@ -221,7 +211,6 @@ func (im *Image) CreateQcow2Image() error {
 		"qemu-img", "convert", "-c", "-O", "qcow2", "-p", im.imagePath, qcow2Path)
 }
 
-// RemoveImageFile removes an image file and its associated .sha256 and .asc files.
 func (im *Image) RemoveImageFile() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
@@ -234,7 +223,6 @@ func (im *Image) RemoveImageFile() error {
 	return nil
 }
 
-// ShowFinalFilesystemInfo displays information about the final filesystem layout.
 func (im *Image) ShowFinalFilesystemInfo() error {
 	if im.devicePath == "" {
 		return errors.New("missing devicePath, not set in NewImageOptions")
@@ -265,7 +253,6 @@ func (im *Image) ShowFinalFilesystemInfo() error {
 	return nil
 }
 
-// ShowImageTestInfo prints information about generated artifacts and how to test them.
 func (im *Image) ShowImageTestInfo(artifacts []string) error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err

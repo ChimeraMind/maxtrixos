@@ -10,7 +10,6 @@ import (
 	"matrixos/vector/lib/filesystems"
 )
 
-// CreateImage creates a sparse image file at imagePath with the given size.
 func (im *Image) CreateImage(imageSize string) (retErr error) {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
@@ -56,7 +55,6 @@ func (im *Image) CreateImage(imageSize string) (retErr error) {
 	return nil
 }
 
-// ClearPartitionTable clears the partition table on a device using sgdisk.
 func (im *Image) ClearPartitionTable() error {
 	if im.devicePath == "" {
 		return errors.New("missing devicePath, not set in NewImageOptions")
@@ -69,12 +67,10 @@ func (im *Image) ClearPartitionTable() error {
 	return im.runner(nil, im.stdout, im.stderr, "sgdisk", "-Z", im.devicePath)
 }
 
-// DatedFsLabel returns a filesystem label based on the current date (YYYYMMDD).
 func (im *Image) DatedFsLabel() string {
 	return time.Now().Format("20060102")
 }
 
-// PartitionDevices creates the EFI, boot, and root partitions on a device.
 func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	if efiSize == "" {
 		return errors.New("missing efiSize parameter")
@@ -160,7 +156,6 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	return nil
 }
 
-// FormatEfifs creates a FAT32 filesystem on the EFI partition.
 func (im *Image) FormatEfifs() error {
 	if im.efiDevice == "" {
 		return errors.New("missing efiDevice, not set in NewImageOptions")
@@ -177,7 +172,6 @@ func (im *Image) FormatEfifs() error {
 	return im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...)
 }
 
-// MountEfifs mounts the EFI partition.
 func (im *Image) MountEfifs(mountEfifs string) error {
 	if im.efiDevice == "" {
 		return errors.New("missing efiDevice, not set in NewImageOptions")
@@ -202,8 +196,6 @@ func (im *Image) MountEfifs(mountEfifs string) error {
 	return nil
 }
 
-// EfiBootDir returns the full path to the EFI boot directory on the mounted
-// EFI filesystem.
 func (im *Image) EfiBootDir() (string, error) {
 	if im.efifsMount == "" {
 		return "", errors.New("EFI filesystem not mounted")
@@ -216,7 +208,6 @@ func (im *Image) EfiBootDir() (string, error) {
 	return efibootDir, nil
 }
 
-// FormatBootfs creates a btrfs filesystem on the boot partition.
 func (im *Image) FormatBootfs() error {
 	if im.bootDevice == "" {
 		return errors.New("missing bootDevice, not set in NewImageOptions")
@@ -233,7 +224,6 @@ func (im *Image) FormatBootfs() error {
 	return im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...)
 }
 
-// MountBootfs mounts the boot partition.
 func (im *Image) MountBootfs(mountBootfs string) error {
 	if im.bootDevice == "" {
 		return errors.New("missing bootDevice, not set in NewImageOptions")
@@ -258,8 +248,6 @@ func (im *Image) MountBootfs(mountBootfs string) error {
 	return nil
 }
 
-// MaybeEncryptRootfs encrypts the root partition with LUKS if encryption is
-// enabled in the configuration.
 func (im *Image) MaybeEncryptRootfs() error {
 	if !im.encrypted {
 		return nil
@@ -285,7 +273,6 @@ func (im *Image) MaybeEncryptRootfs() error {
 	return nil
 }
 
-// FormatRootfs creates a btrfs filesystem on the root partition.
 func (im *Image) FormatRootfs() error {
 	if im.rootDevice == "" {
 		return errors.New("missing rootDevice, not set in NewImageOptions")
@@ -302,12 +289,10 @@ func (im *Image) FormatRootfs() error {
 	return im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...)
 }
 
-// RootfsKernelArgs returns the default kernel arguments for the root filesystem.
 func (im *Image) RootfsKernelArgs() []string {
 	return []string{"rootflags=discard=async"}
 }
 
-// MountRootfs mounts the root partition with btrfs compression options.
 func (im *Image) MountRootfs(mountRootfs string) error {
 	if im.rootDevice == "" {
 		return errors.New("missing rootDevice, not set in NewImageOptions")
@@ -342,8 +327,6 @@ func (im *Image) MountRootfs(mountRootfs string) error {
 	return nil
 }
 
-// FinalizeFilesystems runs fstrim on the root and boot filesystems to improve
-// compression ratios for sparse image files.
 func (im *Image) FinalizeFilesystems() error {
 	if im.rootfsMount == "" {
 		return errors.New("missing rootfsMount, call MountRootfs first")
