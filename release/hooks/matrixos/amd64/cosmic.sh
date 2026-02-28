@@ -12,6 +12,8 @@
 set -e
 source "${MATRIXOS_DEV_DIR}/headers/env.include.sh"
 
+source "${MATRIXOS_DEV_DIR}/release/hooks/matrixos/amd64/common.sh"
+
 
 setup_greetd() {
     local imagedir="${1}"
@@ -32,7 +34,23 @@ EOF
 }
 
 main() {
-    setup_greetd "${CHROOT_DIR}"
+    local funcs=(
+        setup_greetd
+        release_common.check_nvidia_module
+        release_common.check_ryzen_smu_module
+    )
+    local exit_code=0
+    for func in "${funcs[@]}"; do
+        if ! "${func}" "${CHROOT_DIR}"; then
+            echo "${func} failed, exiting with error." >&2
+            exit_code=1
+        else
+            echo "${func} completed successfully."
+        fi
+    done
+    if [ "${exit_code}" != "0" ]; then
+        return "${exit_code}"
+    fi
 }
 
 main "${@}"
