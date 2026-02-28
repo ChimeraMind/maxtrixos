@@ -489,9 +489,9 @@ func (s *Seeder) SetupChrootDirs(chrootDir string) error {
 
 // --- Chroot execution ---
 
-// ExecuteInChroot runs the seeder's chroot script inside the chroot
+// Seed runs the seeder's chroot script inside the chroot
 // using unshare for namespace isolation.
-func (s *Seeder) ExecuteInChroot(chrootDir string, info SeederInfo) error {
+func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
 	defaultDevDir, err := s.DefaultDevDir()
 	if err != nil {
 		return err
