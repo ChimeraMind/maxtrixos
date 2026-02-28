@@ -1,11 +1,11 @@
 package runner
 
-import "io"
-
 // MockRunnerCall records a single command invocation.
 type MockRunnerCall struct {
 	Name string
 	Args []string
+	Dir  string
+	Env  []string
 }
 
 // MockRunner records calls and returns configurable errors.
@@ -23,15 +23,11 @@ type MockRunner struct {
 }
 
 // Run implements the Func signature.
-func (mr *MockRunner) Run(stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
-	mr.Calls = append(mr.Calls, MockRunnerCall{Name: name, Args: args})
-	if mr.FailOn >= 0 && len(mr.Calls)-1 == mr.FailOn {
-		return mr.Err
-	}
-	if mr.FailOn < 0 && mr.Err != nil {
-		return mr.Err
-	}
-	return nil
+func (mr *MockRunner) Run(c *Cmd) error {
+	mr.Calls = append(mr.Calls, MockRunnerCall{
+		Name: c.Name, Args: c.Args, Dir: c.Dir, Env: c.Env,
+	})
+	return mr.errForCall()
 }
 
 // errForCall returns the error for the current call index, if any.
@@ -55,44 +51,34 @@ func (mr *MockRunner) outputForCall() []byte {
 }
 
 // Output implements the OutputFunc signature.
-func (mr *MockRunner) Output(name string, args ...string) ([]byte, error) {
-	mr.Calls = append(mr.Calls, MockRunnerCall{Name: name, Args: args})
+func (mr *MockRunner) Output(c *Cmd) ([]byte, error) {
+	mr.Calls = append(mr.Calls, MockRunnerCall{
+		Name: c.Name, Args: c.Args, Dir: c.Dir, Env: c.Env,
+	})
 	return mr.outputForCall(), mr.errForCall()
 }
 
 // CombinedOutput implements the CombinedOutputFunc signature.
-func (mr *MockRunner) CombinedOutput(name string, args ...string) ([]byte, error) {
-	mr.Calls = append(mr.Calls, MockRunnerCall{Name: name, Args: args})
+func (mr *MockRunner) CombinedOutput(c *Cmd) ([]byte, error) {
+	mr.Calls = append(mr.Calls, MockRunnerCall{
+		Name: c.Name, Args: c.Args, Dir: c.Dir, Env: c.Env,
+	})
 	return mr.outputForCall(), mr.errForCall()
 }
 
 // ChrootRun implements the ChrootRunFunc signature.
-func (mr *MockRunner) ChrootRun(stdin io.Reader, stdout, stderr io.Writer, chrootDir, chrootExec string, args ...string) error {
-	mr.Calls = append(mr.Calls, MockRunnerCall{Name: "chroot:" + chrootExec, Args: args})
-	if mr.FailOn >= 0 && len(mr.Calls)-1 == mr.FailOn {
-		return mr.Err
-	}
-	if mr.FailOn < 0 && mr.Err != nil {
-		return mr.Err
-	}
-	return nil
-}
-
-// DirRun implements the DirRunFunc signature.
-func (mr *MockRunner) DirRun(dir string, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
-	mr.Calls = append(mr.Calls, MockRunnerCall{Name: name, Args: args})
-	if mr.FailOn >= 0 && len(mr.Calls)-1 == mr.FailOn {
-		return mr.Err
-	}
-	if mr.FailOn < 0 && mr.Err != nil {
-		return mr.Err
-	}
-	return nil
+func (mr *MockRunner) ChrootRun(c *ChrootCmd) error {
+	mr.Calls = append(mr.Calls, MockRunnerCall{
+		Name: "chroot:" + c.Name, Args: c.Args,
+	})
+	return mr.errForCall()
 }
 
 // ChrootOutput implements the ChrootOutputFunc signature.
-func (mr *MockRunner) ChrootOutput(chrootDir, chrootExec string, args ...string) ([]byte, error) {
-	mr.Calls = append(mr.Calls, MockRunnerCall{Name: "chroot:" + chrootExec, Args: args})
+func (mr *MockRunner) ChrootOutput(c *ChrootCmd) ([]byte, error) {
+	mr.Calls = append(mr.Calls, MockRunnerCall{
+		Name: "chroot:" + c.Name, Args: c.Args,
+	})
 	return mr.outputForCall(), mr.errForCall()
 }
 

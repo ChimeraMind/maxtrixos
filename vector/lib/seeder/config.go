@@ -77,3 +77,35 @@ func (s *Seeder) LockWaitSeconds() (string, error) {
 func (s *Seeder) Stage3DownloadUrl() (string, error) {
 	return s.configItem("Seeder.Stage3DownloadUrl")
 }
+
+func (s *Seeder) DownloadsDir() (string, error) {
+	return s.configItem("Seeder.DownloadsDir")
+}
+
+func (s *Seeder) DistfilesDir() (string, error) {
+	return s.configItem("Seeder.DistfilesDir")
+}
+
+func (s *Seeder) BinpkgsDir() (string, error) {
+	return s.configItem("Seeder.BinpkgsDir")
+}
+
+func (s *Seeder) GpgKeysDir() (string, error) {
+	return s.configItem("Seeder.GpgKeysDir")
+}
+
+func (s *Seeder) DevDir() (string, error) {
+	return s.configItem("matrixOS.Root")
+}
+
+func (s *Seeder) DefaultDevDir() (string, error) {
+	return s.configItem("matrixOS.DefaultRoot")
+}
+
+func (s *Seeder) GitRepo() (string, error) {
+	return s.configItem("matrixOS.GitRepo")
+}
+
+func (s *Seeder) DefaultPrivateGitRepoPath() (string, error) {
+	return s.configItem("matrixOS.DefaultPrivateGitRepoPath")
+}

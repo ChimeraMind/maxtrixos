@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/runner"
 )
 
 func (im *Image) SetupBootloaderConfig() error {
@@ -246,9 +247,18 @@ func (im *Image) InstallSecurebootCerts() error {
 		}
 
 		im.Print("Generating SecureBoot MOK ...\n")
-		if err := im.runner(nil, im.stdout, im.stderr,
-			"openssl", "x509", "-in", sbCert,
-			"-outform", "DER", "-out", filepath.Join(im.efifsMount, certDerFileName)); err != nil {
+		cmd := &runner.Cmd{
+			Name: "openssl",
+			Args: []string{
+				"x509",
+				"-in", sbCert,
+				"-outform", "DER",
+				"-out", filepath.Join(im.efifsMount, certDerFileName),
+			},
+			Stdout: im.stdout,
+			Stderr: im.stderr,
+		}
+		if err := im.runner(cmd); err != nil {
 			return fmt.Errorf("openssl DER conversion failed: %w", err)
 		}
 	} else {
@@ -264,9 +274,17 @@ func (im *Image) InstallSecurebootCerts() error {
 		}
 
 		im.Print("Generating SecureBoot KEK DER for convenience ...\n")
-		if err := im.runner(nil, im.stdout, im.stderr,
-			"openssl", "x509", "-in", sbKek,
-			"-outform", "DER", "-out", filepath.Join(im.efifsMount, kekDerFileName)); err != nil {
+		if err := im.runner(&runner.Cmd{
+			Name: "openssl",
+			Args: []string{
+				"x509",
+				"-in", sbKek,
+				"-outform", "DER",
+				"-out", filepath.Join(im.efifsMount, kekDerFileName),
+			},
+			Stdout: im.stdout,
+			Stderr: im.stderr,
+		}); err != nil {
 			return fmt.Errorf("openssl KEK DER conversion failed: %w", err)
 		}
 	} else {
@@ -392,19 +410,25 @@ func (im *Image) InstallBootloader() error {
 	}
 
 	// Run grub-install inside the chroot.
-	err = filesystems.ExecChrootRun(
-		os.Stdin, im.stdout, im.stdout,
-		im.rootfs,
-		"/usr/bin/grub-install",
-		"--target=x86_64-efi",
-		"--directory=/usr/lib/grub/x86_64-efi",
-		"--efi-directory="+efiRoot,
-		"--boot-directory="+bootRoot,
-		"--themes="+osName+"-theme",
-		"--removable",
-		"--modules=ext2 btrfs gzio part_gpt fat part_msdos all_video",
-		im.devicePath,
-	)
+	err = filesystems.ExecChrootRun(&runner.ChrootCmd{
+		Cmd: runner.Cmd{
+			Name: "/usr/bin/grub-install",
+			Args: []string{
+				"--target=x86_64-efi",
+				"--directory=/usr/lib/grub/x86_64-efi",
+				"--efi-directory=" + efiRoot,
+				"--boot-directory=" + bootRoot,
+				"--themes=" + osName + "-theme",
+				"--removable",
+				"--modules=ext2 btrfs gzio part_gpt fat part_msdos all_video",
+				im.devicePath,
+			},
+			Stdin:  os.Stdin,
+			Stdout: im.stdout,
+			Stderr: im.stdout,
+		},
+		ChrootDir: im.rootfs,
+	})
 
 	// Clean up chroot mounts regardless of grub-install result.
 	bootBind.Unmount()

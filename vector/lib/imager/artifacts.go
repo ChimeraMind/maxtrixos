@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/ostree"
+	"matrixos/vector/lib/runner"
 )
 
 // --- Helpers ---
@@ -184,8 +185,15 @@ func (im *Image) CompressImage() error {
 	if len(parts) == 0 {
 		return errors.New("invalid compressor parameters: empty command")
 	}
+
 	args := append(parts[1:], im.imagePath)
-	if err := im.runner(nil, im.stdout, im.stderr, parts[0], args...); err != nil {
+	cmd := &runner.Cmd{
+		Name:   parts[0],
+		Args:   args,
+		Stdout: im.stdout,
+		Stderr: im.stderr,
+	}
+	if err := im.runner(cmd); err != nil {
 		return fmt.Errorf("compression failed: %w", err)
 	}
 
@@ -207,8 +215,20 @@ func (im *Image) CreateQcow2Image() error {
 		return err
 	}
 	qcow2Path, _ := im.Qcow2ImagePath()
-	return im.runner(nil, im.stdout, im.stderr,
-		"qemu-img", "convert", "-c", "-O", "qcow2", "-p", im.imagePath, qcow2Path)
+	return im.runner(&runner.Cmd{
+		Name: "qemu-img",
+		Args: []string{
+			"convert",
+			"-c",
+			"-O",
+			"qcow2",
+			"-p",
+			im.imagePath,
+			qcow2Path,
+		},
+		Stdout: im.stdout,
+		Stderr: im.stderr,
+	})
 }
 
 func (im *Image) RemoveImageFile() error {

@@ -2,13 +2,13 @@ package ostree
 
 import (
 	"fmt"
-	"io"
 	"matrixos/vector/lib/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"matrixos/vector/lib/runner"
 )
 
 func TestGpgHelpers(t *testing.T) {
@@ -56,7 +56,8 @@ func TestGpgKeyID(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		stdout := cmd.Stdout
 		// Mock gpg output
 		// Format: pub:u:4096:1:3260D9CC6D9275DD:1678752000:::u:::scESC:
 		fmt.Fprintln(stdout, "pub:u:4096:1:3260D9CC6D9275DD:1678752000:::u:::scESC:")
@@ -108,7 +109,8 @@ func TestGpgSignFile(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, stdout := cmd.Args, cmd.Stdout
 		cmds = append(cmds, strings.Join(args, " "))
 		// Mock GpgKeyID call
 		for _, arg := range args {
@@ -154,7 +156,8 @@ func TestImportGpgKey(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args := cmd.Args
 		lastArgs = args
 		return nil
 	}
@@ -260,7 +263,8 @@ func TestMaybeInitializeGpg(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args := cmd.Args
 		cmds = append(cmds, args)
 		return nil
 	}
@@ -402,7 +406,8 @@ func TestInitializeSigningGpg(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args := cmd.Args
 		cmds = append(cmds, args)
 		return nil
 	}
@@ -456,7 +461,8 @@ func TestInitializeRemoteSigningGpg(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args := cmd.Args
 		cmds = append(cmds, args)
 		return nil
 	}
@@ -523,7 +529,8 @@ func TestGpgArgsEnabled(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, stdout := cmd.Args, cmd.Stdout
 		for _, arg := range args {
 			if arg == "--show-keys" {
 				fmt.Fprintln(stdout, "pub:u:4096:1:KEYID123:1678752000:::u:::scESC:")

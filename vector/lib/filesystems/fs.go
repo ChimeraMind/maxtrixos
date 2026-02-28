@@ -196,7 +196,10 @@ func ListContents(path string) ([]*PathInfo, error) {
 
 // DevicesSettle waits for udev events to settle.
 func DevicesSettle() {
-	execRun(nil, nil, nil, "udevadm", "settle")
+	execRun(&runner.Cmd{
+		Name: "udevadm",
+		Args: []string{"settle"},
+	})
 }
 
 // FlushBlockDeviceBuffers flushes the buffers of a block device.
@@ -347,7 +350,13 @@ func CleanupCryptsetupDevices(devices []string) {
 
 		fmt.Printf("Closing LUKS device: %s ...\n", cd)
 		FlushBlockDeviceBuffers(cdpath)
-		if err := execRun(nil, nil, nil, "cryptsetup", "close", cd); err != nil {
+		cmd := &runner.Cmd{
+			Name:   "cryptsetup",
+			Args:   []string{"close", cd},
+			Stdout: os.Stdout,
+			Stderr: os.Stderr,
+		}
+		if err := execRun(cmd); err != nil {
 			fmt.Fprintf(os.Stderr, "Unable to cryptsetup close %s\n", cdpath)
 			if entries, mntErr := findMountsBySource(cdpath); mntErr == nil {
 				fmt.Fprintf(os.Stderr, "%s\n", formatMountEntries(entries))
@@ -939,13 +948,26 @@ func DirEmpty(dir string) (bool, error) {
 // ChrootRun runs a command in a chroot environment using unshare,
 // wiring stdin/stdout/stderr.
 func ChrootRun(chrootDir, chrootExec string, args ...string) error {
-	return ExecChrootRun(os.Stdin, os.Stdout, os.Stderr, chrootDir, chrootExec, args...)
+	cmd := runner.ChrootCmd{
+		Cmd: runner.Cmd{
+			Name:   chrootExec,
+			Args:   args,
+			Stdin:  os.Stdin,
+			Stdout: os.Stdout,
+			Stderr: os.Stderr,
+		},
+		ChrootDir: chrootDir,
+	}
+	return ExecChrootRun(&cmd)
 }
 
 // ChrootOutput runs a command in a chroot environment using unshare
 // and returns its standard output.
 func ChrootOutput(chrootDir, chrootExec string, args ...string) ([]byte, error) {
-	return ExecChrootOutput(chrootDir, chrootExec, args...)
+	return ExecChrootOutput(&runner.ChrootCmd{
+		Cmd:       runner.Cmd{Name: chrootExec, Args: args},
+		ChrootDir: chrootDir,
+	})
 }
 
 // BlockDeviceNthPartition returns the device path of the nth partition

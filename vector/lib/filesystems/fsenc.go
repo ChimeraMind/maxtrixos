@@ -140,15 +140,21 @@ func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string) error {
 
 	// Format the device with LUKS encryption.
 	fmt.Fprintf(os.Stdout, "Formatting %s using LUKS Encryption ...\n", devicePath)
-	err = f.runner(
-		stdin, os.Stdout, os.Stderr,
-		"cryptsetup",
-		"-c", "aes-xts-plain64",
-		"-s", "512",
-		"luksFormat",
-		devicePath,
-		keyFileArg,
-	)
+	err = f.runner(&runner.Cmd{
+		Name: "cryptsetup",
+		Args: []string{
+			"-c",
+			"aes-xts-plain64",
+			"-s",
+			"512",
+			"luksFormat",
+			devicePath,
+			keyFileArg,
+		},
+		Stdin:  stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+	})
 	if err != nil {
 		return fmt.Errorf("cryptsetup luksFormat failed on %s: %w", devicePath, err)
 	}
@@ -163,15 +169,19 @@ func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string) error {
 	// Track the opened device-mapper name for cleanup.
 	f.add(luksName)
 	f.opening(luksName)
-	err = f.runner(
-		stdin, os.Stdout, os.Stderr,
-		"cryptsetup",
-		"open",
-		"--allow-discards",
-		"--key-file="+keyFileArg,
-		devicePath,
-		luksName,
-	)
+	err = f.runner(&runner.Cmd{
+		Name: "cryptsetup",
+		Args: []string{
+			"open",
+			"--allow-discards",
+			"--key-file=" + keyFileArg,
+			devicePath,
+			luksName,
+		},
+		Stdin:  stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+	})
 	if err != nil {
 		return fmt.Errorf("cryptsetup open failed on %s: %w", devicePath, err)
 	}

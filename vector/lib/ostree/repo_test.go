@@ -2,12 +2,12 @@ package ostree
 
 import (
 	"fmt"
-	"io"
 	"matrixos/vector/lib/config"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"matrixos/vector/lib/runner"
 )
 
 func TestRepoOperations(t *testing.T) {
@@ -94,7 +94,8 @@ func TestOstreeCommandsMocked(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, stdout := cmd.Args, cmd.Stdout
 		lastCmdArgs = args
 		// Mock rev-parse for GenerateStaticDelta
 		if len(args) > 0 && args[0] == "rev-parse" {
@@ -162,7 +163,8 @@ func TestMaybeInitializeRemote(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args := cmd.Args
 		cmds = append(cmds, strings.Join(args, " "))
 		return nil
 	}
@@ -193,7 +195,8 @@ func TestAddRemoteToRootfs(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args := cmd.Args
 		lastArgs = args
 		return nil
 	}
@@ -220,7 +223,8 @@ func TestPullWithRemoteExplicit(t *testing.T) {
 	defer func() { runCommand = origRunCommand }()
 
 	var lastArgs []string
-	runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	runCommand = func(cmd *runner.Cmd) error {
+		args := cmd.Args
 		lastArgs = args
 		return nil
 	}
@@ -271,7 +275,8 @@ func TestMaybeInitializeRemoteIdempotency(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, stdout := cmd.Args, cmd.Stdout
 		cmds = append(cmds, strings.Join(args, " "))
 		// Mock ListRemotes output
 		// args: --repo=... remote list
@@ -311,7 +316,7 @@ func TestAddRemote_Error(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
 		return fmt.Errorf("error")
 	}
 	if err := o.AddRemote(); err == nil {
@@ -330,7 +335,7 @@ func TestOstreeWrappers(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
 		return nil
 	}
 
@@ -346,7 +351,7 @@ func TestLastCommit_Errors(t *testing.T) {
 	origRunCommand := runCommand
 	defer func() { runCommand = origRunCommand }()
 
-	runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	runCommand = func(cmd *runner.Cmd) error {
 		return fmt.Errorf("not found")
 	}
 
@@ -359,7 +364,7 @@ func TestLastCommit_Errors(t *testing.T) {
 func TestListRemotes_Errors(t *testing.T) {
 	origRunCommand := runCommand
 	defer func() { runCommand = origRunCommand }()
-	runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	runCommand = func(cmd *runner.Cmd) error {
 		return fmt.Errorf("error")
 	}
 
@@ -375,7 +380,7 @@ func TestMiscWrappers_Errors(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
 		return fmt.Errorf("cmd error")
 	}
 
@@ -413,7 +418,8 @@ func TestRemoteRefs(t *testing.T) {
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+		o.runner = func(cmd *runner.Cmd) error {
+			stdout := cmd.Stdout
 			stdout.Write([]byte("matrixos/amd64/gnome\nmatrixos/amd64/server\nmatrixos/amd64/dev/gnome\n"))
 			return nil
 		}
@@ -438,7 +444,8 @@ func TestRemoteRefs(t *testing.T) {
 
 	t.Run("VerifiesRepoPathAndRemote", func(t *testing.T) {
 		var capturedArgs []string
-		runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+		runCommand = func(cmd *runner.Cmd) error {
+			args, name, stdout := cmd.Args, cmd.Name, cmd.Stdout
 			capturedArgs = append([]string{name}, args...)
 			stdout.Write([]byte("ref1\n"))
 			return nil
@@ -516,7 +523,7 @@ func TestRemoteRefs(t *testing.T) {
 	})
 
 	t.Run("NoRefs", func(t *testing.T) {
-		runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+		runCommand = func(cmd *runner.Cmd) error {
 			return nil
 		}
 
@@ -542,7 +549,7 @@ func TestRemoteRefs(t *testing.T) {
 	})
 
 	t.Run("CommandError", func(t *testing.T) {
-		runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+		runCommand = func(cmd *runner.Cmd) error {
 			return fmt.Errorf("remote refs failed")
 		}
 

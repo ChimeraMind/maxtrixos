@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -14,7 +15,7 @@ import (
 
 func TestRun_Echo(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	err := Run(nil, &stdout, &stderr, "echo", "hello")
+	err := Run(&Cmd{Name: "echo", Args: []string{"hello"}, Stdout: &stdout, Stderr: &stderr})
 	if err != nil {
 		t.Fatalf("Run(echo hello): unexpected error: %v", err)
 	}
@@ -24,14 +25,14 @@ func TestRun_Echo(t *testing.T) {
 }
 
 func TestRun_Failure(t *testing.T) {
-	err := Run(nil, io.Discard, io.Discard, "false")
+	err := Run(&Cmd{Name: "false", Stdout: io.Discard, Stderr: io.Discard})
 	if err == nil {
 		t.Fatal("Run(false): expected error, got nil")
 	}
 }
 
 func TestOutput_Echo(t *testing.T) {
-	out, err := Output("echo", "world")
+	out, err := Output(&Cmd{Name: "echo", Args: []string{"world"}})
 	if err != nil {
 		t.Fatalf("Output(echo world): unexpected error: %v", err)
 	}
@@ -41,12 +42,46 @@ func TestOutput_Echo(t *testing.T) {
 }
 
 func TestCombinedOutput_Echo(t *testing.T) {
-	out, err := CombinedOutput("echo", "combined")
+	out, err := CombinedOutput(
+		&Cmd{Name: "echo", Args: []string{"combined"}},
+	)
 	if err != nil {
 		t.Fatalf("CombinedOutput(echo combined): unexpected error: %v", err)
 	}
 	if got := strings.TrimSpace(string(out)); got != "combined" {
 		t.Errorf("output = %q, want %q", got, "combined")
+	}
+}
+
+func TestRun_WithDir(t *testing.T) {
+	var stdout bytes.Buffer
+	cmd := &Cmd{Name: "pwd", Stdout: &stdout, Stderr: io.Discard}
+	cmd.Dir = "/tmp"
+	if err := Run(cmd); err != nil {
+		t.Fatalf("Run(pwd): unexpected error: %v", err)
+	}
+	got := strings.TrimSpace(stdout.String())
+	// /tmp may be a symlink (e.g. /private/tmp on macOS, /sysroot/tmp on
+	// ostree-based systems), so resolve it before comparing.
+	want, err := filepath.EvalSymlinks("/tmp")
+	if err != nil {
+		want = "/tmp"
+	}
+	if got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+}
+
+func TestRun_WithEnv(t *testing.T) {
+	var stdout bytes.Buffer
+	cmd := &Cmd{Name: "env", Stdout: &stdout, Stderr: io.Discard}
+	cmd.Env = []string{"MY_TEST_VAR=hello_runner"}
+	if err := Run(cmd); err != nil {
+		t.Fatalf("Run(env): unexpected error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "MY_TEST_VAR=hello_runner") {
+		t.Errorf("env output should contain MY_TEST_VAR, got: %s",
+			stdout.String())
 	}
 }
 
@@ -113,13 +148,21 @@ func TestChrootRun_DelegatesToRun(t *testing.T) {
 		name string
 		args []string
 	}
-	Run = func(_ io.Reader, _, _ io.Writer, name string, args ...string) error {
-		captured.name = name
-		captured.args = args
+	Run = func(c *Cmd) error {
+		captured.name = c.Name
+		captured.args = c.Args
 		return nil
 	}
 
-	err := ChrootRun(nil, io.Discard, io.Discard, "/mnt", "/bin/bash", "-c", "ls")
+	err := ChrootRun(&ChrootCmd{
+		Cmd: Cmd{
+			Name:   "/bin/bash",
+			Args:   []string{"-c", "ls"},
+			Stdout: io.Discard,
+			Stderr: io.Discard,
+		},
+		ChrootDir: "/mnt",
+	})
 	if err != nil {
 		t.Fatalf("ChrootRun: unexpected error: %v", err)
 	}
@@ -132,7 +175,9 @@ func TestChrootRun_DelegatesToRun(t *testing.T) {
 }
 
 func TestChrootRun_ErrorOnEmptyDir(t *testing.T) {
-	err := ChrootRun(nil, io.Discard, io.Discard, "", "/bin/bash")
+	err := ChrootRun(&ChrootCmd{
+		Cmd: Cmd{Name: "/bin/bash", Stdout: io.Discard, Stderr: io.Discard},
+	})
 	if err == nil {
 		t.Fatal("expected error for empty chrootDir")
 	}
@@ -142,11 +187,14 @@ func TestChrootOutput_DelegatesToOutput(t *testing.T) {
 	origOutput := Output
 	defer func() { Output = origOutput }()
 
-	Output = func(name string, args ...string) ([]byte, error) {
+	Output = func(c *Cmd) ([]byte, error) {
 		return []byte("mocked"), nil
 	}
 
-	out, err := ChrootOutput("/mnt", "/bin/echo")
+	out, err := ChrootOutput(&ChrootCmd{
+		Cmd:       Cmd{Name: "/bin/echo"},
+		ChrootDir: "/mnt",
+	})
 	if err != nil {
 		t.Fatalf("ChrootOutput: unexpected error: %v", err)
 	}
@@ -155,10 +203,10 @@ func TestChrootOutput_DelegatesToOutput(t *testing.T) {
 	}
 }
 
-func TestChrootOutput_ErrorOnEmptyExec(t *testing.T) {
-	_, err := ChrootOutput("/mnt", "")
+func TestChrootOutput_ErrorOnEmptyName(t *testing.T) {
+	_, err := ChrootOutput(&ChrootCmd{ChrootDir: "/mnt"})
 	if err == nil {
-		t.Fatal("expected error for empty chrootExec")
+		t.Fatal("expected error for empty Name")
 	}
 }
 
@@ -168,7 +216,7 @@ func TestChrootOutput_ErrorOnEmptyExec(t *testing.T) {
 
 func TestMockRunner_Success(t *testing.T) {
 	mr := NewMockRunner()
-	err := mr.Run(nil, io.Discard, io.Discard, "cmd", "a", "b")
+	err := mr.Run(&Cmd{Name: "cmd", Args: []string{"a", "b"}, Stdout: io.Discard, Stderr: io.Discard})
 	if err != nil {
 		t.Fatalf("MockRunner.Run: unexpected error: %v", err)
 	}
@@ -185,15 +233,15 @@ func TestMockRunner_FailOnCall(t *testing.T) {
 	mr := NewMockRunnerFailOnCall(1, testErr)
 
 	// Call 0 succeeds
-	if err := mr.Run(nil, io.Discard, io.Discard, "a"); err != nil {
+	if err := mr.Run(&Cmd{Name: "a", Stdout: io.Discard, Stderr: io.Discard}); err != nil {
 		t.Fatalf("call 0: unexpected error: %v", err)
 	}
 	// Call 1 fails
-	if err := mr.Run(nil, io.Discard, io.Discard, "b"); !errors.Is(err, testErr) {
+	if err := mr.Run(&Cmd{Name: "b", Stdout: io.Discard, Stderr: io.Discard}); !errors.Is(err, testErr) {
 		t.Fatalf("call 1: got %v, want %v", err, testErr)
 	}
 	// Call 2 succeeds
-	if err := mr.Run(nil, io.Discard, io.Discard, "c"); err != nil {
+	if err := mr.Run(&Cmd{Name: "c", Stdout: io.Discard, Stderr: io.Discard}); err != nil {
 		t.Fatalf("call 2: unexpected error: %v", err)
 	}
 }
@@ -204,11 +252,11 @@ func TestMockRunner_OutputWithData(t *testing.T) {
 		1: []byte("second"),
 	})
 
-	out0, err := mr.Output("cmd0")
+	out0, err := mr.Output(&Cmd{Name: "cmd0"})
 	if err != nil {
 		t.Fatalf("Output call 0: %v", err)
 	}
-	out1, err := mr.Output("cmd1")
+	out1, err := mr.Output(&Cmd{Name: "cmd1"})
 	if err != nil {
 		t.Fatalf("Output call 1: %v", err)
 	}

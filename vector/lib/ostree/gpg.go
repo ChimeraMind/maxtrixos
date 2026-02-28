@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"matrixos/vector/lib/runner"
 )
 
 // ClientSideGpgArgs returns arguments for client-side GPG verification.
@@ -109,19 +111,19 @@ func (o *Ostree) GpgKeyID() (string, error) {
 	}
 
 	out := new(bytes.Buffer)
-	err = o.runner(
-		nil,
-		out,
-		o.stdout,
-		"gpg",
-		"--homedir", homeDir,
-		"--batch",
-		"--yes",
-		"--with-colons",
-		"--show-keys",
-		"--keyid-format", "LONG",
-		pubkeyPath,
-	)
+	err = o.runner(&runner.Cmd{
+		Name: "gpg",
+		Args: []string{
+			"--homedir", homeDir,
+			"--batch", "--yes",
+			"--with-colons",
+			"--show-keys",
+			"--keyid-format", "LONG",
+			pubkeyPath,
+		},
+		Stdout: out,
+		Stderr: o.stdout,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -165,15 +167,12 @@ func (o *Ostree) ImportGpgKey(keyPath string) error {
 		return err
 	}
 
-	return o.runner(
-		nil,
-		o.stdout,
-		o.stderr,
-		"gpg",
-		"--homedir", homeDir,
-		"--batch", "--yes",
-		"--import", keyPath,
-	)
+	return o.runner(&runner.Cmd{
+		Name:   "gpg",
+		Args:   []string{"--homedir", homeDir, "--batch", "--yes", "--import", keyPath},
+		Stdout: o.stdout,
+		Stderr: o.stderr,
+	})
 }
 
 func (o *Ostree) GpgSignFile(file string) error {
@@ -196,19 +195,19 @@ func (o *Ostree) GpgSignFile(file string) error {
 
 	ascFile := GpgSignedFilePath(file)
 
-	err = o.runner(
-		nil,
-		o.stdout,
-		o.stdout,
-		"gpg",
-		"--homedir", homeDir,
-		"--batch", "--yes",
-		"--local-user", keyID,
-		"--armor",
-		"--detach-sign",
-		"--output", ascFile,
-		file,
-	)
+	err = o.runner(&runner.Cmd{
+		Name: "gpg",
+		Args: []string{
+			"--homedir", homeDir,
+			"--batch", "--yes",
+			"--local-user", keyID,
+			"--armor", "--detach-sign",
+			"--output", ascFile,
+			file,
+		},
+		Stdout: o.stdout,
+		Stderr: o.stdout,
+	})
 	if err != nil {
 		return err
 	}
