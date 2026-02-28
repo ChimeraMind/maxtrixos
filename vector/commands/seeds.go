@@ -271,12 +271,6 @@ func (c *SeedsCommand) seederWorker(info seeder.SeederInfo) error {
 			info.Name,
 		)
 	}
-	if !filesystems.DirectoryExists(chrootDir) {
-		return fmt.Errorf(
-			"[%s] resolved chroot dir does not exist: %s",
-			info.Name, chrootDir,
-		)
-	}
 
 	// Check if already done.
 	done, err := c.sd.IsSeederDone(info.Name, chrootDir)
