@@ -449,14 +449,18 @@ setup_chroot_dirs() {
 
     local local_cloning="${MATRIXOS_USE_LOCAL_GIT_REPO_INSIDE_CHROOT}"
     local chroot_dev_dir="${chroot_dir%/}${DEFAULT_MATRIXOS_DEV_DIR}"
+    local git_clone_args=(
+        ${MATRIXOS_SEEDER_GIT_CLONE_ARGS}
+    )
     if [ ! -d "${chroot_dev_dir}" ]; then
         echo "Dev build toolkit at ${chroot_dev_dir} does not exist, pulling it ..."
         if [ -n "${local_cloning}" ]; then
             echo "Cloning ${MATRIXOS_DEV_DIR} (local) into chroot's dir ${chroot_dev_dir} ..."
-            git clone --depth 1 "${MATRIXOS_DEV_DIR}" "${chroot_dev_dir}"
+            git clone "${git_clone_args[@]}" "${MATRIXOS_DEV_DIR}" "${chroot_dev_dir}"
         else
             echo "Cloning ${MATRIXOS_GIT_REPO} (remote) into chroot's dir ${chroot_dev_dir} ..."
-            seeders_lib.retryable_cmd 6 git clone --depth 1 "${MATRIXOS_GIT_REPO}" "${chroot_dev_dir}"
+            seeders_lib.retryable_cmd 6 git clone "${git_clone_args[@]}" \
+                "${MATRIXOS_GIT_REPO}" "${chroot_dev_dir}"
         fi
     fi
 
