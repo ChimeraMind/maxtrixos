@@ -1,0 +1,29 @@
+package releaser
+
+// CheckMatrixOS validates the matrixOS development environment.
+func (r *Releaser) CheckMatrixOS() error {
+	return r.qa.CheckMatrixOSPrivate()
+}
+
+// PreCleanQAChecks runs pre-clean quality assurance checks on the image directory.
+func (r *Releaser) PreCleanQAChecks() error {
+	r.Print("Pre clean QA Checks ...\n")
+
+	sbCertPath, err := r.SecureBootCertPath()
+	if err != nil {
+		return err
+	}
+
+	if err := r.qa.VerifyDistroRootfsEnvironmentSetup(r.imageDir); err != nil {
+		return err
+	}
+	if err := r.qa.CheckSecureBoot(r.imageDir, sbCertPath); err != nil {
+		return err
+	}
+	if err := r.qa.CheckNumberOfKernels(r.imageDir, 1); err != nil {
+		return err
+	}
+
+	r.Print("Pre clean QA Checks complete\n")
+	return nil
+}
