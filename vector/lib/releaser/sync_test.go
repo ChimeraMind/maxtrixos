@@ -403,8 +403,6 @@ func verifyTreeCopy(t *testing.T, src, dst string) {
 
 // TestIntegrationRsyncCopy exercises the rsyncCopy method with real rsync.
 func TestIntegrationRsyncCopy(t *testing.T) {
-	// XXX
-	t.Skip()
 	requireCommand(t, "rsync")
 
 	src := t.TempDir()
@@ -440,8 +438,6 @@ func TestIntegrationRsyncCopy(t *testing.T) {
 
 // TestIntegrationRsyncCopy_Verbose verifies verbose flags are passed.
 func TestIntegrationRsyncCopy_Verbose(t *testing.T) {
-	// XXX
-	t.Skip()
 	requireCommand(t, "rsync")
 
 	src := t.TempDir()
@@ -476,8 +472,6 @@ func TestIntegrationRsyncCopy_Verbose(t *testing.T) {
 // TestIntegrationRsyncCopy_ExcludesAreApplied verifies that excluded paths
 // are not synced.
 func TestIntegrationRsyncCopy_ExcludesAreApplied(t *testing.T) {
-	// XXX
-	t.Skip()
 	requireCommand(t, "rsync")
 
 	src := t.TempDir()
@@ -515,8 +509,6 @@ func TestIntegrationRsyncCopy_ExcludesAreApplied(t *testing.T) {
 
 // TestIntegrationCpReflinkCopy exercises the cpReflinkCopy method with real cp.
 func TestIntegrationCpReflinkCopy(t *testing.T) {
-	// XXX
-	t.Skip()
 	requireCommand(t, "cp")
 
 	src := t.TempDir()
@@ -556,8 +548,6 @@ func TestIntegrationCpReflinkCopy(t *testing.T) {
 // TestIntegrationCpReflinkCopy_RemovesExcludedPaths verifies that excluded
 // paths in the destination are removed after copy.
 func TestIntegrationCpReflinkCopy_RemovesExcludedPaths(t *testing.T) {
-	// XXX
-	t.Skip()
 	requireCommand(t, "cp")
 
 	src := t.TempDir()
@@ -600,8 +590,6 @@ func TestIntegrationCpReflinkCopy_RemovesExcludedPaths(t *testing.T) {
 // TestIntegrationCpReflinkCopy_DestinationClearedBeforeCopy verifies that
 // pre-existing destination content is removed before the copy.
 func TestIntegrationCpReflinkCopy_DestinationClearedBeforeCopy(t *testing.T) {
-	// XXX
-	t.Skip()
 	requireCommand(t, "cp")
 
 	src := t.TempDir()
@@ -647,9 +635,6 @@ func TestIntegrationCpReflinkCopy_DestinationClearedBeforeCopy(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestIntegrationSyncFilesystem_RsyncPath(t *testing.T) {
-	// XXX
-	t.Skip()
-
 	requireCommand(t, "rsync")
 
 	src := t.TempDir()
@@ -689,8 +674,6 @@ func TestIntegrationSyncFilesystem_RsyncPath(t *testing.T) {
 }
 
 func TestIntegrationSyncFilesystem_RsyncPathVerbose(t *testing.T) {
-	// XXX
-	t.Skip()
 	requireCommand(t, "rsync")
 
 	src := t.TempDir()
