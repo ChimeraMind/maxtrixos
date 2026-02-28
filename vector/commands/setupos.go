@@ -12,7 +12,7 @@ type SetupOSCommand struct {
 }
 
 // NewSetupOSCommand creates a new SetupOSCommand
-func NewSetupOSCommand() ICommand {
+func NewSetupOSCommand() *SetupOSCommand {
 	return &SetupOSCommand{
 		fs: flag.NewFlagSet("setupOS", flag.ExitOnError),
 	}

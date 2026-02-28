@@ -12,7 +12,7 @@ type ReadWriteCommand struct {
 }
 
 // NewReadWriteCommand creates a new ReadWriteCommand
-func NewReadWriteCommand() ICommand {
+func NewReadWriteCommand() *ReadWriteCommand {
 	return &ReadWriteCommand{
 		fs: flag.NewFlagSet("readwrite", flag.ExitOnError),
 	}

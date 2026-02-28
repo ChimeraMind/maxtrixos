@@ -33,7 +33,7 @@ func newTestImagesCommand(
 	cfg *config.MockConfig,
 	args []string,
 ) (*ImagesCommand, error) {
-	cmd := NewImagesCommand().(*ImagesCommand)
+	cmd := NewImagesCommand()
 	cmd.ot = ot
 	cmd.cfg = cfg
 
@@ -53,7 +53,7 @@ func newTestImagesCommand(
 // --- Tests ---
 
 func TestImagesName(t *testing.T) {
-	cmd := NewImagesCommand().(*ImagesCommand)
+	cmd := NewImagesCommand()
 	if name := cmd.Name(); name != "images" {
 		t.Errorf("Expected name 'images', got %q", name)
 	}
@@ -74,7 +74,7 @@ func TestImagesParseArgsDefaults(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImagesCommand().(*ImagesCommand)
+	cmd := NewImagesCommand()
 	cmd.StartUI()
 	if err := cmd.parseArgs([]string{}); err != nil {
 		t.Fatalf("parseArgs failed: %v", err)
@@ -102,7 +102,7 @@ func TestImagesParseArgsFlags(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImagesCommand().(*ImagesCommand)
+	cmd := NewImagesCommand()
 	cmd.StartUI()
 	if err := cmd.parseArgs([]string{
 		"--local-ostree",
@@ -155,7 +155,7 @@ func TestImagesParseArgsNotRoot(t *testing.T) {
 	getEuid = func() int { return 1000 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImagesCommand().(*ImagesCommand)
+	cmd := NewImagesCommand()
 	cmd.StartUI()
 	err := cmd.parseArgs([]string{})
 	if err == nil {
@@ -209,7 +209,7 @@ func TestSkipFilter(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImagesCommand().(*ImagesCommand)
+	cmd := NewImagesCommand()
 	cmd.StartUI()
 	_ = cmd.parseArgs([]string{"--skip-releases", "ref1,ref3"})
 
@@ -240,7 +240,7 @@ func TestOnlyFilter(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImagesCommand().(*ImagesCommand)
+	cmd := NewImagesCommand()
 	cmd.StartUI()
 	_ = cmd.parseArgs([]string{"--only-releases", "ref2"})
 

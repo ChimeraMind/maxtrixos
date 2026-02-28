@@ -149,7 +149,7 @@ type JailbreakCommand struct {
 }
 
 // NewJailbreakCommand creates a new JailbreakCommand.
-func NewJailbreakCommand() ICommand {
+func NewJailbreakCommand() *JailbreakCommand {
 	return &JailbreakCommand{}
 }
 

@@ -14,7 +14,7 @@ type BranchCommand struct {
 }
 
 // NewBranchCommand creates a new BranchCommand
-func NewBranchCommand() ICommand {
+func NewBranchCommand() *BranchCommand {
 	return &BranchCommand{}
 }
 

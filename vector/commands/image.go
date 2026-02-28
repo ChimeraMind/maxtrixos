@@ -38,7 +38,7 @@ type ImageCommand struct {
 }
 
 // NewImageCommand creates a new ImageCommand
-func NewImageCommand() ICommand {
+func NewImageCommand() *ImageCommand {
 	return &ImageCommand{}
 }
 

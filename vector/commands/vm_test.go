@@ -55,7 +55,7 @@ func TestVMCommandName(t *testing.T) {
 func TestVMCommandInitDefaults(t *testing.T) {
 	// Init requires config which we can't load in unit tests,
 	// so test flag parsing directly on the flagset.
-	c := NewVMCommand().(*VMCommand)
+	c := NewVMCommand()
 	// Parse with no flags – should use defaults.
 	if err := c.fs.Parse([]string{}); err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
@@ -97,7 +97,7 @@ func TestVMCommandInitDefaults(t *testing.T) {
 }
 
 func TestVMCommandFlagOverrides(t *testing.T) {
-	c := NewVMCommand().(*VMCommand)
+	c := NewVMCommand()
 	err := c.fs.Parse([]string{
 		"-image", "/tmp/test.qcow2",
 		"-memory", "8G",
@@ -153,7 +153,7 @@ func TestVMCommandFlagOverrides(t *testing.T) {
 // --- Run validation ---
 
 func TestVMCommandRunMissingImage(t *testing.T) {
-	c := NewVMCommand().(*VMCommand)
+	c := NewVMCommand()
 	_ = c.fs.Parse([]string{})
 	// Manually set a cfg so we don't fail on initBaseConfig.
 	c.cfg = &config.MockConfig{}
@@ -168,7 +168,7 @@ func TestVMCommandRunMissingImage(t *testing.T) {
 }
 
 func TestVMCommandRunNonAmd64Image(t *testing.T) {
-	c := NewVMCommand().(*VMCommand)
+	c := NewVMCommand()
 	_ = c.fs.Parse([]string{"-image", "/tmp/matrixos-arm64.img"})
 	c.cfg = &config.MockConfig{}
 
