@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -147,15 +148,29 @@ func isPathUnderMount(path, mountpoint string) bool {
 	return path == mountpoint || strings.HasPrefix(path, mountpoint+"/")
 }
 
+// resolvePath returns the canonical path with symlinks resolved.
+// If resolution fails (e.g. the path does not exist), it falls back
+// to filepath.Clean so callers always get a normalised path.
+func resolvePath(p string) string {
+	resolved, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return filepath.Clean(p)
+	}
+	return resolved
+}
+
 // findMountByTarget returns the mount entry for an exact mountpoint match.
 // When multiple mounts exist at the same target, the last (most recent) is returned.
+// The path is resolved through symlinks before comparison because the kernel
+// records the real (resolved) path in /proc/self/mountinfo.
 func findMountByTarget(mnt string) (*MountInfoEntry, error) {
 	entries, err := readMountInfo()
 	if err != nil {
 		return nil, err
 	}
+	resolved := resolvePath(mnt)
 	for i := len(entries) - 1; i >= 0; i-- {
-		if entries[i].Mountpoint == mnt {
+		if entries[i].Mountpoint == resolved {
 			return entries[i], nil
 		}
 	}
@@ -164,16 +179,18 @@ func findMountByTarget(mnt string) (*MountInfoEntry, error) {
 
 // findMountContainingPath returns the entry whose mountpoint is the longest
 // prefix of path (equivalent to findmnt -T <path>).
+// The path is resolved through symlinks before comparison.
 func findMountContainingPath(path string) (*MountInfoEntry, error) {
 	entries, err := readMountInfo()
 	if err != nil {
 		return nil, err
 	}
+	resolved := resolvePath(path)
 	var best *MountInfoEntry
 	bestLen := -1
 	for i := range entries {
 		mp := entries[i].Mountpoint
-		if isPathUnderMount(path, mp) && len(mp) > bestLen {
+		if isPathUnderMount(resolved, mp) && len(mp) > bestLen {
 			bestLen = len(mp)
 			best = entries[i]
 		}
@@ -185,14 +202,16 @@ func findMountContainingPath(path string) (*MountInfoEntry, error) {
 }
 
 // listMountsByPrefix returns entries whose mountpoint starts with prefix.
+// The prefix is resolved through symlinks before comparison.
 func listMountsByPrefix(prefix string) ([]*MountInfoEntry, error) {
 	entries, err := readMountInfo()
 	if err != nil {
 		return nil, err
 	}
+	resolved := resolvePath(prefix)
 	var result []*MountInfoEntry
 	for _, e := range entries {
-		if strings.HasPrefix(e.Mountpoint, prefix) {
+		if strings.HasPrefix(e.Mountpoint, resolved) {
 			result = append(result, e)
 		}
 	}

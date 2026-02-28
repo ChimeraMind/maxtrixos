@@ -413,6 +413,146 @@ func TestIsMounted(t *testing.T) {
 			t.Error("Expected mounted=false")
 		}
 	})
+
+	t.Run("SymlinkResolved", func(t *testing.T) {
+		// The kernel records the resolved (real) path in mountinfo.
+		// isMounted must resolve symlinks before comparing so that
+		// a query through a symlinked path still matches.
+		tmpDir := t.TempDir()
+		realDir := filepath.Join(tmpDir, "real")
+		if err := os.MkdirAll(realDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		linkDir := filepath.Join(tmpDir, "link")
+		if err := os.Symlink(realDir, linkDir); err != nil {
+			t.Fatal(err)
+		}
+
+		// mountinfo records the resolved path
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: realDir},
+		})
+
+		// query via the symlink path must still report mounted
+		mounted, err := isMounted(linkDir)
+		if err != nil {
+			t.Fatalf("isMounted through symlink failed: %v", err)
+		}
+		if !mounted {
+			t.Errorf("Expected mounted=true when querying via symlink %s (real %s)", linkDir, realDir)
+		}
+	})
+}
+
+func TestResolvePath(t *testing.T) {
+	t.Run("Symlink", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		realDir := filepath.Join(tmpDir, "real")
+		if err := os.MkdirAll(realDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		linkDir := filepath.Join(tmpDir, "link")
+		if err := os.Symlink(realDir, linkDir); err != nil {
+			t.Fatal(err)
+		}
+
+		got := resolvePath(linkDir)
+		if got != realDir {
+			t.Errorf("resolvePath(%q) = %q, want %q", linkDir, got, realDir)
+		}
+	})
+
+	t.Run("NoSymlink", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		got := resolvePath(tmpDir)
+		if got != tmpDir {
+			t.Errorf("resolvePath(%q) = %q, want %q", tmpDir, got, tmpDir)
+		}
+	})
+
+	t.Run("NonExistentFallsBackToClean", func(t *testing.T) {
+		p := "/nonexistent/path/../normalized"
+		got := resolvePath(p)
+		want := filepath.Clean(p)
+		if got != want {
+			t.Errorf("resolvePath(%q) = %q, want %q", p, got, want)
+		}
+	})
+}
+
+func TestFindMountByTargetSymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+	realDir := filepath.Join(tmpDir, "real")
+	if err := os.MkdirAll(realDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	linkDir := filepath.Join(tmpDir, "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Fatal(err)
+	}
+
+	setupMockMountInfo(t, []*MountInfoEntry{
+		{MountID: 1, Mountpoint: realDir, Source: "/dev/sda1", FSType: "ext4"},
+	})
+
+	entry, err := findMountByTarget(linkDir)
+	if err != nil {
+		t.Fatalf("findMountByTarget through symlink failed: %v", err)
+	}
+	if entry.Source != "/dev/sda1" {
+		t.Errorf("Expected /dev/sda1, got %s", entry.Source)
+	}
+}
+
+func TestFindMountContainingPathSymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+	realDir := filepath.Join(tmpDir, "real")
+	if err := os.MkdirAll(filepath.Join(realDir, "sub"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	linkDir := filepath.Join(tmpDir, "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Fatal(err)
+	}
+
+	setupMockMountInfo(t, []*MountInfoEntry{
+		{MountID: 1, Mountpoint: "/", Source: "/dev/sda1", FSType: "ext4"},
+		{MountID: 2, Mountpoint: realDir, Source: "/dev/sda2", FSType: "ext4"},
+	})
+
+	entry, err := findMountContainingPath(filepath.Join(linkDir, "sub"))
+	if err != nil {
+		t.Fatalf("findMountContainingPath through symlink failed: %v", err)
+	}
+	if entry.Source != "/dev/sda2" {
+		t.Errorf("Expected /dev/sda2, got %s", entry.Source)
+	}
+}
+
+func TestListMountsByPrefixSymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+	realDir := filepath.Join(tmpDir, "real")
+	if err := os.MkdirAll(realDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	linkDir := filepath.Join(tmpDir, "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Fatal(err)
+	}
+
+	setupMockMountInfo(t, []*MountInfoEntry{
+		{Mountpoint: realDir},
+		{Mountpoint: realDir + "/sub1"},
+		{Mountpoint: "/other"},
+	})
+
+	result, err := listMountsByPrefix(linkDir)
+	if err != nil {
+		t.Fatalf("listMountsByPrefix through symlink failed: %v", err)
+	}
+	if len(result) != 2 {
+		t.Errorf("Expected 2 entries, got %d", len(result))
+	}
 }
 
 func TestResolveDeviceAttribute(t *testing.T) {
