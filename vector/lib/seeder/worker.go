@@ -236,6 +236,15 @@ func (s *Seeder) mountPrivateGitRepo(chrootDir string) error {
 	if err != nil {
 		return fmt.Errorf("error getting default private git repo path: %w", err)
 	}
+
+	if !filesystems.DirectoryExists(privatePath) {
+		s.PrintWarning(
+			"%s does not exist, skipping private git repo mount ...\n",
+			privatePath,
+		)
+		return nil
+	}
+
 	privateDst := filepath.Join(chrootDir, defaultPrivatePath)
 	privateBind, err := filesystems.NewBindMount(
 		filesystems.BindMountOptions{
@@ -323,8 +332,8 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) error {
 		filesystems.CommonRootfsMountsOptions{
 			MountPoint: chrootDir,
 			Mounting: func(mnt string) {
-				s.trackMount(mnt)
 				s.Print("Mounting: %s ...\n", mnt)
+				s.trackMount(mnt)
 			},
 			Mounted: func(mnt string) {
 				s.Print("Mounted: %s ...\n", mnt)
