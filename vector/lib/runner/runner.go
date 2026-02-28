@@ -78,6 +78,22 @@ func chrootArgs(chrootDir, chrootExec string, args ...string) ([]string, error) 
 	return cmdArgs, nil
 }
 
+// DirRunFunc is a function type that executes an external command with the
+// working directory set to dir. It mirrors Func but adds a dir parameter
+// that maps to exec.Cmd.Dir.
+type DirRunFunc func(dir string, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error
+
+// DirRun is the default DirRunFunc implementation. It executes the named
+// program with the given arguments, setting the working directory to dir.
+var DirRun DirRunFunc = func(dir string, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd.Run()
+}
+
 // ChrootRunFunc is a function type that executes a command inside a chroot
 // via unshare, wiring stdin/stdout/stderr to the supplied writers.
 type ChrootRunFunc func(stdin io.Reader, stdout, stderr io.Writer, chrootDir, chrootExec string, args ...string) error

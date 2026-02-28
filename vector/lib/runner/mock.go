@@ -78,6 +78,18 @@ func (mr *MockRunner) ChrootRun(stdin io.Reader, stdout, stderr io.Writer, chroo
 	return nil
 }
 
+// DirRun implements the DirRunFunc signature.
+func (mr *MockRunner) DirRun(dir string, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	mr.Calls = append(mr.Calls, MockRunnerCall{Name: name, Args: args})
+	if mr.FailOn >= 0 && len(mr.Calls)-1 == mr.FailOn {
+		return mr.Err
+	}
+	if mr.FailOn < 0 && mr.Err != nil {
+		return mr.Err
+	}
+	return nil
+}
+
 // ChrootOutput implements the ChrootOutputFunc signature.
 func (mr *MockRunner) ChrootOutput(chrootDir, chrootExec string, args ...string) ([]byte, error) {
 	mr.Calls = append(mr.Calls, MockRunnerCall{Name: "chroot:" + chrootExec, Args: args})
