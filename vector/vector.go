@@ -30,7 +30,7 @@ Usage:
     vm           runs generated image tests using QEMU.
   build       - build toolkit command, orchestrates building OS artifacts.
     image        generates a single OS image.
-	release      generates a single OS release (ostree commit).
+    release      generates a single OS release (ostree commit).
 `
 )
 
