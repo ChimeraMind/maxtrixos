@@ -13,8 +13,11 @@ import (
 
 // ICommand defines the interface for a vector command
 type ICommand interface {
+	// Name returns the name of the command.
 	Name() string
+	// Init initializes the command with the given arguments.
 	Init(args []string) error
+	// Run executes the command.
 	Run() error
 }
 

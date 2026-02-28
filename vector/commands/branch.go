@@ -18,12 +18,10 @@ func NewBranchCommand() *BranchCommand {
 	return &BranchCommand{}
 }
 
-// Name returns the name of the command
 func (c *BranchCommand) Name() string {
 	return "branch"
 }
 
-// Init initializes the command
 func (c *BranchCommand) Init(args []string) error {
 	if err := c.parseArgs(args); err != nil {
 		return err
@@ -60,7 +58,6 @@ func (c *BranchCommand) parseArgs(args []string) error {
 	return nil
 }
 
-// Run runs the command
 func (c *BranchCommand) Run() error {
 	switch c.sub {
 	case "show":

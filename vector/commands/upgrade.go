@@ -38,12 +38,10 @@ func NewUpgradeCommand() *UpgradeCommand {
 	return &UpgradeCommand{}
 }
 
-// Name returns the name of the command
 func (c *UpgradeCommand) Name() string {
 	return "upgrade"
 }
 
-// Init initializes the command
 func (c *UpgradeCommand) Init(args []string) error {
 	if err := c.parseArgs(args); err != nil {
 		return err
@@ -78,7 +76,6 @@ func (c *UpgradeCommand) parseArgs(args []string) error {
 	return c.fs.Parse(args)
 }
 
-// Run runs the command
 func (c *UpgradeCommand) Run() error {
 
 	// Check if we are running as root. If running as user, exit with error.

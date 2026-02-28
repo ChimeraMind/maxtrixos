@@ -15,7 +15,6 @@ import (
 	"matrixos/vector/lib/filesystems"
 )
 
-// GetKernelPath returns the kernel version directory name from the deployed rootfs.
 func (im *Image) GetKernelPath() (string, error) {
 	if im.rootfs == "" {
 		return "", errors.New("rootfs not set, call SetRootfs first")
@@ -40,7 +39,6 @@ func (im *Image) GetKernelPath() (string, error) {
 	return dirs[0], nil
 }
 
-// SetupPasswords sets default passwords for the matrix and root users.
 func (im *Image) SetupPasswords() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -84,7 +82,6 @@ func (im *Image) SetupPasswords() error {
 	return os.WriteFile(shadowFile, []byte(strings.Join(lines, "\n")+"\n"), 0640)
 }
 
-// ExtractPackageList returns the list of packages installed in a rootfs.
 func (im *Image) ExtractPackageList() ([]string, error) {
 	if im.rootfs == "" {
 		return nil, errors.New("rootfs not set, call SetRootfs first")
@@ -123,7 +120,6 @@ func (im *Image) ExtractPackageList() ([]string, error) {
 	return pkgList, nil
 }
 
-// SetupHooks runs image-specific hook scripts.
 func (im *Image) SetupHooks() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -170,7 +166,6 @@ func (im *Image) SetupHooks() error {
 	return cmd.Run()
 }
 
-// TestImage copies an image to a temp directory and runs test scripts against it.
 func (im *Image) TestImage() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err

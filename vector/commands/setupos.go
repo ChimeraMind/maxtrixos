@@ -18,12 +18,10 @@ func NewSetupOSCommand() *SetupOSCommand {
 	}
 }
 
-// Name returns the name of the command
 func (c *SetupOSCommand) Name() string {
 	return c.fs.Name()
 }
 
-// Init initializes the command
 func (c *SetupOSCommand) Init(args []string) error {
 	c.fs.Usage = func() {
 		fmt.Printf("Usage: vector %s\n", c.Name())
@@ -32,7 +30,6 @@ func (c *SetupOSCommand) Init(args []string) error {
 	return c.fs.Parse(args)
 }
 
-// Run runs the command
 func (c *SetupOSCommand) Run() error {
 	// Check if we are running as root. If running as user, exit with error.
 	if getEuid() != 0 {

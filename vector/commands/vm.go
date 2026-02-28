@@ -172,12 +172,10 @@ func NewVMCommand() *VMCommand {
 	return c
 }
 
-// Name returns the name of the command
 func (c *VMCommand) Name() string {
 	return c.fs.Name()
 }
 
-// Init initializes the command
 func (c *VMCommand) Init(args []string) error {
 	if err := c.initBaseConfig(); err != nil {
 		return err
@@ -195,7 +193,6 @@ func (c *VMCommand) Init(args []string) error {
 	return nil
 }
 
-// Run runs the command
 func (c *VMCommand) Run() error {
 	if c.imagePath == "" {
 		c.fs.Usage()

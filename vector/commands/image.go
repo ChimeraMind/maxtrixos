@@ -42,12 +42,10 @@ func NewImageCommand() *ImageCommand {
 	return &ImageCommand{}
 }
 
-// Name returns the name of the command
 func (c *ImageCommand) Name() string {
 	return "image"
 }
 
-// Init initializes the command
 func (c *ImageCommand) Init(args []string) error {
 	if err := c.parseArgs(args); err != nil {
 		return err
@@ -118,9 +116,9 @@ func (c *ImageCommand) parseArgs(args []string) error {
 	return nil
 }
 
-// Run runs the command.  The SignalGuard ensures that all registered
-// cleanup functions (mounts, loop devices, temp dirs, etc.) are executed
-// even when the process is terminated by SIGINT or SIGTERM.
+// Run uses the SignalGuard to ensure that all registered cleanup functions
+// (mounts, loop devices, temp dirs, etc.) are executed even when the process
+// is terminated by SIGINT or SIGTERM.
 func (c *ImageCommand) Run() error {
 	return c.RunWithGuard(c.runImage)
 }

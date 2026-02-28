@@ -36,12 +36,10 @@ func NewReleaseCommand() *ReleaseCommand {
 	return &ReleaseCommand{}
 }
 
-// Name returns the name of the command
 func (c *ReleaseCommand) Name() string {
 	return "release"
 }
 
-// Init initializes the command
 func (c *ReleaseCommand) Init(args []string) error {
 	if err := c.parseArgs(args); err != nil {
 		return err
@@ -119,7 +117,7 @@ func (c *ReleaseCommand) parseArgs(args []string) error {
 	return nil
 }
 
-// Run runs the command. The SignalGuard ensures cleanup on signals.
+// Run uses the SignalGuard to ensure cleanup on signals.
 func (c *ReleaseCommand) Run() error {
 	return c.RunWithGuard(c.runRelease)
 }
