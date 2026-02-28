@@ -31,10 +31,13 @@ seeders_lib.maybe_initialize_matrixos_private_example() {
         return 1
     fi
     local private_git_url="${MATRIXOS_PRIVATE_EXAMPLE_GIT_REPO}"
+    local git_clone_args=(
+        ${MATRIXOS_SEEDER_GIT_CLONE_ARGS}
+    )
     if [ ! -d "${private_repo_path}" ] || [ -z "$(ls -A "${private_repo_path}")" ]; then
         echo "${private_repo_path} does not exist or is empty. Pulling it from: ${private_git_url} ..." >&2
         mkdir -p "${private_repo_path}"
-        git clone --depth 1 "${private_git_url}" "${private_repo_path}"
+        git clone "${git_clone_args[@]}" "${private_git_url}" "${private_repo_path}"
         (
             cd "${private_repo_path}"
             ./make.sh
