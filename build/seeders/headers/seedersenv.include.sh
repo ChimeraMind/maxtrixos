@@ -8,7 +8,8 @@ if [ -z "${__MATRIXOS_SEEDERS_ENV_PARSED:-}" ]; then
 source "${MATRIXOS_DEV_DIR}"/lib/env_lib.sh
 
 # See conf/matrixos.conf for documentation on these variables.
-MATRIXOS_SEEDERS_DIR=$(env_lib.get_simple_var "matrixOS" "DefaultRoot")/build/seeders
+_default_root=$(env_lib.get_simple_var "matrixOS" "DefaultRoot")
+MATRIXOS_SEEDERS_DIR=$(env_lib.get_root_var "${_default_root}" "Seeder" "ChrootSeedersDir")
 MATRIXOS_SEEDERS_BUILD_ARTIFACTS_DIR=$(env_lib.get_simple_var "Seeder" "ChrootBuildArtifactsDir")
 MATRIXOS_SEEDERS_PHASES_STATE_DIR=$(env_lib.get_simple_var "Seeder" "ChrootSeedersPhasesStateDir")
 MATRIXOS_DISABLED_SEEDER_FILE=$(env_lib.get_simple_var "Seeder" "SeederDisabledFileName")

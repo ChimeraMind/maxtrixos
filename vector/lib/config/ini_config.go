@@ -2,9 +2,11 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 )
 
@@ -342,23 +344,6 @@ func (c *IniConfig) Load() error {
 		return err
 	}
 
-	// Set defaults for base paths if missing, to allow expansion
-	rootVal, foundRoot := c.getVal("matrixOS.Root")
-	if !foundRoot {
-		c.setVal("matrixOS.Root", c.sp.defaultRoot)
-	} else {
-		rootVal, err := smartRootify(rootVal, c.sp.defaultRoot)
-		if err != nil {
-			return err
-		}
-		c.setVal("matrixOS.Root", rootVal)
-	}
-
-	// Expand base paths to absolute
-	if err := c.expandAbs("matrixOS.Root"); err != nil {
-		return err
-	}
-
 	rootDependents := []string{
 		"matrixOS.PrivateGitRepoPath",
 		"matrixOS.LogsDir",
@@ -378,6 +363,53 @@ func (c *IniConfig) Load() error {
 		"Ostree.DevGpgHomeDir",
 		"Ostree.GpgOfficialPublicKey",
 	}
+	defaultRootDependents := []string{
+		"Seeder.ChrootSeedersDir",
+	}
+
+	// Set defaults for base paths if missing, to allow expansion
+	rootVal, foundRoot := c.getVal("matrixOS.Root")
+	if !foundRoot {
+		log.Printf(
+			`WARNING WARNING WARNING:
+- matrixOS.Root is not set in %s.
+- Relative paths depending on it will be expanded using %s.
+- Those paths are:
+  - %s`,
+			fullPath,
+			c.sp.defaultRoot,
+			strings.Join(rootDependents, "\n  - "),
+		)
+		c.setVal("matrixOS.Root", c.sp.defaultRoot)
+	} else {
+		rootVal, err := smartRootify(rootVal, c.sp.defaultRoot)
+		if err != nil {
+			return err
+		}
+		c.setVal("matrixOS.Root", rootVal)
+	}
+
+	// Expand base paths to absolute
+	if err := c.expandAbs("matrixOS.Root"); err != nil {
+		return err
+	}
+
+	// Some very minimal sanity checks at this stage.
+	_, foundDefaultRoot := c.getVal("matrixOS.DefaultRoot")
+	if !foundDefaultRoot {
+		log.Printf(
+			`WARNING WARNING WARNING:
+- matrixOS.DefaultRoot is not set in %s.
+- Relative paths depending on it will be expanded using %s.
+- Those paths are:
+  - %s`,
+			fullPath,
+			c.sp.defaultRoot,
+			strings.Join(defaultRootDependents, "\n  - "),
+		)
+		c.setVal("matrixOS.DefaultRoot", c.sp.defaultRoot)
+	}
+
 	for _, key := range rootDependents {
 		c.expand(key, "matrixOS.Root")
 	}
@@ -398,6 +430,10 @@ func (c *IniConfig) Load() error {
 	}
 	for _, key := range defaultPrivateRepoDependents {
 		c.expand(key, "matrixOS.DefaultPrivateGitRepoPath")
+	}
+
+	for _, key := range defaultRootDependents {
+		c.expand(key, "matrixOS.DefaultRoot")
 	}
 
 	return nil
