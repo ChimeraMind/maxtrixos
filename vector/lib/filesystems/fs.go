@@ -588,10 +588,12 @@ func (m *CommonRootfsMounts) Cleanup() error {
 
 // BindMountOptions represents the options for creating a bind mount.
 type BindMountOptions struct {
-	Src    string
-	Dst    string
-	Stdout io.Writer
-	Stderr io.Writer
+	Src      string
+	Dst      string
+	ReadOnly bool // remount the bind as read-only after setup
+	MkdirAll bool // create Dst (and parents) if it does not exist
+	Stdout   io.Writer
+	Stderr   io.Writer
 }
 
 // BindMounter represents a bind mount that tracks its mounted state.
@@ -604,6 +606,8 @@ type BindMounter struct {
 }
 
 // NewBindMount creates and performs a bind mount from src to dst.
+// When MkdirAll is true the destination path is created automatically.
+// When ReadOnly is true the mount is remounted read-only after binding.
 func NewBindMount(opts BindMountOptions) (*BindMounter, error) {
 	if opts.Src == "" {
 		return nil, fmt.Errorf("missing src parameter")
@@ -615,7 +619,11 @@ func NewBindMount(opts BindMountOptions) (*BindMounter, error) {
 	if _, err := os.Stat(opts.Src); os.IsNotExist(err) {
 		return nil, fmt.Errorf("%s does not exist", opts.Src)
 	}
-	if _, err := os.Stat(opts.Dst); os.IsNotExist(err) {
+	if opts.MkdirAll {
+		if err := os.MkdirAll(opts.Dst, 0755); err != nil {
+			return nil, fmt.Errorf("mkdir %s: %w", opts.Dst, err)
+		}
+	} else if _, err := os.Stat(opts.Dst); os.IsNotExist(err) {
 		return nil, fmt.Errorf("%s does not exist", opts.Dst)
 	}
 
@@ -640,6 +648,15 @@ func NewBindMount(opts BindMountOptions) (*BindMounter, error) {
 	}
 	if err := Mount("", opts.Dst, "", unix.MS_SLAVE, ""); err != nil {
 		return nil, fmt.Errorf("mount make-slave failed: %w", err)
+	}
+
+	if opts.ReadOnly {
+		flags := unix.MS_REMOUNT | unix.MS_RDONLY | unix.MS_BIND
+		if err := Mount("", opts.Dst, "", uintptr(flags), ""); err != nil {
+			// Best-effort unmount on failure.
+			_ = Unmount(opts.Dst, 0)
+			return nil, fmt.Errorf("remount read-only %s: %w", opts.Dst, err)
+		}
 	}
 
 	return &BindMounter{

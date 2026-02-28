@@ -3,7 +3,6 @@ package seeder
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -11,8 +10,6 @@ import (
 
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/runner"
-
-	"golang.org/x/sys/unix"
 )
 
 // SeederParams holds the key variables exported by a seeder's params.sh.
@@ -228,77 +225,76 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 
 // --- Mount management ---
 
-// SetupChrootMounts sets up all bind mounts needed for a seeder chroot
-// and returns a cleanup function that unmounts everything in LIFO order.
-func (s *Seeder) SetupChrootMounts(chrootDir string) (func(), error) {
-	var cleanups []func()
-	cleanAll := func() {
-		for i := len(cleanups) - 1; i >= 0; i-- {
-			cleanups[i]()
-		}
-	}
-
+// SetupChrootMounts sets up all bind mounts needed for a seeder chroot.
+// All mount points are tracked and can be cleaned up by calling Cleanup().
+func (s *Seeder) SetupChrootMounts(chrootDir string) error {
 	// 1. Common rootfs mounts (dev, sys, proc, shm, run/lock).
 	common, err := filesystems.NewCommonRootfsMounts(
 		filesystems.CommonRootfsMountsOptions{
 			MountPoint: chrootDir,
 			Mounting: func(mnt string) {
+				s.trackMount(mnt)
 				s.Print("Mounting: %s ...\n", mnt)
 			},
-			Mounted: func(mnt string) {},
-			Stdout:  s.stdout,
-			Stderr:  s.stderr,
+			Mounted: func(mnt string) {
+				s.Print("Mounted: %s ...\n", mnt)
+			},
+			Stdout: s.stdout,
+			Stderr: s.stderr,
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("common mounts init: %w", err)
+		return fmt.Errorf("common mounts init: %w", err)
 	}
 	if err := common.Setup(); err != nil {
-		common.Cleanup()
-		return nil, fmt.Errorf("common mounts setup: %w", err)
+		return fmt.Errorf("common mounts setup: %w", err)
 	}
-	cleanups = append(cleanups, func() { common.Cleanup() })
 
-	// 2. Special read-only mounts: private repo and .ssh.
-	var roMounts []string
 	privatePath, err := s.PrivateGitRepoPath()
 	if err != nil {
-		cleanAll()
-		return nil, fmt.Errorf("private repo path: %w", err)
+		return fmt.Errorf("error getting private repo path: %w", err)
 	}
 	defaultPrivatePath, err := s.DefaultPrivateGitRepoPath()
 	if err != nil {
-		cleanAll()
-		return nil, fmt.Errorf("default private path: %w", err)
+		return fmt.Errorf("error getting default private git repo path: %w", err)
 	}
 	privateDst := filepath.Join(chrootDir, defaultPrivatePath)
-	if err := mountReadOnly(privatePath, privateDst); err != nil {
-		cleanAll()
-		return nil, fmt.Errorf(
-			"RO mount private repo: %w", err,
-		)
+	privateBind, err := filesystems.NewBindMount(
+		filesystems.BindMountOptions{
+			Src:      privatePath,
+			Dst:      privateDst,
+			ReadOnly: true,
+			MkdirAll: true,
+			Stdout:   s.stdout,
+			Stderr:   s.stderr,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("error creating RO mount for private repo: %w", err)
 	}
-	roMounts = append(roMounts, privateDst)
+	s.trackMount(privateBind.Dst())
 
 	if filesystems.DirectoryExists("/root/.ssh") {
 		sshDst := filepath.Join(chrootDir, "root", ".ssh")
-		if err := mountReadOnly("/root/.ssh", sshDst); err != nil {
-			unmountList(roMounts, s.stdout, s.stderr)
-			cleanAll()
-			return nil, fmt.Errorf("RO mount .ssh: %w", err)
+		sshBind, err := filesystems.NewBindMount(
+			filesystems.BindMountOptions{
+				Src:      "/root/.ssh",
+				Dst:      sshDst,
+				ReadOnly: true,
+				MkdirAll: true,
+				Stdout:   s.stdout,
+				Stderr:   s.stderr,
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("error creating RO mount for .ssh: %w", err)
 		}
-		roMounts = append(roMounts, sshDst)
+		s.trackMount(sshBind.Dst())
 	}
 
-	cleanups = append(cleanups, func() {
-		unmountList(roMounts, s.stdout, s.stderr)
-	})
-
-	// 3. Distfiles bind mount.
 	distDir, err := s.ensureDir(s.DistfilesDir)
 	if err != nil {
-		cleanAll()
-		return nil, fmt.Errorf("distfiles dir: %w", err)
+		return fmt.Errorf("error getting distfiles dir: %w", err)
 	}
 	distMount, err := filesystems.BindMountDistdir(
 		filesystems.BindMountDistdirOptions{
@@ -309,16 +305,13 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) (func(), error) {
 		},
 	)
 	if err != nil {
-		cleanAll()
-		return nil, fmt.Errorf("distfiles mount: %w", err)
+		return fmt.Errorf("error creating distfiles mount: %w", err)
 	}
-	cleanups = append(cleanups, func() { distMount.Unmount() })
+	s.trackMount(distMount.Dst())
 
-	// 4. Binpkgs bind mount.
 	binDir, err := s.ensureDir(s.BinpkgsDir)
 	if err != nil {
-		cleanAll()
-		return nil, fmt.Errorf("binpkgs dir: %w", err)
+		return fmt.Errorf("error getting binpkgs dir: %w", err)
 	}
 	binMount, err := filesystems.BindMountBinpkgs(
 		filesystems.BindMountBinpkgsOptions{
@@ -329,54 +322,18 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) (func(), error) {
 		},
 	)
 	if err != nil {
-		cleanAll()
-		return nil, fmt.Errorf("binpkgs mount: %w", err)
+		return fmt.Errorf("error creating binpkgs mount: %w", err)
 	}
-	cleanups = append(cleanups, func() { binMount.Unmount() })
+	s.trackMount(binMount.Dst())
 
-	return cleanAll, nil
-}
-
-// mountReadOnly creates a read-only bind mount from src to dst.
-func mountReadOnly(src, dst string) error {
-	if err := os.MkdirAll(dst, 0755); err != nil {
-		return fmt.Errorf("mkdir %s: %w", dst, err)
-	}
-	if err := filesystems.Mount(
-		src, dst, "", unix.MS_BIND, "",
-	); err != nil {
-		return fmt.Errorf("bind %s -> %s: %w", src, dst, err)
-	}
-	if err := filesystems.Mount(
-		"", dst, "", unix.MS_SLAVE, "",
-	); err != nil {
-		return fmt.Errorf("make-slave %s: %w", dst, err)
-	}
-	flags := unix.MS_REMOUNT | unix.MS_RDONLY | unix.MS_BIND
-	if err := filesystems.Mount(
-		"", dst, "", uintptr(flags), "",
-	); err != nil {
-		return fmt.Errorf("remount RO %s: %w", dst, err)
-	}
 	return nil
 }
 
-// unmountList unmounts a list of mount points in reverse order.
-func unmountList(mounts []string, stdout, stderr io.Writer) {
-	filesystems.CleanupMounts(filesystems.CleanupMountsOptions{
-		Mounts: mounts,
-		Stdout: stdout,
-		Stderr: stderr,
-	})
-}
-
 // ensureDir calls dirFn to get a path and creates it if needed.
-func (s *Seeder) ensureDir(
-	dirFn func() (string, error),
-) (string, error) {
+func (s *Seeder) ensureDir(dirFn func() (string, error)) (string, error) {
 	dir, err := dirFn()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error getting directory: %w", err)
 	}
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create %s: %w", dir, err)
@@ -416,9 +373,7 @@ func (s *Seeder) SetupChrootDirs(chrootDir string) error {
 	}
 	phasesDir := filepath.Join(chrootDir, stateDir)
 	if err := os.MkdirAll(phasesDir, 0755); err != nil {
-		return fmt.Errorf(
-			"failed to create phases dir %s: %w", phasesDir, err,
-		)
+		return fmt.Errorf("error creating phases dir %s: %w", phasesDir, err)
 	}
 
 	// Clone the dev toolkit into the chroot.
@@ -435,13 +390,13 @@ func (s *Seeder) SetupChrootDirs(chrootDir string) error {
 		}
 		cloneArgs, err := s.gitCloneArgs()
 		if err != nil {
-			return fmt.Errorf("git clone args: %w", err)
+			return fmt.Errorf("error getting git clone args: %w", err)
 		}
 
 		if localClone {
 			devDir, err := s.DevDir()
 			if err != nil {
-				return err
+				return fmt.Errorf("error getting dev dir: %w", err)
 			}
 			s.Print(
 				"Cloning %s (local) into %s ...\n",
@@ -455,12 +410,12 @@ func (s *Seeder) SetupChrootDirs(chrootDir string) error {
 				Stdout: s.stdout,
 				Stderr: s.stderr,
 			}); err != nil {
-				return fmt.Errorf("git clone (local): %w", err)
+				return fmt.Errorf("error cloning git repo (local): %w", err)
 			}
 		} else {
 			gitRepo, err := s.GitRepo()
 			if err != nil {
-				return err
+				return fmt.Errorf("error getting git repo: %w", err)
 			}
 			s.Print(
 				"Cloning %s (remote) into %s ...\n",
@@ -471,7 +426,7 @@ func (s *Seeder) SetupChrootDirs(chrootDir string) error {
 			if err := s.RetryableCmd(
 				6, "git", args...,
 			); err != nil {
-				return fmt.Errorf("git clone (remote): %w", err)
+				return fmt.Errorf("error cloning git repo (remote): %w", err)
 			}
 		}
 	}
@@ -479,7 +434,7 @@ func (s *Seeder) SetupChrootDirs(chrootDir string) error {
 	// Maybe delete .git directory.
 	deleteDotGit, err := s.DeleteDotGitFromGitRepo()
 	if err != nil {
-		return err
+		return fmt.Errorf("error checking if .git should be deleted: %w", err)
 	}
 	if deleteDotGit {
 		dotGitDir := filepath.Join(chrootDevDir, ".git")
