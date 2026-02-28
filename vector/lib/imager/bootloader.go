@@ -383,11 +383,14 @@ func (im *Image) InstallBootloader() error {
 		filesystems.CommonRootfsMountsOptions{
 			MountPoint: im.rootfs,
 			Mounting: func(tg string) {
+				im.Print("Mounting: %s ...\n", tg)
 				im.trackMount(tg)
 			},
-			Mounted: func(tg string) {},
-			Stdout:  im.stdout,
-			Stderr:  im.stderr,
+			Mounted: func(tg string) {
+				im.Print("Mounted: %s\n", tg)
+			},
+			Stdout: im.stdout,
+			Stderr: im.stderr,
 		},
 	)
 	if err != nil {
