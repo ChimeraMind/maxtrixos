@@ -17,10 +17,11 @@ import (
 func newTestSeederWithConfig(cfg *config.MockConfig) *Seeder {
 	mr := runner.NewMockRunner()
 	return &Seeder{
-		cfg:    cfg,
-		runner: mr.Run,
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 }
 
@@ -249,10 +250,11 @@ func newRealSeeder(devDir string) *Seeder {
 		Bools: map[string]bool{},
 	}
 	return &Seeder{
-		cfg:    cfg,
-		runner: runner.Run,
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		cfg:          cfg,
+		runner:       runner.Run,
+		chrootRunner: runner.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 }
 
@@ -431,10 +433,11 @@ func TestParseSeederParams_DevDirError(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	sd := &Seeder{
-		cfg:    cfg,
-		runner: runner.Run,
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		cfg:          cfg,
+		runner:       runner.Run,
+		chrootRunner: runner.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	_, err := sd.ParseSeederParams("/fake/params.sh")
@@ -483,10 +486,11 @@ func newPrepperSeeder(devDir, downloadsDir, stage3URL string) *Seeder {
 		Bools: map[string]bool{},
 	}
 	return &Seeder{
-		cfg:    cfg,
-		runner: runner.Run,
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		cfg:          cfg,
+		runner:       runner.Run,
+		chrootRunner: runner.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 }
 
@@ -630,10 +634,11 @@ func TestExecutePrepper_DevDirError(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	sd := &Seeder{
-		cfg:    cfg,
-		runner: runner.Run,
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		cfg:          cfg,
+		runner:       runner.Run,
+		chrootRunner: runner.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	err := sd.ExecutePrepper(
@@ -656,10 +661,11 @@ func TestExecutePrepper_DownloadsDirError(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	sd := &Seeder{
-		cfg:    cfg,
-		runner: runner.Run,
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		cfg:          cfg,
+		runner:       runner.Run,
+		chrootRunner: runner.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	err := sd.ExecutePrepper(
@@ -682,10 +688,11 @@ func TestExecutePrepper_Stage3URLError(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	sd := &Seeder{
-		cfg:    cfg,
-		runner: runner.Run,
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		cfg:          cfg,
+		runner:       runner.Run,
+		chrootRunner: runner.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	err := sd.ExecutePrepper(
