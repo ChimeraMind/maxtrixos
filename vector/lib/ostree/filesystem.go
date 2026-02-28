@@ -10,7 +10,7 @@ import (
 )
 
 func (o *Ostree) SetupEtc(rootfs string) error {
-	o.Print("Setting up /etc...")
+	o.Print("Setting up /etc...\n")
 	etcDir := filepath.Join(rootfs, "etc")
 	usrEtcDir := filepath.Join(rootfs, "usr", "etc")
 
@@ -37,7 +37,7 @@ func (o *Ostree) prepareVarHome(imageDir, homeName, varHomeName string) error {
 		}
 	} else if homeExists && homeInfo.IsDir() {
 		if pathExists(varHomeDir) { // path exists is correct.
-			o.PrintError("WARNING: removing %s", varHomeDir)
+			o.PrintError("WARNING: removing %s\n", varHomeDir)
 			os.RemoveAll(varHomeDir)
 		}
 		if err := filesystems.Move(homeDir, varHomeDir); err != nil {
@@ -145,7 +145,7 @@ func prepareMachineID(imageDir string) error {
 // prepareVarDbPkg moves var/db/pkg to the read-only VDB location and creates
 // a relative symlink back.
 func (o *Ostree) prepareVarDbPkg(imageDir, roVdbPath string) error {
-	o.Print("Setting up /var/db/pkg...")
+	o.Print("Setting up /var/db/pkg...\n")
 	varDbPkg := filepath.Join(imageDir, "var", "db", "pkg")
 	usrVarDbPkg := filepath.Join(imageDir, roVdbPath)
 
@@ -164,8 +164,8 @@ func (o *Ostree) prepareVarDbPkg(imageDir, roVdbPath string) error {
 }
 
 // prepareOpt moves /opt to /usr/opt and symlinks it.
-func prepareOpt(imageDir string) error {
-	fmt.Println("Setting up /opt...")
+func (o *Ostree) prepareOpt(imageDir string) error {
+	o.Print("Setting up /opt...\n")
 	return moveDirToTargetAndSymlink(
 		filepath.Join(imageDir, "opt"),
 		filepath.Join(imageDir, "usr", "opt"),
@@ -174,8 +174,8 @@ func prepareOpt(imageDir string) error {
 }
 
 // prepareSrv moves /srv to /var/srv and symlinks it.
-func prepareSrv(imageDir string) error {
-	fmt.Println("Setting up /srv...")
+func (o *Ostree) prepareSrv(imageDir string) error {
+	o.Print("Setting up /srv...\n")
 	return moveDirToTargetAndSymlink(
 		filepath.Join(imageDir, "srv"),
 		filepath.Join(imageDir, "var", "srv"),
@@ -184,17 +184,17 @@ func prepareSrv(imageDir string) error {
 }
 
 // prepareStaticDirs creates /lab, /snap, and /usr/src directories.
-func prepareStaticDirs(imageDir string) error {
+func (o *Ostree) prepareStaticDirs(imageDir string) error {
 	dirs := []struct {
 		path string
 		desc string
 	}{
-		{"lab", "Setting up /lab (for everything homelabbing and your LAN)..."},
-		{"snap", "Setting up /snap ..."},
-		{filepath.Join("usr", "src"), "Setting up /usr/src (for snap) ..."},
+		{"lab", "Setting up /lab (for everything homelabbing and your LAN)...\n"},
+		{"snap", "Setting up /snap ...\n"},
+		{filepath.Join("usr", "src"), "Setting up /usr/src (for snap) ...\n"},
 	}
 	for _, d := range dirs {
-		fmt.Println(d.desc)
+		o.Print("%s", d.desc)
 		if err := os.MkdirAll(filepath.Join(imageDir, d.path), 0755); err != nil {
 			return fmt.Errorf("failed to create %s: %w", d.path, err)
 		}
@@ -203,8 +203,8 @@ func prepareStaticDirs(imageDir string) error {
 }
 
 // prepareUsrLocal moves /usr/local to /var/usrlocal and symlinks it.
-func prepareUsrLocal(imageDir string) error {
-	fmt.Println("Setting up /usr/local...")
+func (o *Ostree) prepareUsrLocal(imageDir string) error {
+	o.Print("Setting up /usr/local...\n")
 	usrLocalDir := filepath.Join(imageDir, "usr", "local")
 	relUsrLocal := "var/usrlocal"
 	imageUsrLocal := filepath.Join(imageDir, relUsrLocal)
@@ -255,23 +255,23 @@ func (o *Ostree) PrepareFilesystemHierarchy(rootfs string) error {
 		return err
 	}
 
-	if err := prepareOpt(rootfs); err != nil {
+	if err := o.prepareOpt(rootfs); err != nil {
 		return err
 	}
 
-	if err := prepareSrv(rootfs); err != nil {
+	if err := o.prepareSrv(rootfs); err != nil {
 		return err
 	}
 
-	if err := prepareStaticDirs(rootfs); err != nil {
+	if err := o.prepareStaticDirs(rootfs); err != nil {
 		return err
 	}
 
-	o.Print("Setting up /home ...")
+	o.Print("Setting up /home ...\n")
 	if err := o.prepareVarHome(rootfs, "home", "home"); err != nil {
 		return err
 	}
-	o.Print("Setting up /root ...")
+	o.Print("Setting up /root ...\n")
 	if err := o.prepareVarHome(rootfs, "root", "roothome"); err != nil {
 		return err
 	}
@@ -286,7 +286,7 @@ func (o *Ostree) PrepareFilesystemHierarchy(rootfs string) error {
 	o.Print("Setting up %s...\n", efiRoot)
 	os.MkdirAll(filepath.Join(rootfs, efiRoot), 0755)
 
-	if err := prepareUsrLocal(rootfs); err != nil {
+	if err := o.prepareUsrLocal(rootfs); err != nil {
 		return err
 	}
 
