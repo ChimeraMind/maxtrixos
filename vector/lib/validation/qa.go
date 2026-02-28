@@ -471,44 +471,6 @@ func (q *QA) CheckKernelAndExternalModule(imageDir, moduleName string) error {
 	return nil
 }
 
-// CheckNvidiaModule checks whether nvidia drivers are installed and delegates to the
-// kernel module check.
-func (q *QA) CheckNvidiaModule(imageDir string) error {
-	if imageDir == "" {
-		return errors.New("missing parameter imageDir")
-	}
-	if fi, err := os.Stat(imageDir); err != nil || !fi.IsDir() {
-		return fmt.Errorf("%s is not a directory", imageDir)
-	}
-	// match glob var/db/pkg/x11-drivers/nvidia-drivers*
-	matches, _ := filepath.Glob(
-		filepath.Join(imageDir, "var/db/pkg/x11-drivers/nvidia-drivers*"),
-	)
-	if len(matches) == 0 {
-		fmt.Println("x11-drivers/nvidia-drivers* not installed, skipping QA check")
-		return nil
-	}
-	return q.CheckKernelAndExternalModule(imageDir, "nvidia.ko*")
-}
-
-// CheckRyzenSMUModule checks for ryzen_smu and delegates to module check
-func (q *QA) CheckRyzenSMUModule(imageDir string) error {
-	if imageDir == "" {
-		return errors.New("missing parameter imageDir")
-	}
-	if fi, err := os.Stat(imageDir); err != nil || !fi.IsDir() {
-		return fmt.Errorf("%s is not a directory", imageDir)
-	}
-	matches, _ := filepath.Glob(
-		filepath.Join(imageDir, "var/db/pkg/app-admin/ryzen_smu*"),
-	)
-	if len(matches) == 0 {
-		fmt.Println("app-admin/ryzen_smu* not installed, skipping QA check")
-		return nil
-	}
-	return q.CheckKernelAndExternalModule(imageDir, "ryzen_smu.ko*")
-}
-
 // CheckNumberOfKernels verifies the number of vmlinuz files under /usr/lib/modules
 func (q *QA) CheckNumberOfKernels(imageDir string, expectedAmount int) error {
 	if imageDir == "" {
