@@ -157,7 +157,7 @@ func (c *ReleaseCommand) runRelease() error {
 	c.rel.SetStderr(stderrWriter)
 
 	// Execute the release pipeline under an exclusive release lock.
-	return c.rel.ExecuteWithReleaseLock(ref, func() error {
+	return c.rel.ExecuteWithReleaseLock(func() error {
 		// Register cleanup.
 		c.PushCleanup(func() {
 			c.rel.Cleanup()

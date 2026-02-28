@@ -21,7 +21,8 @@ func (r *Releaser) ReleaseLockDir() (string, error) {
 	return lockDir, nil
 }
 
-func (r *Releaser) ReleaseLockPath(name string) (string, error) {
+func (r *Releaser) ReleaseLockPath() (string, error) {
+	name := r.ref
 	if name == "" {
 		return "", errors.New("missing release name")
 	}
@@ -38,12 +39,12 @@ func (r *Releaser) ReleaseLockPath(name string) (string, error) {
 	return lockFile, nil
 }
 
-func (r *Releaser) ExecuteWithReleaseLock(name string, fn func() error) error {
-	lockPath, err := r.ReleaseLockPath(name)
+func (r *Releaser) ExecuteWithReleaseLock(fn func() error) error {
+	lockPath, err := r.ReleaseLockPath()
 	if err != nil {
 		return fmt.Errorf("failed to get release lock path: %w", err)
 	}
-	r.Print("Acquiring release %s lock via %s ...\n", name, lockPath)
+	r.Print("Acquiring release %s lock via %s ...\n", r.ref, lockPath)
 
 	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -75,6 +76,6 @@ func (r *Releaser) ExecuteWithReleaseLock(name string, fn func() error) error {
 		return fmt.Errorf("timed out waiting for release lock %s", lockPath)
 	}
 
-	r.Print("Lock for releaser %s, %s acquired!\n", name, lockPath)
+	r.Print("Lock for releaser %s, %s acquired!\n", r.ref, lockPath)
 	return fn()
 }

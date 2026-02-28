@@ -243,10 +243,10 @@ func (m *MockReleaser) Release(opts CommitOptions) error {
 func (m *MockReleaser) ReleaseLockDir() (string, error) {
 	return m.ReleaseLockDir_, m.ReleaseLockDirErr
 }
-func (m *MockReleaser) ReleaseLockPath(name string) (string, error) {
+func (m *MockReleaser) ReleaseLockPath() (string, error) {
 	return m.ReleaseLockPath_, m.ReleaseLockPathErr
 }
-func (m *MockReleaser) ExecuteWithReleaseLock(name string, fn func() error) error {
+func (m *MockReleaser) ExecuteWithReleaseLock(fn func() error) error {
 	if m.ExecuteWithReleaseLockErr != nil {
 		return m.ExecuteWithReleaseLockErr
 	}

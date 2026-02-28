@@ -165,11 +165,11 @@ type IRelease interface {
 
 	// ReleaseLockDir returns the lock directory, creating it if necessary.
 	ReleaseLockDir() (string, error)
-	// ReleaseLockPath returns the lock file path for the given release name.
-	ReleaseLockPath(name string) (string, error)
-	// ExecuteWithReleaseLock acquires an exclusive file lock for the given release name,
+	// ReleaseLockPath returns the lock file path.
+	ReleaseLockPath() (string, error)
+	// ExecuteWithReleaseLock acquires an exclusive file lock for the given .Ref,
 	// executes fn under that lock, and releases the lock when fn returns.
-	ExecuteWithReleaseLock(name string, fn func() error) error
+	ExecuteWithReleaseLock(fn func() error) error
 
 	// Cleanup unmounts all mount points tracked by this Releaser instance
 	// in reverse order. It is safe to call multiple times.
