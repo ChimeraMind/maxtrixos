@@ -151,6 +151,15 @@ type IRelease interface {
 	// /usr/etc/portage symlink so it works after client-side deployment.
 	RemoveExtraDotDotFromUsrEtcPortage() error
 
+	// Build runs the full release pipeline for a single branch.
+	// It performs environment verification, pre-release operations,
+	// GPG initialisation, ostree preparation, a two-commit workflow
+	// (full branch without consume, then regular branch with consume
+	// and full as parent), and all intermediate symlink/portage
+	// adjustments.  The full branch name is derived from the current
+	// ref via IOstree.BranchToFull.
+	Build() error
+
 	// Release commits the image directory to the ostree repository.
 	Release(opts CommitOptions) error
 
@@ -230,6 +239,99 @@ func NewReleaser(cfg config.IConfig, ot ostree.IOstree, opts *NewReleaserOptions
 		ref:       opts.Ref,
 		verbose:   opts.Verbose,
 	}, nil
+}
+
+// Build runs the full release pipeline for a single branch.
+// The full branch name (with -full suffix) is computed internally via
+// IOstree.BranchToFull.  The regular branch used for the second commit
+// is taken from r.ref.
+func (r *Releaser) Build() error {
+	// Compute the full branch name (with -full suffix).
+	fullBranch, err := r.ostree.BranchToFull()
+	if err != nil {
+		return fmt.Errorf("failed to compute full branch name: %w", err)
+	}
+
+	// Verify releaser environment.
+	if err := r.qa.VerifyReleaserEnvironmentSetup("/"); err != nil {
+		return fmt.Errorf("environment verification failed: %w", err)
+	}
+
+	// Pre-release operations.
+	if err := r.CheckMatrixOS(); err != nil {
+		return fmt.Errorf("matrixOS check failed: %w", err)
+	}
+	if err := r.SyncFilesystem(); err != nil {
+		return fmt.Errorf("filesystem sync failed: %w", err)
+	}
+	if err := r.PreCleanQAChecks(); err != nil {
+		return fmt.Errorf("pre-clean QA checks failed: %w", err)
+	}
+	if err := r.CleanRootfs(); err != nil {
+		return fmt.Errorf("rootfs clean failed: %w", err)
+	}
+	if err := r.SetupServices(); err != nil {
+		return fmt.Errorf("services setup failed: %w", err)
+	}
+	if err := r.SetupHostname(); err != nil {
+		return fmt.Errorf("hostname setup failed: %w", err)
+	}
+
+	// Initialize GPG for signing.
+	if err := r.ostree.InitializeSigningGpg(); err != nil {
+		return fmt.Errorf("GPG signing initialization failed: %w", err)
+	}
+
+	// Release hook and ostree preparation.
+	if err := r.ReleaseHook(); err != nil {
+		return fmt.Errorf("release hook failed: %w", err)
+	}
+	if err := r.OstreePrepare(); err != nil {
+		return fmt.Errorf("ostree preparation failed: %w", err)
+	}
+	if err := r.MaybeOstreeInit(); err != nil {
+		return fmt.Errorf("ostree init failed: %w", err)
+	}
+
+	// --- First commit: full branch (no consume) ---
+	if err := r.Release(CommitOptions{
+		Branch:  fullBranch,
+		Consume: false,
+	}); err != nil {
+		return fmt.Errorf("full branch release failed: %w", err)
+	}
+
+	// Re-link /etc and fix portage for post-clean shrink (uses emerge).
+	if err := r.SymlinkEtc(); err != nil {
+		return fmt.Errorf("symlink /etc failed: %w", err)
+	}
+	if err := r.AddExtraDotDotToUsrEtcPortage(); err != nil {
+		return fmt.Errorf("add extra ../ to /usr/etc/portage failed: %w", err)
+	}
+
+	// Remove dev artifacts to produce the smaller branch.
+	if err := r.PostCleanShrink(); err != nil {
+		return fmt.Errorf("post-clean shrink failed: %w", err)
+	}
+
+	// Restore portage symlink for client-side deployment.
+	if err := r.RemoveExtraDotDotFromUsrEtcPortage(); err != nil {
+		return fmt.Errorf("remove extra ../ from /usr/etc/portage failed: %w", err)
+	}
+
+	// --- Second commit: regular branch (consume, parent=full) ---
+	if err := r.UnlinkEtc(); err != nil {
+		return fmt.Errorf("unlink /etc (second commit) failed: %w", err)
+	}
+	if err := r.Release(CommitOptions{
+		Branch:       r.ref,
+		ParentBranch: fullBranch,
+		Consume:      true,
+	}); err != nil {
+		return fmt.Errorf("branch release failed: %w", err)
+	}
+
+	return nil
 }
 
 // checkImageDir validates that imageDir is a non-empty existing directory.
