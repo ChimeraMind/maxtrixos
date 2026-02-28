@@ -66,12 +66,6 @@ type MockReleaser struct {
 	ReleaseErr                            error
 	SetImageDirErr                        error
 
-	// Detection
-	DetectLocalReleases_    []string
-	DetectLocalReleasesErr  error
-	DetectRemoteReleases_   []string
-	DetectRemoteReleasesErr error
-
 	// Locking
 	ReleaseLockDir_           string
 	ReleaseLockDirErr         error
@@ -232,13 +226,6 @@ func (m *MockReleaser) Release(opts CommitOptions) error {
 	m.ReleaseCalled = true
 	m.ReleaseOpts = append(m.ReleaseOpts, opts)
 	return m.ReleaseErr
-}
-
-func (m *MockReleaser) DetectLocalReleases(skip, only RefFilterFunc) ([]string, error) {
-	return m.DetectLocalReleases_, m.DetectLocalReleasesErr
-}
-func (m *MockReleaser) DetectRemoteReleases(skip, only RefFilterFunc) ([]string, error) {
-	return m.DetectRemoteReleases_, m.DetectRemoteReleasesErr
 }
 
 func (m *MockReleaser) ReleaseLockDir() (string, error) {

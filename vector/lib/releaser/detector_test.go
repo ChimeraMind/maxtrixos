@@ -66,11 +66,56 @@ func TestFilterRefs_EmptyInput(t *testing.T) {
 	}
 }
 
-func TestDetectLocalReleases_Success(t *testing.T) {
-	r := newTestReleaser()
-	r.ostree.(*ostree.MockOstree).LocalRefs_ = []string{"ref/a", "ref/b", "ref/c"}
+// --- newTestDetector helper ---
 
-	got, err := r.DetectLocalReleases(nil, nil)
+func newTestDetector(ot ostree.IOstree) *ReleaseDetector {
+	return &ReleaseDetector{
+		ostree: ot,
+		stderr: &bytes.Buffer{},
+	}
+}
+
+// --- ReleaseDetector tests ---
+
+func TestNewReleaseDetector_NilOstree(t *testing.T) {
+	_, err := NewReleaseDetector(nil)
+	if err == nil {
+		t.Fatal("expected error for nil ostree")
+	}
+}
+
+func TestNewReleaseDetector_HappyPath(t *testing.T) {
+	d, err := NewReleaseDetector(&ostree.MockOstree{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d == nil {
+		t.Fatal("expected non-nil ReleaseDetector")
+	}
+}
+
+func TestNewReleaseDetector_ImplementsIReleaseDetector(t *testing.T) {
+	d, err := NewReleaseDetector(&ostree.MockOstree{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var _ IReleaseDetector = d
+}
+
+func TestReleaseDetector_SetStderr(t *testing.T) {
+	d, _ := NewReleaseDetector(&ostree.MockOstree{})
+	var buf bytes.Buffer
+	d.SetStderr(&buf)
+	if d.Stderr() != &buf {
+		t.Error("SetStderr did not update the writer")
+	}
+}
+
+func TestDetectLocalReleases_Success(t *testing.T) {
+	ot := &ostree.MockOstree{LocalRefs_: []string{"ref/a", "ref/b", "ref/c"}}
+	d := newTestDetector(ot)
+
+	got, err := d.DetectLocalReleases(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -80,11 +125,11 @@ func TestDetectLocalReleases_Success(t *testing.T) {
 }
 
 func TestDetectLocalReleases_WithSkip(t *testing.T) {
-	r := newTestReleaser()
-	r.ostree.(*ostree.MockOstree).LocalRefs_ = []string{"ref/a", "ref/b"}
+	ot := &ostree.MockOstree{LocalRefs_: []string{"ref/a", "ref/b"}}
+	d := newTestDetector(ot)
 
 	skip := func(ref string) bool { return ref == "ref/a" }
-	got, err := r.DetectLocalReleases(skip, nil)
+	got, err := d.DetectLocalReleases(skip, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -94,20 +139,20 @@ func TestDetectLocalReleases_WithSkip(t *testing.T) {
 }
 
 func TestDetectLocalReleases_Error(t *testing.T) {
-	r := newTestReleaser()
-	r.ostree.(*ostree.MockOstree).LocalRefsErr = errors.New("boom")
+	ot := &ostree.MockOstree{LocalRefsErr: errors.New("boom")}
+	d := newTestDetector(ot)
 
-	_, err := r.DetectLocalReleases(nil, nil)
+	_, err := d.DetectLocalReleases(nil, nil)
 	if err == nil || err.Error() != "boom" {
 		t.Fatalf("expected 'boom' error, got %v", err)
 	}
 }
 
 func TestDetectRemoteReleases_Success(t *testing.T) {
-	r := newTestReleaser()
-	r.ostree.(*ostree.MockOstree).Refs = []string{"remote/a", "remote/b"}
+	ot := &ostree.MockOstree{Refs: []string{"remote/a", "remote/b"}}
+	d := newTestDetector(ot)
 
-	got, err := r.DetectRemoteReleases(nil, nil)
+	got, err := d.DetectRemoteReleases(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,11 +162,11 @@ func TestDetectRemoteReleases_Success(t *testing.T) {
 }
 
 func TestDetectRemoteReleases_WithOnly(t *testing.T) {
-	r := newTestReleaser()
-	r.ostree.(*ostree.MockOstree).Refs = []string{"remote/a", "remote/b"}
+	ot := &ostree.MockOstree{Refs: []string{"remote/a", "remote/b"}}
+	d := newTestDetector(ot)
 
 	only := func(ref string) bool { return ref == "remote/b" }
-	got, err := r.DetectRemoteReleases(nil, only)
+	got, err := d.DetectRemoteReleases(nil, only)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -131,10 +176,10 @@ func TestDetectRemoteReleases_WithOnly(t *testing.T) {
 }
 
 func TestDetectRemoteReleases_Error(t *testing.T) {
-	r := newTestReleaser()
-	r.ostree.(*ostree.MockOstree).RefsErr = errors.New("network fail")
+	ot := &ostree.MockOstree{RefsErr: errors.New("network fail")}
+	d := newTestDetector(ot)
 
-	_, err := r.DetectRemoteReleases(nil, nil)
+	_, err := d.DetectRemoteReleases(nil, nil)
 	if err == nil || err.Error() != "network fail" {
 		t.Fatalf("expected 'network fail' error, got %v", err)
 	}
