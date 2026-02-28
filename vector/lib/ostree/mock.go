@@ -92,22 +92,21 @@ func (m *MockOstree) BootCommit(string) (string, error) {
 	}
 	return "abc123commit", nil
 }
-func (m *MockOstree) InitRepo() error                                 { return nil }
-func (m *MockOstree) ListRemotes() ([]string, error)                  { return nil, nil }
-func (m *MockOstree) ImportGpgKey(string) error                       { return nil }
-func (m *MockOstree) GpgSignFile(string) error                        { return nil }
-func (m *MockOstree) GpgKeys() ([]string, error)                      { return nil, nil }
-func (m *MockOstree) InitializeSigningGpg() error                     { return nil }
-func (m *MockOstree) InitializeRemoteSigningGpg(string, string) error { return nil }
-func (m *MockOstree) MaybeInitializeGpg() error                       { return nil }
-func (m *MockOstree) MaybeInitializeRemote() error                    { return nil }
-func (m *MockOstree) Pull() error                                     { return nil }
-func (m *MockOstree) PullWithRemote(string) error                     { return nil }
-func (m *MockOstree) Prune() error                                    { return nil }
-func (m *MockOstree) GenerateStaticDelta() error                      { return nil }
-func (m *MockOstree) UpdateSummary() error                            { return nil }
-func (m *MockOstree) AddRemote() error                                { return nil }
-func (m *MockOstree) AddRemoteToRootfs(string) error                  { return nil }
+func (m *MockOstree) InitRepo() error                { return nil }
+func (m *MockOstree) ListRemotes() ([]string, error) { return nil, nil }
+func (m *MockOstree) ImportGpgKey(string) error      { return nil }
+func (m *MockOstree) GpgSignFile(string) error       { return nil }
+func (m *MockOstree) GpgKeys() ([]string, error)     { return nil, nil }
+func (m *MockOstree) InitializeSigningGpg() error    { return nil }
+func (m *MockOstree) MaybeInitializeGpg() error      { return nil }
+func (m *MockOstree) MaybeInitializeRemote() error   { return nil }
+func (m *MockOstree) Pull() error                    { return nil }
+func (m *MockOstree) PullWithRemote(string) error    { return nil }
+func (m *MockOstree) Prune() error                   { return nil }
+func (m *MockOstree) GenerateStaticDelta() error     { return nil }
+func (m *MockOstree) UpdateSummary() error           { return nil }
+func (m *MockOstree) AddRemote() error               { return nil }
+func (m *MockOstree) AddRemoteToRootfs(string) error { return nil }
 func (m *MockOstree) LocalRefs() ([]string, error) {
 	return m.LocalRefs_, m.LocalRefsErr
 }
