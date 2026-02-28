@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"matrixos/vector/lib/config"
+	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/runner"
 )
 
@@ -1249,5 +1250,335 @@ func TestCleanTemporaryArtifact_NestedFiles(t *testing.T) {
 
 	if _, err := os.Stat(artDir); !os.IsNotExist(err) {
 		t.Error("nested directory should have been removed")
+	}
+}
+
+// --- Mount tests ---
+//
+// These tests mock the syscall-level Mount/Unmount in the filesystems
+// package and use real temp directories so the os.Stat/MkdirAll calls
+// inside the constructor succeed.
+
+// mockMountSyscalls replaces filesystems.Mount and filesystems.Unmount
+// with no-ops for the duration of a test.
+func mockMountSyscalls(t *testing.T) {
+	t.Helper()
+	origMount := filesystems.Mount
+	origUnmount := filesystems.Unmount
+	filesystems.Mount = func(source, target, fstype string, flags uintptr, data string) error {
+		return nil
+	}
+	filesystems.Unmount = func(target string, flags int) error {
+		return nil
+	}
+	t.Cleanup(func() {
+		filesystems.Mount = origMount
+		filesystems.Unmount = origUnmount
+	})
+}
+
+// mountTestConfig returns a config with all keys needed by the mount
+// functions. The paths point into tmp so os.Stat succeeds.
+func mountTestConfig(tmp string) *config.MockConfig {
+	privateSrc := filepath.Join(tmp, "private-repo")
+	distSrc := filepath.Join(tmp, "distfiles")
+	binSrc := filepath.Join(tmp, "binpkgs")
+
+	// Pre-create source directories the constructors will Stat.
+	os.MkdirAll(privateSrc, 0755)
+	os.MkdirAll(distSrc, 0755)
+	os.MkdirAll(binSrc, 0755)
+
+	return &config.MockConfig{
+		Items: map[string][]string{
+			"matrixOS.PrivateGitRepoPath":        {privateSrc},
+			"matrixOS.DefaultPrivateGitRepoPath": {"/matrixos/private"},
+			"Seeder.DistfilesDir":                {distSrc},
+			"Seeder.BinpkgsDir":                  {binSrc},
+		},
+		Bools: map[string]bool{},
+	}
+}
+
+func TestMountPrivateGitRepo_Success(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	if err := sd.mountPrivateGitRepo(chrootDir); err != nil {
+		t.Fatalf("mountPrivateGitRepo: %v", err)
+	}
+
+	// Verify the destination directory was created inside the chroot.
+	dst := filepath.Join(chrootDir, "matrixos", "private")
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		t.Errorf("expected dst dir %s to exist", dst)
+	}
+
+	// Verify the mount was tracked.
+	if len(sd.trackedMounts) != 1 {
+		t.Fatalf("expected 1 tracked mount, got %d", len(sd.trackedMounts))
+	}
+	if sd.trackedMounts[0] != dst {
+		t.Errorf("tracked mount = %q, want %q", sd.trackedMounts[0], dst)
+	}
+}
+
+func TestMountPrivateGitRepo_ConfigError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{""}
+	cfg.Items["matrixOS.DefaultPrivateGitRepoPath"] = []string{"/x"}
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.mountPrivateGitRepo("/tmp/fake")
+	if err == nil {
+		t.Fatal("expected error for empty PrivateGitRepoPath")
+	}
+	if !strings.Contains(err.Error(), "private repo path") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestMountDistDir_Success(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	distSrc := filepath.Join(tmp, "distfiles")
+	os.MkdirAll(distSrc, 0755)
+
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.DistfilesDir"] = []string{distSrc}
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	if err := sd.mountDistDir(chrootDir); err != nil {
+		t.Fatalf("mountDistDir: %v", err)
+	}
+
+	dst := filepath.Join(chrootDir, "var", "cache", "distfiles")
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		t.Errorf("expected dst dir %s to exist", dst)
+	}
+	if len(sd.trackedMounts) != 1 {
+		t.Fatalf("expected 1 tracked mount, got %d", len(sd.trackedMounts))
+	}
+}
+
+func TestMountDistDir_ConfigError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.DistfilesDir"] = []string{""}
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.mountDistDir("/tmp/fake")
+	if err == nil {
+		t.Fatal("expected error for empty DistfilesDir")
+	}
+}
+
+func TestMountBinpkgsDir_Success(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	binSrc := filepath.Join(tmp, "binpkgs")
+	os.MkdirAll(binSrc, 0755)
+
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.BinpkgsDir"] = []string{binSrc}
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	if err := sd.mountBinpkgsDir(chrootDir); err != nil {
+		t.Fatalf("mountBinpkgsDir: %v", err)
+	}
+
+	dst := filepath.Join(chrootDir, "var", "cache", "binpkgs")
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		t.Errorf("expected dst dir %s to exist", dst)
+	}
+	if len(sd.trackedMounts) != 1 {
+		t.Fatalf("expected 1 tracked mount, got %d", len(sd.trackedMounts))
+	}
+}
+
+func TestMountBinpkgsDir_ConfigError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.BinpkgsDir"] = []string{""}
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.mountBinpkgsDir("/tmp/fake")
+	if err == nil {
+		t.Fatal("expected error for empty BinpkgsDir")
+	}
+}
+
+func TestSetupChrootMounts_Success(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	if err := sd.SetupChrootMounts(chrootDir); err != nil {
+		t.Fatalf("SetupChrootMounts: %v", err)
+	}
+
+	// Common rootfs mounts create: dev, dev/pts, sys, dev/shm, proc, run/lock = 6
+	// Plus: private repo, distfiles, binpkgs = 3
+	// Total tracked mounts >= 9
+	if len(sd.trackedMounts) < 9 {
+		t.Errorf("expected at least 9 tracked mounts, got %d: %v",
+			len(sd.trackedMounts), sd.trackedMounts)
+	}
+
+	// Verify key directories were created inside the chroot.
+	for _, sub := range []string{"dev", "proc", "sys", "dev/shm", "run/lock"} {
+		p := filepath.Join(chrootDir, sub)
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			t.Errorf("expected %s to exist", p)
+		}
+	}
+}
+
+func TestSetupChrootMounts_PrivateRepoError(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	// Break the private repo path so mountPrivateGitRepo fails.
+	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{""}
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.SetupChrootMounts(chrootDir)
+	if err == nil {
+		t.Fatal("expected error from broken private repo config")
+	}
+	if !strings.Contains(err.Error(), "private git repo") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestSetupChrootMounts_DistDirError(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	cfg.Items["Seeder.DistfilesDir"] = []string{""} // break distfiles
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.SetupChrootMounts(chrootDir)
+	if err == nil {
+		t.Fatal("expected error from broken distfiles config")
+	}
+	if !strings.Contains(err.Error(), "distfiles") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestSetupChrootMounts_BinpkgsError(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	cfg.Items["Seeder.BinpkgsDir"] = []string{""} // break binpkgs
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.SetupChrootMounts(chrootDir)
+	if err == nil {
+		t.Fatal("expected error from broken binpkgs config")
+	}
+	if !strings.Contains(err.Error(), "binpkgs") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
