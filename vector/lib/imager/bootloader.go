@@ -368,6 +368,9 @@ func (im *Image) InstallBootloader() error {
 	if err != nil {
 		return fmt.Errorf("failed to bind mount EFI: %w", err)
 	}
+	if err := efiBind.Mount(); err != nil {
+		return fmt.Errorf("failed to bind mount EFI: %w", err)
+	}
 
 	// Bind mount boot into the chroot.
 	bootChrootMount := filepath.Join(im.rootfs, bootRoot)
@@ -384,6 +387,9 @@ func (im *Image) InstallBootloader() error {
 		},
 	)
 	if err != nil {
+		return fmt.Errorf("failed to bind mount boot: %w", err)
+	}
+	if err := bootBind.Mount(); err != nil {
 		return fmt.Errorf("failed to bind mount boot: %w", err)
 	}
 
