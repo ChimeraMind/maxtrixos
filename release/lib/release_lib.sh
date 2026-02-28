@@ -442,12 +442,6 @@ release_lib.post_clean_qa_checks() {
     _check_imagedir "${imagedir}"
 
     echo "Post-clean QA Checks ..."
-
-    echo "Listing the top 20 largest packages:"
-    fs_lib.chroot "${imagedir}" \
-        equery size '*' | sed 's/\(.*\):.*(\(.*\))$/\2 \1/' \
-            | sort -n | numfmt --to=iec-i | tail -n 20
-
 }
 
 release_lib.post_clean_shrink() {

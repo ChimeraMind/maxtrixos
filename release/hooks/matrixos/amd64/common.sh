@@ -153,3 +153,20 @@ release_common.check_ryzen_smu_module() {
 
     release_common.check_kernel_and_external_module "${imagedir}" "ryzen_smu.ko*"
 }
+
+release_common.list_top_packages() {
+    local imagedir="${1}"
+    if [ -z "${imagedir}" ]; then
+        echo "release_common.list_top_packages: missing parameter imagedir" >&2
+        return 1
+    fi
+    if [ ! -d "${imagedir}" ]; then
+        echo "release_common.list_top_packages: ${imagedir} is not a directory" >&2
+        return 1
+    fi
+
+    echo "Listing the top 20 largest packages:"
+    release_common.chroot "${imagedir}" \
+        equery size '*' | sed 's/\(.*\):.*(\(.*\))$/\2 \1/' \
+            | sort -n | numfmt --to=iec-i | tail -n 20
+}

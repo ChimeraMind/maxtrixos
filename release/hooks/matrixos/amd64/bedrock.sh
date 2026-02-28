@@ -35,6 +35,7 @@ main() {
         setup_networkd
         release_common.check_nvidia_module
         release_common.check_ryzen_smu_module
+        release_common.list_top_packages
     )
     local exit_code=0
     for func in "${funcs[@]}"; do
