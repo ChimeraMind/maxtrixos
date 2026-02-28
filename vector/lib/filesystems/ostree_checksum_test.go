@@ -708,8 +708,7 @@ func TestOstreeChecksumIntegrationRegularFile(t *testing.T) {
 
 	expected := ostreeChecksum(t, path)
 
-	flags := OstreeChecksumFlagsIgnoreXattrs | OstreeChecksumFlagsCanonicalPermissions
-	got, err := OstreeChecksumFileAt(path, OstreeObjectTypeFile, flags)
+	got, err := OstreeChecksumFileAt(path, OstreeObjectTypeFile, OstreeChecksumFlagsNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -729,8 +728,7 @@ func TestOstreeChecksumIntegrationEmptyFile(t *testing.T) {
 	}
 
 	expected := ostreeChecksum(t, path)
-	flags := OstreeChecksumFlagsIgnoreXattrs | OstreeChecksumFlagsCanonicalPermissions
-	got, err := OstreeChecksumFileAt(path, OstreeObjectTypeFile, flags)
+	got, err := OstreeChecksumFileAt(path, OstreeObjectTypeFile, OstreeChecksumFlagsNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -753,8 +751,7 @@ func TestOstreeChecksumIntegrationLargeFile(t *testing.T) {
 	}
 
 	expected := ostreeChecksum(t, path)
-	flags := OstreeChecksumFlagsIgnoreXattrs | OstreeChecksumFlagsCanonicalPermissions
-	got, err := OstreeChecksumFileAt(path, OstreeObjectTypeFile, flags)
+	got, err := OstreeChecksumFileAt(path, OstreeObjectTypeFile, OstreeChecksumFlagsNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -774,8 +771,7 @@ func TestOstreeChecksumIntegrationSymlink(t *testing.T) {
 	}
 
 	expected := ostreeChecksum(t, link)
-	flags := OstreeChecksumFlagsIgnoreXattrs | OstreeChecksumFlagsCanonicalPermissions
-	got, err := OstreeChecksumFileAt(link, OstreeObjectTypeFile, flags)
+	got, err := OstreeChecksumFileAt(link, OstreeObjectTypeFile, OstreeChecksumFlagsNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -791,8 +787,7 @@ func TestOstreeChecksumIntegrationDirectory(t *testing.T) {
 	dir := t.TempDir()
 
 	expected := ostreeChecksum(t, dir)
-	flags := OstreeChecksumFlagsIgnoreXattrs | OstreeChecksumFlagsCanonicalPermissions
-	got, err := OstreeChecksumFileAt(dir, OstreeObjectTypeDirMeta, flags)
+	got, err := OstreeChecksumFileAt(dir, OstreeObjectTypeDirMeta, OstreeChecksumFlagsNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -818,8 +813,7 @@ func TestOstreeChecksumIntegrationBinaryFile(t *testing.T) {
 	}
 
 	expected := ostreeChecksum(t, path)
-	flags := OstreeChecksumFlagsIgnoreXattrs | OstreeChecksumFlagsCanonicalPermissions
-	got, err := OstreeChecksumFileAt(path, OstreeObjectTypeFile, flags)
+	got, err := OstreeChecksumFileAt(path, OstreeObjectTypeFile, OstreeChecksumFlagsNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -843,8 +837,7 @@ func TestOstreeChecksumIntegrationMultiplePermissions(t *testing.T) {
 			}
 
 			expected := ostreeChecksum(t, path)
-			flags := OstreeChecksumFlagsIgnoreXattrs | OstreeChecksumFlagsCanonicalPermissions
-			got, err := OstreeChecksumFileAt(path, OstreeObjectTypeFile, flags)
+			got, err := OstreeChecksumFileAt(path, OstreeObjectTypeFile, OstreeChecksumFlagsNone)
 			if err != nil {
 				t.Fatal(err)
 			}
