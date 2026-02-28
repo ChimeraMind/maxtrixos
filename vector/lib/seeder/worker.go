@@ -273,6 +273,9 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) error {
 		return fmt.Errorf("error creating RO mount for private repo: %w", err)
 	}
 	s.trackMount(privateBind.Dst())
+	if err := privateBind.Mount(); err != nil {
+		return fmt.Errorf("error mounting RO private repo: %w", err)
+	}
 
 	if filesystems.DirectoryExists("/root/.ssh") {
 		sshDst := filepath.Join(chrootDir, "root", ".ssh")
@@ -290,6 +293,9 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) error {
 			return fmt.Errorf("error creating RO mount for .ssh: %w", err)
 		}
 		s.trackMount(sshBind.Dst())
+		if err := sshBind.Mount(); err != nil {
+			return fmt.Errorf("error mounting RO .ssh: %w", err)
+		}
 	}
 
 	distDir, err := s.ensureDir(s.DistfilesDir)
@@ -308,6 +314,9 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) error {
 		return fmt.Errorf("error creating distfiles mount: %w", err)
 	}
 	s.trackMount(distMount.Dst())
+	if err := distMount.Mount(); err != nil {
+		return fmt.Errorf("error mounting distfiles: %w", err)
+	}
 
 	binDir, err := s.ensureDir(s.BinpkgsDir)
 	if err != nil {
@@ -325,6 +334,9 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) error {
 		return fmt.Errorf("error creating binpkgs mount: %w", err)
 	}
 	s.trackMount(binMount.Dst())
+	if err := binMount.Mount(); err != nil {
+		return fmt.Errorf("error mounting binpkgs: %w", err)
+	}
 
 	return nil
 }
