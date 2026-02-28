@@ -46,6 +46,9 @@ type MockOstree struct {
 	OsName_   string
 	OsNameErr error
 
+	Arch_   string
+	ArchErr error
+
 	FancyOsName_   string
 	FancyOsNameErr error
 
@@ -105,7 +108,7 @@ func (m *MockOstree) GpgPrivateKeyPath() (string, error)         { return "", ni
 func (m *MockOstree) GpgPublicKeyPath() (string, error)          { return "", nil }
 func (m *MockOstree) GpgOfficialPubKeyPath() (string, error)     { return "", nil }
 func (m *MockOstree) OsName() (string, error)                    { return m.OsName_, m.OsNameErr }
-func (m *MockOstree) Arch() (string, error)                      { return "", nil }
+func (m *MockOstree) Arch() (string, error)                      { return m.Arch_, m.ArchErr }
 func (m *MockOstree) RepoDir() (string, error)                   { return m.RepoDir_, m.RepoDirErr }
 func (m *MockOstree) Sysroot() (string, error)                   { return "", nil }
 func (m *MockOstree) Remote() (string, error)                    { return m.Remote_, m.RemoteErr }
