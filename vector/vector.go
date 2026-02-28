@@ -11,25 +11,26 @@ import (
 )
 
 const (
-	helpMessage = `matrixos' vector - Your matrixOS handy tool (in the future...).
+	helpMessage = `matrixos' vector - Your OS handy tool (in the future...).
 Usage:
 
   PROTOTYPE! Some features are wrappers around bash scripts or are not fully featured yet!
 
   help        - this command.
-  branch      - vector branch command. Operates on matrixOS ostree branches.
-    show         show current matrixOS ostree branch.
-    list         list all the available matrixOS branches.
+  branch      - vector branch command. Operates on OS ostree branches.
+    show         show current OS ostree branch.
+    list         list all the available OS branches.
     switch       switch to a new branch.
   upgrade     - system upgrade tool, wraps ostree.
   setupOS     - setup tool, configures passwords, accounts, languages, etc.
-  readwrite   - temporarily (until next upgrade) turn matrixOS into a (mutable) read-write system.
+  readwrite   - temporarily (until next upgrade) turn OS into a (mutable) read-write system.
   jailbreak   - permanently turns this system into a regular mutable Gentoo.
   dev 	      - development toolkit command, orchestrates development workflow and tools.
     janitor      cleans up development toolkit artifacts, such as old images and downloads.
     vm           runs generated image tests using QEMU.
-  build       - build toolkit command, orchestrates building matrixOS artifacts.
-    image        generates a single matrixOS image.
+  build       - build toolkit command, orchestrates building OS artifacts.
+    image        generates a single OS image.
+	release      generates a single OS release (ostree commit).
 `
 )
 
