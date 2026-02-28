@@ -84,6 +84,12 @@ func stringAccessors() []configAccessorTestCase {
 			call:    func(s *Seeder) (string, error) { return s.LockWaitSeconds() },
 			wantVal: "86400",
 		},
+		{
+			name:    "Stage3DownloadUrl",
+			key:     "Seeder.Stage3DownloadUrl",
+			call:    func(s *Seeder) (string, error) { return s.Stage3DownloadUrl() },
+			wantVal: "https://distfiles.gentoo.org/releases/amd64/autobuilds/current-stage3-amd64-systemd/latest-stage3-amd64-systemd.txt",
+		},
 	}
 }
 
