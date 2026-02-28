@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode"
 
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/ostree"
 )
 
 var (
@@ -101,7 +101,7 @@ func (c *UpgradeCommand) Run() error {
 		return fmt.Errorf("failed to fetch updates: %w", err)
 	}
 
-	newCommit, err := c.ot.LastCommit(ref, false)
+	newCommit, err := c.ot.LastCommit(ref)
 	if err != nil {
 		return fmt.Errorf("failed to get new commit: %w", err)
 	}
@@ -173,7 +173,7 @@ func (c *UpgradeCommand) Run() error {
 }
 
 func (c *UpgradeCommand) getCurrentState() (string, string, error) {
-	deployments, err := c.ot.ListDeployments(false)
+	deployments, err := c.ot.ListDeployments()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to list deployments: %w", err)
 	}
@@ -188,11 +188,11 @@ func (c *UpgradeCommand) getCurrentState() (string, string, error) {
 }
 
 func (c *UpgradeCommand) upgradePull() error {
-	return c.ot.Upgrade([]string{"--pull-only"}, false)
+	return c.ot.Upgrade([]string{"--pull-only"})
 }
 
 func (c *UpgradeCommand) upgradeDeploy() error {
-	return c.ot.Upgrade([]string{"--deploy-only"}, false)
+	return c.ot.Upgrade([]string{"--deploy-only"})
 }
 
 func (c *UpgradeCommand) updateBootloader(commit string) error {
@@ -300,7 +300,7 @@ func (c *UpgradeCommand) updateGrubDir_x64(efiDir, commit string) error {
 		return fmt.Errorf("failed to get ostree root: %w", err)
 	}
 
-	deployments, err := c.ot.ListDeployments(false)
+	deployments, err := c.ot.ListDeployments()
 	if err != nil {
 		return fmt.Errorf("failed to list deployments: %w", err)
 	}
@@ -381,7 +381,7 @@ func (c *UpgradeCommand) promptUser(prompt string) bool {
 }
 
 func (c *UpgradeCommand) analyzeDiff(oldSHA, newSHA string) error {
-	opkgs, err := c.ot.ListPackages(oldSHA, false)
+	opkgs, err := c.ot.ListPackages(oldSHA)
 	if err != nil {
 		return err
 	}
@@ -390,7 +390,7 @@ func (c *UpgradeCommand) analyzeDiff(oldSHA, newSHA string) error {
 		oldPkgs[pkg] = true
 	}
 
-	npkgs, err := c.ot.ListPackages(newSHA, false)
+	npkgs, err := c.ot.ListPackages(newSHA)
 	if err != nil {
 		return err
 	}

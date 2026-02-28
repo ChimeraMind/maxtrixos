@@ -252,7 +252,7 @@ func (o *Ostree) GpgKeys() ([]string, error) {
 }
 
 // InitializeSigningGpg imports GPG keys into the local GPG keyring.
-func (o *Ostree) InitializeSigningGpg(verbose bool) error {
+func (o *Ostree) InitializeSigningGpg() error {
 	keys, err := o.GpgKeys()
 	if err != nil {
 		return err
@@ -272,7 +272,7 @@ func (o *Ostree) InitializeSigningGpg(verbose bool) error {
 }
 
 // InitializeRemoteSigningGpg imports GPG keys into the remote ostree repository.
-func (o *Ostree) InitializeRemoteSigningGpg(remote, repoDir string, verbose bool) error {
+func (o *Ostree) InitializeRemoteSigningGpg(remote, repoDir string) error {
 	if remote == "" {
 		return errors.New("InitializeRemoteSigningGpg: missing remote parameter")
 	}
@@ -291,7 +291,7 @@ func (o *Ostree) InitializeRemoteSigningGpg(remote, repoDir string, verbose bool
 			o.PrintError("WARNING: Remote signing GPG key %s not present, skipping import ...\n", key)
 			continue
 		}
-		err := o.ostreeRun(verbose, "--repo="+repoDir, "remote", "gpg-import", remote, "-k", key)
+		err := o.ostreeRun("--repo="+repoDir, "remote", "gpg-import", remote, "-k", key)
 		if err != nil {
 			return fmt.Errorf("failed to import gpg key %s to remote %s: %w", key, remote, err)
 		}
@@ -300,7 +300,7 @@ func (o *Ostree) InitializeRemoteSigningGpg(remote, repoDir string, verbose bool
 }
 
 // MaybeInitializeGpg initializes GPG keys for an ostree repository.
-func (o *Ostree) MaybeInitializeGpg(verbose bool) error {
+func (o *Ostree) MaybeInitializeGpg() error {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return err
@@ -310,11 +310,11 @@ func (o *Ostree) MaybeInitializeGpg(verbose bool) error {
 		return err
 	}
 
-	return o.MaybeInitializeGpgForRepo(remote, repoDir, verbose)
+	return o.MaybeInitializeGpgForRepo(remote, repoDir)
 }
 
 // MaybeInitializeGpgForRepo initializes GPG keys for an ostree repository.
-func (o *Ostree) MaybeInitializeGpgForRepo(remote, repoDir string, verbose bool) error {
+func (o *Ostree) MaybeInitializeGpgForRepo(remote, repoDir string) error {
 	gpgEnabled, err := o.GpgEnabled()
 	if err != nil {
 		return err
@@ -324,10 +324,10 @@ func (o *Ostree) MaybeInitializeGpgForRepo(remote, repoDir string, verbose bool)
 		return nil
 	}
 
-	if err := o.InitializeSigningGpg(verbose); err != nil {
+	if err := o.InitializeSigningGpg(); err != nil {
 		return err
 	}
-	return o.InitializeRemoteSigningGpg(remote, repoDir, verbose)
+	return o.InitializeRemoteSigningGpg(remote, repoDir)
 }
 
 // GpgArgs returns the gpg arguments for ostree commands.

@@ -15,13 +15,12 @@ type AddRemoteOptions struct {
 	GpgArgs   []string
 	RepoDir   string
 	Sysroot   string
-	Verbose   bool
 }
 
 // InitRepo initialises the local ostree repository in archive mode.
 // The collection ID is read from the Ostree.CollectionId config key;
 // if set, it is passed as --collection-id.
-func (o *Ostree) InitRepo(verbose bool) error {
+func (o *Ostree) InitRepo() error {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return err
@@ -38,7 +37,7 @@ func (o *Ostree) InitRepo(verbose bool) error {
 		args = append(args, collArgs...)
 	}
 
-	return o.ostreeRun(verbose, args...)
+	return o.ostreeRun(args...)
 }
 
 // CollectionIDArgs returns the ostree --collection-id argument if a collection ID is provided.
@@ -237,11 +236,11 @@ func Prune(repoDir, ref, keepObjectsYoungerThan string, verbose bool) error {
 }
 
 // listRemotesFromRepo lists remotes using the instance runner.
-func (o *Ostree) listRemotesFromRepo(repoDir string, verbose bool) ([]string, error) {
+func (o *Ostree) listRemotesFromRepo(repoDir string) ([]string, error) {
 	if repoDir == "" {
 		return nil, errors.New("invalid repoDir parameter")
 	}
-	stdout, err := o.ostreeRunCapture(verbose, "--repo="+repoDir, "remote", "list")
+	stdout, err := o.ostreeRunCapture("--repo="+repoDir, "remote", "list")
 	if err != nil {
 		return nil, err
 	}
@@ -249,14 +248,14 @@ func (o *Ostree) listRemotesFromRepo(repoDir string, verbose bool) ([]string, er
 }
 
 // lastCommitFromRepo returns the last commit for a ref using the instance runner.
-func (o *Ostree) lastCommitFromRepo(repoDir, ref string, verbose bool) (string, error) {
+func (o *Ostree) lastCommitFromRepo(repoDir, ref string) (string, error) {
 	if repoDir == "" {
 		return "", errors.New("invalid repoDir parameter")
 	}
 	if ref == "" {
 		return "", errors.New("invalid ref parameter")
 	}
-	stdout, err := o.ostreeRunCapture(verbose, "rev-parse", "--repo="+repoDir, ref)
+	stdout, err := o.ostreeRunCapture("rev-parse", "--repo="+repoDir, ref)
 	if err != nil {
 		return "", err
 	}
@@ -271,11 +270,11 @@ func (o *Ostree) lastCommitFromRepo(repoDir, ref string, verbose bool) (string, 
 }
 
 // listLocalRefsFromRepo lists local refs using the instance runner.
-func (o *Ostree) listLocalRefsFromRepo(repoDir string, verbose bool) ([]string, error) {
+func (o *Ostree) listLocalRefsFromRepo(repoDir string) ([]string, error) {
 	if repoDir == "" {
 		return nil, errors.New("invalid repoDir parameter")
 	}
-	stdout, err := o.ostreeRunCapture(verbose, "--repo="+repoDir, "refs")
+	stdout, err := o.ostreeRunCapture("--repo="+repoDir, "refs")
 	if err != nil {
 		return nil, err
 	}
@@ -283,14 +282,14 @@ func (o *Ostree) listLocalRefsFromRepo(repoDir string, verbose bool) ([]string, 
 }
 
 // listRemoteRefsFromRepo lists remote refs using the instance runner.
-func (o *Ostree) listRemoteRefsFromRepo(repoDir, remote string, verbose bool) ([]string, error) {
+func (o *Ostree) listRemoteRefsFromRepo(repoDir, remote string) ([]string, error) {
 	if repoDir == "" {
 		return nil, errors.New("invalid repoDir parameter")
 	}
 	if remote == "" {
 		return nil, errors.New("invalid remote parameter")
 	}
-	stdout, err := o.ostreeRunCapture(verbose, "--repo="+repoDir, "remote", "refs", remote)
+	stdout, err := o.ostreeRunCapture("--repo="+repoDir, "remote", "refs", remote)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +297,7 @@ func (o *Ostree) listRemoteRefsFromRepo(repoDir, remote string, verbose bool) ([
 }
 
 // addRemote adds a remote using the instance runner.
-func (o *Ostree) addRemote(opts AddRemoteOptions, verbose bool) error {
+func (o *Ostree) addRemote(opts AddRemoteOptions) error {
 	if opts.Remote == "" {
 		return errors.New("invalid Remote parameter")
 	}
@@ -321,11 +320,11 @@ func (o *Ostree) addRemote(opts AddRemoteOptions, verbose bool) error {
 	args = append(args, "--force")
 	args = append(args, opts.GpgArgs...)
 	args = append(args, opts.Remote, opts.RemoteURL)
-	return o.ostreeRun(verbose, args...)
+	return o.ostreeRun(args...)
 }
 
 // pullFromRepo pulls an ostree ref using the instance runner.
-func (o *Ostree) pullFromRepo(repoDir, remote, ref string, verbose bool) error {
+func (o *Ostree) pullFromRepo(repoDir, remote, ref string) error {
 	if repoDir == "" {
 		return errors.New("invalid repoDir parameter")
 	}
@@ -336,11 +335,11 @@ func (o *Ostree) pullFromRepo(repoDir, remote, ref string, verbose bool) error {
 		return errors.New("invalid ref parameter")
 	}
 	o.Print("Pulling ostree from %s %s:%s ...\n", repoDir, remote, ref)
-	return o.ostreeRun(verbose, "--repo="+repoDir, "pull", remote, ref)
+	return o.ostreeRun("--repo="+repoDir, "pull", remote, ref)
 }
 
 // pruneFromRepo prunes an ostree repo using the instance runner.
-func (o *Ostree) pruneFromRepo(repoDir, ref, keepObjectsYoungerThan string, verbose bool) error {
+func (o *Ostree) pruneFromRepo(repoDir, ref, keepObjectsYoungerThan string) error {
 	if repoDir == "" {
 		return errors.New("invalid repoDir parameter")
 	}
@@ -351,7 +350,7 @@ func (o *Ostree) pruneFromRepo(repoDir, ref, keepObjectsYoungerThan string, verb
 		return errors.New("invalid keepObjectsYoungerThan parameter")
 	}
 	o.Print("Pruning ostree repo for %s ...\n", repoDir)
-	return o.ostreeRun(verbose,
+	return o.ostreeRun(
 		"--repo="+repoDir, "prune",
 		"--depth=5",
 		"--refs-only",
@@ -361,25 +360,25 @@ func (o *Ostree) pruneFromRepo(repoDir, ref, keepObjectsYoungerThan string, verb
 }
 
 // ListRemotes lists all the remote refs in the configuration's ostree repository.
-func (o *Ostree) ListRemotes(verbose bool) ([]string, error) {
+func (o *Ostree) ListRemotes() ([]string, error) {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return nil, err
 	}
-	return o.listRemotesFromRepo(repoDir, verbose)
+	return o.listRemotesFromRepo(repoDir)
 }
 
 // LastCommit returns the last commit for a given ref.
-func (o *Ostree) LastCommit(ref string, verbose bool) (string, error) {
+func (o *Ostree) LastCommit(ref string) (string, error) {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return "", err
 	}
-	return o.lastCommitFromRepo(repoDir, ref, verbose)
+	return o.lastCommitFromRepo(repoDir, ref)
 }
 
 // Pull pulls an ostree ref from a remote.
-func (o *Ostree) Pull(ref string, verbose bool) error {
+func (o *Ostree) Pull(ref string) error {
 	if ref == "" {
 		return errors.New("invalid ref parameter")
 	}
@@ -392,12 +391,12 @@ func (o *Ostree) Pull(ref string, verbose bool) error {
 		return fmt.Errorf("%v does not contain the remote: prefix (e.g. origin:)", ref)
 	}
 	ref = CleanRemoteFromRef(ref)
-	return o.pullFromRepo(repoDir, remote, ref, verbose)
+	return o.pullFromRepo(repoDir, remote, ref)
 }
 
 // PullWithRemote runs `ostree pull` assuming that the provided ref is
 // clean from the remote prefix.
-func (o *Ostree) PullWithRemote(remote, ref string, verbose bool) error {
+func (o *Ostree) PullWithRemote(remote, ref string) error {
 	if remote == "" {
 		return errors.New("invalid remote parameter")
 	}
@@ -408,11 +407,11 @@ func (o *Ostree) PullWithRemote(remote, ref string, verbose bool) error {
 	if err != nil {
 		return err
 	}
-	return o.pullFromRepo(repoDir, remote, ref, verbose)
+	return o.pullFromRepo(repoDir, remote, ref)
 }
 
 // Prune prunes the ostree repo for the given ref.
-func (o *Ostree) Prune(ref string, verbose bool) error {
+func (o *Ostree) Prune(ref string) error {
 	if ref == "" {
 		return errors.New("invalid ref parameter")
 	}
@@ -424,11 +423,11 @@ func (o *Ostree) Prune(ref string, verbose bool) error {
 	if err != nil {
 		return err
 	}
-	return o.pruneFromRepo(repoDir, ref, keepObjectsYoungerThan, verbose)
+	return o.pruneFromRepo(repoDir, ref, keepObjectsYoungerThan)
 }
 
 // GenerateStaticDelta generates a static delta for an ostree repository.
-func (o *Ostree) GenerateStaticDelta(ref string, verbose bool) error {
+func (o *Ostree) GenerateStaticDelta(ref string) error {
 	if ref == "" {
 		return errors.New("invalid ref parameter")
 	}
@@ -441,7 +440,6 @@ func (o *Ostree) GenerateStaticDelta(ref string, verbose bool) error {
 	o.Print("Generating static delta for %s and ref %s ...\n", repoDir, ref)
 
 	stdout, err := o.ostreeRunCapture(
-		verbose,
 		"--repo="+repoDir,
 		"rev-parse",
 		ref,
@@ -456,7 +454,6 @@ func (o *Ostree) GenerateStaticDelta(ref string, verbose bool) error {
 	}
 
 	stdout, err = o.ostreeRunCapture(
-		verbose,
 		"--repo="+repoDir,
 		"rev-parse",
 		ref+"^",
@@ -470,7 +467,6 @@ func (o *Ostree) GenerateStaticDelta(ref string, verbose bool) error {
 		err := o.runCmd(
 			io.Discard,
 			os.Stderr,
-			verbose,
 			"--repo="+repoDir,
 			"rev-parse",
 			revOld,
@@ -489,7 +485,6 @@ func (o *Ostree) GenerateStaticDelta(ref string, verbose bool) error {
 		err := o.runCmd(
 			io.Discard,
 			os.Stderr,
-			verbose,
 			"show",
 			"--repo="+repoDir,
 			revOld,
@@ -520,11 +515,11 @@ func (o *Ostree) GenerateStaticDelta(ref string, verbose bool) error {
 		args = append(args, "--from="+revOld)
 	}
 
-	return o.ostreeRun(verbose, args...)
+	return o.ostreeRun(args...)
 }
 
 // UpdateSummary updates the summary of an ostree repository.
-func (o *Ostree) UpdateSummary(verbose bool) error {
+func (o *Ostree) UpdateSummary() error {
 	o.Print("Updating ostree summary ...")
 
 	repoDir, err := o.RepoDir()
@@ -544,11 +539,11 @@ func (o *Ostree) UpdateSummary(verbose bool) error {
 	}
 	args = append(args, gpgArgs...)
 
-	return o.ostreeRun(verbose, args...)
+	return o.ostreeRun(args...)
 }
 
 // AddRemote adds a remote to an ostree repo.
-func (o *Ostree) AddRemote(verbose bool) error {
+func (o *Ostree) AddRemote() error {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return err
@@ -573,13 +568,12 @@ func (o *Ostree) AddRemote(verbose bool) error {
 		RemoteURL: remoteURL,
 		GpgArgs:   gpgArgs,
 		RepoDir:   repoDir,
-		Verbose:   verbose,
 	}
-	return o.addRemote(opts, verbose)
+	return o.addRemote(opts)
 }
 
 // AddRemoteToRootfs adds a remote to an ostree rootfs.
-func (o *Ostree) AddRemoteToRootfs(rootfs string, verbose bool) error {
+func (o *Ostree) AddRemoteToRootfs(rootfs string) error {
 	gpgArgs, err := o.ClientSideGpgArgs()
 	if err != nil {
 		return err
@@ -599,22 +593,21 @@ func (o *Ostree) AddRemoteToRootfs(rootfs string, verbose bool) error {
 		RemoteURL: remoteURL,
 		GpgArgs:   gpgArgs,
 		Sysroot:   rootfs,
-		Verbose:   verbose,
 	}
-	return o.addRemote(opts, verbose)
+	return o.addRemote(opts)
 }
 
 // LocalRefs lists the locally available ostree refs.
-func (o *Ostree) LocalRefs(verbose bool) ([]string, error) {
+func (o *Ostree) LocalRefs() ([]string, error) {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return nil, err
 	}
-	return o.listLocalRefsFromRepo(repoDir, verbose)
+	return o.listLocalRefsFromRepo(repoDir)
 }
 
 // RemoteRefs lists the remote available ostree refs.
-func (o *Ostree) RemoteRefs(verbose bool) ([]string, error) {
+func (o *Ostree) RemoteRefs() ([]string, error) {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return nil, err
@@ -623,11 +616,11 @@ func (o *Ostree) RemoteRefs(verbose bool) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return o.listRemoteRefsFromRepo(repoDir, remote, verbose)
+	return o.listRemoteRefsFromRepo(repoDir, remote)
 }
 
 // MaybeInitializeRemote initializes an ostree remote.
-func (o *Ostree) MaybeInitializeRemote(verbose bool) error {
+func (o *Ostree) MaybeInitializeRemote() error {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return err
@@ -650,14 +643,14 @@ func (o *Ostree) MaybeInitializeRemote(verbose bool) error {
 	objectsDir := filepath.Join(repoDir, "objects")
 	if !directoryExists(objectsDir) {
 		o.Print("Initializing local ostree repo at %v ...\n", repoDir)
-		if err := o.InitRepo(verbose); err != nil {
+		if err := o.InitRepo(); err != nil {
 			return err
 		}
 	} else {
 		o.Print("ostree repo at %v already initialized. Reusing ...\n", repoDir)
 	}
 
-	remotes, err := o.listRemotesFromRepo(repoDir, verbose)
+	remotes, err := o.listRemotesFromRepo(repoDir)
 	if err != nil {
 		return err
 	}
@@ -673,13 +666,13 @@ func (o *Ostree) MaybeInitializeRemote(verbose bool) error {
 		args := []string{"--repo=" + repoDir, "remote", "add"}
 		args = append(args, gpgArgs...)
 		args = append(args, remote, remoteURL)
-		err = o.ostreeRun(verbose, args...)
+		err = o.ostreeRun(args...)
 		if err != nil {
 			return err
 		}
 	}
 
 	o.Print("Showing current ostree remotes:")
-	err = o.ostreeRun(verbose, "--repo="+repoDir, "remote", "list", "-u")
+	err = o.ostreeRun("--repo="+repoDir, "remote", "list", "-u")
 	return err
 }

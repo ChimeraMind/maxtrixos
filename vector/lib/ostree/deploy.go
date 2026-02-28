@@ -142,11 +142,11 @@ func BootedHashWithSysroot(sysroot string, verbose bool) (string, error) {
 }
 
 // listDeploymentsFromSysroot lists deployments using the instance runner.
-func (o *Ostree) listDeploymentsFromSysroot(sysroot string, verbose bool) ([]Deployment, error) {
+func (o *Ostree) listDeploymentsFromSysroot(sysroot string) ([]Deployment, error) {
 	if sysroot == "" {
 		return nil, errors.New("invalid ostree sysroot parameter")
 	}
-	stdout, err := o.ostreeRunCapture(verbose, "--sysroot="+sysroot, "admin", "status", "--json")
+	stdout, err := o.ostreeRunCapture("--sysroot="+sysroot, "admin", "status", "--json")
 	if err != nil {
 		return nil, err
 	}
@@ -181,16 +181,16 @@ func (o *Ostree) BootCommit(sysroot string) (string, error) {
 }
 
 // ListDeployments lists the deployments in the / filesystem.
-func (o *Ostree) ListDeployments(verbose bool) ([]Deployment, error) {
+func (o *Ostree) ListDeployments() ([]Deployment, error) {
 	root, err := o.Root()
 	if err != nil {
 		return nil, err
 	}
-	return o.listDeploymentsFromSysroot(root, verbose)
+	return o.listDeploymentsFromSysroot(root)
 }
 
 // DeployedRootfs returns the path to the deployed rootfs.
-func (o *Ostree) DeployedRootfs(ref string, verbose bool) (string, error) {
+func (o *Ostree) DeployedRootfs(ref string) (string, error) {
 	sysroot, err := o.Sysroot()
 	if err != nil {
 		return "", err
@@ -204,7 +204,7 @@ func (o *Ostree) DeployedRootfs(ref string, verbose bool) (string, error) {
 		return "", err
 	}
 
-	ostreeCommit, err := o.LastCommit(ref, verbose)
+	ostreeCommit, err := o.LastCommit(ref)
 	if err != nil {
 		return "", fmt.Errorf("cannot get last ostree commit: %w", err)
 	}
@@ -214,12 +214,12 @@ func (o *Ostree) DeployedRootfs(ref string, verbose bool) (string, error) {
 }
 
 // BootedRef returns the ref of the booted deployment.
-func (o *Ostree) BootedRef(verbose bool) (string, error) {
+func (o *Ostree) BootedRef() (string, error) {
 	root, err := o.Root()
 	if err != nil {
 		return "", err
 	}
-	deployments, err := o.listDeploymentsFromSysroot(root, verbose)
+	deployments, err := o.listDeploymentsFromSysroot(root)
 	if err != nil {
 		return "", err
 	}
@@ -232,12 +232,12 @@ func (o *Ostree) BootedRef(verbose bool) (string, error) {
 }
 
 // BootedHash returns the commit hash of the booted deployment.
-func (o *Ostree) BootedHash(verbose bool) (string, error) {
+func (o *Ostree) BootedHash() (string, error) {
 	root, err := o.Root()
 	if err != nil {
 		return "", err
 	}
-	deployments, err := o.listDeploymentsFromSysroot(root, verbose)
+	deployments, err := o.listDeploymentsFromSysroot(root)
 	if err != nil {
 		return "", err
 	}
@@ -250,16 +250,16 @@ func (o *Ostree) BootedHash(verbose bool) (string, error) {
 }
 
 // Switch runs `ostree admin switch` to switch to the given ref.
-func (o *Ostree) Switch(ref string, verbose bool) error {
+func (o *Ostree) Switch(ref string) error {
 	sysroot, err := o.Sysroot()
 	if err != nil {
 		return err
 	}
-	return o.ostreeRun(verbose, "admin", "switch", "--sysroot="+sysroot, ref)
+	return o.ostreeRun("admin", "switch", "--sysroot="+sysroot, ref)
 }
 
 // Deploy deploys an ostree commit.
-func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) error {
+func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string) error {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return err
@@ -274,13 +274,13 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		return err
 	}
 
-	ostreeCommit, err := o.lastCommitFromRepo(repoDir, ref, verbose)
+	ostreeCommit, err := o.lastCommitFromRepo(repoDir, ref)
 	if err != nil {
 		return fmt.Errorf("cannot get last ostree commit: %w", err)
 	}
 
 	o.Print("Initializing ostree dir structure into %s ...\n", sysroot)
-	if err := o.ostreeRun(verbose, "admin", "init-fs", sysroot); err != nil {
+	if err := o.ostreeRun("admin", "init-fs", sysroot); err != nil {
 		return err
 	}
 
@@ -295,7 +295,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		osName,
 		"--sysroot=" + sysroot,
 	}
-	if err := o.ostreeRun(verbose, osInitArgs...); err != nil {
+	if err := o.ostreeRun(osInitArgs...); err != nil {
 		return err
 	}
 
@@ -307,7 +307,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		repoDir,
 		ostreeCommit,
 	}
-	if err := o.ostreeRun(verbose, pullArgs...); err != nil {
+	if err := o.ostreeRun(pullArgs...); err != nil {
 		return err
 	}
 
@@ -318,7 +318,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		ostreeCommit,
 	}
 	o.Print("ostree creating ref %s in sysroot repo ...\n", remote+":"+ref)
-	if err := o.ostreeRun(verbose, createRefArgs...); err != nil {
+	if err := o.ostreeRun(createRefArgs...); err != nil {
 		return err
 	}
 
@@ -330,7 +330,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		"sysroot.bootloader",
 		"none",
 	}
-	if err := o.ostreeRun(verbose, blArgs...); err != nil {
+	if err := o.ostreeRun(blArgs...); err != nil {
 		return err
 	}
 
@@ -342,7 +342,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 		"sysroot.bootprefix",
 		"false",
 	}
-	if err := o.ostreeRun(verbose, bootprefixArgs...); err != nil {
+	if err := o.ostreeRun(bootprefixArgs...); err != nil {
 		return err
 	}
 
@@ -357,7 +357,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 	}
 	deployArgs = append(deployArgs, remote+":"+ref)
 
-	if err := o.ostreeRun(verbose, deployArgs...); err != nil {
+	if err := o.ostreeRun(deployArgs...); err != nil {
 		return err
 	}
 
@@ -366,7 +366,7 @@ func (o *Ostree) Deploy(ref, sysroot string, bootArgs []string, verbose bool) er
 }
 
 // Upgrade runs `ostree admin upgrade`.
-func (o *Ostree) Upgrade(args []string, verbose bool) error {
+func (o *Ostree) Upgrade(args []string) error {
 	root, err := o.Root()
 	if err != nil {
 		return err
@@ -375,5 +375,5 @@ func (o *Ostree) Upgrade(args []string, verbose bool) error {
 	cmdArgs := []string{"admin", "upgrade", "--sysroot=" + root}
 	cmdArgs = append(cmdArgs, args...)
 
-	return o.ostreeRun(verbose, cmdArgs...)
+	return o.ostreeRun(cmdArgs...)
 }

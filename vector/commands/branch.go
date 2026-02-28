@@ -64,7 +64,7 @@ func (c *BranchCommand) parseArgs(args []string) error {
 func (c *BranchCommand) Run() error {
 	switch c.sub {
 	case "show":
-		deployments, err := c.ot.ListDeployments(false)
+		deployments, err := c.ot.ListDeployments()
 		if err != nil {
 			return fmt.Errorf("failed to list deployments: %w", err)
 		}
@@ -84,7 +84,7 @@ func (c *BranchCommand) Run() error {
 		return fmt.Errorf("could not find booted deployment")
 
 	case "list":
-		refs, err := c.ot.RemoteRefs(false)
+		refs, err := c.ot.RemoteRefs()
 		if err != nil {
 			return fmt.Errorf("failed to list remote refs: %w", err)
 		}
@@ -98,7 +98,8 @@ func (c *BranchCommand) Run() error {
 			return fmt.Errorf("switch command requires a branch/ref name")
 		}
 		ref := c.args[0]
-		return c.ot.Switch(ref, true)
+		c.ot.SetVerbose(false) // ostree's own verbose flag, separate from ours.
+		return c.ot.Switch(ref)
 
 	default:
 		return fmt.Errorf("unknown subcommand: %s", c.sub)
