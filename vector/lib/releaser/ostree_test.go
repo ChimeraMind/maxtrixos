@@ -369,7 +369,7 @@ func TestRelease_Success(t *testing.T) {
 	r, mock := releaseTestSetup(t)
 	opts := CommitOptions{Branch: "matrixos/stable"}
 
-	if err := r.Release(opts, false); err != nil {
+	if err := r.Release(opts); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 
@@ -402,7 +402,7 @@ func TestRelease_WithConsume(t *testing.T) {
 	r, mock := releaseTestSetup(t)
 	opts := CommitOptions{Branch: "matrixos/stable", Consume: true}
 
-	if err := r.Release(opts, false); err != nil {
+	if err := r.Release(opts); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 
@@ -415,7 +415,7 @@ func TestRelease_MissingBranch(t *testing.T) {
 	r, _ := releaseTestSetup(t)
 	opts := CommitOptions{}
 
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || !strings.Contains(err.Error(), "missing branch") {
 		t.Fatalf("expected 'missing branch' error, got %v", err)
 	}
@@ -430,7 +430,7 @@ func TestRelease_EtcExists(t *testing.T) {
 	}
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || !strings.Contains(err.Error(), "illegal") {
 		t.Fatalf("expected 'illegal' error, got %v", err)
 	}
@@ -441,7 +441,7 @@ func TestRelease_RepoDirError(t *testing.T) {
 	mock.RepoDirErr = errors.New("repodir boom")
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || err.Error() != "repodir boom" {
 		t.Fatalf("expected 'repodir boom', got %v", err)
 	}
@@ -452,7 +452,7 @@ func TestRelease_OsNameError(t *testing.T) {
 	mock.OsNameErr = errors.New("osname boom")
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || err.Error() != "osname boom" {
 		t.Fatalf("expected 'osname boom', got %v", err)
 	}
@@ -463,7 +463,7 @@ func TestRelease_FancyOsNameError(t *testing.T) {
 	mock.FancyOsNameErr = errors.New("fancy boom")
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || err.Error() != "fancy boom" {
 		t.Fatalf("expected 'fancy boom', got %v", err)
 	}
@@ -474,7 +474,7 @@ func TestRelease_GpgArgsError(t *testing.T) {
 	mock.GpgArgsErr = errors.New("gpg boom")
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || err.Error() != "gpg boom" {
 		t.Fatalf("expected 'gpg boom', got %v", err)
 	}
@@ -485,7 +485,7 @@ func TestRelease_CommitError(t *testing.T) {
 	mock.CommitErr = errors.New("commit boom")
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || !strings.Contains(err.Error(), "commit boom") {
 		t.Fatalf("expected wrapped 'commit boom', got %v", err)
 	}
@@ -496,7 +496,7 @@ func TestRelease_PruneError(t *testing.T) {
 	mock.PruneErr = errors.New("prune boom")
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || !strings.Contains(err.Error(), "prune boom") {
 		t.Fatalf("expected wrapped 'prune boom', got %v", err)
 	}
@@ -507,7 +507,7 @@ func TestRelease_StaticDeltaError(t *testing.T) {
 	mock.GenerateStaticDeltaErr = errors.New("delta boom")
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || !strings.Contains(err.Error(), "delta boom") {
 		t.Fatalf("expected wrapped 'delta boom', got %v", err)
 	}
@@ -518,7 +518,7 @@ func TestRelease_UpdateSummaryError(t *testing.T) {
 	mock.UpdateSummaryErr = errors.New("summary boom")
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || !strings.Contains(err.Error(), "summary boom") {
 		t.Fatalf("expected wrapped 'summary boom', got %v", err)
 	}
@@ -530,7 +530,7 @@ func TestRelease_SkipsStaticDeltas(t *testing.T) {
 	cfgMock.Bools["Releaser.GenerateStaticDeltas"] = false
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	if err := r.Release(opts, false); err != nil {
+	if err := r.Release(opts); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 
@@ -551,7 +551,7 @@ func TestRelease_WithParentBranch(t *testing.T) {
 		ParentBranch: "matrixos/testing",
 	}
 
-	if err := r.Release(opts, false); err != nil {
+	if err := r.Release(opts); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 
@@ -575,7 +575,7 @@ func TestRelease_ParentBranchRevParseError(t *testing.T) {
 		ParentBranch: "matrixos/testing",
 	}
 
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || !strings.Contains(err.Error(), "revparse boom") {
 		t.Fatalf("expected wrapped 'revparse boom', got %v", err)
 	}
@@ -594,7 +594,7 @@ func TestRelease_ReadsMetadataFile(t *testing.T) {
 	}
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	if err := r.Release(opts, false); err != nil {
+	if err := r.Release(opts); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 
@@ -607,7 +607,7 @@ func TestRelease_MissingMetadataUsesDefault(t *testing.T) {
 	r, mock := releaseTestSetup(t)
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	if err := r.Release(opts, false); err != nil {
+	if err := r.Release(opts); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 
@@ -621,7 +621,7 @@ func TestRelease_BuildMetadataFileError(t *testing.T) {
 	r.cfg = &config.ErrConfig{Err: errors.New("cfg boom")}
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	err := r.Release(opts, false)
+	err := r.Release(opts)
 	if err == nil || !strings.Contains(err.Error(), "cfg boom") {
 		t.Fatalf("expected 'cfg boom', got %v", err)
 	}
@@ -631,7 +631,7 @@ func TestRelease_BodyContainsNoneWhenNoParent(t *testing.T) {
 	r, mock := releaseTestSetup(t)
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	if err := r.Release(opts, false); err != nil {
+	if err := r.Release(opts); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 
@@ -645,7 +645,7 @@ func TestRelease_GpgArgsPassedToCommit(t *testing.T) {
 	mock.GpgArgs_ = []string{"--gpg-sign=KEY1", "--gpg-homedir=/tmp"}
 
 	opts := CommitOptions{Branch: "matrixos/stable"}
-	if err := r.Release(opts, false); err != nil {
+	if err := r.Release(opts); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 

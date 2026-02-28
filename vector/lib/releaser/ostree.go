@@ -120,7 +120,7 @@ func (r *Releaser) MaybeOstreeInit() error {
 }
 
 // Release commits the image directory to the ostree repository.
-func (r *Releaser) Release(opts CommitOptions, verbose bool) error {
+func (r *Releaser) Release(opts CommitOptions) error {
 	imageDir := r.imageDir
 	repoDir, err := r.ostree.RepoDir()
 	if err != nil {
