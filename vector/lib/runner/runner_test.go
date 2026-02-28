@@ -90,7 +90,11 @@ func TestRun_WithEnv(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestChrootArgs_Valid(t *testing.T) {
-	args, err := chrootArgs("/mnt/root", "/bin/bash", "-c", "ls")
+	c := &ChrootCmd{
+		Cmd:       Cmd{Name: "/bin/bash", Args: []string{"-c", "ls"}},
+		ChrootDir: "/mnt/root",
+	}
+	args, err := chrootArgs(c)
 	if err != nil {
 		t.Fatalf("chrootArgs: unexpected error: %v", err)
 	}
@@ -112,8 +116,56 @@ func TestChrootArgs_Valid(t *testing.T) {
 	}
 }
 
+func TestChrootArgs_WithDir(t *testing.T) {
+	c := &ChrootCmd{
+		Cmd:       Cmd{Name: "/bin/bash", Args: []string{"-c", "ls"}, Dir: "/work"},
+		ChrootDir: "/mnt/root",
+	}
+	args, err := chrootArgs(c)
+	if err != nil {
+		t.Fatalf("chrootArgs: unexpected error: %v", err)
+	}
+
+	expected := []string{
+		"--pid", "--fork", "--kill-child",
+		"--mount", "--uts", "--ipc",
+		"--mount-proc=/mnt/root/proc",
+		"--wd", "/work",
+		"chroot", "/mnt/root", "/bin/bash",
+		"-c", "ls",
+	}
+	if len(args) != len(expected) {
+		t.Fatalf("len(args) = %d, want %d\nargs: %v", len(args), len(expected), args)
+	}
+	for i := range expected {
+		if args[i] != expected[i] {
+			t.Errorf("args[%d] = %q, want %q", i, args[i], expected[i])
+		}
+	}
+}
+
+func TestChrootArgs_WithoutDir(t *testing.T) {
+	c := &ChrootCmd{
+		Cmd:       Cmd{Name: "/bin/bash", Args: []string{"-c", "ls"}},
+		ChrootDir: "/mnt/root",
+	}
+	args, err := chrootArgs(c)
+	if err != nil {
+		t.Fatalf("chrootArgs: unexpected error: %v", err)
+	}
+	for _, a := range args {
+		if a == "--wd" {
+			t.Fatal("--wd should not be present when Dir is empty")
+		}
+	}
+}
+
 func TestChrootArgs_NoExtraArgs(t *testing.T) {
-	args, err := chrootArgs("/chroot", "/bin/sh")
+	c := &ChrootCmd{
+		Cmd:       Cmd{Name: "/bin/sh"},
+		ChrootDir: "/chroot",
+	}
+	args, err := chrootArgs(c)
 	if err != nil {
 		t.Fatalf("chrootArgs: unexpected error: %v", err)
 	}
@@ -123,14 +175,14 @@ func TestChrootArgs_NoExtraArgs(t *testing.T) {
 }
 
 func TestChrootArgs_EmptyDir(t *testing.T) {
-	_, err := chrootArgs("", "/bin/sh")
+	_, err := chrootArgs(&ChrootCmd{Cmd: Cmd{Name: "/bin/sh"}})
 	if err == nil {
 		t.Fatal("expected error for empty chrootDir")
 	}
 }
 
 func TestChrootArgs_EmptyExec(t *testing.T) {
-	_, err := chrootArgs("/mnt", "")
+	_, err := chrootArgs(&ChrootCmd{ChrootDir: "/mnt"})
 	if err == nil {
 		t.Fatal("expected error for empty chrootExec")
 	}

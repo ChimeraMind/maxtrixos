@@ -79,29 +79,42 @@ var CombinedOutput CombinedOutputFunc = func(c *Cmd) ([]byte, error) {
 // chrootArgs builds the unshare argument list for running a command inside
 // a chroot. It preserves the exact invocation pattern:
 //
-//	unshare --pid --fork --kill-child --mount --uts --ipc \
+//	unshare --pid --fork --kill-child --mount --uts --ipc --wd=<Dir> \
 //	    --mount-proc=<chrootDir>/proc chroot <chrootDir> <chrootExec> [args...]
-func chrootArgs(chrootDir, chrootExec string, args ...string) ([]string, error) {
-	if chrootDir == "" {
+func chrootArgs(c *ChrootCmd) ([]string, error) {
+	if c.ChrootDir == "" {
 		return nil, fmt.Errorf("missing chrootDir parameter")
 	}
-	if chrootExec == "" {
+	if c.Name == "" {
 		return nil, fmt.Errorf("missing chrootExec parameter")
 	}
 
-	cmdArgs := []string{
+	var dirArgs []string
+	if c.Dir != "" {
+		dirArgs = []string{"--wd", c.Dir}
+	}
+
+	unshareArgs := []string{
 		"--pid",
 		"--fork",
 		"--kill-child",
 		"--mount",
 		"--uts",
 		"--ipc",
-		fmt.Sprintf("--mount-proc=%s/proc", chrootDir),
-		"chroot",
-		chrootDir,
-		chrootExec,
+		fmt.Sprintf("--mount-proc=%s/proc", c.ChrootDir),
 	}
-	cmdArgs = append(cmdArgs, args...)
+	unshareArgs = append(unshareArgs, dirArgs...)
+
+	execArgs := []string{
+		"chroot",
+		c.ChrootDir,
+		c.Name,
+	}
+
+	var cmdArgs []string
+	cmdArgs = append(cmdArgs, unshareArgs...)
+	cmdArgs = append(cmdArgs, execArgs...)
+	cmdArgs = append(cmdArgs, c.Args...)
 	return cmdArgs, nil
 }
 
@@ -125,16 +138,22 @@ type ChrootOutputFunc func(cmd *ChrootCmd) ([]byte, error)
 
 // ChrootRun is the default ChrootRunFunc implementation.
 var ChrootRun ChrootRunFunc = func(c *ChrootCmd) error {
-	uArgs, err := chrootArgs(c.ChrootDir, c.Name, c.Args...)
+	uArgs, err := chrootArgs(c)
 	if err != nil {
 		return err
 	}
-	return Run(&Cmd{Name: "unshare", Args: uArgs, Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr})
+	return Run(&Cmd{
+		Name:   "unshare",
+		Args:   uArgs,
+		Stdin:  c.Stdin,
+		Stdout: c.Stdout,
+		Stderr: c.Stderr,
+	})
 }
 
 // ChrootOutput is the default ChrootOutputFunc implementation.
 var ChrootOutput ChrootOutputFunc = func(c *ChrootCmd) ([]byte, error) {
-	uArgs, err := chrootArgs(c.ChrootDir, c.Name, c.Args...)
+	uArgs, err := chrootArgs(c)
 	if err != nil {
 		return nil, err
 	}
