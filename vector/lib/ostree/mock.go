@@ -77,6 +77,7 @@ func (m *MockOstree) GpgBestPubKeyPath() (string, error)         { return "", ni
 func (m *MockOstree) ClientSideGpgArgs() ([]string, error)       { return nil, nil }
 func (m *MockOstree) GpgHomeDir() (string, error)                { return "", nil }
 func (m *MockOstree) GpgKeyID() (string, error)                  { return "", nil }
+func (m *MockOstree) FancyOsName() (string, error)               { return "", nil }
 func (m *MockOstree) GpgArgs() ([]string, error)                 { return nil, nil }
 func (m *MockOstree) SetGpg(_ bool) error                        { return nil }
 func (m *MockOstree) SetVerbose(_ bool)                          {}

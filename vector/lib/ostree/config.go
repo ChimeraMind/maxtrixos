@@ -74,6 +74,18 @@ func (o *Ostree) OsName() (string, error) {
 	return name, nil
 }
 
+// FancyOsName returns the fancy (display) name of the OS as defined in the config.
+func (o *Ostree) FancyOsName() (string, error) {
+	name, err := o.cfg.GetItem("matrixOS.FancyOsName")
+	if err != nil {
+		return "", err
+	}
+	if name == "" {
+		return "", errors.New("invalid matrixOS.FancyOsName")
+	}
+	return name, nil
+}
+
 // Arch returns the build architecture as defined in the config.
 func (o *Ostree) Arch() (string, error) {
 	arch, err := o.cfg.GetItem("matrixOS.Arch")
