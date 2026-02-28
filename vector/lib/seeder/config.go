@@ -73,3 +73,7 @@ func (s *Seeder) LockDir() (string, error) {
 func (s *Seeder) LockWaitSeconds() (string, error) {
 	return s.configItem("Seeder.LockWaitSeconds")
 }
+
+func (s *Seeder) Stage3DownloadUrl() (string, error) {
+	return s.configItem("Seeder.Stage3DownloadUrl")
+}

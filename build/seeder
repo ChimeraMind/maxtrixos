@@ -23,7 +23,6 @@ ARG_CLEAN_ARTIFACTS=
 ARG_BUILT_ROOTFS_FILE=
 ARG_BUILT_SEEDERS_FILE=
 ARG_STAGE3_FILE=
-ARG_STAGE3_URL=https://distfiles.gentoo.org/releases/amd64/autobuilds/current-stage3-amd64-systemd/latest-stage3-amd64-systemd.txt
 ARG_SKIP_SEEDERS=()
 ARG_ONLY_SEEDERS=()
 ARG_OVERRIDE_CHROOTS=()
@@ -150,18 +149,6 @@ parse_args() {
         ARG_STAGE3_FILE="${val}"
         ;;
 
-        -u|--stage3-url|--stage3-url=*)
-        local val=
-        if [[ "${1}" =~ --stage3-url=.* ]]; then
-            val=${1/--stage3-url=/}
-            shift
-        else
-            val="${2}"
-            shift 2
-        fi
-        ARG_STAGE3_URL="${val}"
-        ;;
-
         -v|--verbose)
         ARG_VERBOSE_MODE=1
 
@@ -187,7 +174,6 @@ parse_args() {
         echo -e "-bf, --built-rootfs-file \t path to a file where the list of succesfully built chroot dirs will be written." >&2
         echo -e "-bf, --built-seeders-file \t path to a file where the list of succesfully built seeder names will be written." >&2
         echo -e "-f, --stage3-file \t\t a Gentoo stage3 file to unpack (no download)." >&2
-        echo -e "-u, --stage3-url \t\t a Gentoo stage3 'latest' URL to retrieve the real stage3 tarball." >&2
         echo -e "-v, --verbose  \t\t\t enable verbose mode (default: false)." >&2
         echo -e "-c, --clean  \t\t\t clean artifacts after execution (default: false)." >&2
         echo >&2
@@ -558,7 +544,7 @@ seeder_worker() {
         export DOWNLOAD_DIR="${MATRIXOS_SEEDER_DOWNLOADS_DIR}"
         export CHROOT_RESUME="${ARG_RESUME}"
         export STAGE3_FILE="${ARG_STAGE3_FILE}"
-        export STAGE3_URL="${ARG_STAGE3_URL}"
+        export STAGE3_URL="${MATRIXOS_SEEDER_STAGE3_DOWNLOAD_URL}"
         "${prepper_exec}"
     ) || {
         echo "[${seeder_name}] Prepper ${prepper_exec} failed. Aborting." >&2;

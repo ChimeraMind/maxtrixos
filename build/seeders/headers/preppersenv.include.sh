@@ -8,6 +8,7 @@ if [ -z "${__MATRIXOS_PREPPERS_ENV_PARSED:-}" ]; then
 source "${MATRIXOS_DEV_DIR}"/lib/env_lib.sh
 
 # See conf/matrixos.conf for documentation on these variables.
+MATRIXOS_SEEDER_STAGE3_DOWNLOAD_URL=$(env_lib.get_simple_var "Seeder" "Stage3DownloadUrl")
 MATRIXOS_SEEDER_METADATA_DIR=$(env_lib.get_simple_var "Seeder" "ChrootMetadataDir")
 MATRIXOS_SEEDER_BUILD_METADATA_FILE="${MATRIXOS_SEEDER_METADATA_DIR}/$(env_lib.get_simple_var "Seeder" "ChrootMetadataDirBuildFileName")"
 MATRIXOS_PREPPERS_BUILD_ARTIFACTS_DIR=$(env_lib.get_simple_var "Seeder" "ChrootBuildArtifactsDir")

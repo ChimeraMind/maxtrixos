@@ -80,6 +80,9 @@ type ISeeder interface {
 	LockDir() (string, error)
 	// LockWaitSeconds returns the configured lock acquisition timeout in seconds.
 	LockWaitSeconds() (string, error)
+	// Stage3DownloadUrl returns the URL where the latest Gentoo stage3 tarball
+	// metadata can be downloaded.
+	Stage3DownloadUrl() (string, error)
 
 	// RetryableCmd executes the command up to tries times, sleeping 5 seconds
 	// between attempts. Returns nil on the first successful invocation, or the
