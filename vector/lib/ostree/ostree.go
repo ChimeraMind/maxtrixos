@@ -60,6 +60,7 @@ type IOstree interface {
 	SetVerbose(bool)
 
 	// Repo operations
+	Commit(opts CommitOptions) error
 	InitRepo() error
 	BootCommit(sysroot string) (string, error)
 	ListRemotes() ([]string, error)
