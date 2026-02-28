@@ -14,7 +14,7 @@ type JanitorCommand struct {
 }
 
 // NewJanitorCommand creates a new JanitorCommand
-func NewJanitorCommand() ICommand {
+func NewJanitorCommand() *JanitorCommand {
 	return &JanitorCommand{
 		fs: flag.NewFlagSet("janitor", flag.ContinueOnError),
 	}

@@ -42,7 +42,7 @@ type ImagesCommand struct {
 }
 
 // NewImagesCommand creates a new ImagesCommand
-func NewImagesCommand() ICommand {
+func NewImagesCommand() *ImagesCommand {
 	return &ImagesCommand{}
 }
 
@@ -133,20 +133,17 @@ func (c *ImagesCommand) Run() error {
 // detectReleases detects available OS releases using either local or
 // remote listing, then applies the skip/only filters.
 func (c *ImagesCommand) detectReleases(w io.Writer) ([]string, error) {
-	rOpts := &releaser.NewMinimalReleaserForImagesOptions{
-		Verbose: c.verbose,
-	}
-	rel, err := releaser.NewMinimalReleaser(c.cfg, c.ot, rOpts)
+	det, err := releaser.NewReleaseDetector(c.ot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize releaser: %w", err)
+		return nil, fmt.Errorf("failed to initialize release detector: %w", err)
 	}
-	defer rel.Cleanup()
+	det.SetStderr(w)
 
 	var refs []string
 	if c.localOstree {
-		refs, err = rel.DetectLocalReleases(c.skipFilter(), c.onlyFilter())
+		refs, err = det.DetectLocalReleases(c.skipFilter(), c.onlyFilter())
 	} else {
-		refs, err = rel.DetectRemoteReleases(c.skipFilter(), c.onlyFilter())
+		refs, err = det.DetectRemoteReleases(c.skipFilter(), c.onlyFilter())
 	}
 
 	return refs, err

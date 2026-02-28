@@ -34,7 +34,7 @@ type UpgradeCommand struct {
 }
 
 // NewUpgradeCommand creates a new UpgradeCommand
-func NewUpgradeCommand() ICommand {
+func NewUpgradeCommand() *UpgradeCommand {
 	return &UpgradeCommand{}
 }
 

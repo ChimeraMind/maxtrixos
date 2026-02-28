@@ -154,7 +154,7 @@ type VMCommand struct {
 }
 
 // NewVMCommand creates a new VMCommand
-func NewVMCommand() ICommand {
+func NewVMCommand() *VMCommand {
 	c := &VMCommand{
 		fs: flag.NewFlagSet("vm", flag.ExitOnError),
 	}
