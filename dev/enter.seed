@@ -30,18 +30,6 @@ clean_exit() {
 parse_args() {
     while [[ ${#} -gt 0 ]]; do
     case ${1} in
-        -d|--chroot-dir|--chroot-dir=*)
-        # check if we have a --chroot-dir=*
-        local vals=
-        if [[ "${1}" =~ --chroot-dir=.* ]]; then
-            vals=${1/--chroot-dir=/}
-            shift
-        else
-            vals="${2}"
-            shift 2
-        fi
-        ARG_CHROOT_DIR="${vals}"
-        ;;
 
         -h|--help)
         echo -e "enter.seed - matrixOS seeded chroot enter script." >&2
