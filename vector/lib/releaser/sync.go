@@ -25,7 +25,6 @@ func (r *Releaser) syncExcludedPaths(dst string) ([]string, error) {
 	return []string{
 		filepath.Join(dst, "/tmp/*"),
 		// There can be some device nodes that we do not want to copy over.
-		filepath.Join(dst, "/dev/*"),
 		filepath.Join(dst, seedersArtifactsDir),
 		filepath.Join(dst, preppersArtifactsDir),
 		filepath.Join(dst, "/var/spool/nullmailer/trigger"),

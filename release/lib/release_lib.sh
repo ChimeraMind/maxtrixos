@@ -161,8 +161,6 @@ release_lib.get_sync_excluded_paths() {
     __internal_list+=(
         "${dst%/}${ostreedir}"
         # "${dst%/}/var/db/repos/*" -- this is needed to emerge --depclean later.
-        # There can be some device nodes that we do not want to copy over.
-        "${dst%/}/dev/*"
         "${dst%/}/tmp/*"
         "${dst%/}${MATRIXOS_SEEDERS_BUILD_ARTIFACTS_DIR}"
         "${dst%/}${MATRIXOS_PREPPERS_BUILD_ARTIFACTS_DIR}"
