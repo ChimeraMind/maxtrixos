@@ -704,3 +704,550 @@ func TestExecutePrepper_Stage3URLError(t *testing.T) {
 		t.Fatal("Expected error for empty Stage3URL, got nil")
 	}
 }
+
+// --- Seed tests ---
+
+func TestSeed_Success(t *testing.T) {
+	mr := runner.NewMockRunner()
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	info := SeederInfo{
+		Name:       "00-bedrock",
+		ChrootExec: "/build/seeders/00-bedrock/chroot.sh",
+	}
+	if err := sd.Seed("/mnt/chroot", info); err != nil {
+		t.Fatalf("Seed: unexpected error: %v", err)
+	}
+
+	if len(mr.Calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(mr.Calls))
+	}
+	call := mr.Calls[0]
+	if call.Name != "chroot:/build/seeders/00-bedrock/chroot.sh" {
+		t.Errorf("Name = %q, want chroot exec name", call.Name)
+	}
+	if call.ChrootDir != "/mnt/chroot" {
+		t.Errorf("ChrootDir = %q, want %q", call.ChrootDir, "/mnt/chroot")
+	}
+
+	// Verify MATRIXOS_DEV_DIR is in the env.
+	found := false
+	for _, e := range call.Env {
+		if e == "MATRIXOS_DEV_DIR=/matrixos" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("MATRIXOS_DEV_DIR=/matrixos not found in env")
+	}
+}
+
+func TestSeed_DefaultDevDirError(t *testing.T) {
+	mr := runner.NewMockRunner()
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{""} // empty → error
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.Seed("/mnt/chroot", SeederInfo{ChrootExec: "/x"})
+	if err == nil {
+		t.Fatal("expected error for empty DefaultDevDir")
+	}
+}
+
+func TestSeed_ChrootRunnerError(t *testing.T) {
+	mr := runner.NewMockRunnerFailOnCall(0, fmt.Errorf("chroot boom"))
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.Seed("/mnt/chroot", SeederInfo{ChrootExec: "/x"})
+	if err == nil {
+		t.Fatal("expected error from chrootRunner")
+	}
+	if !strings.Contains(err.Error(), "chroot boom") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// --- ImportGentooGpgKeys tests ---
+
+func TestImportGentooGpgKeys_Success(t *testing.T) {
+	tmp := t.TempDir()
+	gpgDir := filepath.Join(tmp, "gpg")
+
+	mr := runner.NewMockRunner()
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.GpgKeysDir"] = []string{gpgDir}
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	if err := sd.ImportGentooGpgKeys(); err != nil {
+		t.Fatalf("ImportGentooGpgKeys: %v", err)
+	}
+
+	// gpgDir should have been created with 0700 permissions.
+	info, err := os.Stat(gpgDir)
+	if err != nil {
+		t.Fatalf("Stat gpgDir: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0700 {
+		t.Errorf("gpgDir permissions = %o, want 0700", perm)
+	}
+
+	// The mock runner should have been called with gpg.
+	if len(mr.Calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(mr.Calls))
+	}
+	if mr.Calls[0].Name != "gpg" {
+		t.Errorf("Name = %q, want %q", mr.Calls[0].Name, "gpg")
+	}
+}
+
+func TestImportGentooGpgKeys_FixesFilePermissions(t *testing.T) {
+	tmp := t.TempDir()
+	gpgDir := filepath.Join(tmp, "gpg")
+	os.MkdirAll(gpgDir, 0755)
+
+	// Create a file with overly broad permissions.
+	testFile := filepath.Join(gpgDir, "pubring.kbx")
+	os.WriteFile(testFile, []byte("key"), 0644)
+
+	mr := runner.NewMockRunner()
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.GpgKeysDir"] = []string{gpgDir}
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	if err := sd.ImportGentooGpgKeys(); err != nil {
+		t.Fatalf("ImportGentooGpgKeys: %v", err)
+	}
+
+	info, err := os.Stat(testFile)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0600 {
+		t.Errorf("file permissions = %o, want 0600", perm)
+	}
+}
+
+func TestImportGentooGpgKeys_GpgKeysDirError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.GpgKeysDir"] = []string{""} // empty → error
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	if err := sd.ImportGentooGpgKeys(); err == nil {
+		t.Fatal("expected error for empty GpgKeysDir")
+	}
+}
+
+func TestImportGentooGpgKeys_RunnerError(t *testing.T) {
+	tmp := t.TempDir()
+	gpgDir := filepath.Join(tmp, "gpg")
+
+	mr := runner.NewMockRunnerFailOnCall(0, fmt.Errorf("gpg failed"))
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.GpgKeysDir"] = []string{gpgDir}
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.ImportGentooGpgKeys()
+	if err == nil {
+		t.Fatal("expected error from runner")
+	}
+	if !strings.Contains(err.Error(), "gpg failed") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// --- SetupChrootDNS tests ---
+
+func TestSetupChrootDNS_Success(t *testing.T) {
+	// This test requires /etc/resolv.conf to exist on the host.
+	if _, err := os.Stat("/etc/resolv.conf"); os.IsNotExist(err) {
+		t.Skip("skipping: /etc/resolv.conf not found")
+	}
+
+	tmp := t.TempDir()
+	cfg := workerTestConfig()
+	sd := newTestSeederWithConfig(cfg)
+
+	if err := sd.SetupChrootDNS(tmp); err != nil {
+		t.Fatalf("SetupChrootDNS: %v", err)
+	}
+
+	dst := filepath.Join(tmp, "etc", "resolv.conf")
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		t.Fatal("resolv.conf not copied into chroot")
+	}
+
+	// Content should match host.
+	hostData, _ := os.ReadFile("/etc/resolv.conf")
+	chrootData, _ := os.ReadFile(dst)
+	if string(chrootData) != string(hostData) {
+		t.Error("chroot resolv.conf does not match host")
+	}
+}
+
+func TestSetupChrootDNS_CreatesEtcDir(t *testing.T) {
+	if _, err := os.Stat("/etc/resolv.conf"); os.IsNotExist(err) {
+		t.Skip("skipping: /etc/resolv.conf not found")
+	}
+
+	tmp := t.TempDir()
+	cfg := workerTestConfig()
+	sd := newTestSeederWithConfig(cfg)
+
+	// etc dir does not exist yet — SetupChrootDNS should create it.
+	if err := sd.SetupChrootDNS(tmp); err != nil {
+		t.Fatalf("SetupChrootDNS: %v", err)
+	}
+
+	etcDir := filepath.Join(tmp, "etc")
+	info, err := os.Stat(etcDir)
+	if err != nil {
+		t.Fatalf("Stat etc: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("etc is not a directory")
+	}
+}
+
+// --- SetupChrootDirs tests ---
+
+func TestSetupChrootDirs_CreatesPhasesDirAndCallsSetupDevDir(t *testing.T) {
+	tmp := t.TempDir()
+
+	mr := runner.NewMockRunner()
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["Seeder.UseLocalGitRepoInsideChroot"] = []string{"true"}
+	cfg.Bools["Seeder.UseLocalGitRepoInsideChroot"] = true
+	cfg.Items["Seeder.GitCloneArgs"] = []string{"--depth 1"}
+	cfg.Items["matrixOS.Root"] = []string{"/dev/toolkit"}
+	cfg.Items["Seeder.DeleteDotGitFromGitRepo"] = []string{"false"}
+	cfg.Bools["Seeder.DeleteDotGitFromGitRepo"] = false
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	if err := sd.SetupChrootDirs(tmp); err != nil {
+		t.Fatalf("SetupChrootDirs: %v", err)
+	}
+
+	// Phases dir should exist.
+	phasesDir := filepath.Join(tmp, "build", ".seeders_phases")
+	if _, err := os.Stat(phasesDir); os.IsNotExist(err) {
+		t.Error("phases dir not created")
+	}
+
+	// git clone should have been called (local clone).
+	if len(mr.Calls) < 1 {
+		t.Fatal("expected at least 1 runner call (git clone)")
+	}
+	call := mr.Calls[0]
+	if call.Name != "git" {
+		t.Errorf("expected git call, got %q", call.Name)
+	}
+	if call.Args[0] != "clone" {
+		t.Errorf("expected clone subcommand, got %q", call.Args[0])
+	}
+}
+
+func TestSetupChrootDirs_SkipsCloneIfDevDirExists(t *testing.T) {
+	tmp := t.TempDir()
+
+	mr := runner.NewMockRunner()
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["Seeder.DeleteDotGitFromGitRepo"] = []string{"false"}
+	cfg.Bools["Seeder.DeleteDotGitFromGitRepo"] = false
+
+	// Pre-create the dev dir so clone is skipped.
+	chrootDevDir := filepath.Join(tmp, "matrixos")
+	os.MkdirAll(chrootDevDir, 0755)
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	if err := sd.SetupChrootDirs(tmp); err != nil {
+		t.Fatalf("SetupChrootDirs: %v", err)
+	}
+
+	// No runner calls expected (clone skipped).
+	if len(mr.Calls) != 0 {
+		t.Errorf("expected 0 runner calls, got %d", len(mr.Calls))
+	}
+}
+
+func TestSetupChrootDirs_RemoteClone(t *testing.T) {
+	tmp := t.TempDir()
+
+	mr := runner.NewMockRunner()
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["Seeder.UseLocalGitRepoInsideChroot"] = []string{"false"}
+	cfg.Bools["Seeder.UseLocalGitRepoInsideChroot"] = false
+	cfg.Items["Seeder.GitCloneArgs"] = []string{"--depth 1"}
+	cfg.Items["matrixOS.GitRepo"] = []string{"https://example.com/repo.git"}
+	cfg.Items["Seeder.DeleteDotGitFromGitRepo"] = []string{"false"}
+	cfg.Bools["Seeder.DeleteDotGitFromGitRepo"] = false
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	if err := sd.SetupChrootDirs(tmp); err != nil {
+		t.Fatalf("SetupChrootDirs: %v", err)
+	}
+
+	// RetryableCmd calls the runner multiple times on failure, but on
+	// success the first call is git clone with the remote URL.
+	if len(mr.Calls) < 1 {
+		t.Fatal("expected at least 1 runner call")
+	}
+	call := mr.Calls[0]
+	if call.Name != "git" {
+		t.Errorf("expected git, got %q", call.Name)
+	}
+	// The URL should appear in the args.
+	found := false
+	for _, a := range call.Args {
+		if a == "https://example.com/repo.git" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("remote URL not found in args: %v", call.Args)
+	}
+}
+
+func TestSetupChrootDirs_PhasesStateDirError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{""} // error
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.SetupChrootDirs("/tmp/fake")
+	if err == nil {
+		t.Fatal("expected error for empty PhasesStateDir")
+	}
+}
+
+// --- cleanDevDirGitDir tests ---
+
+func TestCleanDevDirGitDir_DeletesWhenConfigured(t *testing.T) {
+	tmp := t.TempDir()
+	dotGit := filepath.Join(tmp, ".git")
+	os.MkdirAll(dotGit, 0755)
+	os.WriteFile(filepath.Join(dotGit, "HEAD"), []byte("ref"), 0644)
+
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.DeleteDotGitFromGitRepo"] = []string{"true"}
+	cfg.Bools["Seeder.DeleteDotGitFromGitRepo"] = true
+
+	sd := newTestSeederWithConfig(cfg)
+
+	if err := sd.cleanDevDirGitDir(tmp); err != nil {
+		t.Fatalf("cleanDevDirGitDir: %v", err)
+	}
+
+	if _, err := os.Stat(dotGit); !os.IsNotExist(err) {
+		t.Error(".git dir should have been deleted")
+	}
+}
+
+func TestCleanDevDirGitDir_SkipsWhenNotConfigured(t *testing.T) {
+	tmp := t.TempDir()
+	dotGit := filepath.Join(tmp, ".git")
+	os.MkdirAll(dotGit, 0755)
+
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.DeleteDotGitFromGitRepo"] = []string{"false"}
+	cfg.Bools["Seeder.DeleteDotGitFromGitRepo"] = false
+
+	sd := newTestSeederWithConfig(cfg)
+
+	if err := sd.cleanDevDirGitDir(tmp); err != nil {
+		t.Fatalf("cleanDevDirGitDir: %v", err)
+	}
+
+	if _, err := os.Stat(dotGit); os.IsNotExist(err) {
+		t.Error(".git dir should NOT have been deleted")
+	}
+}
+
+func TestCleanDevDirGitDir_NoDotGitDir(t *testing.T) {
+	tmp := t.TempDir()
+
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.DeleteDotGitFromGitRepo"] = []string{"true"}
+	cfg.Bools["Seeder.DeleteDotGitFromGitRepo"] = true
+
+	sd := newTestSeederWithConfig(cfg)
+
+	// Should succeed without error when .git doesn't exist.
+	if err := sd.cleanDevDirGitDir(tmp); err != nil {
+		t.Fatalf("cleanDevDirGitDir: %v", err)
+	}
+}
+
+// --- Done-flag error branch tests ---
+
+func TestSeederDoneFlagFile_PhasesStateDirError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{""}
+	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"done"}
+
+	sd := newTestSeederWithConfig(cfg)
+	_, err := sd.SeederDoneFlagFile("x", "/chroot")
+	if err == nil {
+		t.Fatal("expected error for empty PhasesStateDir")
+	}
+}
+
+func TestSeederDoneFlagFile_PrefixError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.phases"}
+	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{""}
+
+	sd := newTestSeederWithConfig(cfg)
+	_, err := sd.SeederDoneFlagFile("x", "/chroot")
+	if err == nil {
+		t.Fatal("expected error for empty prefix")
+	}
+}
+
+func TestIsSeederDone_ConfigError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{""}
+
+	sd := newTestSeederWithConfig(cfg)
+	_, err := sd.IsSeederDone("x", "/chroot")
+	if err == nil {
+		t.Fatal("expected error propagated from SeederDoneFlagFile")
+	}
+}
+
+func TestMarkSeederDone_ConfigError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{""}
+
+	sd := newTestSeederWithConfig(cfg)
+	err := sd.MarkSeederDone("x", "/chroot")
+	if err == nil {
+		t.Fatal("expected error propagated from SeederDoneFlagFile")
+	}
+}
+
+// --- CleanTemporaryArtifact additional tests ---
+
+func TestCleanTemporaryArtifact_SuccessEmptyDir(t *testing.T) {
+	// Test cleaning an empty directory (no submounts).
+	tmp := t.TempDir()
+	artDir := filepath.Join(tmp, "empty-art")
+	os.MkdirAll(artDir, 0755)
+
+	sd := newTestSeederWithConfig(workerTestConfig())
+
+	if err := sd.CleanTemporaryArtifact(artDir); err != nil {
+		t.Fatalf("CleanTemporaryArtifact: %v", err)
+	}
+
+	if _, err := os.Stat(artDir); !os.IsNotExist(err) {
+		t.Error("directory should have been removed")
+	}
+}
+
+func TestCleanTemporaryArtifact_NestedFiles(t *testing.T) {
+	tmp := t.TempDir()
+	artDir := filepath.Join(tmp, "nested")
+	os.MkdirAll(filepath.Join(artDir, "sub", "deep"), 0755)
+	os.WriteFile(filepath.Join(artDir, "sub", "deep", "f.txt"), []byte("data"), 0644)
+
+	sd := newTestSeederWithConfig(workerTestConfig())
+
+	if err := sd.CleanTemporaryArtifact(artDir); err != nil {
+		t.Fatalf("CleanTemporaryArtifact: %v", err)
+	}
+
+	if _, err := os.Stat(artDir); !os.IsNotExist(err) {
+		t.Error("nested directory should have been removed")
+	}
+}
