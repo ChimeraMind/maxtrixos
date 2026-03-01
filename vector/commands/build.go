@@ -21,6 +21,7 @@ func NewBuildCommand() *BuildCommand {
 		"image":   func() ICommand { return NewImageCommand() },
 		"images":  func() ICommand { return NewImagesCommand() },
 		"release": func() ICommand { return NewReleaseCommand() },
+		"seeds":   func() ICommand { return NewSeedsCommand() },
 	}
 	return &BuildCommand{
 		fs:          flag.NewFlagSet("build", flag.ExitOnError),
