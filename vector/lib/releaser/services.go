@@ -144,40 +144,58 @@ func (r *Releaser) SetupServices() error {
 		}
 	}
 
-	systemctl := func(args ...string) {
+	systemctl := func(args ...string) error {
 		cmd := strings.Join(args, " ")
+		r.Print("Running systemctl %s ...\n", cmd)
 		// Use /bin/sh -c to prevent systemctl from acting as PID 1.
-		_ = filesystems.ChrootRun(imageDir, "/bin/sh", "-c", "systemctl "+cmd+"; exit $?")
+		return filesystems.ChrootRun(
+			imageDir,
+			"/bin/sh", "-c", "systemctl "+cmd+"; exit $?",
+		)
 	}
 
 	for _, svc := range enable {
 		r.Print("Enabling service: %s\n", svc)
-		systemctl("enable", svc)
+		if err := systemctl("enable", svc); err != nil {
+			return err
+		}
 	}
 	for _, svc := range disable {
 		r.Print("Disabling service: %s\n", svc)
-		systemctl("disable", svc)
+		if err := systemctl("disable", svc); err != nil {
+			return err
+		}
 	}
 	for _, svc := range mask {
 		r.Print("Masking service: %s\n", svc)
-		systemctl("mask", svc)
+		if err := systemctl("mask", svc); err != nil {
+			return err
+		}
 	}
 	for _, svc := range presetEnable {
 		r.Print("Preset enabling for service: %s\n", svc)
-		systemctl("--global", "enable", svc)
+		if err := systemctl("--global", "enable", svc); err != nil {
+			return err
+		}
 	}
 	for _, svc := range presetDisable {
 		r.Print("Preset disabling for service: %s\n", svc)
-		systemctl("--global", "disable", svc)
+		if err := systemctl("--global", "disable", svc); err != nil {
+			return err
+		}
 	}
 	for _, svc := range presetMask {
 		r.Print("Preset masking for service: %s\n", svc)
-		systemctl("--global", "mask", svc)
+		if err := systemctl("--global", "mask", svc); err != nil {
+			return err
+		}
 	}
 
 	if defaultTarget != "" {
 		r.Print("Setting default target to: %s\n", defaultTarget)
-		systemctl("set-default", defaultTarget)
+		if err := systemctl("set-default", defaultTarget); err != nil {
+			return err
+		}
 	}
 
 	return nil
