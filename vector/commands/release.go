@@ -224,9 +224,6 @@ func (c *ReleaseCommand) executeRelease(ref, fullBranch string) error {
 	}
 
 	// --- First commit: full branch (no consume) ---
-	if err := c.rel.UnlinkEtc(); err != nil {
-		return fmt.Errorf("unlink /etc failed: %w", err)
-	}
 	if err := c.rel.Release(releaser.CommitOptions{
 		Branch:  fullBranch,
 		Consume: false,
