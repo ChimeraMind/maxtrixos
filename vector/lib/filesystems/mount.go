@@ -262,7 +262,6 @@ func NewCommonRootfsMounts(opts CommonRootfsMountsOptions) (*CommonRootfsMounts,
 
 // add adds a mount to the list of mounts to be cleaned up later.
 func (m *CommonRootfsMounts) add(mnt string) {
-	fmt.Fprintf(m.stdout, "Mounting: %s ...\n", mnt)
 	m.mounts = append(m.mounts, mnt)
 }
 
