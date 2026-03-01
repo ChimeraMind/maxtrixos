@@ -25,6 +25,8 @@ type MockReleaser struct {
 	HostnameErr                  error
 	HooksDir_                    string
 	HooksDirErr                  error
+	DevDir_                      string
+	DevDirErr                    error
 	UseCpReflink_                bool
 	UseCpReflinkErr              error
 	ReadOnlyVdb_                 string
@@ -138,6 +140,7 @@ func (m *MockReleaser) Ref() string       { return m.Ref_ }
 
 func (m *MockReleaser) Hostname() (string, error)    { return m.Hostname_, m.HostnameErr }
 func (m *MockReleaser) HooksDir() (string, error)    { return m.HooksDir_, m.HooksDirErr }
+func (m *MockReleaser) DevDir() (string, error)      { return m.DevDir_, m.DevDirErr }
 func (m *MockReleaser) UseCpReflink() (bool, error)  { return m.UseCpReflink_, m.UseCpReflinkErr }
 func (m *MockReleaser) ReadOnlyVdb() (string, error) { return m.ReadOnlyVdb_, m.ReadOnlyVdbErr }
 func (m *MockReleaser) LockDir() (string, error)     { return m.LockDir_, m.LockDirErr }
