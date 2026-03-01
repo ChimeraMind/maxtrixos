@@ -283,7 +283,15 @@ func checkFsCapabilitySupport(testDir string) (bool, error) {
 	tmpBin.Close()
 	defer os.Remove(tmpBin.Name())
 
-	if err := setFileCap(tmpBin.Name(), unix.CAP_NET_RAW); err != nil {
+	// Use the setcap command (from libcap) rather than raw Lsetxattr.
+	// The setcap binary handles VFS capability revision negotiation
+	// (v2 vs v3 with rootid for user namespaces) automatically, whereas
+	// a raw Lsetxattr with a hardcoded v2 struct will fail when the
+	// kernel requires v3.
+	if err := execRun(&runner.Cmd{
+		Name: "setcap",
+		Args: []string{"cap_net_raw+ep", tmpBin.Name()},
+	}); err != nil {
 		log.Println("WARNING: System/FS does not allow setting capabilities.")
 		return false, nil
 	}
@@ -291,16 +299,27 @@ func checkFsCapabilitySupport(testDir string) (bool, error) {
 	tmpCopy := tmpBin.Name() + ".copy"
 	defer os.Remove(tmpCopy)
 
-	if err := CopyFilePreserveXattrs(tmpBin.Name(), tmpCopy); err != nil {
+	// Copy with cp -a (archive mode) to preserve xattrs, matching the
+	// bash version. This delegates capability preservation to coreutils
+	// which handles all xattr edge cases correctly.
+	if err := execRun(&runner.Cmd{
+		Name: "cp",
+		Args: []string{"-a", tmpBin.Name(), tmpCopy},
+	}); err != nil {
 		return false, err
 	}
 
-	hasCap, err := getFileCap(tmpCopy, unix.CAP_NET_RAW)
+	// Verify the capability survived the copy using getcap, matching
+	// the bash: getcap "$tmp_copy" | grep -q "cap_net_raw[=+]ep"
+	out, err := execCombinedOutput(&runner.Cmd{
+		Name: "getcap",
+		Args: []string{tmpCopy},
+	})
 	if err != nil {
-		// xattr not present on copy means FS does not preserve capabilities
 		return false, nil
 	}
-	return hasCap, nil
+
+	return strings.Contains(string(out), "cap_net_raw"), nil
 }
 
 // CheckDirIsRoot checks if a directory is the root of the filesystem and exits if it is.
