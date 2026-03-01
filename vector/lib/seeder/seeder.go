@@ -154,8 +154,6 @@ type ISeeder interface {
 	SetupChrootDirs(chrootDir string) error
 	// Seed runs the seeder script inside the chroot.
 	Seed(chrootDir string, info SeederInfo) error
-	// CleanTemporaryArtifact removes a temporary artifact directory.
-	CleanTemporaryArtifact(dir string) error
 }
 
 // Seeder provides seed detection and manipulation operations.

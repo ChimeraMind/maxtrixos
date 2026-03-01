@@ -511,36 +511,3 @@ func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
 		ChrootDir: chrootDir,
 	})
 }
-
-// --- Artifact cleanup ---
-
-// CleanTemporaryArtifact removes a temporary artifact directory after
-// verifying no submounts remain.
-func (s *Seeder) CleanTemporaryArtifact(dir string) error {
-	if dir == "" {
-		return fmt.Errorf("missing directory parameter")
-	}
-	if !filesystems.DirectoryExists(dir) {
-		return fmt.Errorf(
-			"%s is not a directory or does not exist", dir,
-		)
-	}
-
-	s.Print("Cleaning artifacts for dir: %s ...\n", dir)
-
-	submounts, err := filesystems.ListSubmounts(dir)
-	if err != nil {
-		return err
-	}
-	if len(submounts) > 0 {
-		for _, mnt := range submounts {
-			s.PrintError("Dangling mount: %s\n", mnt)
-		}
-		return fmt.Errorf(
-			"cannot remove %s: %d dangling submounts",
-			dir, len(submounts),
-		)
-	}
-
-	return os.RemoveAll(dir)
-}
