@@ -92,7 +92,7 @@ type MockSeeder struct {
 	SetupChrootMountsErr      error
 	SetupChrootDNSErr         error
 	SetupChrootDirsErr        error
-	ExecuteInChrootErr        error
+	SeedErr error
 	CleanTemporaryArtifactErr error
 
 	// Track calls
@@ -105,7 +105,7 @@ type MockSeeder struct {
 	CleanupCalled                    bool
 	SetupChrootDNSCalled             bool
 	SetupChrootDirsCalled            bool
-	ExecuteInChrootCalled            bool
+	SeedCalled            bool
 	MarkSeederDoneCalled             bool
 	CleanTemporaryArtifactCalled     bool
 }
@@ -288,11 +288,11 @@ func (m *MockSeeder) SetupChrootDirs(chrootDir string) error {
 	m.SetupChrootDirsCalled = true
 	return m.SetupChrootDirsErr
 }
-func (m *MockSeeder) ExecuteInChroot(
+func (m *MockSeeder) Seed(
 	chrootDir string, info SeederInfo,
 ) error {
-	m.ExecuteInChrootCalled = true
-	return m.ExecuteInChrootErr
+	m.SeedCalled = true
+	return m.SeedErr
 }
 func (m *MockSeeder) CleanTemporaryArtifact(dir string) error {
 	m.CleanTemporaryArtifactCalled = true

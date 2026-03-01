@@ -152,8 +152,8 @@ type ISeeder interface {
 	SetupChrootDNS(chrootDir string) error
 	// SetupChrootDirs creates phase dirs and clones the dev toolkit.
 	SetupChrootDirs(chrootDir string) error
-	// ExecuteInChroot runs the seeder script inside the chroot.
-	ExecuteInChroot(chrootDir string, info SeederInfo) error
+	// Seed runs the seeder script inside the chroot.
+	Seed(chrootDir string, info SeederInfo) error
 	// CleanTemporaryArtifact removes a temporary artifact directory.
 	CleanTemporaryArtifact(dir string) error
 }
