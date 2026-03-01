@@ -91,6 +91,8 @@ type IRelease interface {
 	Hostname() (string, error)
 	// HooksDir returns the directory where per-branch release hooks live.
 	HooksDir() (string, error)
+	// DevDir returns the matrixOS dev directory (Root).
+	DevDir() (string, error)
 	// UseCpReflink returns whether cp --reflink=auto should be used instead of rsync.
 	UseCpReflink() (bool, error)
 	// ReadOnlyVdb returns the path used for the read-only Portage vardb.
