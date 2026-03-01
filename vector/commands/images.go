@@ -295,21 +295,6 @@ func (c *ImagesCommand) imageWorker(ref string) error {
 		return err
 	}
 
-	if err := c.initGpg(); err != nil {
-		return err
-	}
-
-	// Initialize ostree for this ref.
-	if c.localOstree {
-		if err := c.showLocalRefs(im); err != nil {
-			return err
-		}
-	} else {
-		if err := c.initializeRemoteOstree(im); err != nil {
-			return err
-		}
-	}
-
 	buildOpts := &imager.BuildOptions{}
 
 	// Execute the build under an exclusive image lock.
@@ -321,6 +306,22 @@ func (c *ImagesCommand) imageWorker(ref string) error {
 			stderrWriter.Flush()
 		})
 		defer c.RunCleanups()
+
+		if err := c.initGpg(); err != nil {
+			return err
+		}
+
+		// Initialize ostree for this ref.
+		if c.localOstree {
+			if err := c.showLocalRefs(im); err != nil {
+				return err
+			}
+		} else {
+			if err := c.initializeRemoteOstree(im); err != nil {
+				return err
+			}
+		}
+
 		return im.Build(buildOpts)
 	})
 }
