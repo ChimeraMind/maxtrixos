@@ -160,10 +160,11 @@ type ISeeder interface {
 
 // Seeder provides seed detection and manipulation operations.
 type Seeder struct {
-	cfg    config.IConfig
-	runner runner.Func
-	stdout io.Writer
-	stderr io.Writer
+	cfg          config.IConfig
+	runner       runner.Func
+	chrootRunner runner.ChrootRunFunc
+	stdout       io.Writer
+	stderr       io.Writer
 
 	verbose bool
 
@@ -182,11 +183,12 @@ func NewSeeder(cfg config.IConfig, opts *NewSeederOptions) (*Seeder, error) {
 		opts = &NewSeederOptions{}
 	}
 	return &Seeder{
-		cfg:     cfg,
-		runner:  runner.Run,
-		stdout:  os.Stdout,
-		stderr:  os.Stderr,
-		verbose: opts.Verbose,
+		cfg:          cfg,
+		runner:       runner.Run,
+		chrootRunner: runner.ChrootRun,
+		stdout:       os.Stdout,
+		stderr:       os.Stderr,
+		verbose:      opts.Verbose,
 	}, nil
 }
 
