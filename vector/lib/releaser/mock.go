@@ -75,6 +75,10 @@ type MockReleaser struct {
 	ReleaseLockPathErr        error
 	ExecuteWithReleaseLockErr error
 
+	// Build
+	BuildErr    error
+	BuildCalled bool
+
 	// Track calls
 	CheckMatrixOSCalled                      bool
 	SyncFilesystemCalled                     bool
@@ -223,6 +227,11 @@ func (m *MockReleaser) AddExtraDotDotToUsrEtcPortage() error {
 func (m *MockReleaser) RemoveExtraDotDotFromUsrEtcPortage() error {
 	m.RemoveExtraDotDotFromUsrEtcPortageCalled = true
 	return m.RemoveExtraDotDotFromUsrEtcPortageErr
+}
+
+func (m *MockReleaser) Build() error {
+	m.BuildCalled = true
+	return m.BuildErr
 }
 
 func (m *MockReleaser) Release(opts CommitOptions) error {
