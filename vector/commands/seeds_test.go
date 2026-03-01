@@ -38,14 +38,11 @@ func newTestSeedsCommand(sd *seeder.MockSeeder, det *seeder.MockSeederDetector,
 	return cmd, nil
 }
 
-func defaultSeedsTestConfig() *config.MockConfig {
-	tmp := filepath.Join(
-		os.TempDir(), "matrixos-seeds-test-private",
-	)
-	os.MkdirAll(tmp, 0755)
+func defaultSeedsTestConfig(t *testing.T) *config.MockConfig {
+	t.Helper()
 	return &config.MockConfig{
 		Items: map[string][]string{
-			"matrixOS.PrivateGitRepoPath": {tmp},
+			"matrixOS.PrivateGitRepoPath": {t.TempDir()},
 		},
 	}
 }
@@ -203,7 +200,7 @@ func TestSeedsNoSeedersFound(t *testing.T) {
 	det := &seeder.MockSeederDetector{
 		Detect_: nil, // no seeders
 	}
-	cfg := defaultSeedsTestConfig()
+	cfg := defaultSeedsTestConfig(t)
 
 	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
@@ -229,7 +226,7 @@ func TestSeedsDetectionError(t *testing.T) {
 	det := &seeder.MockSeederDetector{
 		DetectErr: fmt.Errorf("scan failed"),
 	}
-	cfg := defaultSeedsTestConfig()
+	cfg := defaultSeedsTestConfig(t)
 
 	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
@@ -256,7 +253,7 @@ func TestSeedsGpgImportError(t *testing.T) {
 	det := &seeder.MockSeederDetector{
 		Detect_: defaultSeedsTestSeeders(t.TempDir()),
 	}
-	cfg := defaultSeedsTestConfig()
+	cfg := defaultSeedsTestConfig(t)
 
 	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
@@ -283,7 +280,7 @@ func TestSeedsPrivateRepoError(t *testing.T) {
 	det := &seeder.MockSeederDetector{
 		Detect_: defaultSeedsTestSeeders(t.TempDir()),
 	}
-	cfg := defaultSeedsTestConfig()
+	cfg := defaultSeedsTestConfig(t)
 
 	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
@@ -316,7 +313,7 @@ func TestSeedsFullPipeline(t *testing.T) {
 	det := &seeder.MockSeederDetector{
 		Detect_: defaultSeedsTestSeeders(baseDir),
 	}
-	cfg := defaultSeedsTestConfig()
+	cfg := defaultSeedsTestConfig(t)
 
 	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
@@ -376,7 +373,7 @@ func TestSeedsWorkerPrepperError(t *testing.T) {
 	det := &seeder.MockSeederDetector{
 		Detect_: defaultSeedsTestSeeders(baseDir),
 	}
-	cfg := defaultSeedsTestConfig()
+	cfg := defaultSeedsTestConfig(t)
 
 	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
@@ -414,7 +411,7 @@ func TestSeedsWorkerMountError(t *testing.T) {
 	det := &seeder.MockSeederDetector{
 		Detect_: defaultSeedsTestSeeders(baseDir),
 	}
-	cfg := defaultSeedsTestConfig()
+	cfg := defaultSeedsTestConfig(t)
 
 	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
@@ -452,7 +449,7 @@ func TestSeedsWorkerSkipsDoneSeeder(t *testing.T) {
 	det := &seeder.MockSeederDetector{
 		Detect_: defaultSeedsTestSeeders(baseDir),
 	}
-	cfg := defaultSeedsTestConfig()
+	cfg := defaultSeedsTestConfig(t)
 
 	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
@@ -510,7 +507,7 @@ func TestSeedsOutputFiles(t *testing.T) {
 	det := &seeder.MockSeederDetector{
 		Detect_: defaultSeedsTestSeeders(baseDir),
 	}
-	cfg := defaultSeedsTestConfig()
+	cfg := defaultSeedsTestConfig(t)
 
 	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{
 		"--built-rootfs-file", rootfsFile,
