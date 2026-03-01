@@ -13,16 +13,25 @@ import (
 )
 
 func (r *Releaser) SymlinkEtc() error {
+	if err := checkImageDir(r.imageDir); err != nil {
+		return err
+	}
 	r.Print("Symlinking /etc to prevent emerge packages recreating it ...\n")
 	return os.Symlink("usr/etc", filepath.Join(r.imageDir, "etc"))
 }
 
 func (r *Releaser) UnlinkEtc() error {
+	if err := checkImageDir(r.imageDir); err != nil {
+		return err
+	}
 	r.Print("Removing /etc symlink before ostree commit ...\n")
 	return os.Remove(filepath.Join(r.imageDir, "etc"))
 }
 
 func (r *Releaser) AddExtraDotDotToUsrEtcPortage() error {
+	if err := checkImageDir(r.imageDir); err != nil {
+		return err
+	}
 	r.Print("Fixing /usr/etc/portage symlink after move of /etc to /usr/etc ...\n")
 	etcPortageDir := filepath.Join(r.imageDir, "usr/etc/portage")
 
@@ -49,6 +58,9 @@ func (r *Releaser) AddExtraDotDotToUsrEtcPortage() error {
 }
 
 func (r *Releaser) RemoveExtraDotDotFromUsrEtcPortage() error {
+	if err := checkImageDir(r.imageDir); err != nil {
+		return err
+	}
 	r.Print("Removing extra ../ from /usr/etc/portage so that it works after client deployment.\n")
 	etcPortageDir := filepath.Join(r.imageDir, "usr/etc/portage")
 
@@ -75,6 +87,9 @@ func (r *Releaser) RemoveExtraDotDotFromUsrEtcPortage() error {
 }
 
 func (r *Releaser) OstreePrepare() error {
+	if err := checkImageDir(r.imageDir); err != nil {
+		return err
+	}
 	if err := r.ostree.PrepareFilesystemHierarchy(r.imageDir); err != nil {
 		return err
 	}
@@ -111,6 +126,9 @@ func (r *Releaser) MaybeOstreeInit() error {
 }
 
 func (r *Releaser) Release(opts CommitOptions) error {
+	if err := checkImageDir(r.imageDir); err != nil {
+		return err
+	}
 	imageDir := r.imageDir
 	repoDir, err := r.ostree.RepoDir()
 	if err != nil {

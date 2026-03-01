@@ -1,7 +1,6 @@
 package releaser
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -88,8 +87,11 @@ func (r *Releaser) rsyncCopy(src, dst string) error {
 }
 
 func (r *Releaser) SyncFilesystem() error {
-	if r.chrootDir == "" || r.imageDir == "" {
-		return errors.New("chrootDir and imageDir are required")
+	if err := checkChrootDir(r.chrootDir); err != nil {
+		return err
+	}
+	if r.imageDir == "" {
+		return fmt.Errorf("imageDir is empty")
 	}
 	if r.chrootDir == r.imageDir {
 		return fmt.Errorf("chrootDir and imageDir are the same: %s", r.imageDir)
