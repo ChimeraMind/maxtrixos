@@ -17,6 +17,7 @@ type DevCommand struct {
 // NewDevCommand creates a new DevCommand
 func NewDevCommand() *DevCommand {
 	subcommands := map[string]func() ICommand{
+		"enter":   func() ICommand { return NewEnterCommand() },
 		"janitor": func() ICommand { return NewJanitorCommand() },
 		"vm":      func() ICommand { return NewVMCommand() },
 	}

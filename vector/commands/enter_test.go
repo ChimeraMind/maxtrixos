@@ -1,0 +1,413 @@
+package commands
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"matrixos/vector/lib/runner"
+	"matrixos/vector/lib/seeder"
+)
+
+// newTestEnterCommand creates an EnterCommand with injected mocks,
+// bypassing Init() which requires real config files and root.
+func newTestEnterCommand(
+	sd *seeder.MockSeeder,
+	det *seeder.MockSeederDetector,
+	chrootRunner runner.ChrootRunFunc,
+	args []string,
+) (*EnterCommand, error) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	cmd := NewEnterCommand()
+	cmd.sd = sd
+	cmd.det = det
+	if chrootRunner != nil {
+		cmd.chrootRunner = chrootRunner
+	}
+
+	if err := cmd.parseArgs(args); err != nil {
+		return nil, err
+	}
+	return cmd, nil
+}
+
+// --- Tests ---
+
+func TestEnterName(t *testing.T) {
+	cmd := NewEnterCommand()
+	if name := cmd.Name(); name != "enter" {
+		t.Errorf("Expected name 'enter', got %q", name)
+	}
+}
+
+func TestNewEnterCommand(t *testing.T) {
+	cmd := NewEnterCommand()
+	if cmd == nil {
+		t.Fatal("NewEnterCommand returned nil")
+	}
+	if cmd.chrootRunner == nil {
+		t.Fatal("chrootRunner should be set to default")
+	}
+}
+
+func TestEnterParseArgsNotRoot(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 1000 }
+	defer func() { getEuid = origEuid }()
+
+	cmd := NewEnterCommand()
+	err := cmd.parseArgs([]string{"/some/chroot"})
+	if err == nil {
+		t.Fatal("Expected error for non-root, got nil")
+	}
+	if !strings.Contains(err.Error(), "must be run as root") {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestEnterParseArgsNoTargets(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	cmd := NewEnterCommand()
+	err := cmd.parseArgs([]string{})
+	if err == nil {
+		t.Fatal("Expected error for no targets, got nil")
+	}
+	if !strings.Contains(err.Error(), "no chroot dirs or names specified") {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestEnterParseArgsValid(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	cmd := NewEnterCommand()
+	if err := cmd.parseArgs([]string{"/some/chroot", "bedrock"}); err != nil {
+		t.Fatalf("parseArgs failed: %v", err)
+	}
+	if len(cmd.targets) != 2 {
+		t.Fatalf("Expected 2 targets, got %d", len(cmd.targets))
+	}
+	if cmd.targets[0] != "/some/chroot" {
+		t.Errorf("Expected first target /some/chroot, got %q", cmd.targets[0])
+	}
+	if cmd.targets[1] != "bedrock" {
+		t.Errorf("Expected second target bedrock, got %q", cmd.targets[1])
+	}
+}
+
+func TestEnterRunWithDirectoryTarget(t *testing.T) {
+	chrootDir := t.TempDir()
+
+	var calledWith *runner.ChrootCmd
+	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
+		calledWith = cmd
+		return nil
+	}
+
+	sd := seeder.DefaultMockSeeder()
+	det := &seeder.MockSeederDetector{}
+
+	cmd, err := newTestEnterCommand(sd, det, mockChrootRunner, []string{chrootDir})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	captureStdout(t, func() {
+		if err := cmd.run(); err != nil {
+			t.Fatalf("run failed: %v", err)
+		}
+	})
+
+	if calledWith == nil {
+		t.Fatal("chrootRunner was not called")
+	}
+	if calledWith.ChrootDir != chrootDir {
+		t.Errorf("Expected ChrootDir %q, got %q", chrootDir, calledWith.ChrootDir)
+	}
+	if calledWith.Name != "/bin/sh" {
+		t.Errorf("Expected command /bin/sh, got %q", calledWith.Name)
+	}
+	if len(calledWith.Args) != 1 || calledWith.Args[0] != "--login" {
+		t.Errorf("Expected args [--login], got %v", calledWith.Args)
+	}
+	if !sd.SetupChrootMountsCalled {
+		t.Error("SetupChrootMounts was not called")
+	}
+	if !sd.CleanupCalled {
+		t.Error("Cleanup was not called")
+	}
+}
+
+func TestEnterRunWithNamedTarget(t *testing.T) {
+	// Create a chroot directory that will be found by name resolution.
+	chrootsDir := t.TempDir()
+	chrootDir := filepath.Join(chrootsDir, "bedrock")
+	if err := os.MkdirAll(chrootDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	// Create seeder structure.
+	seederDir := filepath.Join(t.TempDir(), "00-bedrock")
+	if err := os.MkdirAll(seederDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	var calledWith *runner.ChrootCmd
+	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
+		calledWith = cmd
+		return nil
+	}
+
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableName_ = "params.sh"
+	sd.ParseSeederParams_ = &seeder.SeederParams{
+		ChrootName:         "bedrock",
+		ChrootsDir:         chrootsDir,
+		PreferredChrootDir: filepath.Join(chrootsDir, "bedrock"),
+	}
+
+	det := &seeder.MockSeederDetector{
+		Detect_: []seeder.SeederInfo{
+			{
+				Name:        "00-bedrock",
+				Dir:         seederDir,
+				ChrootExec:  filepath.Join(seederDir, "chroot.sh"),
+				PrepperExec: filepath.Join(seederDir, "prepper.sh"),
+			},
+		},
+	}
+
+	// Create params.sh so the file existence check passes.
+	paramsPath := filepath.Join(seederDir, "params.sh")
+	if err := os.WriteFile(paramsPath, []byte("#!/bin/bash\n"), 0755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cmd, err := newTestEnterCommand(sd, det, mockChrootRunner, []string{"bedrock"})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	captureStdout(t, func() {
+		if err := cmd.run(); err != nil {
+			t.Fatalf("run failed: %v", err)
+		}
+	})
+
+	if calledWith == nil {
+		t.Fatal("chrootRunner was not called")
+	}
+	if calledWith.ChrootDir != chrootDir {
+		t.Errorf("Expected ChrootDir %q, got %q", chrootDir, calledWith.ChrootDir)
+	}
+}
+
+func TestEnterRunNoMatchingNames(t *testing.T) {
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableName_ = "params.sh"
+	det := &seeder.MockSeederDetector{
+		Detect_: nil, // no seeders detected
+	}
+
+	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
+		t.Fatal("chrootRunner should not be called")
+		return nil
+	}
+
+	cmd, err := newTestEnterCommand(sd, det, mockChrootRunner, []string{"nonexistent"})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	err = cmd.run()
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "no chroot dirs or names found") {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestEnterRunSetupMountsError(t *testing.T) {
+	chrootDir := t.TempDir()
+
+	sd := seeder.DefaultMockSeeder()
+	sd.SetupChrootMountsErr = fmt.Errorf("mount failure")
+	det := &seeder.MockSeederDetector{}
+
+	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
+		t.Fatal("chrootRunner should not be called on mount failure")
+		return nil
+	}
+
+	cmd, err := newTestEnterCommand(sd, det, mockChrootRunner, []string{chrootDir})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	captureStdout(t, func() {
+		err = cmd.run()
+	})
+
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "mount failure") {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestEnterRunChrootError(t *testing.T) {
+	chrootDir := t.TempDir()
+
+	sd := seeder.DefaultMockSeeder()
+	det := &seeder.MockSeederDetector{}
+
+	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
+		return fmt.Errorf("shell exited with error")
+	}
+
+	cmd, err := newTestEnterCommand(sd, det, mockChrootRunner, []string{chrootDir})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	captureStdout(t, func() {
+		err = cmd.run()
+	})
+
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "shell exited with error") {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	// Cleanup should still be called even on error.
+	if !sd.CleanupCalled {
+		t.Error("Cleanup was not called after chroot error")
+	}
+}
+
+func TestEnterRunEmptyTarget(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	// Empty target passed directly to run (bypassing parseArgs which would catch it)
+	cmd := NewEnterCommand()
+	cmd.sd = seeder.DefaultMockSeeder()
+	cmd.det = &seeder.MockSeederDetector{}
+	cmd.targets = []string{""}
+
+	err := cmd.run()
+	if err == nil {
+		t.Fatal("Expected error for empty target, got nil")
+	}
+	if !strings.Contains(err.Error(), "empty target") {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestEnterRunUnrecognizedPath(t *testing.T) {
+	// Target that looks like a path but doesn't exist as a directory.
+	sd := seeder.DefaultMockSeeder()
+	det := &seeder.MockSeederDetector{}
+
+	cmd, err := newTestEnterCommand(sd, det, nil, []string{"/nonexistent/path/to/chroot"})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	err = cmd.run()
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unrecognized argument") {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestEnterRunMultipleDirectories(t *testing.T) {
+	chrootDir1 := t.TempDir()
+	chrootDir2 := t.TempDir()
+
+	var entered []string
+	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
+		entered = append(entered, cmd.ChrootDir)
+		return nil
+	}
+
+	sd := seeder.DefaultMockSeeder()
+	det := &seeder.MockSeederDetector{}
+
+	cmd, err := newTestEnterCommand(sd, det, mockChrootRunner, []string{chrootDir1, chrootDir2})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	captureStdout(t, func() {
+		if err := cmd.run(); err != nil {
+			t.Fatalf("run failed: %v", err)
+		}
+	})
+
+	if len(entered) != 2 {
+		t.Fatalf("Expected 2 chroot entries, got %d", len(entered))
+	}
+	if entered[0] != chrootDir1 {
+		t.Errorf("Expected first entry %q, got %q", chrootDir1, entered[0])
+	}
+	if entered[1] != chrootDir2 {
+		t.Errorf("Expected second entry %q, got %q", chrootDir2, entered[1])
+	}
+}
+
+func TestEnterDetectionError(t *testing.T) {
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableName_ = "params.sh"
+	det := &seeder.MockSeederDetector{
+		DetectErr: fmt.Errorf("detection failed"),
+	}
+
+	cmd, err := newTestEnterCommand(sd, det, nil, []string{"somename"})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	err = cmd.run()
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "seeder detection failed") {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestEnterParamsExecNameError(t *testing.T) {
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableNameErr = fmt.Errorf("config missing")
+	det := &seeder.MockSeederDetector{}
+
+	cmd, err := newTestEnterCommand(sd, det, nil, []string{"somename"})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	err = cmd.run()
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "params executable name") {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
