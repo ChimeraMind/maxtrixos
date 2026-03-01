@@ -19,7 +19,6 @@ source "${MATRIXOS_DEV_DIR}"/build/seeders/lib/seeders_lib.sh
 ARG_CHROOT_DIR=
 ARG_RESUME=
 ARG_VERBOSE_MODE=
-ARG_CLEAN_ARTIFACTS=
 ARG_BUILT_ROOTFS_FILE=
 ARG_BUILT_SEEDERS_FILE=
 ARG_STAGE3_FILE=
@@ -27,7 +26,6 @@ ARG_SKIP_SEEDERS=()
 ARG_ONLY_SEEDERS=()
 ARG_POSITIONALS=()
 MOUNTS=()
-TEMPORARY_ARTIFACTS=()
 OPT_CLEAN_EXIT=0
 
 is_bool_arg_false() {
@@ -140,12 +138,6 @@ parse_args() {
         shift
         ;;
 
-        -c|--clean)
-        ARG_CLEAN_ARTIFACTS=1
-
-        shift
-        ;;
-
         -h|--help)
         echo -e "seeder - matrixOS stage3 chroot builder (aka seeder)." >&2
         echo >&2
@@ -158,7 +150,6 @@ parse_args() {
         echo -e "-bf, --built-seeders-file \t path to a file where the list of succesfully built seeder names will be written." >&2
         echo -e "-f, --stage3-file \t\t a Gentoo stage3 file to unpack (no download)." >&2
         echo -e "-v, --verbose  \t\t\t enable verbose mode (default: false)." >&2
-        echo -e "-c, --clean  \t\t\t clean artifacts after execution (default: false)." >&2
         echo >&2
         OPT_CLEAN_EXIT=1
         exit 0
@@ -239,54 +230,8 @@ _get_chroot_seeder_exec() {
     echo "${path}"
 }
 
-clean_temporary_artifact() {
-    local dir="${1}"
-    if [ -z "${dir}" ]; then
-        echo "Missing parameter to clean_temporary_artifact" >&2
-        return 1
-    fi
-    if [ ! -d "${dir}" ]; then
-        echo "${dir} is not a directory or does not exist ..." >&2
-        return 1
-    fi
-
-    echo "Cleaning artifacts for dir: ${dir} ..."
-    # Check if there are dangling mounts inside it before removing.
-    local submounts
-    mapfile -t submounts < <(fs_lib.list_submounts "${dir}")
-    if [[ "${#submounts[@]}" -gt 0 ]]; then
-        echo "Cannot remove ${dir} due to the following submounts:" >&2
-    fi
-    for mnt in "${submounts[@]}"; do
-        echo "${mnt}" >&2
-    done
-    if [[ "${#submounts[@]}" -gt 0 ]]; then
-        return 1
-    fi
-
-    rm -rf "${dir}" || true
-}
-
-clean_temporary_artifacts() {
-    local clean_artifacts="${1}"
-    if is_bool_arg_false "${clean_artifacts}"; then
-        if [[ "${#TEMPORARY_ARTIFACTS[@]}" -gt 0 ]]; then
-            echo "Preserved artifacts. Those are available at:"
-            for dir in "${TEMPORARY_ARTIFACTS[@]}"; do
-                echo "${dir}"
-            done
-        fi
-        return 0
-    fi
-
-    for dir in "${TEMPORARY_ARTIFACTS[@]}"; do
-        clean_temporary_artifact "${dir}" || true
-    done
-}
-
 clean_exit() {
     fs_lib.cleanup_mounts "${MOUNTS[@]}"
-    clean_temporary_artifacts "${ARG_CLEAN_ARTIFACTS}"
     if [ "${OPT_CLEAN_EXIT}" != "1" ]; then
         echo "ERROR: The seeder was terminated unexpectedly." >&2
     fi
@@ -482,10 +427,6 @@ seeder_worker() {
     if [ -z "${chroot_dir}" ]; then
         chroot_dir="${PREFERRED_SEEDER_CHROOT_DIR}"
         echo "[${seeder_name}] --chroot-dir unset, using the chroot path from config: ${chroot_dir}" >&2
-    elif [ -n "${ARG_CLEAN_ARTIFACTS}" ]; then
-        # If the temp artifacts cleanup is active, this can erase the whole
-        # to-be-built chroot!
-        TEMPORARY_ARTIFACTS+=( "${chroot_dir}" )
     fi
 
     local chroot_done_flag_file=
