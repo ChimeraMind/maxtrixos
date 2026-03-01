@@ -102,7 +102,7 @@ func (q *QA) CheckSecureBoot(imageDir, sbcertPath string) error {
 			return fmt.Errorf("No sig_key found for %s", rel)
 		}
 
-		if serial != sig {
+		if !strings.EqualFold(serial, sig) {
 			return fmt.Errorf(
 				"%s SecureBoot serial and module signature key mismatch: cert='%s' module='%s'",
 				rel, serial, sig,
