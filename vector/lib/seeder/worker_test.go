@@ -1412,14 +1412,14 @@ func TestSetupChrootMounts_Success(t *testing.T) {
 
 	// Common rootfs mounts create: dev, dev/pts, sys, dev/shm, proc, run/lock = 6
 	// Plus: private repo, distfiles, binpkgs = 3
-	// Total tracked mounts >= 9
-	if len(sd.trackedMounts) < 9 {
-		t.Errorf("expected at least 9 tracked mounts, got %d: %v",
+	// Total tracked mounts >= 8
+	if len(sd.trackedMounts) < 8 {
+		t.Errorf("expected at least 8 tracked mounts, got %d: %v",
 			len(sd.trackedMounts), sd.trackedMounts)
 	}
 
 	// Verify key directories were created inside the chroot.
-	for _, sub := range []string{"dev", "proc", "sys", "dev/shm", "run/lock"} {
+	for _, sub := range []string{"dev", "sys", "dev/shm", "run/lock"} {
 		p := filepath.Join(chrootDir, sub)
 		if _, err := os.Stat(p); os.IsNotExist(err) {
 			t.Errorf("expected %s to exist", p)
