@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"matrixos/vector/lib/config"
@@ -307,7 +308,7 @@ func TestSetupServices_HooksDirError(t *testing.T) {
 
 func TestSetupServices_NoServicesFile_SkipsGracefully(t *testing.T) {
 	hooksDir := t.TempDir()
-	// No .conf file exists → should print warning and return nil.
+	// No .conf file exists → should return error.
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
 			"Releaser.HooksDir": {hooksDir},
@@ -323,13 +324,12 @@ func TestSetupServices_NoServicesFile_SkipsGracefully(t *testing.T) {
 		ref:      "myref",
 	}
 
-	if err := r.SetupServices(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	err := r.SetupServices()
+	if err == nil {
+		t.Fatal("expected error when services file does not exist")
 	}
-
-	warn := r.stderr.(*bytes.Buffer).String()
-	if warn == "" {
-		t.Error("expected a warning about missing services file")
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
@@ -369,10 +369,11 @@ func TestSetupServices_FallbackToServicesSubdir(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify no "does not exist" warning was emitted.
+	// Verify that the specific "Create an empty" error message was NOT emitted
+	// (only the initial "Trying to look harder" warning should appear).
 	warn := r.stderr.(*bytes.Buffer).String()
-	if bytes.Contains([]byte(warn), []byte("does not exist")) {
-		t.Error("fallback path was not tried; got 'does not exist' warning")
+	if bytes.Contains([]byte(warn), []byte("Create an empty")) {
+		t.Error("fallback path was not tried; got 'Create an empty' error")
 	}
 }
 
@@ -500,13 +501,12 @@ func TestReleaseHook_NoHookFile_SkipsGracefully(t *testing.T) {
 		ref:      "myref",
 	}
 
-	if err := r.ReleaseHook(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	err := r.ReleaseHook()
+	if err == nil {
+		t.Fatal("expected error when hook file does not exist")
 	}
-
-	warn := r.stderr.(*bytes.Buffer).String()
-	if warn == "" {
-		t.Error("expected a warning about missing hook file")
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
