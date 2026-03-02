@@ -179,11 +179,12 @@ type IRelease interface {
 
 // Releaser provides release creation and manipulation operations.
 type Releaser struct {
-	cfg    config.IConfig
-	ostree ostree.IOstree
-	runner runner.Func
-	stdout io.Writer
-	stderr io.Writer
+	cfg          config.IConfig
+	ostree       ostree.IOstree
+	runner       runner.Func
+	chrootRunner runner.ChrootRunFunc
+	stdout       io.Writer
+	stderr       io.Writer
 
 	chrootDir string // source chroot directory
 	imageDir  string // destination image directory
@@ -220,16 +221,17 @@ func NewReleaser(cfg config.IConfig, ot ostree.IOstree, opts *NewReleaserOptions
 	}
 
 	return &Releaser{
-		cfg:       cfg,
-		ostree:    ot,
-		runner:    runner.Run,
-		qa:        qa,
-		stdout:    os.Stdout,
-		stderr:    os.Stderr,
-		chrootDir: opts.ChrootDir,
-		imageDir:  opts.ImageDir,
-		ref:       opts.Ref,
-		verbose:   opts.Verbose,
+		cfg:          cfg,
+		ostree:       ot,
+		runner:       runner.Run,
+		chrootRunner: runner.ChrootRun,
+		qa:           qa,
+		stdout:       os.Stdout,
+		stderr:       os.Stderr,
+		chrootDir:    opts.ChrootDir,
+		imageDir:     opts.ImageDir,
+		ref:          opts.Ref,
+		verbose:      opts.Verbose,
 	}, nil
 }
 

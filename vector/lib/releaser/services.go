@@ -205,7 +205,7 @@ func (r *Releaser) SetupServices() error {
 			},
 			ChrootDir: r.imageDir,
 		}
-		return filesystems.ExecChrootRun(&cmd)
+		return r.chrootRunner(&cmd)
 	}
 
 	for _, svc := range enable {
