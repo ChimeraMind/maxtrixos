@@ -136,7 +136,7 @@ type ISeeder interface {
 	MarkSeederDone(name, chrootDir string) error
 	// ParseSeederParams sources a seeder params.sh and extracts the
 	// required variables (SEEDER_CHROOT_NAME, etc.).
-	ParseSeederParams(paramsPath string) (*SeederParams, error)
+	ParseSeederParams(name, paramsPath string) (*SeederParams, error)
 	// ImportGentooGpgKeys imports Gentoo release engineering GPG keys.
 	ImportGentooGpgKeys() error
 	// ExecutePrepper runs the prepper script with required env vars.

@@ -267,7 +267,7 @@ func (c *SeedsCommand) seederWorker(info seeder.SeederInfo) error {
 		return fmt.Errorf("unable to find %s", paramsPath)
 	}
 
-	params, err := c.sd.ParseSeederParams(paramsPath)
+	params, err := c.sd.ParseSeederParams(info.Name, paramsPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse params: %w", err)
 	}

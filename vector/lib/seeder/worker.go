@@ -7,9 +7,32 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/runner"
+)
+
+var (
+	funcMap = template.FuncMap{
+		"shq": func(s string) string {
+			if strings.ContainsAny(s, "\x00\n\r") {
+				panic(fmt.Sprintf("shq: unsafe characters in %q", s))
+			}
+			return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+		},
+	}
+
+	paramsParser = template.Must(
+		template.New("paramsParser").Funcs(funcMap).Parse(`
+set -eu
+export MATRIXOS_DEV_DIR={{shq .DevDir}}
+source {{shq .ParamsPath}}
+echo "${SEEDER_CHROOT_NAME}"
+echo "${SEEDER_CHROOTS_DIR}"
+echo "${PREFERRED_SEEDER_CHROOT_DIR}"
+echo $("{{.SeedName}}_params.find_latest_chroot_dir" {{shq .Name}} || true)
+`))
 )
 
 // SeederParams holds the key variables exported by a seeder's params.sh.
@@ -17,6 +40,10 @@ type SeederParams struct {
 	ChrootName         string // SEEDER_CHROOT_NAME
 	ChrootsDir         string // SEEDER_CHROOTS_DIR
 	PreferredChrootDir string // PREFERRED_SEEDER_CHROOT_DIR
+	// Computed path to the latest available chroot directory for this seeder.
+	// This points to the latest effectively available directory, which may
+	// differ from PREFERRED_SEEDER_CHROOT_DIR if that directory is missing or not ready.
+	LatestAvailableChrootDir string
 }
 
 // PrepperOptions configures how the prepper script is executed.
@@ -72,23 +99,24 @@ func (s *Seeder) MarkSeederDone(name, chrootDir string) error {
 
 // --- Params parsing ---
 
-// ParseSeederParams executes the given params.sh in a bash subshell
-// and captures the three key variables it must set.
-func (s *Seeder) ParseSeederParams(paramsPath string) (*SeederParams, error) {
+func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, error) {
 	devDir, err := s.DevDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dev dir: %w", err)
 	}
 
+	var scriptBuf bytes.Buffer
+	if err := paramsParser.Execute(&scriptBuf, map[string]string{
+		"DevDir":     devDir,
+		"ParamsPath": paramsPath,
+		"SeedName":   SeederNameWithoutOrderPrefix(name),
+		"Name":       name,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to render params parser script: %w", err)
+	}
+
 	// Source params.sh and echo the required variables.
-	script := fmt.Sprintf(
-		`set -eu; export MATRIXOS_DEV_DIR=%q; `+
-			`source %q; `+
-			`echo "${SEEDER_CHROOT_NAME}"; `+
-			`echo "${SEEDER_CHROOTS_DIR}"; `+
-			`echo "${PREFERRED_SEEDER_CHROOT_DIR}"`,
-		devDir, paramsPath,
-	)
+	script := scriptBuf.String()
 
 	var stdout bytes.Buffer
 	cmd := &runner.Cmd{
@@ -103,20 +131,25 @@ func (s *Seeder) ParseSeederParams(paramsPath string) (*SeederParams, error) {
 		)
 	}
 
-	lines := strings.Split(
-		strings.TrimSpace(stdout.String()), "\n",
-	)
-	if len(lines) < 3 {
+	// Split on newlines and drop the trailing empty element caused by
+	// the final newline. Do not use TrimSpace on the whole output because
+	// that would collapse an empty 4th line (missing latest chroot dir).
+	lines := strings.Split(stdout.String(), "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	if len(lines) < 4 {
 		return nil, fmt.Errorf(
-			"expected 3 lines from params %s, got %d",
+			"expected 4 lines from params %s, got %d",
 			paramsPath, len(lines),
 		)
 	}
 
 	params := &SeederParams{
-		ChrootName:         strings.TrimSpace(lines[0]),
-		ChrootsDir:         strings.TrimSpace(lines[1]),
-		PreferredChrootDir: strings.TrimSpace(lines[2]),
+		ChrootName:               strings.TrimSpace(lines[0]),
+		ChrootsDir:               strings.TrimSpace(lines[1]),
+		PreferredChrootDir:       strings.TrimSpace(lines[2]),
+		LatestAvailableChrootDir: strings.TrimSpace(lines[3]),
 	}
 
 	if params.ChrootName == "" {
@@ -134,6 +167,29 @@ func (s *Seeder) ParseSeederParams(paramsPath string) (*SeederParams, error) {
 			"PREFERRED_SEEDER_CHROOT_DIR is empty in %s", paramsPath,
 		)
 	}
+	return params, nil
+}
+
+// ParseSeederParams executes the given params.sh in a bash subshell
+// and captures the three key variables it must set.
+func (s *Seeder) ParseSeederParams(name, paramsPath string) (*SeederParams, error) {
+	params, err := s.parseParamsVariables(name, paramsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	chrootDir := params.LatestAvailableChrootDir
+	if chrootDir == "" {
+		return nil, fmt.Errorf(
+			"latest available chroot dir is empty in %s", paramsPath,
+		)
+	}
+	if !filesystems.DirectoryExists(chrootDir) {
+		return nil, fmt.Errorf(
+			"latest available chroot dir %s does not exist", chrootDir,
+		)
+	}
+
 	return params, nil
 }
 
