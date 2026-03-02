@@ -10,10 +10,6 @@ import (
 
 // CommitOptions contains the parameters for an ostree commit operation.
 type CommitOptions struct {
-	// RepoDir is the path to the ostree repository.
-	RepoDir string
-	// Branch is the ostree branch to commit to.
-	Branch string
 	// Subject is the commit subject line.
 	Subject string
 	// Body is inline commit body text. If non-empty a temporary file is
@@ -37,17 +33,8 @@ type CommitOptions struct {
 
 // validate checks that all required fields are populated.
 func (o *CommitOptions) validate() error {
-	if o.RepoDir == "" {
-		return errors.New("missing RepoDir in CommitOptions")
-	}
-	if o.Branch == "" {
-		return errors.New("missing Branch in CommitOptions")
-	}
 	if o.ImageDir == "" {
 		return errors.New("missing ImageDir in CommitOptions")
-	}
-	if !directoryExists(o.RepoDir) {
-		return fmt.Errorf("repo directory %s does not exist", o.RepoDir)
 	}
 	if !directoryExists(o.ImageDir) {
 		return fmt.Errorf("image directory %s does not exist", o.ImageDir)
@@ -59,28 +46,37 @@ func (o *CommitOptions) validate() error {
 }
 
 // args builds the ostree commit argument list from the options.
-func (o *CommitOptions) args(verbose bool) []string {
+func (o *Ostree) commitArgs(opts *CommitOptions) ([]string, error) {
+	ref := o.Ref()
+	if ref == "" {
+		return nil, errors.New("ostree ref is not set")
+	}
+	repoDir, err := o.RepoDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ostree repo dir: %w", err)
+	}
+
 	a := []string{"commit"}
-	if verbose {
+	if o.verbose {
 		a = append(a, "--verbose")
 	}
-	if o.Consume {
+	if opts.Consume {
 		a = append(a, "--consume")
 	}
-	a = append(a, "--repo="+o.RepoDir)
-	if o.Parent != "" {
-		a = append(a, "--parent="+o.Parent)
+	a = append(a, "--repo="+repoDir)
+	if opts.Parent != "" {
+		a = append(a, "--parent="+opts.Parent)
 	}
-	a = append(a, "--branch="+o.Branch)
-	a = append(a, o.GpgArgs...)
-	if o.Subject != "" {
-		a = append(a, "--subject="+o.Subject)
+	a = append(a, "--branch="+ref)
+	a = append(a, opts.GpgArgs...)
+	if opts.Subject != "" {
+		a = append(a, "--subject="+opts.Subject)
 	}
-	if o.BodyFile != "" {
-		a = append(a, "--body-file="+o.BodyFile)
+	if opts.BodyFile != "" {
+		a = append(a, "--body-file="+opts.BodyFile)
 	}
-	a = append(a, o.ImageDir)
-	return a
+	a = append(a, opts.ImageDir)
+	return a, nil
 }
 
 // materializeBody writes opts.Body to a temporary file and sets opts.BodyFile.
@@ -104,6 +100,11 @@ func materializeBody(opts *CommitOptions) (tmpPath string, err error) {
 }
 
 func (o *Ostree) Commit(opts CommitOptions) error {
+	ref := o.Ref()
+	if ref == "" {
+		return errors.New("ostree ref is not set")
+	}
+
 	tmp, err := materializeBody(&opts)
 	if tmp != "" {
 		defer os.Remove(tmp)
@@ -114,6 +115,14 @@ func (o *Ostree) Commit(opts CommitOptions) error {
 	if err := opts.validate(); err != nil {
 		return err
 	}
-	o.Print("Committing ostree rootfs from %s to branch: %s\n", opts.ImageDir, opts.Branch)
-	return o.ostreeRun(opts.args(o.verbose)...)
+	o.Print(
+		"Committing ostree rootfs from %s to branch: %s\n",
+		opts.ImageDir,
+		ref,
+	)
+	args, err := o.commitArgs(&opts)
+	if err != nil {
+		return err
+	}
+	return o.ostreeRun(args...)
 }

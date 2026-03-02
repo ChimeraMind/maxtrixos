@@ -293,7 +293,7 @@ func TestSetupServices_HooksDirError(t *testing.T) {
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "origin/matrixos"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -316,7 +316,7 @@ func TestSetupServices_NoServicesFile_SkipsGracefully(t *testing.T) {
 	}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "myref"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -355,7 +355,7 @@ func TestSetupServices_FallbackToServicesSubdir(t *testing.T) {
 	}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "myref"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -397,7 +397,7 @@ func TestSetupServices_ParseError(t *testing.T) {
 	}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "myref"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -430,7 +430,7 @@ func TestSetupServices_MountSetupFailure(t *testing.T) {
 	}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "myref"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -448,7 +448,7 @@ func TestSetupServices_ErrConfigPropagates(t *testing.T) {
 	cfg := &config.ErrConfig{Err: wantErr}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "ref"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -469,7 +469,7 @@ func TestReleaseHook_HooksDirError(t *testing.T) {
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "ref"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -493,7 +493,7 @@ func TestReleaseHook_NoHookFile_SkipsGracefully(t *testing.T) {
 	}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "myref"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -533,7 +533,7 @@ func TestReleaseHook_ExecutesHookScript(t *testing.T) {
 	}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "myref"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: imageDir,
@@ -578,7 +578,7 @@ func TestReleaseHook_HookScriptFails(t *testing.T) {
 	}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "myref"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -610,7 +610,7 @@ func TestReleaseHook_HookScriptStdout(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "myref"},
 		stdout:   &stdout,
 		stderr:   &stderr,
 		imageDir: t.TempDir(),
@@ -633,7 +633,7 @@ func TestReleaseHook_ErrConfigPropagates(t *testing.T) {
 	cfg := &config.ErrConfig{Err: wantErr}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "ref"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -665,7 +665,7 @@ func TestReleaseHook_NonExecutableFile(t *testing.T) {
 	}
 	r := &Releaser{
 		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		ostree:   &ostree.MockOstree{Ref_: "myref"},
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),

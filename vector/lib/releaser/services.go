@@ -2,6 +2,7 @@ package releaser
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/ostree"
 )
 
 func (r *Releaser) SetupHostname() error {
@@ -23,6 +25,22 @@ func (r *Releaser) SetupHostname() error {
 	r.Print("Setting hostname to: %s\n", hostname)
 	data := []byte(hostname + "\n")
 	return os.WriteFile(filepath.Join(r.imageDir, "etc/hostname"), data, 0644)
+}
+
+func (r *Releaser) cleanAndStripRef() (string, error) {
+	if r.ref == "" {
+		return "", errors.New("missing ref, set Ref in Releaser")
+	}
+	stripped, err := r.ostree.RemoveFullFromBranch()
+	if err != nil {
+		return "", err
+	}
+
+	stripped = ostree.CleanRemoteFromRef(stripped)
+	if stripped == "" {
+		return "", errors.New("invalid ref parameter after cleaning")
+	}
+	return stripped, nil
 }
 
 // serviceAction represents a parsed line from a services configuration file.
@@ -64,8 +82,12 @@ func (r *Releaser) SetupServices() error {
 	if err := checkImageDir(r.imageDir); err != nil {
 		return err
 	}
-	imageDir := r.imageDir
-	ref := r.ref
+
+	// Remove full from ref using the functions
+	ref, err := r.cleanAndStripRef()
+	if err != nil {
+		return err
+	}
 
 	hooksDir, err := r.HooksDir()
 	if err != nil {
@@ -79,16 +101,25 @@ func (r *Releaser) SetupServices() error {
 		if err != nil {
 			return err
 		}
+		r.PrintWarning(
+			"Services setup file %s does not exist. Trying to look harder ...\n",
+			servicesFile,
+		)
+
 		// Fallback: check in the services dir relative to the same parent.
 		parent := filepath.Dir(servicesDir)
 		altPath := filepath.Join(parent, "services", ref+".conf")
 		if !filesystems.FileExists(altPath) {
-			r.PrintWarning("Services setup file %s does not exist. Skipping ...\n", servicesFile)
-			return nil
+			r.PrintError(
+				"Services setup file %s does not exist. Create an empty file at least ...\n",
+				servicesFile,
+			)
+			return fmt.Errorf("services setup file does not exist: %s", servicesFile)
 		}
 		servicesFile = altPath
 	}
 
+	r.Print("Using services setup file: %s\n", servicesFile)
 	actions, err := parseServicesFile(servicesFile)
 	if err != nil {
 		return fmt.Errorf("failed to parse services file: %w", err)
@@ -97,7 +128,7 @@ func (r *Releaser) SetupServices() error {
 	// Set up chroot mounts for systemctl execution.
 	mounts, err := filesystems.NewCommonRootfsMounts(
 		filesystems.CommonRootfsMountsOptions{
-			MountPoint: imageDir,
+			MountPoint: r.imageDir,
 			Mounting: func(mnt string) {
 				r.Print("Mounting: %s ...\n", mnt)
 				r.trackMount(mnt)
@@ -155,7 +186,7 @@ func (r *Releaser) SetupServices() error {
 		r.Print("Running systemctl %s ...\n", cmd)
 		// Use /bin/sh -c to prevent systemctl from acting as PID 1.
 		return filesystems.ChrootRun(
-			imageDir,
+			r.imageDir,
 			"/bin/sh", "-c", "systemctl "+cmd+"; exit $?",
 		)
 	}
@@ -211,7 +242,12 @@ func (r *Releaser) ReleaseHook() error {
 	if err := checkImageDir(r.imageDir); err != nil {
 		return err
 	}
-	ref := r.ref
+
+	// Remove full from ref using the functions
+	ref, err := r.cleanAndStripRef()
+	if err != nil {
+		return err
+	}
 
 	hooksDir, err := r.HooksDir()
 	if err != nil {
@@ -225,8 +261,11 @@ func (r *Releaser) ReleaseHook() error {
 
 	hookPath := filepath.Join(hooksDir, ref+".sh")
 	if !filesystems.FileExists(hookPath) {
-		r.PrintWarning("Release hook %s does not exist. Skipping ...\n", hookPath)
-		return nil
+		r.PrintWarning(
+			"Release hook %s does not exist. Create an empty executable file at least ...\n",
+			hookPath,
+		)
+		return fmt.Errorf("release hook does not exist: %s", hookPath)
 	}
 
 	r.Print("Running release hook %s ...\n", hookPath)

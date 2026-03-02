@@ -26,11 +26,16 @@ func (im *Image) ImageLockPath() (string, error) {
 		return "", errors.New("missing ref, set Ref in NewImageOptions")
 	}
 
+	ref, err := im.cleanAndStripRef()
+	if err != nil {
+		return "", fmt.Errorf("failed to clean ref: %w", err)
+	}
+
 	lockDir, err := im.ImageLockDir()
 	if err != nil {
 		return "", err
 	}
-	lockFile := filepath.Join(lockDir, im.ref+".lock")
+	lockFile := filepath.Join(lockDir, ref+".lock")
 
 	lockFileDir := filepath.Dir(lockFile)
 	if err := os.MkdirAll(lockFileDir, 0755); err != nil {

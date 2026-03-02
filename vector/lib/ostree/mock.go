@@ -82,6 +82,12 @@ type MockOstree struct {
 	ValidateFilesystemHierarchyErr error
 }
 
+func (m *MockOstree) CloneForRef(ref string) (IOstree, error) {
+	clone := *m
+	clone.Ref_ = ref
+	return &clone, nil
+}
+
 // Config accessors — return zero values (not used in branch/upgrade tests).
 func (m *MockOstree) SetStdout(_ io.Writer)                                   {}
 func (m *MockOstree) SetStderr(_ io.Writer)                                   {}

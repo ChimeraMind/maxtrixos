@@ -399,6 +399,9 @@ func TestCommitOptions_ZeroValue(t *testing.T) {
 	if opts.ParentBranch != "" {
 		t.Errorf("expected empty ParentBranch, got %q", opts.ParentBranch)
 	}
+	if opts.ParentRev != "" {
+		t.Errorf("expected empty ParentRev, got %q", opts.ParentRev)
+	}
 	if opts.Consume {
 		t.Error("expected Consume false")
 	}

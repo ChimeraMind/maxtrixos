@@ -387,9 +387,6 @@ func TestRelease_Success(t *testing.T) {
 	}
 
 	// Validate commit options.
-	if mock.CommitOpts.Branch != "matrixos/stable" {
-		t.Errorf("commit branch = %q, want %q", mock.CommitOpts.Branch, "matrixos/stable")
-	}
 	if !strings.Contains(mock.CommitOpts.Subject, "matrixOS") {
 		t.Errorf("subject should contain OS name, got %q", mock.CommitOpts.Subject)
 	}
@@ -433,17 +430,6 @@ func TestRelease_EtcExists(t *testing.T) {
 	err := r.Release(opts)
 	if err == nil || !strings.Contains(err.Error(), "illegal") {
 		t.Fatalf("expected 'illegal' error, got %v", err)
-	}
-}
-
-func TestRelease_RepoDirError(t *testing.T) {
-	r, mock := releaseTestSetup(t)
-	mock.RepoDirErr = errors.New("repodir boom")
-
-	opts := CommitOptions{Branch: "matrixos/stable"}
-	err := r.Release(opts)
-	if err == nil || err.Error() != "repodir boom" {
-		t.Fatalf("expected 'repodir boom', got %v", err)
 	}
 }
 
@@ -544,20 +530,17 @@ func TestRelease_SkipsStaticDeltas(t *testing.T) {
 
 func TestRelease_WithParentBranch(t *testing.T) {
 	r, mock := releaseTestSetup(t)
-	mock.LastCommit_ = "abc123parent"
 
 	opts := CommitOptions{
 		Branch:       "matrixos/stable",
 		ParentBranch: "matrixos/testing",
+		ParentRev:    "abc123parent",
 	}
 
 	if err := r.Release(opts); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 
-	if mock.Ref_ != "matrixos/testing" {
-		t.Errorf("SetRef = %q, want %q", mock.Ref_, "matrixos/testing")
-	}
 	if mock.CommitOpts.Parent != "abc123parent" {
 		t.Errorf("commit parent = %q, want %q", mock.CommitOpts.Parent, "abc123parent")
 	}
@@ -566,18 +549,20 @@ func TestRelease_WithParentBranch(t *testing.T) {
 	}
 }
 
-func TestRelease_ParentBranchRevParseError(t *testing.T) {
+func TestRelease_ParentRevPassedToCommit(t *testing.T) {
 	r, mock := releaseTestSetup(t)
-	mock.LastCommitErr = errors.New("revparse boom")
 
 	opts := CommitOptions{
-		Branch:       "matrixos/stable",
-		ParentBranch: "matrixos/testing",
+		Branch:    "matrixos/stable",
+		ParentRev: "deadbeef",
 	}
 
-	err := r.Release(opts)
-	if err == nil || !strings.Contains(err.Error(), "revparse boom") {
-		t.Fatalf("expected wrapped 'revparse boom', got %v", err)
+	if err := r.Release(opts); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+
+	if mock.CommitOpts.Parent != "deadbeef" {
+		t.Errorf("commit parent = %q, want %q", mock.CommitOpts.Parent, "deadbeef")
 	}
 }
 
@@ -654,5 +639,88 @@ func TestRelease_GpgArgsPassedToCommit(t *testing.T) {
 	}
 	if mock.CommitOpts.GpgArgs[0] != "--gpg-sign=KEY1" {
 		t.Errorf("gpgArgs[0] = %q, want %q", mock.CommitOpts.GpgArgs[0], "--gpg-sign=KEY1")
+	}
+}
+
+func TestRelease_EmptyParentRevNoParentInCommit(t *testing.T) {
+	r, mock := releaseTestSetup(t)
+
+	opts := CommitOptions{Branch: "matrixos/stable"}
+	if err := r.Release(opts); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+
+	if mock.CommitOpts.Parent != "" {
+		t.Errorf("commit parent should be empty when no ParentRev, got %q", mock.CommitOpts.Parent)
+	}
+}
+
+func TestRelease_ConsumePassedToCommit(t *testing.T) {
+	r, mock := releaseTestSetup(t)
+
+	opts := CommitOptions{Branch: "matrixos/stable", Consume: true, ParentRev: "rev1"}
+	if err := r.Release(opts); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+
+	if !mock.CommitOpts.Consume {
+		t.Error("Consume should be passed through to ostree commit")
+	}
+	if mock.CommitOpts.Parent != "rev1" {
+		t.Errorf("Parent = %q, want %q", mock.CommitOpts.Parent, "rev1")
+	}
+}
+
+func TestRelease_ImageDirPassedToCommit(t *testing.T) {
+	r, mock := releaseTestSetup(t)
+
+	opts := CommitOptions{Branch: "matrixos/stable"}
+	if err := r.Release(opts); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+
+	if mock.CommitOpts.ImageDir != r.imageDir {
+		t.Errorf("commit ImageDir = %q, want %q", mock.CommitOpts.ImageDir, r.imageDir)
+	}
+}
+
+func TestRelease_SubjectContainsBranch(t *testing.T) {
+	r, mock := releaseTestSetup(t)
+
+	opts := CommitOptions{Branch: "matrixos/testing"}
+	if err := r.Release(opts); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+
+	if !strings.Contains(mock.CommitOpts.Subject, "matrixos/testing") {
+		t.Errorf("subject should contain branch name, got %q", mock.CommitOpts.Subject)
+	}
+}
+
+func TestRelease_BodyContainsParentBranchWhenSet(t *testing.T) {
+	r, mock := releaseTestSetup(t)
+
+	opts := CommitOptions{
+		Branch:       "matrixos/stable",
+		ParentBranch: "matrixos/testing-full",
+		ParentRev:    "abc123",
+	}
+	if err := r.Release(opts); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+
+	if !strings.Contains(mock.CommitOpts.Body, "matrixos/testing-full") {
+		t.Errorf("body should contain parent branch name, got %q", mock.CommitOpts.Body)
+	}
+}
+
+func TestRelease_EmptyImageDir(t *testing.T) {
+	r, _ := releaseTestSetup(t)
+	r.imageDir = ""
+
+	opts := CommitOptions{Branch: "matrixos/stable"}
+	err := r.Release(opts)
+	if err == nil || !strings.Contains(err.Error(), "imageDir") {
+		t.Fatalf("expected imageDir error, got %v", err)
 	}
 }
