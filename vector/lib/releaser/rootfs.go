@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/runner"
 )
 
 const (
@@ -149,12 +150,19 @@ func (r *Releaser) PostCleanShrink() error {
 		return fmt.Errorf("failed to set up chroot mounts: %w", err)
 	}
 
-	err = filesystems.ChrootRun(imageDir,
-		"emerge",
-		"--depclean",
-		"--with-bdeps=n",
-		"--complete-graph",
-	)
+	err = filesystems.ExecChrootRun(&runner.ChrootCmd{
+		Cmd: runner.Cmd{
+			Name: "emerge",
+			Args: []string{
+				"--depclean",
+				"--with-bdeps=n",
+				"--complete-graph",
+			},
+			Stdout: r.stdout,
+			Stderr: r.stderr,
+		},
+		ChrootDir: imageDir,
+	})
 	if err != nil {
 		return fmt.Errorf("emerge --depclean failed: %w", err)
 	}
