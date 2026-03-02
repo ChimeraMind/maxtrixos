@@ -161,6 +161,7 @@ func (c *ReleasesCommand) updateStdWriters(name string) (*styledWriter, *styledW
 	stderrWriter := c.SetStderr(name)
 	c.sd.SetStdout(stdoutWriter)
 	c.sd.SetStderr(stderrWriter)
+	c.det.SetStderr(stderrWriter)
 	return stdoutWriter, stderrWriter
 }
 

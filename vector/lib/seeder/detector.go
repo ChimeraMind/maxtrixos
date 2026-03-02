@@ -22,6 +22,12 @@ type ISeederDetector interface {
 	// skip returns true for seeders that should be skipped.
 	// only returns true for seeders that are allowed (pass-through); if nil, all are allowed.
 	Detect(skip, only SeederFilterFunc) ([]SeederInfo, error)
+
+	// SetStderr replaces the writer used for filter-skip messages.
+	SetStderr(io.Writer)
+
+	// Stderr returns the current warning/error output writer.
+	Stderr() io.Writer
 }
 
 // SeederDetector discovers available seeders by walking the seeders directory
