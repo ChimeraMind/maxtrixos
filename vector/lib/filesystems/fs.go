@@ -389,13 +389,34 @@ func CreateTempFile(parentDir, prefix string) (*os.File, error) {
 	return tempFile, nil
 }
 
+// RemoveFileWithGlobOptions holds options for RemoveFileWithGlob.
+type RemoveFileWithGlobOptions struct {
+	Stdout io.Writer
+	Stderr io.Writer
+}
+
 // RemoveFileWithGlob removes files matching a glob pattern.
-func RemoveFileWithGlob(target string) error {
+func RemoveFileWithGlob(target string, opts RemoveFileWithGlobOptions) error {
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+
 	matches, err := filepath.Glob(target)
 	if err != nil {
 		return err
 	}
+
+	if len(matches) == 0 {
+		fmt.Fprintf(stdout, "Removing (glob): %s does not exist\n", target)
+	}
+
 	for _, match := range matches {
+		fmt.Fprintf(stdout, "Removing file (glob): %s\n", match)
 		err := os.Remove(match)
 		if err != nil {
 			return err
@@ -404,23 +425,51 @@ func RemoveFileWithGlob(target string) error {
 	return nil
 }
 
+// RemoveDirOptions holds options for RemoveDir.
+type RemoveDirOptions struct {
+	Stdout io.Writer
+	Stderr io.Writer
+}
+
 // RemoveDir removes a directory.
-func RemoveDir(target string) error {
+func RemoveDir(target string, opts RemoveDirOptions) error {
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
 	if _, err := os.Stat(target); os.IsNotExist(err) {
-		log.Printf("Removing: %s does not exist\n", target)
+		fmt.Fprintf(stdout, "Removing: %s does not exist\n", target)
 		return nil
 	}
-	log.Printf("Removing %s\n", target)
+	fmt.Fprintf(stdout, "Removing %s\n", target)
 	return os.RemoveAll(target)
 }
 
+// EmptyDirOptions holds options for EmptyDir.
+type EmptyDirOptions struct {
+	Stdout io.Writer
+	Stderr io.Writer
+}
+
 // EmptyDir empties a directory.
-func EmptyDir(target string) error {
+func EmptyDir(target string, opts EmptyDirOptions) error {
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
 	if _, err := os.Stat(target); os.IsNotExist(err) {
-		log.Printf("Emptying: %s does not exist\n", target)
+		fmt.Fprintf(stdout, "Emptying: %s does not exist\n", target)
 		return nil
 	}
-	log.Printf("Emptying directory %s\n", target)
+	fmt.Fprintf(stdout, "Emptying directory %s\n", target)
 
 	entries, err := os.ReadDir(target)
 	if err != nil {
