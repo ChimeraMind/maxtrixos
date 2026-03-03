@@ -7,6 +7,7 @@
         now that we have separate mount namespaces via unshare.
         -> no chance of leaking mounts when SIGKILL is sent.
 - Wrap ostree admin kargs edit-in-place ...
+- Add support of ostree admin post-copy in imager (right before umounting)
 - Test and consider migration to systemd-boot (while supporting GRUB).
 - Add UKI building to kernel build (make USE flag optional).
 - Test bootc & migration to UKI.
