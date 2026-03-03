@@ -173,24 +173,7 @@ func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, e
 // ParseSeederParams executes the given params.sh in a bash subshell
 // and captures the three key variables it must set.
 func (s *Seeder) ParseSeederParams(name, paramsPath string) (*SeederParams, error) {
-	params, err := s.parseParamsVariables(name, paramsPath)
-	if err != nil {
-		return nil, err
-	}
-
-	chrootDir := params.LatestAvailableChrootDir
-	if chrootDir == "" {
-		return nil, fmt.Errorf(
-			"latest available chroot dir is empty in %s", paramsPath,
-		)
-	}
-	if !filesystems.DirectoryExists(chrootDir) {
-		return nil, fmt.Errorf(
-			"latest available chroot dir %s does not exist", chrootDir,
-		)
-	}
-
-	return params, nil
+	return s.parseParamsVariables(name, paramsPath)
 }
 
 // --- GPG key management ---
