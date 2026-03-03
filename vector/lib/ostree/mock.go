@@ -1,6 +1,7 @@
 package ostree
 
 import (
+	"errors"
 	"io"
 	"strings"
 
@@ -26,6 +27,10 @@ type MockOstree struct {
 	LastCommitErr    error
 	UpgradeArgs      []string
 	UpgradeErr       error
+	PinIndex         int
+	PinChecksum      string
+	PinErr           error
+	PinNotFoundErr   error
 	Packages         []string
 	PackagesErr      error
 	PackagesByCommit map[string][]string
@@ -220,6 +225,35 @@ func (m *MockOstree) LastCommit() (string, error) {
 func (m *MockOstree) Upgrade(args []string) error {
 	m.UpgradeArgs = args
 	return m.UpgradeErr
+}
+
+func (m *MockOstree) Pin(targetIndex int) error {
+	for _, dep := range m.Deployments {
+		if dep.Index == targetIndex {
+			m.PinChecksum = dep.Checksum
+			m.PinIndex = dep.Index
+			return m.PinErr
+		}
+	}
+	return m.PinNotFoundErr
+}
+
+func (m *MockOstree) Unpin(targetIndex int) error {
+	if m.PinIndex != targetIndex {
+		return errors.New("not previously pinned")
+	}
+	found := false
+	for _, dep := range m.Deployments {
+		if dep.Index == targetIndex {
+			found = true
+		}
+	}
+	if !found {
+		return m.PinNotFoundErr
+	}
+
+	m.PinIndex = -1
+	return m.PinErr
 }
 
 func (m *MockOstree) ListPackages(commit string) ([]string, error) {

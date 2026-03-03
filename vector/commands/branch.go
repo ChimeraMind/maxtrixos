@@ -3,6 +3,9 @@ package commands
 import (
 	"flag"
 	"fmt"
+	"matrixos/vector/lib/ostree"
+	"slices"
+	"strings"
 )
 
 // BranchCommand is a command for managing branches
@@ -43,7 +46,12 @@ func (c *BranchCommand) parseArgs(args []string) error {
 	c.fs = flag.NewFlagSet("branch", flag.ContinueOnError)
 	c.fs.Usage = func() {
 		fmt.Printf("Usage: vector %s <subcommand>\n", c.Name())
-		fmt.Println("Subcommands: show, list, switch")
+		var scs []string
+		for k := range c.subcommands() {
+			scs = append(scs, k)
+		}
+		slices.Sort(scs)
+		fmt.Printf("Subcommands: %s\n", strings.Join(scs, ", "))
 	}
 	err := c.fs.Parse(args)
 	if err != nil {
@@ -58,47 +66,203 @@ func (c *BranchCommand) parseArgs(args []string) error {
 	return nil
 }
 
-func (c *BranchCommand) Run() error {
-	switch c.sub {
-	case "show":
-		deployments, err := c.ot.ListDeployments()
-		if err != nil {
-			return fmt.Errorf("failed to list deployments: %w", err)
-		}
+func (c *BranchCommand) printDeployment(dep *ostree.Deployment) error {
+	if dep.Booted {
+		fmt.Println("Booted deployment:")
+	} else {
+		fmt.Println("Available deployment:")
+	}
+	fmt.Printf("  Name: %s\n", dep.Stateroot)
+	fmt.Printf("  Index: %d\n", dep.Index)
+	fmt.Printf("  Branch/Refspec: %s\n", dep.Refspec)
+	fmt.Printf("  Checksum: %s\n", dep.Checksum)
+	fmt.Printf("  Serial: %d\n", dep.Serial)
+	fmt.Printf("  Pending: %t\n", dep.Pending)
+	fmt.Printf("  Staged: %t\n", dep.Staged)
+	fmt.Printf("  Rollback: %t\n", dep.Rollback)
+	return nil
+}
 
-		for _, dep := range deployments {
-			if dep.Booted {
-				fmt.Println("Current branch:")
-				fmt.Printf("  Name: %s\n", dep.Stateroot)
-				fmt.Printf("  Branch/Ref: %s\n", dep.Refspec)
-				fmt.Printf("  Checksum: %s\n", dep.Checksum)
-				fmt.Printf("  Index: %d\n", dep.Index)
-				fmt.Printf("  Serial: %d\n", dep.Serial)
-				return nil
-			}
-		}
+func (c *BranchCommand) show() error {
+	deployments, err := c.ot.ListDeployments()
+	if err != nil {
+		return fmt.Errorf("failed to list deployments: %w", err)
+	}
 
-		return fmt.Errorf("could not find booted deployment")
-
-	case "list":
-		refs, err := c.ot.RemoteRefs()
-		if err != nil {
-			return fmt.Errorf("failed to list remote refs: %w", err)
-		}
-		for _, ref := range refs {
-			fmt.Println(ref)
-		}
+	if len(deployments) == 0 {
+		fmt.Println("No deployments found.")
 		return nil
+	}
 
-	case "switch":
-		if len(c.args) < 1 {
-			return fmt.Errorf("switch command requires a branch/ref name")
+	// Sort to show the booted deployment first.
+	var booted *ostree.Deployment
+	for _, dep := range deployments {
+		if dep.Booted {
+			booted = &dep
+			break
 		}
-		c.ot.SetRef(c.args[0])
-		c.ot.SetVerbose(false) // ostree's own verbose flag, separate from ours.
-		return c.ot.Switch()
+	}
+	if booted == nil {
+		return fmt.Errorf("no booted deployment found")
+	}
 
-	default:
+	if err := c.printDeployment(booted); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *BranchCommand) deployment() error {
+	deployments, err := c.ot.ListDeployments()
+	if err != nil {
+		return fmt.Errorf("failed to list deployments: %w", err)
+	}
+
+	if len(deployments) == 0 {
+		fmt.Println("No deployments found.")
+		return nil
+	}
+
+	// Sort deployments considering:
+	// booted deployment first, then everything else sorted by index.
+	var booted *ostree.Deployment
+	var others []*ostree.Deployment
+	for _, dep := range deployments {
+		if dep.Booted {
+			booted = &dep
+			continue
+		}
+		others = append(others, &dep)
+	}
+
+	slices.SortFunc(others, func(a, b *ostree.Deployment) int {
+		return a.Index - b.Index
+	})
+
+	if booted != nil {
+		if err := c.printDeployment(booted); err != nil {
+			return err
+		}
+	}
+
+	for _, dep := range others {
+		if err := c.printDeployment(dep); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *BranchCommand) pinOrUnpin(pin bool) error {
+	if len(c.args) < 1 {
+		if pin {
+			return fmt.Errorf("pin command requires a deployment index")
+		} else {
+			return fmt.Errorf("unpin command requires a deployment index")
+		}
+	}
+
+	var targetIndex int
+	_, err := fmt.Sscanf(c.args[0], "%d", &targetIndex)
+	if err != nil {
+		return fmt.Errorf("invalid deployment index: %w", err)
+	}
+
+	deployments, err := c.ot.ListDeployments()
+	if err != nil {
+		return fmt.Errorf("failed to list deployments: %w", err)
+	}
+
+	if len(deployments) == 0 {
+		fmt.Println("No deployments found.")
+		return nil
+	}
+
+	// Find the target deployment by index.
+	var target *ostree.Deployment
+	for _, dep := range deployments {
+		if dep.Index == targetIndex {
+			target = &dep
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("deployment with index %d not found", targetIndex)
+	}
+
+	// Perform the pin.
+	if pin {
+		if err := c.ot.Pin(target.Index); err != nil {
+			return fmt.Errorf("failed to pin deployment: %w", err)
+		}
+	} else {
+		if err := c.ot.Unpin(target.Index); err != nil {
+			return fmt.Errorf("failed to unpin deployment: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (c *BranchCommand) pin() error {
+	return c.pinOrUnpin(true)
+}
+
+func (c *BranchCommand) unpin() error {
+	return c.pinOrUnpin(false)
+}
+
+func (c *BranchCommand) remote() error {
+	refs, err := c.ot.RemoteRefs()
+	if err != nil {
+		return fmt.Errorf("failed to list remote refs: %w", err)
+	}
+	for _, ref := range refs {
+		fmt.Println(ref)
+	}
+	return nil
+}
+
+func (c *BranchCommand) local() error {
+	refs, err := c.ot.LocalRefs()
+	if err != nil {
+		return fmt.Errorf("failed to list local refs: %w", err)
+	}
+	for _, ref := range refs {
+		fmt.Println(ref)
+	}
+	return nil
+}
+
+func (c *BranchCommand) switch_() error {
+	if len(c.args) < 1 {
+		return fmt.Errorf("switch command requires a branch/ref name")
+	}
+	c.ot.SetRef(c.args[0])
+	c.ot.SetVerbose(false) // ostree's own verbose flag, separate from ours.
+	return c.ot.Switch()
+}
+
+func (c *BranchCommand) subcommands() map[string]func() error {
+	scs := map[string]func() error{
+		"show":       c.show,
+		"deployment": c.deployment,
+		"pin":        c.pin,
+		"unpin":      c.unpin,
+		"remote":     c.remote,
+		"local":      c.local,
+		"switch":     c.switch_,
+	}
+	return scs
+}
+
+func (c *BranchCommand) Run() error {
+	scs := c.subcommands()
+	cmd, ok := scs[c.sub]
+	if !ok {
 		return fmt.Errorf("unknown subcommand: %s", c.sub)
 	}
+	return cmd()
 }
