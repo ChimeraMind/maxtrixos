@@ -205,7 +205,13 @@ func (c *EnterCommand) enterChroot(chrootDir string) error {
 
 	// Always cleanup mounts, even if the shell failed.
 	defer c.sd.Cleanup()
-	if err := c.sd.SetupChrootMounts(chrootDir); err != nil {
+
+	opts := seeder.SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: true,
+	}
+
+	if err := c.sd.SetupChrootMounts(opts); err != nil {
 		return fmt.Errorf("error setting up mounts: %w", err)
 	}
 

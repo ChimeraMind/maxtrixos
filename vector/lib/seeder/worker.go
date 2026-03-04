@@ -365,14 +365,22 @@ func (s *Seeder) mountBinpkgsDir(chrootDir string) error {
 
 // SetupChrootMounts sets up all bind mounts needed for a seeder chroot.
 // All mount points are tracked and can be cleaned up by calling Cleanup().
-func (s *Seeder) SetupChrootMounts(chrootDir string) error {
+func (s *Seeder) SetupChrootMounts(opts SetupChrootMountsOptions) error {
+	if opts.ChrootDir == "" {
+		return fmt.Errorf("missing ChrootDir parameter")
+	}
+
 	// 1. Common rootfs mounts (dev, sys, proc, shm, run/lock).
 	common, err := filesystems.NewCommonRootfsMounts(
 		filesystems.CommonRootfsMountsOptions{
-			MountPoint: chrootDir,
+			MountPoint:    opts.ChrootDir,
+			SkipIfMounted: opts.SkipIfMounted,
 			Mounting: func(mnt string) {
 				s.Print("Mounting: %s ...\n", mnt)
 				s.trackMount(mnt)
+			},
+			Skipping: func(mnt string) {
+				s.Print("Skipping (already mounted): %s ...\n", mnt)
 			},
 			Mounted: func(mnt string) {
 				s.Print("Mounted: %s ...\n", mnt)
@@ -388,15 +396,15 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) error {
 		return fmt.Errorf("error setting up common mounts setup: %w", err)
 	}
 
-	if err := s.mountPrivateGitRepo(chrootDir); err != nil {
+	if err := s.mountPrivateGitRepo(opts.ChrootDir); err != nil {
 		return fmt.Errorf("error mounting private git repo: %w", err)
 	}
 
-	if err := s.mountDistDir(chrootDir); err != nil {
+	if err := s.mountDistDir(opts.ChrootDir); err != nil {
 		return fmt.Errorf("error mounting distfiles: %w", err)
 	}
 
-	if err := s.mountBinpkgsDir(chrootDir); err != nil {
+	if err := s.mountBinpkgsDir(opts.ChrootDir); err != nil {
 		return fmt.Errorf("error mounting binpkgs: %w", err)
 	}
 
