@@ -1403,7 +1403,11 @@ func TestMountPrivateGitRepo_Success(t *testing.T) {
 		stderr:       &bytes.Buffer{},
 	}
 
-	if err := sd.mountPrivateGitRepo(chrootDir); err != nil {
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: false,
+	}
+	if err := sd.mountPrivateGitRepo(&opts); err != nil {
 		t.Fatalf("mountPrivateGitRepo: %v", err)
 	}
 
@@ -1436,12 +1440,96 @@ func TestMountPrivateGitRepo_ConfigError(t *testing.T) {
 		stderr:       &bytes.Buffer{},
 	}
 
-	err := sd.mountPrivateGitRepo("/tmp/fake")
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     "/tmp/fake",
+		SkipIfMounted: false,
+	}
+	err := sd.mountPrivateGitRepo(&opts)
 	if err == nil {
 		t.Fatal("expected error for empty PrivateGitRepoPath")
 	}
 	if !strings.Contains(err.Error(), "private repo path") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestMountPrivateGitRepo_SkipIfMounted(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	// Pre-create and pretend the destination is already mounted.
+	dst := filepath.Join(chrootDir, "matrixos", "private")
+	os.MkdirAll(dst, 0755)
+	mockMountInfo(t, []*filesystems.MountInfoEntry{
+		{Mountpoint: dst},
+	})
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: true,
+	}
+	if err := sd.mountPrivateGitRepo(&opts); err != nil {
+		t.Fatalf("mountPrivateGitRepo: %v", err)
+	}
+
+	// Must NOT be tracked.
+	if len(sd.trackedMounts) != 0 {
+		t.Errorf("expected 0 tracked mounts, got %d: %v",
+			len(sd.trackedMounts), sd.trackedMounts)
+	}
+	if !strings.Contains(stdout.String(), "Skipping (already mounted)") {
+		t.Errorf("expected skip message, got:\n%s", stdout.String())
+	}
+}
+
+func TestMountPrivateGitRepo_NoSkipWhenNotMounted(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	// Nothing is mounted.
+	mockMountInfo(t, []*filesystems.MountInfoEntry{})
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: true,
+	}
+	if err := sd.mountPrivateGitRepo(&opts); err != nil {
+		t.Fatalf("mountPrivateGitRepo: %v", err)
+	}
+
+	// Must be tracked since it wasn't already mounted.
+	if len(sd.trackedMounts) != 1 {
+		t.Errorf("expected 1 tracked mount, got %d: %v",
+			len(sd.trackedMounts), sd.trackedMounts)
+	}
+	if strings.Contains(stdout.String(), "Skipping (already mounted)") {
+		t.Errorf("did not expect skip message, got:\n%s", stdout.String())
 	}
 }
 
@@ -1466,7 +1554,11 @@ func TestMountDistDir_Success(t *testing.T) {
 		stderr:       &bytes.Buffer{},
 	}
 
-	if err := sd.mountDistDir(chrootDir); err != nil {
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: false,
+	}
+	if err := sd.mountDistDir(&opts); err != nil {
 		t.Fatalf("mountDistDir: %v", err)
 	}
 
@@ -1492,9 +1584,100 @@ func TestMountDistDir_ConfigError(t *testing.T) {
 		stderr:       &bytes.Buffer{},
 	}
 
-	err := sd.mountDistDir("/tmp/fake")
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     "/tmp/fake",
+		SkipIfMounted: false,
+	}
+	err := sd.mountDistDir(&opts)
 	if err == nil {
 		t.Fatal("expected error for empty DistfilesDir")
+	}
+}
+
+func TestMountDistDir_SkipIfMounted(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	distSrc := filepath.Join(tmp, "distfiles")
+	os.MkdirAll(distSrc, 0755)
+
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.DistfilesDir"] = []string{distSrc}
+
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	// Pre-create and pretend the destination is already mounted.
+	dst := filepath.Join(chrootDir, "var", "cache", "distfiles")
+	os.MkdirAll(dst, 0755)
+	mockMountInfo(t, []*filesystems.MountInfoEntry{
+		{Mountpoint: dst},
+	})
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: true,
+	}
+	if err := sd.mountDistDir(&opts); err != nil {
+		t.Fatalf("mountDistDir: %v", err)
+	}
+
+	if len(sd.trackedMounts) != 0 {
+		t.Errorf("expected 0 tracked mounts, got %d: %v",
+			len(sd.trackedMounts), sd.trackedMounts)
+	}
+	if !strings.Contains(stdout.String(), "Skipping (already mounted)") {
+		t.Errorf("expected skip message, got:\n%s", stdout.String())
+	}
+}
+
+func TestMountDistDir_NoSkipWhenNotMounted(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	distSrc := filepath.Join(tmp, "distfiles")
+	os.MkdirAll(distSrc, 0755)
+
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.DistfilesDir"] = []string{distSrc}
+
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	mockMountInfo(t, []*filesystems.MountInfoEntry{})
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: true,
+	}
+	if err := sd.mountDistDir(&opts); err != nil {
+		t.Fatalf("mountDistDir: %v", err)
+	}
+
+	if len(sd.trackedMounts) != 1 {
+		t.Errorf("expected 1 tracked mount, got %d: %v",
+			len(sd.trackedMounts), sd.trackedMounts)
+	}
+	if strings.Contains(stdout.String(), "Skipping (already mounted)") {
+		t.Errorf("did not expect skip message, got:\n%s", stdout.String())
 	}
 }
 
@@ -1519,7 +1702,11 @@ func TestMountBinpkgsDir_Success(t *testing.T) {
 		stderr:       &bytes.Buffer{},
 	}
 
-	if err := sd.mountBinpkgsDir(chrootDir); err != nil {
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: false,
+	}
+	if err := sd.mountBinpkgsDir(&opts); err != nil {
 		t.Fatalf("mountBinpkgsDir: %v", err)
 	}
 
@@ -1545,9 +1732,100 @@ func TestMountBinpkgsDir_ConfigError(t *testing.T) {
 		stderr:       &bytes.Buffer{},
 	}
 
-	err := sd.mountBinpkgsDir("/tmp/fake")
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     "/tmp/fake",
+		SkipIfMounted: false,
+	}
+	err := sd.mountBinpkgsDir(&opts)
 	if err == nil {
 		t.Fatal("expected error for empty BinpkgsDir")
+	}
+}
+
+func TestMountBinpkgsDir_SkipIfMounted(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	binSrc := filepath.Join(tmp, "binpkgs")
+	os.MkdirAll(binSrc, 0755)
+
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.BinpkgsDir"] = []string{binSrc}
+
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	// Pre-create and pretend the destination is already mounted.
+	dst := filepath.Join(chrootDir, "var", "cache", "binpkgs")
+	os.MkdirAll(dst, 0755)
+	mockMountInfo(t, []*filesystems.MountInfoEntry{
+		{Mountpoint: dst},
+	})
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: true,
+	}
+	if err := sd.mountBinpkgsDir(&opts); err != nil {
+		t.Fatalf("mountBinpkgsDir: %v", err)
+	}
+
+	if len(sd.trackedMounts) != 0 {
+		t.Errorf("expected 0 tracked mounts, got %d: %v",
+			len(sd.trackedMounts), sd.trackedMounts)
+	}
+	if !strings.Contains(stdout.String(), "Skipping (already mounted)") {
+		t.Errorf("expected skip message, got:\n%s", stdout.String())
+	}
+}
+
+func TestMountBinpkgsDir_NoSkipWhenNotMounted(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	binSrc := filepath.Join(tmp, "binpkgs")
+	os.MkdirAll(binSrc, 0755)
+
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.BinpkgsDir"] = []string{binSrc}
+
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	mockMountInfo(t, []*filesystems.MountInfoEntry{})
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: true,
+	}
+	if err := sd.mountBinpkgsDir(&opts); err != nil {
+		t.Fatalf("mountBinpkgsDir: %v", err)
+	}
+
+	if len(sd.trackedMounts) != 1 {
+		t.Errorf("expected 1 tracked mount, got %d: %v",
+			len(sd.trackedMounts), sd.trackedMounts)
+	}
+	if strings.Contains(stdout.String(), "Skipping (already mounted)") {
+		t.Errorf("did not expect skip message, got:\n%s", stdout.String())
 	}
 }
 
