@@ -8,22 +8,22 @@ import (
 	"testing"
 )
 
-// setupMockMountInfo replaces readMountInfo with a function returning the given entries.
+// setupMockMountInfo replaces ReadMountInfo with a function returning the given entries.
 func setupMockMountInfo(t *testing.T, entries []*MountInfoEntry) {
-	orig := readMountInfo
-	readMountInfo = func() ([]*MountInfoEntry, error) {
+	orig := ReadMountInfo
+	ReadMountInfo = func() ([]*MountInfoEntry, error) {
 		return entries, nil
 	}
-	t.Cleanup(func() { readMountInfo = orig })
+	t.Cleanup(func() { ReadMountInfo = orig })
 }
 
-// setupMockMountInfoFail replaces readMountInfo with a function that always returns an error.
+// setupMockMountInfoFail replaces ReadMountInfo with a function that always returns an error.
 func setupMockMountInfoFail(t *testing.T) {
-	orig := readMountInfo
-	readMountInfo = func() ([]*MountInfoEntry, error) {
+	orig := ReadMountInfo
+	ReadMountInfo = func() ([]*MountInfoEntry, error) {
 		return nil, fmt.Errorf("mock mountinfo read failure")
 	}
-	t.Cleanup(func() { readMountInfo = orig })
+	t.Cleanup(func() { ReadMountInfo = orig })
 }
 
 // setupMockBlkid replaces blkidLookup with a function backed by the given map.
