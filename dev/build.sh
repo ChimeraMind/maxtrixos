@@ -18,8 +18,6 @@ fi
 source "${MATRIXOS_DEV_DIR}"/headers/env.include.sh
 export MATRIXOS_DEV_DIR
 
-source "${MATRIXOS_DEV_DIR}/lib/ostree_lib.sh"
-source "${MATRIXOS_DEV_DIR}/lib/qa_lib.sh"
 source "${MATRIXOS_DEV_DIR}/build/seeders/lib/seeders_lib.sh"
 
 _is_help_arg() {
@@ -57,17 +55,25 @@ _print_build_warning() {
     sleep 5
 }
 
+_root_privs() {
+    local uid=
+    uid=$(id -u)
+    if [ "${uid}" != "0" ]; then
+        echo "Run ${0} as root." >&2
+        return 1
+    fi
+}
+
 main() {
 
     if ! _is_help_in_args "${@}"; then
-        qa_lib.root_privs
+        _root_privs
         _print_build_warning
-        ostree_lib.setup_environment
     fi
 
     seeders_lib.maybe_initialize_matrixos_private_example "${MATRIXOS_PRIVATE_GIT_REPO_PATH}"
 
-    exec "${MATRIXOS_DEV_DIR}/dev/weekly_builder.sh" --on-build-server --disable-send-mail "${@}"
+    exec "${MATRIXOS_DEV_DIR}/dev/vector_builder.sh" --on-build-server --disable-send-mail "${@}"
 }
 
 main "${@}"
