@@ -72,7 +72,9 @@ func (im *Image) prepareRootfs() (string, error) {
 		}
 	}
 
-	mountRootfs, err := filesystems.CreateTempDir(mountDir, "rootfs")
+	suffix := refToSuffix(im.Ref())
+	prefix := fmt.Sprintf("rootfs-%s", suffix)
+	mountRootfs, err := filesystems.CreateTempDir(mountDir, prefix)
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp rootfs dir: %w", err)
 	}
