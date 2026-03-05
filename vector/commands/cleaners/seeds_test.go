@@ -2,9 +2,12 @@ package cleaners
 
 import (
 	"errors"
+	"fmt"
 	"matrixos/vector/lib/config"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -380,5 +383,273 @@ func TestFilterChrootEntry_Symlink(t *testing.T) {
 	got := filterChrootEntry(ChrootDirNamePattern, symlinkPath, symlinkEntry)
 	if got {
 		t.Error("filterChrootEntry should return false for symlinks (Lstat reports non-regular)")
+	}
+}
+
+// --- Integration tests for SeedsCleaner.Run() ---
+
+// createTestSeeder sets up a single seeder directory with the required
+// executable stubs, params.sh script, and chroot directories.
+func createTestSeeder(
+	t *testing.T,
+	seedersDir, chrootsDir string,
+	seederName, seedName string,
+	chrootDirNames []string,
+) {
+	t.Helper()
+
+	seederDir := filepath.Join(seedersDir, seederName)
+	if err := os.MkdirAll(seederDir, 0755); err != nil {
+		t.Fatalf("Failed to create seeder dir %s: %v", seederDir, err)
+	}
+
+	// Create executable stubs required by the detector.
+	for _, name := range []string{"chroot.sh", "prepper.sh"} {
+		path := filepath.Join(seederDir, name)
+		if err := os.WriteFile(path, []byte("#!/bin/bash\n"), 0755); err != nil {
+			t.Fatalf("Failed to create %s: %v", name, err)
+		}
+	}
+
+	// Create the chroot directories.
+	for _, dir := range chrootDirNames {
+		path := filepath.Join(chrootsDir, dir)
+		if err := os.MkdirAll(path, 0755); err != nil {
+			t.Fatalf("Failed to create chroot dir %s: %v", dir, err)
+		}
+	}
+
+	// Determine the latest chroot dir (last when sorted lexicographically).
+	latest := ""
+	if len(chrootDirNames) > 0 {
+		sorted := slices.Clone(chrootDirNames)
+		slices.Sort(sorted)
+		latest = filepath.Join(chrootsDir, sorted[len(sorted)-1])
+	}
+
+	// Create params.sh — a sourceable bash script that sets up
+	// the variables and functions expected by Seeder.ParseSeederParams.
+	paramsScript := fmt.Sprintf(`#!/bin/bash
+SEEDER_CHROOT_NAME="%s"
+SEEDER_CHROOTS_DIR="%s"
+PREFERRED_SEEDER_CHROOT_DIR="%s"
+
+%s_params.find_latest_chroot_dir() {
+    echo "%s"
+}
+
+%s_params.find_all_chroot_dirs() {
+    for d in "${SEEDER_CHROOTS_DIR}"/%s-*; do
+        if [ -d "$d" ]; then
+            echo "$d"
+        fi
+    done
+}
+`, seedName, chrootsDir, latest, seedName, latest, seedName, seedName)
+
+	paramsSh := filepath.Join(seederDir, "params.sh")
+	if err := os.WriteFile(paramsSh, []byte(paramsScript), 0755); err != nil {
+		t.Fatalf("Failed to create params.sh: %v", err)
+	}
+}
+
+// buildSeedsCleanerConfig returns a MockConfig wired for SeedsCleaner.Run().
+func buildSeedsCleanerConfig(
+	seedersDir, devDir, dryRun, minSeeds string,
+) *config.MockConfig {
+	return &config.MockConfig{Items: map[string][]string{
+		"Seeder.ChrootSeedersDir":       {seedersDir},
+		"Seeder.SeederDisabledFileName": {".disabled"},
+		"Seeder.ChrootExecutableName":   {"chroot.sh"},
+		"Seeder.PrepperExecutableName":  {"prepper.sh"},
+		"Seeder.ParamsExecutableName":   {"params.sh"},
+		"matrixOS.Root":                 {devDir},
+		"SeedsCleaner.DryRun":           {dryRun},
+		"SeedsCleaner.MinAmountOfSeeds": {minSeeds},
+	}}
+}
+
+func TestSeedsCleaner_Run_Integration(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not available, skipping integration test")
+	}
+
+	tests := []struct {
+		name            string
+		dryRun          string
+		minSeeds        string
+		chrootDirs      []string
+		expectedRemoved []string
+		expectedKept    []string
+		wantErr         bool
+	}{
+		{
+			name:            "RealRun_RemovesOldest",
+			dryRun:          "false",
+			minSeeds:        "2",
+			chrootDirs:      []string{"bedrock-20260101", "bedrock-20260102", "bedrock-20260103", "bedrock-20260104"},
+			expectedRemoved: []string{"bedrock-20260101", "bedrock-20260102"},
+			expectedKept:    []string{"bedrock-20260103", "bedrock-20260104"},
+		},
+		{
+			name:            "DryRun_KeepsAll",
+			dryRun:          "true",
+			minSeeds:        "2",
+			chrootDirs:      []string{"bedrock-20260101", "bedrock-20260102", "bedrock-20260103", "bedrock-20260104"},
+			expectedRemoved: []string{},
+			expectedKept:    []string{"bedrock-20260101", "bedrock-20260102", "bedrock-20260103", "bedrock-20260104"},
+		},
+		{
+			name:            "WithinMinimum_KeepsAll",
+			dryRun:          "false",
+			minSeeds:        "4",
+			chrootDirs:      []string{"bedrock-20260101", "bedrock-20260102", "bedrock-20260103", "bedrock-20260104"},
+			expectedRemoved: []string{},
+			expectedKept:    []string{"bedrock-20260101", "bedrock-20260102", "bedrock-20260103", "bedrock-20260104"},
+		},
+		{
+			name:            "ExactlyMinimum_KeepsAll",
+			dryRun:          "false",
+			minSeeds:        "2",
+			chrootDirs:      []string{"bedrock-20260101", "bedrock-20260102"},
+			expectedRemoved: []string{},
+			expectedKept:    []string{"bedrock-20260101", "bedrock-20260102"},
+		},
+		{
+			name:            "Min1_RemovesAllButNewest",
+			dryRun:          "false",
+			minSeeds:        "1",
+			chrootDirs:      []string{"bedrock-20260101", "bedrock-20260102", "bedrock-20260103"},
+			expectedRemoved: []string{"bedrock-20260101", "bedrock-20260102"},
+			expectedKept:    []string{"bedrock-20260103"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			seedersDir := filepath.Join(tempDir, "seeders")
+			chrootsDir := filepath.Join(tempDir, "chroots")
+			devDir := filepath.Join(tempDir, "dev")
+
+			for _, d := range []string{seedersDir, chrootsDir, devDir} {
+				if err := os.MkdirAll(d, 0755); err != nil {
+					t.Fatalf("Failed to create dir %s: %v", d, err)
+				}
+			}
+
+			createTestSeeder(t, seedersDir, chrootsDir, "00-bedrock", "bedrock", tt.chrootDirs)
+
+			mockCfg := buildSeedsCleanerConfig(seedersDir, devDir, tt.dryRun, tt.minSeeds)
+
+			cleaner := &SeedsCleaner{}
+			if err := cleaner.Init(mockCfg); err != nil {
+				t.Fatalf("Init failed: %v", err)
+			}
+
+			err := cleaner.Run()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Run() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			for _, dir := range tt.expectedRemoved {
+				path := filepath.Join(chrootsDir, dir)
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Errorf("Directory %s should have been removed", dir)
+				}
+			}
+
+			for _, dir := range tt.expectedKept {
+				path := filepath.Join(chrootsDir, dir)
+				if _, err := os.Stat(path); os.IsNotExist(err) {
+					t.Errorf("Directory %s should have been kept", dir)
+				}
+			}
+		})
+	}
+}
+
+func TestSeedsCleaner_Run_Integration_MultipleSeeders(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not available, skipping integration test")
+	}
+
+	tempDir := t.TempDir()
+	seedersDir := filepath.Join(tempDir, "seeders")
+	chrootsDir := filepath.Join(tempDir, "chroots")
+	devDir := filepath.Join(tempDir, "dev")
+
+	for _, d := range []string{seedersDir, chrootsDir, devDir} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("Failed to create dir %s: %v", d, err)
+		}
+	}
+
+	// bedrock: 4 chroot dirs → with min=2 the 2 oldest should be removed.
+	createTestSeeder(t, seedersDir, chrootsDir, "00-bedrock", "bedrock",
+		[]string{"bedrock-20260101", "bedrock-20260102", "bedrock-20260103", "bedrock-20260104"})
+
+	// server: only 2 chroot dirs → at min=2 all should be kept.
+	createTestSeeder(t, seedersDir, chrootsDir, "10-server", "server",
+		[]string{"server-20260201", "server-20260202"})
+
+	mockCfg := buildSeedsCleanerConfig(seedersDir, devDir, "false", "2")
+
+	cleaner := &SeedsCleaner{}
+	if err := cleaner.Init(mockCfg); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	if err := cleaner.Run(); err != nil {
+		t.Fatalf("Run() failed: %v", err)
+	}
+
+	// bedrock: oldest 2 removed, newest 2 kept.
+	for _, dir := range []string{"bedrock-20260101", "bedrock-20260102"} {
+		path := filepath.Join(chrootsDir, dir)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("Directory %s should have been removed", dir)
+		}
+	}
+	for _, dir := range []string{"bedrock-20260103", "bedrock-20260104"} {
+		path := filepath.Join(chrootsDir, dir)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Errorf("Directory %s should have been kept", dir)
+		}
+	}
+
+	// server: both dirs kept.
+	for _, dir := range []string{"server-20260201", "server-20260202"} {
+		path := filepath.Join(chrootsDir, dir)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Errorf("Directory %s should have been kept", dir)
+		}
+	}
+}
+
+func TestSeedsCleaner_Run_Integration_NoSeeders(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not available, skipping integration test")
+	}
+
+	tempDir := t.TempDir()
+	seedersDir := filepath.Join(tempDir, "seeders")
+	devDir := filepath.Join(tempDir, "dev")
+
+	for _, d := range []string{seedersDir, devDir} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("Failed to create dir %s: %v", d, err)
+		}
+	}
+
+	mockCfg := buildSeedsCleanerConfig(seedersDir, devDir, "false", "2")
+
+	cleaner := &SeedsCleaner{}
+	if err := cleaner.Init(mockCfg); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	if err := cleaner.Run(); err != nil {
+		t.Fatalf("Run() should succeed with no seeders, got: %v", err)
 	}
 }
