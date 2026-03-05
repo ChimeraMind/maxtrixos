@@ -188,16 +188,17 @@ func TestNewConfigAccessors(t *testing.T) {
 // writeParamsScript creates a params.sh in dir that exports the three
 // seeder variables and defines the <seedName>_params.find_latest_chroot_dir
 // function. Returns the full path to the script.
-func writeParamsScript(t *testing.T, dir, seedName, chrootName, chrootsDir, preferredDir, latestDir string) string {
+func writeParamsScript(t *testing.T, dir, seedName, chrootName, chrootsDir, preferredDir, latestDir string, allDirs []string) string {
 	t.Helper()
 	script := fmt.Sprintf(
 		"#!/bin/bash\n"+
 			"SEEDER_CHROOT_NAME=%q\n"+
 			"SEEDER_CHROOTS_DIR=%q\n"+
 			"PREFERRED_SEEDER_CHROOT_DIR=%q\n"+
-			"%s_params.find_latest_chroot_dir() { echo %q; }\n",
+			"%s_params.find_latest_chroot_dir() { echo %q; }\n"+
+			"%s_params.find_all_chroot_dirs() { echo %q | xargs -n 1; }",
 		chrootName, chrootsDir, preferredDir,
-		seedName, latestDir,
+		seedName, latestDir, seedName, strings.Join(allDirs, " "),
 	)
 	p := filepath.Join(dir, "params.sh")
 	if err := os.WriteFile(p, []byte(script), 0755); err != nil {
@@ -243,6 +244,10 @@ func TestParseSeederParams_Success(t *testing.T) {
 		"/mnt/chroots",
 		"/mnt/chroots/bedrock-20260228",
 		latestDir,
+		[]string{
+			"/mnt/chroots/bedrock-20260228",
+			"/mnt/chroots/bedrock-20260104",
+		},
 	)
 
 	sd := newRealSeeder(tmp)
@@ -268,6 +273,20 @@ func TestParseSeederParams_Success(t *testing.T) {
 		t.Errorf("LatestAvailableChrootDir: got %q, want %q",
 			params.LatestAvailableChrootDir, latestDir)
 	}
+
+	if len(params.AllChrootDirs) != 2 {
+		t.Errorf("len(AllChrootDirs): got %d, want %d",
+			len(params.AllChrootDirs), 2)
+	}
+
+	if params.AllChrootDirs[0] != "/mnt/chroots/bedrock-20260228" {
+		t.Errorf("AllChrootDirs[0]: got %q, want %q",
+			params.AllChrootDirs[0], "/mnt/chroots/bedrock-20260228")
+	}
+	if params.AllChrootDirs[1] != "/mnt/chroots/bedrock-20260104" {
+		t.Errorf("AllChrootDirs[1]: got %q, want %q",
+			params.AllChrootDirs[1], "/mnt/chroots/bedrock-20260104")
+	}
 }
 
 func TestParseSeederParams_UsesDevDir(t *testing.T) {
@@ -282,8 +301,9 @@ func TestParseSeederParams_UsesDevDir(t *testing.T) {
 		"SEEDER_CHROOT_NAME=\"${MATRIXOS_DEV_DIR}\"\n"+
 		"SEEDER_CHROOTS_DIR=/chroots\n"+
 		"PREFERRED_SEEDER_CHROOT_DIR=/chroots/test\n"+
-		"bedrock_params.find_latest_chroot_dir() { echo %q; }\n",
-		latestDir)
+		"bedrock_params.find_latest_chroot_dir() { echo %q; }\n"+
+		"bedrock_params.find_all_chroot_dirs() { echo %q; }\n",
+		latestDir, latestDir)
 	paramsFile := filepath.Join(tmp, "params.sh")
 	os.WriteFile(paramsFile, []byte(script), 0755)
 
@@ -306,6 +326,7 @@ func TestParseSeederParams_EmptyChrootName(t *testing.T) {
 
 	paramsFile := writeParamsScript(t, tmp,
 		"bedrock", "", "/mnt/chroots", "/mnt/chroots/bedrock", latestDir,
+		[]string{"/mnt/chroots/bedrock"},
 	)
 
 	sd := newRealSeeder(tmp)
@@ -326,6 +347,7 @@ func TestParseSeederParams_EmptyChrootsDir(t *testing.T) {
 
 	paramsFile := writeParamsScript(t, tmp,
 		"bedrock", "bedrock-20260228", "", "/mnt/chroots/bedrock", latestDir,
+		[]string{},
 	)
 
 	sd := newRealSeeder(tmp)
@@ -347,6 +369,7 @@ func TestParseSeederParams_EmptyPreferredChrootDir(t *testing.T) {
 
 	paramsFile := writeParamsScript(t, tmp,
 		"bedrock", "bedrock-20260228", "/mnt/chroots", "", latestDir,
+		[]string{},
 	)
 
 	sd := newRealSeeder(tmp)
@@ -368,6 +391,7 @@ func TestParseSeederParams_EmptyLatestChrootDir(t *testing.T) {
 	paramsFile := writeParamsScript(t, tmp,
 		"bedrock", "bedrock-20260228", "/mnt/chroots",
 		"/mnt/chroots/bedrock-20260228", "",
+		[]string{"/mnt/chroots/bedrock-20260228"},
 	)
 
 	sd := newRealSeeder(tmp)
@@ -388,7 +412,7 @@ func TestParseSeederParams_FunctionMissing(t *testing.T) {
 
 	// params.sh does NOT define bedrock_params.find_latest_chroot_dir.
 	// The || true in the template should prevent set -e from killing
-	// the script, yielding an empty 4th line.
+	// the script, yielding an empty 4th and 5th line.
 	script := "#!/bin/bash\n" +
 		"SEEDER_CHROOT_NAME=bedrock-20260228\n" +
 		"SEEDER_CHROOTS_DIR=/mnt/chroots\n" +
@@ -417,6 +441,7 @@ func TestParseSeederParams_LatestChrootDirNotExist(t *testing.T) {
 	paramsFile := writeParamsScript(t, tmp,
 		"bedrock", "bedrock-20260228", "/mnt/chroots",
 		"/mnt/chroots/bedrock-20260228", missingDir,
+		[]string{""},
 	)
 
 	sd := newRealSeeder(tmp)
@@ -429,6 +454,11 @@ func TestParseSeederParams_LatestChrootDirNotExist(t *testing.T) {
 		t.Errorf("LatestAvailableChrootDir: got %q, want %q",
 			params.LatestAvailableChrootDir, missingDir)
 	}
+
+	if len(params.AllChrootDirs) != 0 {
+		t.Errorf("len(AllChrootDirs): got %d, want %d",
+			len(params.AllChrootDirs), 0)
+	}
 }
 
 func TestParseParamsVariables_LatestAvailableChrootDir(t *testing.T) {
@@ -440,6 +470,7 @@ func TestParseParamsVariables_LatestAvailableChrootDir(t *testing.T) {
 	paramsFile := writeParamsScript(t, tmp,
 		"bedrock", "bedrock-20260228", "/mnt/chroots",
 		"/mnt/chroots/bedrock-20260228", latestDir,
+		[]string{latestDir},
 	)
 
 	sd := newRealSeeder(tmp)
@@ -482,6 +513,7 @@ func TestParseParamsVariables_DifferentSeedNames(t *testing.T) {
 			paramsFile := writeParamsScript(t, tmp,
 				tc.seedName, "chroot-name", "/chroots",
 				"/chroots/preferred", latestDir,
+				[]string{latestDir},
 			)
 
 			sd := newRealSeeder(tmp)
