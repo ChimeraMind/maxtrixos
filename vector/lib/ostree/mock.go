@@ -85,6 +85,15 @@ type MockOstree struct {
 
 	PrepareFilesystemHierarchyErr  error
 	ValidateFilesystemHierarchyErr error
+
+	Sysroot_   string
+	SysrootErr error
+
+	GpgPrivateKeyPath_   string
+	GpgPrivateKeyPathErr error
+
+	GpgBestPubKeyPath_   string
+	GpgBestPubKeyPathErr error
 }
 
 func (m *MockOstree) CloneForRef(ref string) (IOstree, error) {
@@ -115,17 +124,21 @@ func (m *MockOstree) RemoveFullFromBranch() (string, error) {
 	return strings.TrimSuffix(m.Ref_, "-full"), nil
 }
 func (m *MockOstree) GpgEnabled() (bool, error)                  { return m.GpgEnabled_, m.GpgEnabledErr }
-func (m *MockOstree) GpgPrivateKeyPath() (string, error)         { return "", nil }
+func (m *MockOstree) GpgPrivateKeyPath() (string, error) {
+	return m.GpgPrivateKeyPath_, m.GpgPrivateKeyPathErr
+}
 func (m *MockOstree) GpgPublicKeyPath() (string, error)          { return "", nil }
 func (m *MockOstree) GpgOfficialPubKeyPath() (string, error)     { return "", nil }
 func (m *MockOstree) OsName() (string, error)                    { return m.OsName_, m.OsNameErr }
 func (m *MockOstree) Arch() (string, error)                      { return m.Arch_, m.ArchErr }
 func (m *MockOstree) RepoDir() (string, error)                   { return m.RepoDir_, m.RepoDirErr }
-func (m *MockOstree) Sysroot() (string, error)                   { return "", nil }
+func (m *MockOstree) Sysroot() (string, error)                   { return m.Sysroot_, m.SysrootErr }
 func (m *MockOstree) Remote() (string, error)                    { return m.Remote_, m.RemoteErr }
 func (m *MockOstree) RemoteURL() (string, error)                 { return "", nil }
 func (m *MockOstree) AvailableGpgPubKeyPaths() ([]string, error) { return nil, nil }
-func (m *MockOstree) GpgBestPubKeyPath() (string, error)         { return "", nil }
+func (m *MockOstree) GpgBestPubKeyPath() (string, error) {
+	return m.GpgBestPubKeyPath_, m.GpgBestPubKeyPathErr
+}
 func (m *MockOstree) ClientSideGpgArgs() ([]string, error)       { return nil, nil }
 func (m *MockOstree) GpgHomeDir() (string, error)                { return "", nil }
 func (m *MockOstree) GpgKeyID() (string, error)                  { return "", nil }
