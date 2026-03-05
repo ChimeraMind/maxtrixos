@@ -428,8 +428,8 @@ main() {
 
         if _run_janitor_flag; then
             echo "Running janitor clean ups ..."
-            "${MATRIXOS_DEV_DIR}"/dev/clean_old_builds.sh
             "${VECTOR_EXEC}" dev janitor
+            "${MATRIXOS_DEV_DIR}"/dev/clean_old_builds.sh
         fi
 
         local cdn_pusher=
