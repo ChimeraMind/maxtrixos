@@ -38,6 +38,10 @@ func setupJanitorTest(t *testing.T) (cleanup func(), imgOld, imgNew, dlFile, log
 	imgOld = filepath.Join(imagesDir, "matrixos-20230101.img.xz")
 	imgNew = filepath.Join(imagesDir, "matrixos-20230102.img.xz")
 	dlFile = filepath.Join(downloadsDir, "some-download.tar.gz")
+	seedersDir := filepath.Join(tmpDir, "seeders")
+	if err := os.MkdirAll(seedersDir, 0755); err != nil {
+		t.Fatalf("failed to create seeders dir: %v", err)
+	}
 	logFile = filepath.Join(logsWeeklyDir, "build.log")
 
 	for _, f := range []string{imgOld, imgNew, dlFile, logFile} {
@@ -62,6 +66,11 @@ ImagesDir = %s
 
 [Seeder]
 DownloadsDir = %s
+ChrootSeedersDir = %s/seeders
+SeederDisabledFileName = __disabled__
+ChrootExecutableName = chroot.sh
+PrepperExecutableName = prepper.sh
+ParamsExecutableName = params.sh
 
 [matrixOS]
 Root = %s
@@ -76,7 +85,11 @@ DryRun = false
 
 [LogsCleaner]
 DryRun = false
-`, imagesDir, downloadsDir, tmpDir, logsDir)
+
+[SeedsCleaner]
+DryRun = false
+MinAmountOfSeeds = 2
+`, imagesDir, downloadsDir, tmpDir, tmpDir, logsDir)
 
 	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
