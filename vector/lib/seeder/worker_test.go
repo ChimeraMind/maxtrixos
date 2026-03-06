@@ -867,6 +867,7 @@ func TestSeed_Success(t *testing.T) {
 	mr := runner.NewMockRunner()
 	cfg := workerTestConfig()
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["matrixOS.Root"] = []string{"/sr/build/daily"}
 
 	sd := &Seeder{
 		cfg:          cfg,
@@ -877,8 +878,9 @@ func TestSeed_Success(t *testing.T) {
 	}
 
 	info := SeederInfo{
-		Name:       "00-bedrock",
-		ChrootExec: "/build/seeders/00-bedrock/chroot.sh",
+		Name:             "00-bedrock",
+		ChrootExec:       "/srv/build/daily/build/seeders/00-bedrock/chroot.sh",
+		ChrootChrootExec: "/matrixos/build/seeders/00-bedrock/chroot.sh",
 	}
 	if err := sd.Seed("/mnt/chroot", info); err != nil {
 		t.Fatalf("Seed: unexpected error: %v", err)
@@ -888,7 +890,7 @@ func TestSeed_Success(t *testing.T) {
 		t.Fatalf("expected 1 call, got %d", len(mr.Calls))
 	}
 	call := mr.Calls[0]
-	if call.Name != "chroot:/build/seeders/00-bedrock/chroot.sh" {
+	if call.Name != "chroot:/matrixos/build/seeders/00-bedrock/chroot.sh" {
 		t.Errorf("Name = %q, want chroot exec name", call.Name)
 	}
 	if call.ChrootDir != "/mnt/chroot" {

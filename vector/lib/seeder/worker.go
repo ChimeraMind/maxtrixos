@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/template"
 
+	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/runner"
 )
@@ -252,6 +253,16 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 	}
 
 	env := os.Environ()
+	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
+	env = config.FilterEnvKey(env, "SEEDER_CHROOT_NAME")
+	env = config.FilterEnvKey(env, "SEEDER_CHROOTS_DIR")
+	env = config.FilterEnvKey(env, "PREFERRED_SEEDER_CHROOT_DIR")
+	env = config.FilterEnvKey(env, "CHROOT_DIR")
+	env = config.FilterEnvKey(env, "DOWNLOAD_DIR")
+	env = config.FilterEnvKey(env, "CHROOT_RESUME")
+	env = config.FilterEnvKey(env, "STAGE3_FILE")
+	env = config.FilterEnvKey(env, "STAGE3_URL")
+
 	env = append(env,
 		"MATRIXOS_DEV_DIR="+devDir,
 		"SEEDER_CHROOT_NAME="+params.ChrootName,
@@ -602,6 +613,7 @@ func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
 	}
 
 	env := os.Environ()
+	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
 	// Inside the chroot, we always want /matrixos.
 	env = append(env, "MATRIXOS_DEV_DIR="+defaultDevDir)
 
