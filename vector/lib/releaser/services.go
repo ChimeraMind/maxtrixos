@@ -282,6 +282,15 @@ func (r *Releaser) ReleaseHook() error {
 		return err
 	}
 
+	defaultUsername, err := r.configItem("matrixOS.DefaultUsername")
+	if err != nil {
+		return err
+	}
+	OSName, err := r.configItem("matrixOS.OsName")
+	if err != nil {
+		return err
+	}
+
 	hookPath := filepath.Join(hooksDir, ref+".sh")
 	if !filesystems.FileExists(hookPath) {
 		r.PrintWarning(
@@ -300,9 +309,12 @@ func (r *Releaser) ReleaseHook() error {
 	env = config.FilterEnvKey(env, "MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH")
 	cmd.Env = append(
 		env,
+		"REF="+ref,
 		"CHROOT_DIR="+r.imageDir,
 		"MATRIXOS_DEV_DIR="+devDir,
 		"MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH="+defaultPrivPath,
+		"MATRIXOS_DEFAULT_USERNAME="+defaultUsername,
+		"MATRIXOS_OSNAME="+OSName,
 	)
 	cmd.Stdout = r.stdout
 	cmd.Stderr = r.stderr
