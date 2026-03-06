@@ -157,7 +157,7 @@ func (c *EnterCommand) run() error {
 		if target == name {
 			// Bare name — will be resolved against detected seeders.
 			chrootNames = append(chrootNames, target)
-			continue
+			// continue and try also to collect more chroot names via params.
 		}
 
 		if params, ok := seedersParams[target]; ok {
@@ -169,10 +169,7 @@ func (c *EnterCommand) run() error {
 				chrootName := filepath.Base(params.LatestAvailableChrootDir)
 				chrootNames = append(chrootNames, chrootName)
 			}
-			continue
 		}
-
-		return fmt.Errorf("unable to accept %s, unrecognized argument", target)
 	}
 
 	// Resolve bare names by scanning seeder params for SEEDER_CHROOTS_DIR.
@@ -182,7 +179,7 @@ func (c *EnterCommand) run() error {
 			fmt.Printf("  %s\n", name)
 		}
 
-		resolved, err := c.resolveNames(sd, seedersParams, chrootNames)
+		resolved, err := c.resolveNames(seedersParams, chrootNames)
 		if err != nil {
 			return err
 		}
@@ -209,20 +206,11 @@ func (c *EnterCommand) run() error {
 
 // resolveNames maps bare chroot names to full paths by examining
 // each detected seeder's params for SEEDER_CHROOTS_DIR.
-func (c *EnterCommand) resolveNames(sd seeder.ISeeder, sps SeedersParams, names []string) ([]string, error) {
-	paramsName, err := sd.ParamsExecutableName()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get params executable name: %w", err)
-	}
-
+func (c *EnterCommand) resolveNames(sps SeedersParams, names []string) ([]string, error) {
 	// Collect all unique SEEDER_CHROOTS_DIR values.
 	seen := make(map[string]bool)
 	var chrootsDirs []string
 	for _, info := range c.detected {
-		paramsPath := filepath.Join(info.Dir, paramsName)
-		if !filesystems.FileExists(paramsPath) {
-			continue
-		}
 		params, ok := sps[info.Name]
 		if !ok {
 			continue
@@ -238,9 +226,14 @@ func (c *EnterCommand) resolveNames(sd seeder.ISeeder, sps SeedersParams, names 
 
 	// Look for each name inside the collected chroots dirs.
 	var resolved []string
+	resolvedSeen := make(map[string]bool)
 	for _, name := range names {
 		for _, dir := range chrootsDirs {
 			candidate := filepath.Join(dir, name)
+			if resolvedSeen[candidate] {
+				continue
+			}
+			resolvedSeen[candidate] = true
 			if filesystems.DirectoryExists(candidate) {
 				resolved = append(resolved, candidate)
 			}
