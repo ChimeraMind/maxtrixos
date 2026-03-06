@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/runner"
@@ -247,14 +248,8 @@ func (c *EnterCommand) enterChrootWithLock(sd seeder.ISeeder, chrootDir string) 
 			// Skip seeders whose params cannot be parsed.
 			continue
 		}
-		for _, dir := range params.AllChrootDirs {
-			fmt.Println(dir)
-			if dir == chrootDir {
-				seeder = &info
-				break
-			}
-		}
-		if seeder != nil {
+		if slices.Contains(params.AllChrootDirs, chrootDir) {
+			seeder = &info
 			break
 		}
 	}
