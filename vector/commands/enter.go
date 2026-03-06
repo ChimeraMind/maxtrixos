@@ -248,6 +248,7 @@ func (c *EnterCommand) enterChrootWithLock(sd seeder.ISeeder, chrootDir string) 
 			continue
 		}
 		for _, dir := range params.AllChrootDirs {
+			fmt.Println(dir)
 			if dir == chrootDir {
 				seeder = &info
 				break
