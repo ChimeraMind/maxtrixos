@@ -214,7 +214,7 @@ func (c *SeedsCommand) runSeeds() error {
 	// Print execution plan.
 	c.Printf("Will execute seeders in the following order:\n")
 	for _, s := range seeders {
-		c.Printf("  %s\n", s.ChrootExec)
+		c.Printf("  %s\n", s.Dir)
 	}
 
 	// Initialize output files.
@@ -239,7 +239,7 @@ func (c *SeedsCommand) runSeeds() error {
 	writerSetup(sd)
 	c.Printf("Seeds build complete:\n")
 	for _, info := range seeders {
-		c.Printf("  [%s] %s done.\n", info.Name, info.ChrootExec)
+		c.Printf("  [%s] %s done.\n", info.Name, info.Dir)
 	}
 	return nil
 }

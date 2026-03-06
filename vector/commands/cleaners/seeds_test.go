@@ -455,10 +455,11 @@ PREFERRED_SEEDER_CHROOT_DIR="%s"
 
 // buildSeedsCleanerConfig returns a MockConfig wired for SeedsCleaner.Run().
 func buildSeedsCleanerConfig(
-	seedersDir, devDir, dryRun, minSeeds string,
+	seedersDir, chrootSeedersDir, devDir, dryRun, minSeeds string,
 ) *config.MockConfig {
 	return &config.MockConfig{Items: map[string][]string{
-		"Seeder.ChrootSeedersDir":       {seedersDir},
+		"Seeder.SeedersDir":             {seedersDir},
+		"Seeder.ChrootSeedersDir":       {chrootSeedersDir},
 		"Seeder.SeederDisabledFileName": {".disabled"},
 		"Seeder.ChrootExecutableName":   {"chroot.sh"},
 		"Seeder.PrepperExecutableName":  {"prepper.sh"},
@@ -530,9 +531,11 @@ func TestSeedsCleaner_Run_Integration(t *testing.T) {
 			tempDir := t.TempDir()
 			seedersDir := filepath.Join(tempDir, "seeders")
 			chrootsDir := filepath.Join(tempDir, "chroots")
+			chrootsSeedersTempDir := t.TempDir()
+			chrootsSeedersDir := filepath.Join(chrootsSeedersTempDir, "build", "seeders")
 			devDir := filepath.Join(tempDir, "dev")
 
-			for _, d := range []string{seedersDir, chrootsDir, devDir} {
+			for _, d := range []string{seedersDir, chrootsDir, chrootsSeedersDir, devDir} {
 				if err := os.MkdirAll(d, 0755); err != nil {
 					t.Fatalf("Failed to create dir %s: %v", d, err)
 				}
@@ -540,7 +543,13 @@ func TestSeedsCleaner_Run_Integration(t *testing.T) {
 
 			createTestSeeder(t, seedersDir, chrootsDir, "00-bedrock", "bedrock", tt.chrootDirs)
 
-			mockCfg := buildSeedsCleanerConfig(seedersDir, devDir, tt.dryRun, tt.minSeeds)
+			mockCfg := buildSeedsCleanerConfig(
+				seedersDir,
+				chrootsSeedersDir,
+				devDir,
+				tt.dryRun,
+				tt.minSeeds,
+			)
 
 			cleaner := &SeedsCleaner{}
 			if err := cleaner.Init(mockCfg); err != nil {
@@ -578,8 +587,10 @@ func TestSeedsCleaner_Run_Integration_MultipleSeeders(t *testing.T) {
 	seedersDir := filepath.Join(tempDir, "seeders")
 	chrootsDir := filepath.Join(tempDir, "chroots")
 	devDir := filepath.Join(tempDir, "dev")
+	chrootsSeedersTempDir := t.TempDir()
+	chrootsSeedersDir := filepath.Join(chrootsSeedersTempDir, "build", "seeders")
 
-	for _, d := range []string{seedersDir, chrootsDir, devDir} {
+	for _, d := range []string{seedersDir, chrootsDir, chrootsSeedersDir, devDir} {
 		if err := os.MkdirAll(d, 0755); err != nil {
 			t.Fatalf("Failed to create dir %s: %v", d, err)
 		}
@@ -593,7 +604,7 @@ func TestSeedsCleaner_Run_Integration_MultipleSeeders(t *testing.T) {
 	createTestSeeder(t, seedersDir, chrootsDir, "10-server", "server",
 		[]string{"server-20260201", "server-20260202"})
 
-	mockCfg := buildSeedsCleanerConfig(seedersDir, devDir, "false", "2")
+	mockCfg := buildSeedsCleanerConfig(seedersDir, chrootsSeedersDir, devDir, "false", "2")
 
 	cleaner := &SeedsCleaner{}
 	if err := cleaner.Init(mockCfg); err != nil {
@@ -635,14 +646,16 @@ func TestSeedsCleaner_Run_Integration_NoSeeders(t *testing.T) {
 	tempDir := t.TempDir()
 	seedersDir := filepath.Join(tempDir, "seeders")
 	devDir := filepath.Join(tempDir, "dev")
+	chrootsSeedersTempDir := t.TempDir()
+	chrootsSeedersDir := filepath.Join(chrootsSeedersTempDir, "build", "seeders")
 
-	for _, d := range []string{seedersDir, devDir} {
+	for _, d := range []string{seedersDir, chrootsSeedersDir, devDir} {
 		if err := os.MkdirAll(d, 0755); err != nil {
 			t.Fatalf("Failed to create dir %s: %v", d, err)
 		}
 	}
 
-	mockCfg := buildSeedsCleanerConfig(seedersDir, devDir, "false", "2")
+	mockCfg := buildSeedsCleanerConfig(seedersDir, chrootsSeedersDir, devDir, "false", "2")
 
 	cleaner := &SeedsCleaner{}
 	if err := cleaner.Init(mockCfg); err != nil {
