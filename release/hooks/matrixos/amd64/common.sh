@@ -184,9 +184,9 @@ release_common.check_leaking_buckets() {
 
     local failure=
 
-    local private_git_repo_path="${imagedir}/${MATRIXOS_PRIVATE_GIT_REPO_PATH}"
+    local private_git_repo_path="${imagedir}/${MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH}"
     if [ -d "${private_git_repo_path}" ] && [ "$(ls -A "${private_git_repo_path}")" ]; then
-        echo "ERROR: Leaking files found in private git repo path: ${MATRIXOS_PRIVATE_GIT_REPO_PATH}" >&2
+        echo "ERROR: Leaking files found in private git repo path: ${MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH}" >&2
         echo "Leaking files:" >&2
         ls -la "${private_git_repo_path}" >&2
         failure=1

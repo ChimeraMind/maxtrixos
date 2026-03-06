@@ -432,6 +432,8 @@ release_lib.release_hook() {
     fi
     echo "Running release hook ${hook_exec} ..."
     (
+        export MATRIXOS_DEV_DIR
+        export MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH
         export CHROOT_DIR="${imagedir}"
         "${hook_exec}"
     )
