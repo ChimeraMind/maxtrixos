@@ -71,6 +71,8 @@ func (r *Releaser) CleanRootfs() error {
 
 	removeFiles := []string{
 		"/etc/resolv.conf",
+		"/etc/ssl/apache2/server.key",
+		"/etc/ssl/apache2/server.pem",
 		"/etc/portage/secureboot.x509",
 		"/root/.bash_history",
 		"/root/.lesshst",
