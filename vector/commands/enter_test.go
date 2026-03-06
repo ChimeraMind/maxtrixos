@@ -27,6 +27,13 @@ func newTestEnterCommand(
 
 	cmd := NewEnterCommand()
 	cmd.det = det
+	if det != nil {
+		detected, err := det.Detect(nil, nil)
+		if err != nil {
+			return nil, fmt.Errorf("seeder detection failed: %w", err)
+		}
+		cmd.detected = detected
+	}
 	if chrootRunner != nil {
 		cmd.chrootRunner = chrootRunner
 	}
@@ -447,12 +454,9 @@ func TestEnterDetectionError(t *testing.T) {
 		DetectErr: fmt.Errorf("detection failed"),
 	}
 
-	cmd, err := newTestEnterCommand(det, nil, []string{"somename"})
-	if err != nil {
-		t.Fatalf("newTestEnterCommand: %v", err)
-	}
-
-	err = cmd.run()
+	// Detection now happens during Init (simulated by newTestEnterCommand),
+	// so the error is returned at construction time.
+	_, err := newTestEnterCommand(det, nil, []string{"somename"})
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
