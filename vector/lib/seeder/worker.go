@@ -607,7 +607,7 @@ func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
 
 	return s.chrootRunner(&runner.ChrootCmd{
 		Cmd: runner.Cmd{
-			Name:   info.ChrootExec,
+			Name:   info.ChrootChrootExec,
 			Env:    env,
 			Stdout: s.stdout,
 			Stderr: s.stderr,

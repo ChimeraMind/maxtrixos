@@ -11,10 +11,11 @@ import (
 
 // newDetectTestDetector sets up a SeederDetector with mock config pointing at a real
 // temp directory tree so Detect can walk the filesystem.
-func newDetectTestDetector(t *testing.T, seedersDir string) *SeederDetector {
+func newDetectTestDetector(t *testing.T, seedersDir, chrootSeedersDir string) *SeederDetector {
 	t.Helper()
 	cfg := &config.MockConfig{Items: map[string][]string{
 		"Seeder.SeedersDir":             {seedersDir},
+		"Seeder.ChrootSeedersDir":       {chrootSeedersDir},
 		"Seeder.SeederDisabledFileName": {"__disabled__"},
 		"Seeder.ChrootExecutableName":   {"chroot.sh"},
 		"Seeder.PrepperExecutableName":  {"prepper.sh"},
@@ -56,10 +57,11 @@ func TestNewSeederDetector_NilConfig(t *testing.T) {
 
 func TestDetect_FindsAllSeeders(t *testing.T) {
 	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
 	createSeederDir(t, seedersDir, "00-bedrock")
 	createSeederDir(t, seedersDir, "10-server")
 
-	d := newDetectTestDetector(t, seedersDir)
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 	got, err := d.Detect(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -75,8 +77,37 @@ func TestDetect_FindsAllSeeders(t *testing.T) {
 	}
 }
 
+func TestDetect_ChrootChrootExec(t *testing.T) {
+	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
+	createSeederDir(t, seedersDir, "00-bedrock")
+	createSeederDir(t, seedersDir, "10-server")
+
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
+	got, err := d.Detect(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 seeders, got %d", len(got))
+	}
+	expectedChrootExec := filepath.Join(seedersDir, "00-bedrock", "chroot.sh")
+	if got[0].ChrootExec != expectedChrootExec {
+		t.Errorf("first seeder ChrootExec = %q, want %q",
+			got[0].ChrootExec, expectedChrootExec,
+		)
+	}
+	expectedChrootChrootExec := filepath.Join(chrootSeedersDir, "00-bedrock", "chroot.sh")
+	if got[0].ChrootChrootExec != expectedChrootChrootExec {
+		t.Errorf("first seeder ChrootChrootExec = %q, want %q",
+			got[0].ChrootChrootExec, expectedChrootChrootExec,
+		)
+	}
+}
+
 func TestDetect_SkipsDisabledSeeder(t *testing.T) {
 	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
 	dir := createSeederDir(t, seedersDir, "00-bedrock")
 	createSeederDir(t, seedersDir, "10-server")
 
@@ -85,7 +116,7 @@ func TestDetect_SkipsDisabledSeeder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	d := newDetectTestDetector(t, seedersDir)
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 	got, err := d.Detect(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -100,12 +131,13 @@ func TestDetect_SkipsDisabledSeeder(t *testing.T) {
 
 func TestDetect_SkipFilter(t *testing.T) {
 	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
 	createSeederDir(t, seedersDir, "00-bedrock")
 	createSeederDir(t, seedersDir, "10-server")
 
 	skip := func(name string) bool { return name == "10-server" }
 
-	d := newDetectTestDetector(t, seedersDir)
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 	got, err := d.Detect(skip, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -120,12 +152,13 @@ func TestDetect_SkipFilter(t *testing.T) {
 
 func TestDetect_OnlyFilter(t *testing.T) {
 	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
 	createSeederDir(t, seedersDir, "00-bedrock")
 	createSeederDir(t, seedersDir, "10-server")
 
 	only := func(name string) bool { return name == "10-server" }
 
-	d := newDetectTestDetector(t, seedersDir)
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 	got, err := d.Detect(nil, only)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -140,12 +173,13 @@ func TestDetect_OnlyFilter(t *testing.T) {
 
 func TestDetect_SkipTakesPrecedenceOverOnly(t *testing.T) {
 	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
 	createSeederDir(t, seedersDir, "10-server")
 
 	skip := func(name string) bool { return name == "10-server" }
 	only := func(name string) bool { return name == "10-server" }
 
-	d := newDetectTestDetector(t, seedersDir)
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 	got, err := d.Detect(skip, only)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -157,6 +191,7 @@ func TestDetect_SkipTakesPrecedenceOverOnly(t *testing.T) {
 
 func TestDetect_SkipsDirWithoutChrootExec(t *testing.T) {
 	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
 	// Create a directory without chroot.sh.
 	dir := filepath.Join(seedersDir, "99-nochroot")
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -166,7 +201,7 @@ func TestDetect_SkipsDirWithoutChrootExec(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	d := newDetectTestDetector(t, seedersDir)
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 	got, err := d.Detect(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -178,6 +213,7 @@ func TestDetect_SkipsDirWithoutChrootExec(t *testing.T) {
 
 func TestDetect_ErrorNonExecutableChroot(t *testing.T) {
 	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
 	dir := filepath.Join(seedersDir, "00-bedrock")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
@@ -190,7 +226,7 @@ func TestDetect_ErrorNonExecutableChroot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	d := newDetectTestDetector(t, seedersDir)
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 	_, err := d.Detect(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for non-executable chroot.sh")
@@ -199,6 +235,7 @@ func TestDetect_ErrorNonExecutableChroot(t *testing.T) {
 
 func TestDetect_ErrorMissingPrepper(t *testing.T) {
 	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
 	dir := filepath.Join(seedersDir, "00-bedrock")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
@@ -208,7 +245,7 @@ func TestDetect_ErrorMissingPrepper(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	d := newDetectTestDetector(t, seedersDir)
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 	_, err := d.Detect(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for missing prepper.sh")
@@ -217,6 +254,7 @@ func TestDetect_ErrorMissingPrepper(t *testing.T) {
 
 func TestDetect_ErrorNonExecutablePrepper(t *testing.T) {
 	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
 	dir := filepath.Join(seedersDir, "00-bedrock")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
@@ -229,7 +267,7 @@ func TestDetect_ErrorNonExecutablePrepper(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	d := newDetectTestDetector(t, seedersDir)
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 	_, err := d.Detect(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for non-executable prepper.sh")
@@ -257,7 +295,8 @@ func TestDetect_SeedersDirNotDirectory(t *testing.T) {
 
 func TestDetect_EmptyDir(t *testing.T) {
 	seedersDir := t.TempDir()
-	d := newDetectTestDetector(t, seedersDir)
+	chrootSeedersDir := t.TempDir()
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 
 	got, err := d.Detect(nil, nil)
 	if err != nil {
@@ -270,9 +309,10 @@ func TestDetect_EmptyDir(t *testing.T) {
 
 func TestDetect_PopulatesSeederInfo(t *testing.T) {
 	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
 	createSeederDir(t, seedersDir, "00-bedrock")
 
-	d := newDetectTestDetector(t, seedersDir)
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 	got, err := d.Detect(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -298,13 +338,14 @@ func TestDetect_PopulatesSeederInfo(t *testing.T) {
 
 func TestDetect_SkipsNonDirectoryEntries(t *testing.T) {
 	seedersDir := t.TempDir()
+	chrootSeedersDir := t.TempDir()
 	// Create a regular file in the seeders dir (not a subdirectory).
 	if err := os.WriteFile(filepath.Join(seedersDir, "README.md"), []byte("hi"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	createSeederDir(t, seedersDir, "00-bedrock")
 
-	d := newDetectTestDetector(t, seedersDir)
+	d := newDetectTestDetector(t, seedersDir, chrootSeedersDir)
 	got, err := d.Detect(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

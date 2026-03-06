@@ -77,6 +77,12 @@ func (d *SeederDetector) Detect(skip, only SeederFilterFunc) ([]SeederInfo, erro
 		return nil, fmt.Errorf("%s seeders dir is not a directory", seedersDir)
 	}
 
+	chrootSeedersDir, err := d.configItem("Seeder.ChrootSeedersDir")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chroot seeders dir: %w", err)
+	}
+	// do not test for the path inside the chroot, because it may not exist.
+
 	disabledFile, err := d.configItem("Seeder.SeederDisabledFileName")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get disabled seeder file name: %w", err)
@@ -102,6 +108,7 @@ func (d *SeederDetector) Detect(skip, only SeederFilterFunc) ([]SeederInfo, erro
 		}
 
 		seederDir := filepath.Join(seedersDir, entry.Name())
+		chrootSeederDir := filepath.Join(chrootSeedersDir, entry.Name())
 
 		// Check for disabled marker file.
 		disabled := filepath.Join(seederDir, disabledFile)
@@ -144,14 +151,21 @@ func (d *SeederDetector) Detect(skip, only SeederFilterFunc) ([]SeederInfo, erro
 			return nil, fmt.Errorf("please chmod +x %s", prepperExec)
 		}
 
-		fmt.Fprintf(d.stderr, "Found seeder at: %s\n", seederExec)
+		chrootSeederExec := filepath.Join(chrootSeederDir, chrootExecName)
+		fmt.Fprintf(
+			d.stderr,
+			"Found seeder at: %s (inside chroot: %s)\n",
+			seederExec,
+			chrootSeederExec,
+		)
 		fmt.Fprintf(d.stderr, "Found prepper at: %s\n", prepperExec)
 
 		seeders = append(seeders, SeederInfo{
-			Name:        seederName,
-			Dir:         seederDir,
-			ChrootExec:  seederExec,
-			PrepperExec: prepperExec,
+			Name:             seederName,
+			Dir:              seederDir,
+			ChrootExec:       seederExec,
+			ChrootChrootExec: chrootSeederExec,
+			PrepperExec:      prepperExec,
 		})
 	}
 
