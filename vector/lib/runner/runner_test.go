@@ -85,6 +85,85 @@ func TestRun_WithEnv(t *testing.T) {
 	}
 }
 
+func TestOutput_WithEnv(t *testing.T) {
+	cmd := &Cmd{
+		Name: "env",
+		Env:  []string{"MY_OUTPUT_VAR=from_output"},
+	}
+	out, err := Output(cmd)
+	if err != nil {
+		t.Fatalf("Output(env): unexpected error: %v", err)
+	}
+	if !strings.Contains(string(out), "MY_OUTPUT_VAR=from_output") {
+		t.Errorf("env output should contain MY_OUTPUT_VAR, got: %s", string(out))
+	}
+}
+
+func TestCombinedOutput_WithEnv(t *testing.T) {
+	cmd := &Cmd{
+		Name: "env",
+		Env:  []string{"MY_COMBINED_VAR=from_combined"},
+	}
+	out, err := CombinedOutput(cmd)
+	if err != nil {
+		t.Fatalf("CombinedOutput(env): unexpected error: %v", err)
+	}
+	if !strings.Contains(string(out), "MY_COMBINED_VAR=from_combined") {
+		t.Errorf("env output should contain MY_COMBINED_VAR, got: %s", string(out))
+	}
+}
+
+func TestChrootRun_PassesEnv(t *testing.T) {
+	origRun := Run
+	defer func() { Run = origRun }()
+
+	var capturedEnv []string
+	Run = func(c *Cmd) error {
+		capturedEnv = c.Env
+		return nil
+	}
+
+	env := []string{"CHROOT_VAR=run_env"}
+	err := ChrootRun(&ChrootCmd{
+		Cmd: Cmd{
+			Name:   "/bin/sh",
+			Env:    env,
+			Stdout: io.Discard,
+			Stderr: io.Discard,
+		},
+		ChrootDir: "/mnt",
+	})
+	if err != nil {
+		t.Fatalf("ChrootRun: unexpected error: %v", err)
+	}
+	if len(capturedEnv) != 1 || capturedEnv[0] != "CHROOT_VAR=run_env" {
+		t.Errorf("env not passed through ChrootRun: got %v", capturedEnv)
+	}
+}
+
+func TestChrootOutput_PassesEnv(t *testing.T) {
+	origOutput := Output
+	defer func() { Output = origOutput }()
+
+	var capturedEnv []string
+	Output = func(c *Cmd) ([]byte, error) {
+		capturedEnv = c.Env
+		return nil, nil
+	}
+
+	env := []string{"CHROOT_VAR=output_env"}
+	_, err := ChrootOutput(&ChrootCmd{
+		Cmd:       Cmd{Name: "/bin/sh", Env: env},
+		ChrootDir: "/mnt",
+	})
+	if err != nil {
+		t.Fatalf("ChrootOutput: unexpected error: %v", err)
+	}
+	if len(capturedEnv) != 1 || capturedEnv[0] != "CHROOT_VAR=output_env" {
+		t.Errorf("env not passed through ChrootOutput: got %v", capturedEnv)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // chrootArgs
 // ---------------------------------------------------------------------------

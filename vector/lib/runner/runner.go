@@ -145,6 +145,7 @@ var ChrootRun ChrootRunFunc = func(c *ChrootCmd) error {
 	return Run(&Cmd{
 		Name:   "unshare",
 		Args:   uArgs,
+		Env:    c.Env,
 		Stdin:  c.Stdin,
 		Stdout: c.Stdout,
 		Stderr: c.Stderr,
@@ -157,5 +158,10 @@ var ChrootOutput ChrootOutputFunc = func(c *ChrootCmd) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Output(&Cmd{Name: "unshare", Args: uArgs})
+	return Output(&Cmd{
+		Name:  "unshare",
+		Args:  uArgs,
+		Env:   c.Env,
+		Stdin: c.Stdin,
+	})
 }
