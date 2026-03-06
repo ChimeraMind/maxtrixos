@@ -11,10 +11,10 @@ import (
 
 // newDetectTestDetector sets up a SeederDetector with mock config pointing at a real
 // temp directory tree so Detect can walk the filesystem.
-func newDetectTestDetector(t *testing.T, chrootSeedersDir string) *SeederDetector {
+func newDetectTestDetector(t *testing.T, seedersDir string) *SeederDetector {
 	t.Helper()
 	cfg := &config.MockConfig{Items: map[string][]string{
-		"Seeder.ChrootSeedersDir":       {chrootSeedersDir},
+		"Seeder.SeedersDir":             {seedersDir},
 		"Seeder.SeederDisabledFileName": {"__disabled__"},
 		"Seeder.ChrootExecutableName":   {"chroot.sh"},
 		"Seeder.PrepperExecutableName":  {"prepper.sh"},
@@ -238,7 +238,7 @@ func TestDetect_ErrorNonExecutablePrepper(t *testing.T) {
 
 func TestDetect_SeedersDirNotDirectory(t *testing.T) {
 	cfg := &config.MockConfig{Items: map[string][]string{
-		"Seeder.ChrootSeedersDir":       {"/nonexistent/path"},
+		"Seeder.SeedersDir":             {"/nonexistent/path"},
 		"Seeder.SeederDisabledFileName": {"__disabled__"},
 		"Seeder.ChrootExecutableName":   {"chroot.sh"},
 		"Seeder.PrepperExecutableName":  {"prepper.sh"},

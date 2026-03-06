@@ -61,6 +61,8 @@ type ISeeder interface {
 	// PrintError writes a formatted error/diagnostic message to stderr.
 	PrintError(format string, args ...any)
 
+	// SeedersDir returns the path where seeder scripts are placed in the build toolkit.
+	SeedersDir() (string, error)
 	// ChrootSeedersDir returns the base seeders directory path.
 	ChrootSeedersDir() (string, error)
 	// ChrootBuildArtifactsDir returns the directory path for build artifacts inside the chroot.
