@@ -559,11 +559,9 @@ func TestEnterRunSkipsLockWithFlag(t *testing.T) {
 		return nil
 	}
 
-	sd := seeder.DefaultMockSeeder()
+	sd, det := enterLockTestSetup(t, chrootDir)
 	restore := withMockSeeder(sd)
 	defer restore()
-
-	det := &seeder.MockSeederDetector{}
 
 	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{"--skiplock", chrootDir})
 	if err != nil {
@@ -630,11 +628,9 @@ func TestEnterRunSkipLockWithMultipleDirectories(t *testing.T) {
 		return nil
 	}
 
-	sd := seeder.DefaultMockSeeder()
+	sd, det := enterLockTestSetup(t, chrootDir1, chrootDir2)
 	restore := withMockSeeder(sd)
 	defer restore()
-
-	det := &seeder.MockSeederDetector{}
 
 	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{"--skiplock", chrootDir1, chrootDir2})
 	if err != nil {
@@ -714,8 +710,10 @@ func TestEnterRunLockUsesSeederName(t *testing.T) {
 }
 
 func TestEnterRunLockNoMatchingSeeder(t *testing.T) {
-	// If the chroot dir doesn't match any seeder's AllChrootDirs,
-	// enterChrootWithLock should return an error suggesting --skiplock.
+	// chrootDir exists on disk but is NOT in any seeder's AllChrootDirs.
+	// The DirectoryExists fallback accepts it at classification time,
+	// but enterChrootWithLock can't find a matching seeder, triggering
+	// "no valid seeder chroot found" error suggesting --skiplock.
 	chrootDir := t.TempDir()
 
 	seederDir := filepath.Join(t.TempDir(), "00-bedrock")
@@ -1097,6 +1095,8 @@ func TestEnterRunSeederNameTargetNotInParams(t *testing.T) {
 func TestEnterRunLockWithPreferredChrootDirMatch(t *testing.T) {
 	// enterChrootWithLock should match via PreferredChrootDir as a
 	// last-ditch attempt when AllChrootDirs doesn't contain chrootDir.
+	// chrootDir exists on disk, so the DirectoryExists fallback accepts it
+	// at classification time even without being in AllChrootDirs.
 	chrootDir := t.TempDir()
 
 	seederDir := filepath.Join(t.TempDir(), "00-bedrock")
@@ -1112,7 +1112,7 @@ func TestEnterRunLockWithPreferredChrootDirMatch(t *testing.T) {
 	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		PreferredChrootDir: chrootDir,
-		AllChrootDirs:      []string{}, // intentionally empty
+		AllChrootDirs:      []string{}, // empty — forces PreferredChrootDir fallback in lock
 	}
 	restore := withMockSeeder(sd)
 	defer restore()
@@ -1152,12 +1152,10 @@ func TestEnterRunSkipLockWorkerError(t *testing.T) {
 	// wrapped with the seeder name.
 	chrootDir := t.TempDir()
 
-	sd := seeder.DefaultMockSeeder()
+	sd, det := enterLockTestSetup(t, chrootDir)
 	sd.SetupChrootMountsErr = fmt.Errorf("mount exploded")
 	restore := withMockSeeder(sd)
 	defer restore()
-
-	det := &seeder.MockSeederDetector{}
 
 	cmd, err := newTestEnterCommand(det, nil, []string{"--skiplock", chrootDir})
 	if err != nil {
