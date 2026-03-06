@@ -9,6 +9,15 @@
 #
 # CHROOT_DIR=/path/to/chroot
 # The directory path to a the root filesystem ready to be committed to ostree.
+#
+# MATRIXOS_DEV_DIR=/path/to/matrixos-toolkit-dir (e.g. /matrixos)
+# The directory path to the matrixos-toolkit repository. This is useful for sourcing
+# common functions and utilities.
+#
+# MATRIXOS_PRIVATE_GIT_REPO_PATH=/path/to/private-git-repo
+# The directory path to the private git repository. This directory is expected to
+# be already empty at this stage.
+#
 set -e
 source "${MATRIXOS_DEV_DIR}/headers/env.include.sh"
 
