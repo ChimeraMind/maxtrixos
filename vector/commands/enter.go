@@ -15,6 +15,7 @@ import (
 // EnterCommand enters a seeded chroot interactively.
 type EnterCommand struct {
 	BaseCommand
+	UI
 	SignalGuard
 	fs *flag.FlagSet
 
@@ -88,6 +89,8 @@ func (c *EnterCommand) Init(args []string) error {
 	}
 	c.detected = detected
 
+	c.StartUI()
+
 	return nil
 }
 
@@ -135,6 +138,9 @@ func (c *EnterCommand) run() error {
 	}
 	c.PushCleanup(sd.Cleanup)
 	defer sd.Cleanup()
+
+	c.SetupPrinters("enter")
+	defer c.FlushPrinters()
 
 	// Classify targets into absolute dirs and bare names.
 	var chrootDirs []string
@@ -192,9 +198,10 @@ func (c *EnterCommand) run() error {
 
 	// Resolve bare names by scanning seeder params for SEEDER_CHROOTS_DIR.
 	if len(chrootNames) > 0 {
-		fmt.Printf("Resolving chroot names:\n")
+		c.Printf("%s%sResolving chroot names...%s\n",
+			c.cBold, c.iconSearch, c.cReset)
 		for _, name := range chrootNames {
-			fmt.Printf("  %s\n", name)
+			c.Printf("  %s%s%s\n", c.cCyan, name, c.cReset)
 		}
 
 		resolved, err := c.resolveNames(seedersParams, chrootNames)
@@ -209,7 +216,7 @@ func (c *EnterCommand) run() error {
 	}
 
 	for _, d := range chrootDirs {
-		fmt.Printf("Found seed: %s\n", d)
+		c.Printf("  %s%s%s%s\n", c.cGreen, c.iconCheck, d, c.cReset)
 	}
 
 	// Enter each chroot.
@@ -264,10 +271,13 @@ func (c *EnterCommand) resolveNames(sps SeedersParams, names []string) ([]string
 // enterChroot sets up mounts, runs an interactive shell inside the
 // chroot, and tears down mounts afterwards.
 func (c *EnterCommand) enterChroot(sd seeder.ISeeder, chrootDir string) error {
-	fmt.Printf("Entering seed %s: %s\n", filepath.Base(chrootDir), chrootDir)
+	c.Printf("\n%s%sEntering seed %s: %s%s\n",
+		c.cBold, c.iconRocket, filepath.Base(chrootDir), chrootDir, c.cReset)
+	c.Println(c.separator)
 
 	if c.skipLock {
-		fmt.Println("Skipping seeder lock acquisition (--skiplock).")
+		c.Printf("%s%sSkipping seeder lock acquisition (--skiplock).%s\n",
+			c.cYellow, c.iconWarn, c.cReset)
 		if err := c.enterChrootWorker(sd, chrootDir); err != nil {
 			return fmt.Errorf(
 				"seeder %s chroot enter failed: %w", filepath.Base(chrootDir), err,
