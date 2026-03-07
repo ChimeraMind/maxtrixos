@@ -141,6 +141,10 @@ type SetupOSCommand struct {
 	fs  *flag.FlagSet
 	run *setupOSRunner
 
+	// Flags.
+	skipPasswords bool
+	usernameFlag  string
+
 	// State carried between steps.
 	usernameAfterChange string
 
@@ -175,8 +179,10 @@ func (c *SetupOSCommand) Init(args []string) error {
 
 func (c *SetupOSCommand) parseArgs(args []string) error {
 	c.fs = flag.NewFlagSet("setupOS", flag.ContinueOnError)
+	c.fs.BoolVar(&c.skipPasswords, "skip-passwords", false, "Skip username change, user password and root password steps")
+	c.fs.StringVar(&c.usernameFlag, "username", "", "Set the username directly without prompting (useful with --skip-passwords)")
 	c.fs.Usage = func() {
-		fmt.Printf("Usage: vector %s\n", c.Name())
+		fmt.Printf("Usage: vector %s [flags]\n", c.Name())
 		fmt.Println("  Setup matrixOS: configure username, passwords, locale, disk encryption and boot entries.")
 		c.fs.PrintDefaults()
 	}
@@ -243,26 +249,43 @@ func (c *SetupOSCommand) Run() error {
 	}
 	fmt.Fprintln(c.run.stdout)
 
-	// Step 2: Username change
-	fmt.Fprintf(c.run.stdout, "%s%sStep 2: User Account%s\n", c.cBold, c.iconGear, c.cReset)
-	if err := c.changeUsername(defaultUsername); err != nil {
-		return fmt.Errorf("username change failed: %w", err)
+	if c.usernameFlag != "" {
+		c.usernameAfterChange = c.usernameFlag
+	} else {
+		c.usernameAfterChange = defaultUsername
 	}
-	fmt.Fprintln(c.run.stdout)
 
-	// Step 3: User password
-	fmt.Fprintf(c.run.stdout, "%s%sStep 3: User Password%s\n", c.cBold, c.iconGear, c.cReset)
-	if err := c.changeUserPassword(c.usernameAfterChange); err != nil {
-		return fmt.Errorf("user password change failed: %w", err)
-	}
-	fmt.Fprintln(c.run.stdout)
+	if c.skipPasswords {
+		fmt.Fprintf(c.run.stdout, "   %s%sSkipping steps 2-4 (--skip-passwords), username=%s.%s\n\n",
+			c.cBlue, c.iconCheck, c.usernameAfterChange, c.cReset)
+	} else {
+		// Step 2: Username change
+		if c.usernameFlag == "" {
+			fmt.Fprintf(c.run.stdout, "%s%sStep 2: User Account%s\n", c.cBold, c.iconGear, c.cReset)
+			if err := c.changeUsername(defaultUsername); err != nil {
+				return fmt.Errorf("username change failed: %w", err)
+			}
+		} else {
+			fmt.Fprintf(c.run.stdout, "%s%sStep 2: User Account (--username=%s)%s\n", c.cBold, c.iconGear, c.usernameFlag, c.cReset)
+			fmt.Fprintf(c.run.stdout, "   %s%sUsing provided username: %s%s\n",
+				c.cBlue, c.iconCheck, c.usernameAfterChange, c.cReset)
+		}
+		fmt.Fprintln(c.run.stdout)
 
-	// Step 4: Root password
-	fmt.Fprintf(c.run.stdout, "%s%sStep 4: Root Password%s\n", c.cBold, c.iconGear, c.cReset)
-	if err := c.changeUserPassword("root"); err != nil {
-		return fmt.Errorf("root password change failed: %w", err)
+		// Step 3: User password
+		fmt.Fprintf(c.run.stdout, "%s%sStep 3: User Password%s\n", c.cBold, c.iconGear, c.cReset)
+		if err := c.changeUserPassword(c.usernameAfterChange); err != nil {
+			return fmt.Errorf("user password change failed: %w", err)
+		}
+		fmt.Fprintln(c.run.stdout)
+
+		// Step 4: Root password
+		fmt.Fprintf(c.run.stdout, "%s%sStep 4: Root Password%s\n", c.cBold, c.iconGear, c.cReset)
+		if err := c.changeUserPassword("root"); err != nil {
+			return fmt.Errorf("root password change failed: %w", err)
+		}
+		fmt.Fprintln(c.run.stdout)
 	}
-	fmt.Fprintln(c.run.stdout)
 
 	// Step 5: Localization
 	fmt.Fprintf(c.run.stdout, "%s%sStep 5: Localization%s\n", c.cBold, c.iconGear, c.cReset)
@@ -281,13 +304,13 @@ func (c *SetupOSCommand) Run() error {
 
 	// Step 7: EFI boot entry
 	fmt.Fprintf(c.run.stdout, "%s%sStep 7: EFI Boot Entry%s\n", c.cBold, c.iconRocket, c.cReset)
-	if err := c.addMatrixOSBoot(efiRoot, fancyOsName, efiExecPath); err != nil {
+	if err := c.addOSBoot(efiRoot, fancyOsName, efiExecPath); err != nil {
 		fmt.Fprintf(c.run.stderr, "   %s%sEFI boot entry warning: %v%s\n",
 			c.cYellow, c.iconWarn, err, c.cReset)
 	}
 
 	fmt.Fprintf(c.run.stdout, "\n%s\n", c.separator)
-	fmt.Fprintf(c.run.stdout, "%s%sSetup complete! Please reboot and enjoy matrixOS.%s\n",
+	fmt.Fprintf(c.run.stdout, "%s%sSetup complete! Please reboot and enjoy the OS.%s\n",
 		c.cGreen, c.iconCheck, c.cReset)
 	return nil
 }
@@ -568,7 +591,7 @@ func (c *SetupOSCommand) setupLocalization(efiRoot, jailbrokenEntry string) erro
 	envUpdateCmd.Run() // best effort
 
 	// Configure keymap in boot args.
-	if err := c.setupLocalizationKeymap(efiRoot, jailbrokenEntry); err != nil {
+	if err := c.setupLocalizationKeymap(jailbrokenEntry); err != nil {
 		fmt.Fprintf(c.run.stderr, "   %s%sKeymap setup warning: %v%s\n",
 			c.cYellow, c.iconWarn, err, c.cReset)
 	}
@@ -579,7 +602,7 @@ func (c *SetupOSCommand) setupLocalization(efiRoot, jailbrokenEntry string) erro
 }
 
 // setupLocalizationKeymap configures the vconsole keymap in kernel boot args.
-func (c *SetupOSCommand) setupLocalizationKeymap(efiRoot, jailbrokenEntry string) error {
+func (c *SetupOSCommand) setupLocalizationKeymap(jailbrokenEntry string) error {
 	keymap := ""
 	if vconsoleData, err := c.run.readFile("/etc/vconsole.conf"); err == nil {
 		for _, line := range strings.Split(string(vconsoleData), "\n") {
@@ -761,8 +784,8 @@ menuentry "%s" --class windows {
 	return nil
 }
 
-// addMatrixOSBoot adds a matrixOS UEFI boot entry via efibootmgr.
-func (c *SetupOSCommand) addMatrixOSBoot(efiRoot, fancyOsName, efiExecPath string) error {
+// addOSBoot adds a OS UEFI boot entry via efibootmgr.
+func (c *SetupOSCommand) addOSBoot(efiRoot, fancyOsName, efiExecPath string) error {
 	efiDevice, err := c.run.getMountDevice(efiRoot)
 	if err != nil {
 		return fmt.Errorf("unable to find device for %s: %w", efiRoot, err)
