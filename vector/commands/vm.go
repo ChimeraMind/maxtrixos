@@ -142,7 +142,8 @@ type VMCommand struct {
 	waitBoot    time.Duration
 	waitTests   time.Duration
 	maxRunTime  time.Duration
-	nographic   bool
+	noGraphic   bool
+	noGpuaccel  bool
 	noAudio     bool
 	interactive bool
 	audioDev    string
@@ -165,7 +166,8 @@ func NewVMCommand() *VMCommand {
 	c.fs.DurationVar(&c.waitBoot, "wait_boot", 120*time.Second, "Seconds to wait for boot login prompt")
 	c.fs.DurationVar(&c.waitTests, "wait_tests", 120*time.Second, "Seconds to wait for tests to complete")
 	c.fs.DurationVar(&c.maxRunTime, "max_run_time", 300*time.Second, "Maximum seconds to allow the entire VM run (including boot and tests), when running in non-interactive mode")
-	c.fs.BoolVar(&c.nographic, "nographic", false, "Disable graphical output")
+	c.fs.BoolVar(&c.noGpuaccel, "nogpuaccel", false, "Disable GPU acceleration (use software rendering)")
+	c.fs.BoolVar(&c.noGraphic, "nographic", false, "Disable graphical output")
 	c.fs.BoolVar(&c.noAudio, "noaudio", false, "Disable audio devices")
 	c.fs.BoolVar(&c.interactive, "interactive", false, "Run VM interactively without testing")
 	c.fs.StringVar(&c.cpus, "cpus", "4", "Number of CPUs for the VM")
@@ -274,12 +276,16 @@ func (c *VMCommand) Run() error {
 		"-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", testImageFile.Name()),
 	}
 
-	if c.nographic {
+	if c.noGraphic {
 		qemuArgs = append(qemuArgs, "-nographic")
 	} else {
+		gpuAccel := ",venus=on"
+		if c.noGpuaccel {
+			gpuAccel = ""
+		}
 		qemuArgs = append(qemuArgs,
 			"-serial", "stdio",
-			"-device", "virtio-vga-gl,hostmem=512M,blob=true,venus=on",
+			"-device", "virtio-vga-gl,hostmem=512M,blob=true"+gpuAccel,
 			"-display", "gtk,gl=on",
 		)
 	}
