@@ -407,7 +407,7 @@ func TestTempDirAndFileOperations(t *testing.T) {
 	}
 
 	pattern := filepath.Join(tmpDir, "test-file-*")
-	if err := RemoveFileWithGlob(pattern); err != nil {
+	if err := RemoveFileWithGlob(pattern, RemoveFileWithGlobOptions{}); err != nil {
 		t.Errorf("RemoveFileWithGlob failed: %v", err)
 	}
 
@@ -426,7 +426,7 @@ func TestTempDirAndFileOperations(t *testing.T) {
 	if _, err := os.Create(filepath.Join(tmpDir, "another")); err != nil {
 		t.Fatal(err)
 	}
-	if err := EmptyDir(tmpDir); err != nil {
+	if err := EmptyDir(tmpDir, EmptyDirOptions{}); err != nil {
 		t.Errorf("EmptyDir failed: %v", err)
 	}
 	isEmpty, _ = DirEmpty(tmpDir)
@@ -434,7 +434,7 @@ func TestTempDirAndFileOperations(t *testing.T) {
 		t.Errorf("EmptyDir did not empty the directory")
 	}
 
-	if err := RemoveDir(tmpDir); err != nil {
+	if err := RemoveDir(tmpDir, RemoveDirOptions{}); err != nil {
 		t.Errorf("RemoveDir failed: %v", err)
 	}
 	if _, err := os.Stat(tmpDir); !os.IsNotExist(err) {
