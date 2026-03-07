@@ -311,7 +311,7 @@ func TestNewCommonRootfsMounts_SkipIfMounted(t *testing.T) {
 		setupMockExec(t)
 		setupMockSyscalls(t)
 
-		tmpDir := t.TempDir()
+		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
 		preMountedDev := filepath.Join(tmpDir, "dev")
 		if err := os.MkdirAll(preMountedDev, 0755); err != nil {
 			t.Fatal(err)
@@ -362,7 +362,7 @@ func TestNewCommonRootfsMounts_SkipIfMounted(t *testing.T) {
 		setupMockExec(t)
 		setupMockSyscalls(t)
 
-		tmpDir := t.TempDir()
+		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
 		preMountedDevShm := filepath.Join(tmpDir, "dev", "shm")
 		if err := os.MkdirAll(preMountedDevShm, 0755); err != nil {
 			t.Fatal(err)
@@ -411,7 +411,7 @@ func TestNewCommonRootfsMounts_SkipIfMounted(t *testing.T) {
 		setupMockExec(t)
 		setupMockSyscalls(t)
 
-		tmpDir := t.TempDir()
+		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
 		preMountedProc := filepath.Join(tmpDir, "proc")
 		if err := os.MkdirAll(preMountedProc, 0755); err != nil {
 			t.Fatal(err)
@@ -461,7 +461,7 @@ func TestNewCommonRootfsMounts_SkipIfMounted(t *testing.T) {
 		setupMockExec(t)
 		setupMockSyscalls(t)
 
-		tmpDir := t.TempDir()
+		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
 		preMountedRunLock := filepath.Join(tmpDir, "run", "lock")
 		if err := os.MkdirAll(preMountedRunLock, 0755); err != nil {
 			t.Fatal(err)
@@ -510,7 +510,7 @@ func TestNewCommonRootfsMounts_SkipIfMounted(t *testing.T) {
 		setupMockExec(t)
 		setupMockSyscalls(t)
 
-		tmpDir := t.TempDir()
+		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
 		allMounts := []string{
 			filepath.Join(tmpDir, "dev"),
 			filepath.Join(tmpDir, "dev", "pts"),
@@ -567,7 +567,7 @@ func TestNewCommonRootfsMounts_SkipIfMounted(t *testing.T) {
 		origMount := Mount
 		t.Cleanup(func() { Mount = origMount })
 
-		tmpDir := t.TempDir()
+		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
 		preMountedDev := filepath.Join(tmpDir, "dev")
 		if err := os.MkdirAll(preMountedDev, 0755); err != nil {
 			t.Fatal(err)
@@ -829,7 +829,7 @@ func TestCommonRootfsMountsCleanup(t *testing.T) {
 	setupMockSyscalls(t)
 
 	t.Run("Success", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
 		// Mock that the mounts exist
 		setupMockMountInfo(t, []*MountInfoEntry{
 			{Mountpoint: filepath.Join(tmpDir, "dev")},
@@ -860,7 +860,7 @@ func TestCommonRootfsMountsCleanup(t *testing.T) {
 	})
 
 	t.Run("SuccessProcDisabled", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
 		// Mock mounts without proc
 		setupMockMountInfo(t, []*MountInfoEntry{
 			{Mountpoint: filepath.Join(tmpDir, "dev")},
@@ -925,11 +925,11 @@ func TestBindUmount(t *testing.T) {
 	setupMockSyscalls(t)
 
 	t.Run("Success", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
 		setupMockMountInfo(t, []*MountInfoEntry{
 			{Mountpoint: tmpDir},
 		})
-		src := t.TempDir()
+		src, _ := filepath.EvalSymlinks(t.TempDir())
 		bm, err := NewBindMount(BindMountOptions{
 			Src: src,
 			Dst: tmpDir,

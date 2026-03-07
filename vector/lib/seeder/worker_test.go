@@ -1455,7 +1455,7 @@ func TestMountPrivateGitRepo_ConfigError(t *testing.T) {
 
 func TestMountPrivateGitRepo_SkipIfMounted(t *testing.T) {
 	mockMountSyscalls(t)
-	tmp := t.TempDir()
+	tmp, _ := filepath.EvalSymlinks(t.TempDir())
 	chrootDir := filepath.Join(tmp, "chroot")
 	os.MkdirAll(chrootDir, 0755)
 
@@ -1596,7 +1596,7 @@ func TestMountDistDir_ConfigError(t *testing.T) {
 
 func TestMountDistDir_SkipIfMounted(t *testing.T) {
 	mockMountSyscalls(t)
-	tmp := t.TempDir()
+	tmp, _ := filepath.EvalSymlinks(t.TempDir())
 	chrootDir := filepath.Join(tmp, "chroot")
 	os.MkdirAll(chrootDir, 0755)
 
@@ -1744,7 +1744,7 @@ func TestMountBinpkgsDir_ConfigError(t *testing.T) {
 
 func TestMountBinpkgsDir_SkipIfMounted(t *testing.T) {
 	mockMountSyscalls(t)
-	tmp := t.TempDir()
+	tmp, _ := filepath.EvalSymlinks(t.TempDir())
 	chrootDir := filepath.Join(tmp, "chroot")
 	os.MkdirAll(chrootDir, 0755)
 
@@ -1987,7 +1987,7 @@ func TestSetupChrootMounts_EmptyChrootDir(t *testing.T) {
 
 func TestSetupChrootMounts_SkipIfMounted_SkipsPreMounted(t *testing.T) {
 	mockMountSyscalls(t)
-	tmp := t.TempDir()
+	tmp, _ := filepath.EvalSymlinks(t.TempDir())
 	chrootDir := filepath.Join(tmp, "chroot")
 	os.MkdirAll(chrootDir, 0755)
 
@@ -2050,7 +2050,7 @@ func TestSetupChrootMounts_SkipIfMounted_SkipsPreMounted(t *testing.T) {
 
 func TestSetupChrootMounts_SkipIfMounted_AllPreMounted(t *testing.T) {
 	mockMountSyscalls(t)
-	tmp := t.TempDir()
+	tmp, _ := filepath.EvalSymlinks(t.TempDir())
 	chrootDir := filepath.Join(tmp, "chroot")
 	os.MkdirAll(chrootDir, 0755)
 
@@ -2119,7 +2119,7 @@ func TestSetupChrootMounts_SkipIfMounted_AllPreMounted(t *testing.T) {
 
 func TestSetupChrootMounts_SkipIfMountedFalse_MountsAll(t *testing.T) {
 	mockMountSyscalls(t)
-	tmp := t.TempDir()
+	tmp, _ := filepath.EvalSymlinks(t.TempDir())
 	chrootDir := filepath.Join(tmp, "chroot")
 	os.MkdirAll(chrootDir, 0755)
 

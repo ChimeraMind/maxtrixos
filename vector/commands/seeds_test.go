@@ -17,24 +17,37 @@ import (
 
 // newTestSeedsCommand creates a SeedsCommand with injected mocks,
 // bypassing Init() which requires real config files and root.
+// sd may be nil, in which case a DefaultMockSeeder is used.
+// The caller must defer the returned cleanup function to restore
+// the package-level newSeeder var.
 func newTestSeedsCommand(sd *seeder.MockSeeder, det *seeder.MockSeederDetector,
 	cfg *config.MockConfig, args []string,
-) (*SeedsCommand, error) {
+) (*SeedsCommand, func(), error) {
+	if sd == nil {
+		sd = seeder.DefaultMockSeeder()
+	}
+	origNewSeeder := newSeeder
+	newSeeder = func(_ config.IConfig, _ *seeder.NewSeederOptions) (seeder.ISeeder, error) {
+		return sd, nil
+	}
+
 	cmd := NewSeedsCommand()
 	cmd.det = det
 	cmd.cfg = cfg
 
 	qa, err := validation.New(cfg)
 	if err != nil {
-		return nil, err
+		newSeeder = origNewSeeder
+		return nil, nil, err
 	}
 	cmd.qa = qa
 	cmd.StartUI()
 
 	if err := cmd.parseArgs(args); err != nil {
-		return nil, err
+		newSeeder = origNewSeeder
+		return nil, nil, err
 	}
-	return cmd, nil
+	return cmd, func() { newSeeder = origNewSeeder }, nil
 }
 
 func defaultSeedsTestConfig(t *testing.T) *config.MockConfig {
@@ -195,16 +208,16 @@ func TestSeedsNoSeedersFound(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	sd := seeder.DefaultMockSeeder()
 	det := &seeder.MockSeederDetector{
 		Detect_: nil, // no seeders
 	}
 	cfg := defaultSeedsTestConfig(t)
 
-	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
+	cmd, cleanup, err := newTestSeedsCommand(nil, det, cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestSeedsCommand: %v", err)
 	}
+	defer cleanup()
 
 	err = cmd.runSeeds()
 	if err == nil {
@@ -221,16 +234,16 @@ func TestSeedsDetectionError(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	sd := seeder.DefaultMockSeeder()
 	det := &seeder.MockSeederDetector{
 		DetectErr: fmt.Errorf("scan failed"),
 	}
 	cfg := defaultSeedsTestConfig(t)
 
-	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
+	cmd, cleanup, err := newTestSeedsCommand(nil, det, cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestSeedsCommand: %v", err)
 	}
+	defer cleanup()
 
 	err = cmd.runSeeds()
 	if err == nil {
@@ -254,10 +267,11 @@ func TestSeedsGpgImportError(t *testing.T) {
 	}
 	cfg := defaultSeedsTestConfig(t)
 
-	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
+	cmd, cleanup, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestSeedsCommand: %v", err)
 	}
+	defer cleanup()
 
 	err = cmd.runSeeds()
 	if err == nil {
@@ -281,10 +295,11 @@ func TestSeedsPrivateRepoError(t *testing.T) {
 	}
 	cfg := defaultSeedsTestConfig(t)
 
-	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
+	cmd, cleanup, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestSeedsCommand: %v", err)
 	}
+	defer cleanup()
 
 	err = cmd.runSeeds()
 	if err == nil {
@@ -314,10 +329,11 @@ func TestSeedsFullPipeline(t *testing.T) {
 	}
 	cfg := defaultSeedsTestConfig(t)
 
-	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
+	cmd, cleanup, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestSeedsCommand: %v", err)
 	}
+	defer cleanup()
 
 	err = cmd.runSeeds()
 	if err != nil {
@@ -374,10 +390,11 @@ func TestSeedsWorkerPrepperError(t *testing.T) {
 	}
 	cfg := defaultSeedsTestConfig(t)
 
-	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
+	cmd, cleanup, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestSeedsCommand: %v", err)
 	}
+	defer cleanup()
 
 	err = cmd.runSeeds()
 	if err == nil {
@@ -412,10 +429,11 @@ func TestSeedsWorkerMountError(t *testing.T) {
 	}
 	cfg := defaultSeedsTestConfig(t)
 
-	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
+	cmd, cleanup, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestSeedsCommand: %v", err)
 	}
+	defer cleanup()
 
 	err = cmd.runSeeds()
 	if err == nil {
@@ -450,10 +468,11 @@ func TestSeedsWorkerSkipsDoneSeeder(t *testing.T) {
 	}
 	cfg := defaultSeedsTestConfig(t)
 
-	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{})
+	cmd, cleanup, err := newTestSeedsCommand(sd, det, cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestSeedsCommand: %v", err)
 	}
+	defer cleanup()
 
 	err = cmd.runSeeds()
 	if err != nil {
@@ -508,13 +527,14 @@ func TestSeedsOutputFiles(t *testing.T) {
 	}
 	cfg := defaultSeedsTestConfig(t)
 
-	cmd, err := newTestSeedsCommand(sd, det, cfg, []string{
+	cmd, cleanup, err := newTestSeedsCommand(sd, det, cfg, []string{
 		"--built-rootfs-file", rootfsFile,
 		"--built-seeders-file", seedersFile,
 	})
 	if err != nil {
 		t.Fatalf("newTestSeedsCommand: %v", err)
 	}
+	defer cleanup()
 
 	if err := cmd.runSeeds(); err != nil {
 		t.Fatalf("runSeeds failed: %v", err)
