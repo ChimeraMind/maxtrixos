@@ -97,7 +97,11 @@ func CleanupMounts(opts CleanupMountsOptions) {
 	DevicesSettle()
 	for i := len(mounts) - 1; i >= 0; i-- {
 		mnt := mounts[i]
-		mounted, _ := isMounted(mnt)
+		mounted, err := isMounted(mnt)
+		if err != nil {
+			fmt.Fprintf(stderr, "Unable to check if %s is mounted: %v\n", mnt, err)
+			continue
+		}
 		if !mounted {
 			continue
 		}
@@ -216,24 +220,28 @@ func CheckDirNotFsRoot(mnt string) error {
 // CommonRootfsMounts represents the common rootfs mounts that are typically
 // set up for a container or chroot environment, such as /dev, /proc, and /run/lock.
 type CommonRootfsMounts struct {
-	mountPoint  string
-	mountProc   bool
-	mounting    func(string)
-	mounted     func(string)
-	mounts      []string
-	slaveMounts []string
-	stdout      io.Writer
-	stderr      io.Writer
+	mountPoint    string
+	mountProc     bool
+	skipIfMounted bool
+	mounting      func(string)
+	skipping      func(string)
+	mounted       func(string)
+	mounts        []string
+	slaveMounts   []string
+	stdout        io.Writer
+	stderr        io.Writer
 }
 
 // CommonRootfsMountsOptions represents the options for setting up common rootfs mounts.
 type CommonRootfsMountsOptions struct {
-	MountPoint string
-	MountProc  bool
-	Mounting   func(string)
-	Mounted    func(string)
-	Stdout     io.Writer
-	Stderr     io.Writer
+	MountPoint    string
+	MountProc     bool
+	SkipIfMounted bool
+	Mounting      func(string)
+	Skipping      func(string)
+	Mounted       func(string)
+	Stdout        io.Writer
+	Stderr        io.Writer
 }
 
 // NewCommonRootfsMounts creates a new CommonRootfsMounts for the given mount point.
@@ -251,11 +259,26 @@ func NewCommonRootfsMounts(opts CommonRootfsMountsOptions) (*CommonRootfsMounts,
 		stderr = os.Stderr
 	}
 
+	mounting := opts.Mounting
+	if mounting == nil {
+		mounting = func(string) {}
+	}
+	skipping := opts.Skipping
+	if skipping == nil {
+		skipping = func(string) {}
+	}
+	mounted := opts.Mounted
+	if mounted == nil {
+		mounted = func(string) {}
+	}
+
 	return &CommonRootfsMounts{
-		mountPoint: opts.MountPoint,
-		mountProc:  opts.MountProc,
-		mounting:   opts.Mounting,
-		mounted:    opts.Mounted,
+		mountPoint:    opts.MountPoint,
+		mountProc:     opts.MountProc,
+		skipIfMounted: opts.SkipIfMounted,
+		mounting:      mounting,
+		skipping:      skipping,
+		mounted:       mounted,
 		slaveMounts: []string{
 			"/dev",
 			"/dev/pts",
@@ -285,6 +308,19 @@ func (m *CommonRootfsMounts) Setup() error {
 		if err := os.MkdirAll(dst, 0755); err != nil {
 			return err
 		}
+
+		// Skip if mounted feature.
+		if m.skipIfMounted {
+			mounted, err := isMounted(dst)
+			if err != nil {
+				return fmt.Errorf("failed to check if %s is mounted: %w", dst, err)
+			}
+			if mounted {
+				m.skipping(dst)
+				continue
+			}
+		}
+
 		m.mounting(dst)
 		m.add(dst)
 		if err := Mount(d, dst, "", unix.MS_BIND, ""); err != nil {

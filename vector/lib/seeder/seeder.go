@@ -36,6 +36,12 @@ type NewSeederOptions struct {
 	Verbose bool // show detailed output
 }
 
+// SetupChrootMountsOptions defines the options for setting up chroot mounts.
+type SetupChrootMountsOptions struct {
+	ChrootDir     string
+	SkipIfMounted bool
+}
+
 // ISeeder defines the interface for seeder operations.
 // It mirrors all public methods of Seeder for testability.
 type ISeeder interface {
@@ -144,7 +150,7 @@ type ISeeder interface {
 		info SeederInfo, params *SeederParams, opts *PrepperOptions,
 	) error
 	// SetupChrootMounts sets up all mounts for a seeder chroot.
-	SetupChrootMounts(chrootDir string) error
+	SetupChrootMounts(opts SetupChrootMountsOptions) error
 	// Cleanup unmounts all mount points tracked by this Seeder instance
 	// in reverse order. It is safe to call multiple times.
 	Cleanup()

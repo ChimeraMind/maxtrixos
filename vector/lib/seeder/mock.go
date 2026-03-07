@@ -271,7 +271,7 @@ func (m *MockSeeder) ExecutePrepper(
 	m.ExecutePrepperCalled = true
 	return m.ExecutePrepperErr
 }
-func (m *MockSeeder) SetupChrootMounts(chrootDir string) error {
+func (m *MockSeeder) SetupChrootMounts(opts SetupChrootMountsOptions) error {
 	m.SetupChrootMountsCalled = true
 	return m.SetupChrootMountsErr
 }
