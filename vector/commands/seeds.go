@@ -292,15 +292,21 @@ func (c *SeedsCommand) seederWorker(sd *seeder.Seeder, info seeder.SeederInfo) e
 		)
 	}
 
+	flagFile, err := sd.SeederDoneFlagFilePrefix()
+	if err != nil {
+		return err
+	}
+
 	// Check if already done.
 	done, err := sd.IsSeederDone(info.Name, chrootDir)
 	if err != nil {
 		return err
 	}
+
 	if done {
 		sd.Print(
-			"[%s] Already marked as done. Skipping.\n",
-			info.Name,
+			"[%s] Already marked as done via %s. Skipping.\n",
+			info.Name, flagFile,
 		)
 		return nil
 	}
