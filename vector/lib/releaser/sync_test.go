@@ -12,6 +12,7 @@ import (
 
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/ostree"
+	"matrixos/vector/lib/runner"
 )
 
 // ---------------------------------------------------------------------------
@@ -29,6 +30,7 @@ func TestSyncExcludedPaths_HappyPath(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}
@@ -66,6 +68,7 @@ func TestSyncExcludedPaths_ArtifactsDirError(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}
@@ -90,6 +93,7 @@ func TestSyncExcludedPaths_PreppersDirError(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}
@@ -115,6 +119,7 @@ func TestSyncExcludedPaths_EmptyDst(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}
@@ -139,6 +144,7 @@ func TestCpReflinkCopy_ExcludedPathsError(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}
@@ -163,6 +169,7 @@ func TestCpReflinkCopy_RemoveAllFails(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}
@@ -186,6 +193,7 @@ func TestCpReflinkCopy_PrintsMessages(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &stdout,
 		stderr: &bytes.Buffer{},
 	}
@@ -211,6 +219,7 @@ func TestRsyncCopy_ExcludedPathsError(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}
@@ -288,6 +297,7 @@ func TestSyncFilesystem_UseCpReflinkConfigError(t *testing.T) {
 	r := &Releaser{
 		cfg:       &config.ErrConfig{Err: wantErr},
 		ostree:    &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:    &bytes.Buffer{},
 		stderr:    &bytes.Buffer{},
 		chrootDir: src,
@@ -420,6 +430,7 @@ func TestIntegrationRsyncCopy(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &stdout,
 		stderr: &stderr,
 	}
@@ -455,6 +466,7 @@ func TestIntegrationRsyncCopy_Verbose(t *testing.T) {
 	r := &Releaser{
 		cfg:     cfg,
 		ostree:  &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:  &stdout,
 		stderr:  &stderr,
 		verbose: true,
@@ -493,6 +505,7 @@ func TestIntegrationRsyncCopy_ExcludesAreApplied(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &stdout,
 		stderr: &bytes.Buffer{},
 	}
@@ -527,6 +540,7 @@ func TestIntegrationCpReflinkCopy(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &stdout,
 		stderr: &bytes.Buffer{},
 	}
@@ -568,6 +582,7 @@ func TestIntegrationCpReflinkCopy_RemovesExcludedPaths(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}
@@ -612,6 +627,7 @@ func TestIntegrationCpReflinkCopy_DestinationClearedBeforeCopy(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}
@@ -656,6 +672,7 @@ func TestIntegrationSyncFilesystem_RsyncPath(t *testing.T) {
 	r := &Releaser{
 		cfg:       cfg,
 		ostree:    &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:    &stdout,
 		stderr:    &bytes.Buffer{},
 		chrootDir: src,
@@ -692,6 +709,7 @@ func TestIntegrationSyncFilesystem_RsyncPathVerbose(t *testing.T) {
 	r := &Releaser{
 		cfg:       cfg,
 		ostree:    &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:    &stdout,
 		stderr:    &bytes.Buffer{},
 		chrootDir: src,
@@ -732,6 +750,7 @@ func TestCpReflinkCopy_ExcludeOutsideDst(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}
@@ -762,6 +781,7 @@ func TestSyncExcludedPaths_TrailingSlashOnPortage(t *testing.T) {
 	r := &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
 	}

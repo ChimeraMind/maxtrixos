@@ -10,6 +10,7 @@ import (
 
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/ostree"
+	"matrixos/vector/lib/runner"
 )
 
 // newOstreeTestReleaser returns a Releaser wired to a MockOstree with a
@@ -18,10 +19,11 @@ func newOstreeTestReleaser(tb testing.TB) (*Releaser, *ostree.MockOstree) {
 	tb.Helper()
 	mock := &ostree.MockOstree{}
 	r := &Releaser{
-		cfg:    &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
-		ostree: mock,
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		cfg:          &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+		ostree:       mock,
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 	r.imageDir = tb.(*testing.T).TempDir()
 	return r, mock
