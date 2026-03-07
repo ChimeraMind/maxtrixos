@@ -90,7 +90,7 @@ func (c *UpgradeCommand) Run() error {
 
 	fmt.Printf("%s%sChecking for updates on branch: %s%s\n",
 		c.cBlue, c.iconSearch, ref, c.cReset)
-	fmt.Printf("   %sCurrent version: %s%s\n", c.cBold, oldCommit, c.cReset)
+	fmt.Printf("  %sCurrent version: %s%s\n", c.cBold, oldCommit, c.cReset)
 
 	fmt.Printf("\n%s%sFetching updates...%s\n",
 		c.cBold, c.iconDownload, c.cReset)
