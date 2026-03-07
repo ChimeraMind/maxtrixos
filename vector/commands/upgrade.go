@@ -77,7 +77,6 @@ func (c *UpgradeCommand) parseArgs(args []string) error {
 }
 
 func (c *UpgradeCommand) Run() error {
-
 	// Check if we are running as root. If running as user, exit with error.
 	if getEuid() != 0 {
 		return fmt.Errorf("this command must be run as root")
