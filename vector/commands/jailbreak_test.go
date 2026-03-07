@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
+	"matrixos/vector/lib/ostree"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +37,7 @@ func newTestJailbreakCommand(
 	cmd.cfg = cfg
 	cmd.StartUI()
 	cmd.run = runner
+	cmd.prompt = NewPrompter(runner.stdin, runner.stdout, runner.stderr, &cmd.UI)
 	if err := cmd.parseArgs(nil); err != nil {
 		return nil, err
 	}
@@ -195,7 +196,7 @@ func TestJailbreakSanityChecksNotOnFullBranch(t *testing.T) {
 	}
 
 	err = cmd.Run()
-	if err == nil || !strings.Contains(err.Error(), "not on a -full ostree branch") {
+	if err == nil || !strings.Contains(err.Error(), "not on a -full branch") {
 		t.Fatalf("expected not-on-full-branch error, got: %v", err)
 	}
 }
@@ -511,7 +512,7 @@ func TestJailbreakPrintTitle(t *testing.T) {
 	if !strings.Contains(output, "JAILBREAKING") {
 		t.Errorf("expected JAILBREAKING in title, got: %s", output)
 	}
-	if !strings.Contains(output, "ostree admin switch matrixos/<your branch>-full") {
+	if !strings.Contains(output, "vector branch switch matrixos/<your branch>-full") {
 		t.Errorf("expected switch instruction in title, got: %s", output)
 	}
 }
