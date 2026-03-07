@@ -153,8 +153,9 @@ vector upgrade
 If an update fails, simply boot into the previous entry (`ostree:1`). To make it permanent:
 
 ```shell
-ostree admin pin 1
-ostree admin status # to see the current state
+vector branch deployment  # to show which deployments are available.
+vector branch pin 1       # to pin deployment 1.
+vector branch unpin 1     # in case you want to clean up the pinning of deployment 1.
 ```
 
 ### Branch Switching
