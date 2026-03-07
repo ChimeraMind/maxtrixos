@@ -38,7 +38,7 @@ Usage:
     release         generates a single OS release (ostree commit).
     releases        generates multiple OS releases across all detected seeders.
     image           generates a single OS image.
-    images 	        generates multiple OS images based on released branches.
+    images          generates multiple OS images based on released branches.
 `
 )
 
