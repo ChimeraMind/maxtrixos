@@ -1681,3 +1681,212 @@ func TestSetupChrootMounts_BinpkgsError(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+// mockMountInfo replaces filesystems.ReadMountInfo with a function
+// returning the given entries for the duration of the test.
+func mockMountInfo(t *testing.T, entries []*filesystems.MountInfoEntry) {
+	t.Helper()
+	orig := filesystems.ReadMountInfo
+	filesystems.ReadMountInfo = func() ([]*filesystems.MountInfoEntry, error) {
+		return entries, nil
+	}
+	t.Cleanup(func() { filesystems.ReadMountInfo = orig })
+}
+
+func TestSetupChrootMounts_EmptyChrootDir(t *testing.T) {
+	sd := newTestSeederWithConfig(workerTestConfig())
+	opts := SetupChrootMountsOptions{
+		ChrootDir: "",
+	}
+	err := sd.SetupChrootMounts(opts)
+	if err == nil {
+		t.Fatal("expected error for empty ChrootDir")
+	}
+	if !strings.Contains(err.Error(), "missing ChrootDir") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestSetupChrootMounts_SkipIfMounted_SkipsPreMounted(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	// Pre-create the /dev directory and pretend it is already mounted.
+	preMountedDev := filepath.Join(chrootDir, "dev")
+	os.MkdirAll(preMountedDev, 0755)
+
+	mockMountInfo(t, []*filesystems.MountInfoEntry{
+		{Mountpoint: preMountedDev},
+	})
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: true,
+	}
+	if err := sd.SetupChrootMounts(opts); err != nil {
+		t.Fatalf("SetupChrootMounts: %v", err)
+	}
+
+	// /dev should have been skipped: it must NOT appear in trackedMounts.
+	for _, mnt := range sd.trackedMounts {
+		if mnt == preMountedDev {
+			t.Errorf("%s should not be tracked (was already mounted)", preMountedDev)
+		}
+	}
+
+	// The stdout should mention it was skipped.
+	if !strings.Contains(stdout.String(), "Skipping (already mounted)") {
+		t.Errorf("expected 'Skipping (already mounted)' in output, got:\n%s",
+			stdout.String())
+	}
+
+	// Other slave mounts (/dev/pts, /sys) should still be tracked.
+	devPts := filepath.Join(chrootDir, "dev", "pts")
+	sysDir := filepath.Join(chrootDir, "sys")
+	for _, want := range []string{devPts, sysDir} {
+		found := false
+		for _, mnt := range sd.trackedMounts {
+			if mnt == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected %s to be tracked, tracked: %v", want, sd.trackedMounts)
+		}
+	}
+}
+
+func TestSetupChrootMounts_SkipIfMounted_AllPreMounted(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	// Pre-create all slave mount dirs and pretend they are all mounted.
+	slaveDirs := []string{"dev", "dev/pts", "sys"}
+	var entries []*filesystems.MountInfoEntry
+	for _, d := range slaveDirs {
+		p := filepath.Join(chrootDir, d)
+		os.MkdirAll(p, 0755)
+		entries = append(entries, &filesystems.MountInfoEntry{Mountpoint: p})
+	}
+	mockMountInfo(t, entries)
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: true,
+	}
+	if err := sd.SetupChrootMounts(opts); err != nil {
+		t.Fatalf("SetupChrootMounts: %v", err)
+	}
+
+	// None of the slave mounts should be tracked because they were all skipped.
+	for _, d := range slaveDirs {
+		p := filepath.Join(chrootDir, d)
+		for _, mnt := range sd.trackedMounts {
+			if mnt == p {
+				t.Errorf("%s should not be tracked (was already mounted)", p)
+			}
+		}
+	}
+
+	// dev/shm and run/lock are still always mounted.
+	devShm := filepath.Join(chrootDir, "dev", "shm")
+	runLock := filepath.Join(chrootDir, "run", "lock")
+	for _, want := range []string{devShm, runLock} {
+		found := false
+		for _, mnt := range sd.trackedMounts {
+			if mnt == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected %s to be tracked, tracked: %v", want, sd.trackedMounts)
+		}
+	}
+
+	output := stdout.String()
+	skipCount := strings.Count(output, "Skipping (already mounted)")
+	if skipCount != 3 {
+		t.Errorf("expected 3 'Skipping (already mounted)' messages, got %d in:\n%s",
+			skipCount, output)
+	}
+}
+
+func TestSetupChrootMounts_SkipIfMountedFalse_MountsAll(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	// Even with entries in mountinfo, SkipIfMounted=false should mount everything.
+	preMountedDev := filepath.Join(chrootDir, "dev")
+	os.MkdirAll(preMountedDev, 0755)
+	mockMountInfo(t, []*filesystems.MountInfoEntry{
+		{Mountpoint: preMountedDev},
+	})
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: false,
+	}
+	if err := sd.SetupChrootMounts(opts); err != nil {
+		t.Fatalf("SetupChrootMounts: %v", err)
+	}
+
+	// /dev should appear in tracked mounts since we didn't skip.
+	found := false
+	for _, mnt := range sd.trackedMounts {
+		if mnt == preMountedDev {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected %s to be tracked (SkipIfMounted=false), tracked: %v",
+			preMountedDev, sd.trackedMounts)
+	}
+
+	// No "Skipping" messages should appear.
+	if strings.Contains(stdout.String(), "Skipping (already mounted)") {
+		t.Errorf("did not expect 'Skipping (already mounted)' with SkipIfMounted=false, got:\n%s",
+			stdout.String())
+	}
+}

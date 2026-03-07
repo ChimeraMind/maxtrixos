@@ -14,8 +14,8 @@ var (
 	// mountInfoPath is the path to the mountinfo file.
 	mountInfoPath = "/proc/self/mountinfo"
 
-	// readMountInfo reads and parses the system mount info. Replaceable for testing.
-	readMountInfo = defaultReadMountInfo
+	// ReadMountInfo reads and parses the system mount info. Replaceable for testing.
+	ReadMountInfo = defaultReadMountInfo
 
 	// blkidLookup queries a device attribute via blkid. Replaceable for testing.
 	blkidLookup = defaultBlkidLookup
@@ -164,7 +164,7 @@ func resolvePath(p string) string {
 // The path is resolved through symlinks before comparison because the kernel
 // records the real (resolved) path in /proc/self/mountinfo.
 func findMountByTarget(mnt string) (*MountInfoEntry, error) {
-	entries, err := readMountInfo()
+	entries, err := ReadMountInfo()
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func findMountByTarget(mnt string) (*MountInfoEntry, error) {
 // prefix of path (equivalent to findmnt -T <path>).
 // The path is resolved through symlinks before comparison.
 func findMountContainingPath(path string) (*MountInfoEntry, error) {
-	entries, err := readMountInfo()
+	entries, err := ReadMountInfo()
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func findMountContainingPath(path string) (*MountInfoEntry, error) {
 // listMountsByPrefix returns entries whose mountpoint starts with prefix.
 // The prefix is resolved through symlinks before comparison.
 func listMountsByPrefix(prefix string) ([]*MountInfoEntry, error) {
-	entries, err := readMountInfo()
+	entries, err := ReadMountInfo()
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func listMountsByPrefix(prefix string) ([]*MountInfoEntry, error) {
 
 // findMountsBySource returns entries whose Source matches source.
 func findMountsBySource(source string) ([]*MountInfoEntry, error) {
-	entries, err := readMountInfo()
+	entries, err := ReadMountInfo()
 	if err != nil {
 		return nil, err
 	}
