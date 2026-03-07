@@ -212,9 +212,7 @@ func (c *SeedsCommand) runSeeds() error {
 	}
 
 	// Print execution plan.
-	c.Printf(
-		"Will execute seeders in the following order:\n",
-	)
+	c.Printf("Will execute seeders in the following order:\n")
 	for _, s := range seeders {
 		c.Printf("  %s\n", s.ChrootExec)
 	}
