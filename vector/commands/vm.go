@@ -138,13 +138,16 @@ type VMCommand struct {
 	fs          *flag.FlagSet
 	imagePath   string
 	memory      string
+	gpuMemory   string
 	port        string
 	waitBoot    time.Duration
 	waitTests   time.Duration
 	maxRunTime  time.Duration
-	noGraphic   bool
-	noGpuaccel  bool
-	noAudio     bool
+	display     string
+	venusAccel  bool
+	graphical   bool
+	gpuAccel    bool
+	audio       bool
 	interactive bool
 	audioDev    string
 	cpus        string
@@ -161,16 +164,19 @@ func NewVMCommand() *VMCommand {
 	}
 	c.fs.StringVar(&c.imagePath, "image", "", "Path to the matrixOS image")
 	c.fs.StringVar(&c.memory, "memory", "4G", "Amount of RAM for the VM")
+	c.fs.StringVar(&c.gpuMemory, "gpu_memory", "512M", "Amount of memory for the virtual GPU")
 	c.fs.StringVar(&c.audioDev, "audio_dev", "pipewire", "Audio device for the VM (default 'pipewire' for PipeWire)")
 	c.fs.StringVar(&c.port, "port", "2222", "Local port for SSH forwarding")
 	c.fs.DurationVar(&c.waitBoot, "wait_boot", 120*time.Second, "Seconds to wait for boot login prompt")
 	c.fs.DurationVar(&c.waitTests, "wait_tests", 120*time.Second, "Seconds to wait for tests to complete")
 	c.fs.DurationVar(&c.maxRunTime, "max_run_time", 300*time.Second, "Maximum seconds to allow the entire VM run (including boot and tests), when running in non-interactive mode")
-	c.fs.BoolVar(&c.noGpuaccel, "nogpuaccel", false, "Disable GPU acceleration (use software rendering)")
-	c.fs.BoolVar(&c.noGraphic, "nographic", false, "Disable graphical output")
-	c.fs.BoolVar(&c.noAudio, "noaudio", false, "Disable audio devices")
+	c.fs.BoolVar(&c.venusAccel, "venus", false, "Enable Venus GPU acceleration (requires QEMU with Venus support)")
+	c.fs.BoolVar(&c.gpuAccel, "gpuaccel", true, "Enable GPU acceleration (requires QEMU with GPU support)")
+	c.fs.BoolVar(&c.graphical, "graphical", true, "Enable graphical output")
+	c.fs.BoolVar(&c.audio, "audio", true, "Enable audio devices")
 	c.fs.BoolVar(&c.interactive, "interactive", false, "Run VM interactively without testing")
 	c.fs.StringVar(&c.cpus, "cpus", "4", "Number of CPUs for the VM")
+	c.fs.StringVar(&c.display, "display", "sdl", "Display type for the VM (e.g., 'sdl', 'gtk', default: 'sdl')")
 	return c
 }
 
@@ -276,18 +282,11 @@ func (c *VMCommand) Run() error {
 		"-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", testImageFile.Name()),
 	}
 
-	if c.noGraphic {
-		qemuArgs = append(qemuArgs, "-nographic")
+	if c.graphical {
+		qemuArgs = append(qemuArgs, "-serial", "stdio")
+		qemuArgs = append(qemuArgs, c.displayArgs()...)
 	} else {
-		gpuAccel := ",venus=on"
-		if c.noGpuaccel {
-			gpuAccel = ""
-		}
-		qemuArgs = append(qemuArgs,
-			"-serial", "stdio",
-			"-device", "virtio-vga-gl,hostmem=512M,blob=true"+gpuAccel,
-			"-display", "gtk,gl=on",
-		)
+		qemuArgs = append(qemuArgs, "-nographic")
 	}
 
 	if !c.interactive {
@@ -296,7 +295,7 @@ func (c *VMCommand) Run() error {
 		qemuArgs = append(qemuArgs, "-smbios", "type=1,serial=matrixos-testmode=serial")
 	}
 
-	if !c.noAudio {
+	if c.audio {
 		qemuArgs = append(qemuArgs,
 			"-audiodev", fmt.Sprintf("%s,id=snd0", c.audioDev),
 			"-device", "intel-hda",
@@ -310,6 +309,31 @@ func (c *VMCommand) Run() error {
 	} else {
 		return c.runTests(qemuArgs)
 	}
+}
+
+func (c *VMCommand) displayArgs() []string {
+	var qemuArgs []string
+
+	if !c.gpuAccel {
+		c.Printf("GPU acceleration disabled, using basic VGA display\n")
+		qemuArgs = append(qemuArgs,
+			"-device", "virtio-vga,hostmem="+c.gpuMemory,
+			"-display", c.display+",gl=off",
+		)
+		return qemuArgs
+	}
+
+	venusAccel := ""
+	if c.venusAccel {
+		venusAccel = ",venus=on"
+	}
+	glOn := ",gl=on"
+
+	qemuArgs = append(qemuArgs,
+		"-device", "virtio-vga-gl,hostmem="+c.gpuMemory+",blob=true"+venusAccel,
+		"-display", c.display+glOn,
+	)
+	return qemuArgs
 }
 
 func (c *VMCommand) runInteractive(qemuArgs []string) error {
