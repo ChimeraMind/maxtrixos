@@ -2,6 +2,8 @@
 // params reading.
 package config
 
+import "strings"
+
 type IConfig interface {
 	// Load loads the associated config file or source.
 	Load() error
@@ -26,4 +28,16 @@ type IConfig interface {
 	// GetItems retrieves the config values associated to the provided config key.
 	// Config keys can be of type: category.name.
 	GetItems(key string) ([]string, error)
+}
+
+// FilterEnvKey returns a copy of env with all entries for the given key removed.
+func FilterEnvKey(env []string, key string) []string {
+	prefix := key + "="
+	filtered := make([]string, 0, len(env))
+	for _, e := range env {
+		if !strings.HasPrefix(e, prefix) {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
 }
