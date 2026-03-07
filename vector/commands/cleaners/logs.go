@@ -3,6 +3,8 @@ package cleaners
 import (
 	"fmt"
 	"matrixos/vector/lib/config"
+	"matrixos/vector/lib/filesystems"
+	"os"
 	"path"
 	"time"
 )
@@ -47,6 +49,10 @@ func (c *LogsCleaner) Run() error {
 	logsDir, err := c.getLogsDir()
 	if err != nil {
 		return err
+	}
+	if !filesystems.DirectoryExists(logsDir) {
+		fmt.Fprintf(os.Stderr, "Logs directory %s does not exist. Nothing to do.\n", logsDir)
+		return nil
 	}
 
 	dryRun, err := c.isDryRun()

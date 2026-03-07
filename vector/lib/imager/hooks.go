@@ -215,6 +215,11 @@ func (im *Image) TestImage() error {
 	if err != nil {
 		return err
 	}
+	if !filesystems.DirectoryExists(logsDir) {
+		if err := os.MkdirAll(logsDir, 0755); err != nil {
+			return fmt.Errorf("failed to create logs dir: %w", err)
+		}
+	}
 
 	entries, err := os.ReadDir(testDir)
 	if err != nil {
