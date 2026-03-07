@@ -371,14 +371,14 @@ func TestParseSeederParams_EmptyLatestChrootDir(t *testing.T) {
 	)
 
 	sd := newRealSeeder(tmp)
-	_, err := sd.ParseSeederParams("00-bedrock", paramsFile)
-	if err == nil {
-		t.Fatal("Expected error for empty LatestAvailableChrootDir, got nil")
+	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	if err != nil {
+		t.Fatalf("ParseSeederParams: %v", err)
 	}
-	// The empty 4th line is now preserved, so ParseSeederParams catches
-	// it with its own validation.
-	if !strings.Contains(err.Error(), "latest available chroot dir is empty") {
-		t.Errorf("Unexpected error: %v", err)
+	// Empty LatestAvailableChrootDir is now accepted.
+	if params.LatestAvailableChrootDir != "" {
+		t.Errorf("LatestAvailableChrootDir: got %q, want empty",
+			params.LatestAvailableChrootDir)
 	}
 }
 
@@ -397,12 +397,14 @@ func TestParseSeederParams_FunctionMissing(t *testing.T) {
 	os.WriteFile(paramsFile, []byte(script), 0755)
 
 	sd := newRealSeeder(tmp)
-	_, err := sd.ParseSeederParams("00-bedrock", paramsFile)
-	if err == nil {
-		t.Fatal("Expected error for missing function, got nil")
+	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	if err != nil {
+		t.Fatalf("ParseSeederParams: %v", err)
 	}
-	if !strings.Contains(err.Error(), "latest available chroot dir is empty") {
-		t.Errorf("Unexpected error: %v", err)
+	// Missing function yields empty LatestAvailableChrootDir, now accepted.
+	if params.LatestAvailableChrootDir != "" {
+		t.Errorf("LatestAvailableChrootDir: got %q, want empty",
+			params.LatestAvailableChrootDir)
 	}
 }
 
@@ -418,12 +420,14 @@ func TestParseSeederParams_LatestChrootDirNotExist(t *testing.T) {
 	)
 
 	sd := newRealSeeder(tmp)
-	_, err := sd.ParseSeederParams("00-bedrock", paramsFile)
-	if err == nil {
-		t.Fatal("Expected error for non-existent LatestAvailableChrootDir, got nil")
+	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	if err != nil {
+		t.Fatalf("ParseSeederParams: %v", err)
 	}
-	if !strings.Contains(err.Error(), "does not exist") {
-		t.Errorf("Unexpected error: %v", err)
+	// Non-existent directory is now accepted without validation.
+	if params.LatestAvailableChrootDir != missingDir {
+		t.Errorf("LatestAvailableChrootDir: got %q, want %q",
+			params.LatestAvailableChrootDir, missingDir)
 	}
 }
 
