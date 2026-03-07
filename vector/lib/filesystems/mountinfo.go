@@ -233,8 +233,8 @@ func findMountsBySource(source string) ([]*MountInfoEntry, error) {
 	return result, nil
 }
 
-// isMounted returns true if there is a mount at the exact mountpoint.
-func isMounted(mnt string) (bool, error) {
+// IsMounted returns true if there is a mount at the exact mountpoint.
+func IsMounted(mnt string) (bool, error) {
 	_, err := findMountByTarget(mnt)
 	if err != nil {
 		return false, nil
