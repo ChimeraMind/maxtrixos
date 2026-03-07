@@ -43,6 +43,12 @@ func (c *JanitorCommand) Run() error {
 		return fmt.Errorf("error reading config: %w", err)
 	}
 
+	fmt.Println("Initializing seeds cleaner ...")
+	scln := &cleaners.SeedsCleaner{}
+	if err := scln.Init(c.cfg); err != nil {
+		return fmt.Errorf("error initializing seeds cleaner: %w", err)
+	}
+
 	fmt.Println("Initializing images cleaner ...")
 	icln := &cleaners.ImagesCleaner{}
 	if err := icln.Init(c.cfg); err != nil {
@@ -63,6 +69,7 @@ func (c *JanitorCommand) Run() error {
 
 	fmt.Println("Initializing all cleaners ...")
 	clnrs := []cleaners.ICleaner{
+		scln,
 		icln,
 		dcln,
 		lcln,
