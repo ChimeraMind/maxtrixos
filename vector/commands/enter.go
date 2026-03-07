@@ -19,11 +19,13 @@ type EnterCommand struct {
 	fs *flag.FlagSet
 
 	// Library instances
-	sd  seeder.ISeeder
 	det seeder.ISeederDetector
 
 	// Replaceable for testing
 	chrootRunner runner.ChrootRunFunc
+
+	// Flags
+	skipLock bool
 
 	// Positional arguments (chroot dirs or names)
 	targets []string
@@ -48,12 +50,6 @@ func (c *EnterCommand) Init(args []string) error {
 		return fmt.Errorf("error reading config: %w", err)
 	}
 
-	sd, err := seeder.NewSeeder(c.cfg, nil)
-	if err != nil {
-		return fmt.Errorf("failed to initialize seeder: %w", err)
-	}
-	c.sd = sd
-
 	det, err := seeder.NewSeederDetector(c.cfg)
 	if err != nil {
 		return fmt.Errorf("failed to initialize seeder detector: %w", err)
@@ -66,8 +62,10 @@ func (c *EnterCommand) Init(args []string) error {
 func (c *EnterCommand) parseArgs(args []string) error {
 	c.fs = flag.NewFlagSet("enter", flag.ContinueOnError)
 
+	c.fs.BoolVar(&c.skipLock, "skiplock", false, "Skip acquiring the seeder lock before entering the chroot")
+
 	c.fs.Usage = func() {
-		fmt.Println("Usage: vector dev enter <chroot-dir-or-name> [...]")
+		fmt.Println("Usage: vector dev enter [--skiplock] <chroot-dir-or-name> [...]")
 		fmt.Println()
 		fmt.Println("Enter a seeded chroot interactively.")
 		fmt.Println("Specify full paths to chroot directories, or just the chroot name.")
@@ -99,15 +97,12 @@ func (c *EnterCommand) Run() error {
 
 // run implements the enter workflow, mirroring enter.seed's main().
 func (c *EnterCommand) run() error {
-	// Register cleanup for seeder mounts.
-	c.PushCleanup(c.sd.Cleanup)
-
 	// Classify targets into absolute dirs and bare names.
 	var chrootDirs []string
 	var chrootNames []string
 	for _, target := range c.targets {
 		if target == "" {
-			return fmt.Errorf("empty target specified")
+			continue
 		}
 		if filesystems.DirectoryExists(target) {
 			chrootDirs = append(chrootDirs, target)
@@ -152,7 +147,14 @@ func (c *EnterCommand) run() error {
 // resolveNames maps bare chroot names to full paths by examining
 // each detected seeder's params for SEEDER_CHROOTS_DIR.
 func (c *EnterCommand) resolveNames(names []string) ([]string, error) {
-	paramsName, err := c.sd.ParamsExecutableName()
+	sd, err := newSeeder(c.cfg, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize seeder: %w", err)
+	}
+	c.PushCleanup(sd.Cleanup)
+	defer sd.Cleanup()
+
+	paramsName, err := sd.ParamsExecutableName()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get params executable name: %w", err)
 	}
@@ -170,7 +172,7 @@ func (c *EnterCommand) resolveNames(names []string) ([]string, error) {
 		if !filesystems.FileExists(paramsPath) {
 			continue
 		}
-		params, err := c.sd.ParseSeederParams(info.Name, paramsPath)
+		params, err := sd.ParseSeederParams(info.Name, paramsPath)
 		if err != nil {
 			// Skip seeders whose params cannot be parsed.
 			continue
@@ -201,17 +203,39 @@ func (c *EnterCommand) resolveNames(names []string) ([]string, error) {
 // enterChroot sets up mounts, runs an interactive shell inside the
 // chroot, and tears down mounts afterwards.
 func (c *EnterCommand) enterChroot(chrootDir string) error {
-	fmt.Printf("Entering seed: %s\n", chrootDir)
+	sd, err := newSeeder(c.cfg, nil)
+	if err != nil {
+		return fmt.Errorf("failed to initialize seeder: %w", err)
+	}
+	c.PushCleanup(sd.Cleanup)
+	defer sd.Cleanup()
 
-	// Always cleanup mounts, even if the shell failed.
-	defer c.sd.Cleanup()
+	seedName := filepath.Base(chrootDir)
+	fmt.Printf("Entering seed %s: %s\n", seedName, chrootDir)
 
+	if c.skipLock {
+		fmt.Println("Skipping seeder lock acquisition (--skiplock).")
+		if err := c.enterChrootWorker(sd, chrootDir); err != nil {
+			return fmt.Errorf(
+				"seeder %s chroot enter failed: %w", seedName, err,
+			)
+		}
+		return nil
+	}
+
+	return sd.ExecuteWithSeederLock(
+		seedName,
+		func() error { return c.enterChrootWorker(sd, chrootDir) },
+	)
+}
+
+func (c *EnterCommand) enterChrootWorker(sd seeder.ISeeder, chrootDir string) error {
 	opts := seeder.SetupChrootMountsOptions{
 		ChrootDir:     chrootDir,
 		SkipIfMounted: true,
 	}
 
-	if err := c.sd.SetupChrootMounts(opts); err != nil {
+	if err := sd.SetupChrootMounts(opts); err != nil {
 		return fmt.Errorf("error setting up mounts: %w", err)
 	}
 
