@@ -136,6 +136,8 @@ func (r *Releaser) PostCleanShrink() error {
 			Mounted: func(mnt string) {
 				r.Print("Mounted: %s\n", mnt)
 			},
+			Stdout: r.stdout,
+			Stderr: r.stderr,
 		},
 	)
 	if err != nil {

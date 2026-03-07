@@ -84,11 +84,14 @@ type CleanupMountsOptions struct {
 // CleanupMounts unmounts a list of mounts in reverse order.
 func CleanupMounts(opts CleanupMountsOptions) {
 	mounts := opts.Mounts
-	if opts.Stdout == nil {
-		opts.Stdout = os.Stdout
+
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
 	}
-	if opts.Stderr == nil {
-		opts.Stderr = os.Stderr
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
 	}
 
 	DevicesSettle()
@@ -98,14 +101,14 @@ func CleanupMounts(opts CleanupMountsOptions) {
 		if !mounted {
 			continue
 		}
-		fmt.Fprintf(opts.Stdout, "Unmounting %s ...\n", mnt)
+		fmt.Fprintf(stdout, "Unmounting %s ...\n", mnt)
 		if err := Unmount(mnt, 0); err != nil {
 			FlushBlockDeviceBuffers(mnt)
-			fmt.Fprintf(opts.Stderr, "Unable to umount %s: %v\n", mnt, err)
+			fmt.Fprintf(stderr, "Unable to umount %s: %v\n", mnt, err)
 			if entry, mntErr := findMountByTarget(mnt); mntErr == nil {
-				fmt.Fprintf(opts.Stderr, "%s\n", entry.String())
+				fmt.Fprintf(stderr, "%s\n", entry.String())
 			}
-			fmt.Fprintf(opts.Stderr, "For safety, calling umount -l %s\n", mnt)
+			fmt.Fprintf(stderr, "For safety, calling umount -l %s\n", mnt)
 			Unmount(mnt, unix.MNT_DETACH)
 			continue
 		}
