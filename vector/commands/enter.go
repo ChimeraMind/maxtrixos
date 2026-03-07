@@ -76,11 +76,15 @@ func (c *EnterCommand) Init(args []string) error {
 	if err := c.initBaseConfig(); err != nil {
 		return fmt.Errorf("error reading config: %w", err)
 	}
+	c.StartUI()
+	c.SetupPrinters("enter")
+	defer c.FlushPrinters()
 
 	det, err := seeder.NewSeederDetector(c.cfg)
 	if err != nil {
 		return fmt.Errorf("failed to initialize seeder detector: %w", err)
 	}
+	det.SetStderr(c.errPrinter)
 	c.det = det
 
 	detected, err := c.det.Detect(nil, nil)
@@ -88,8 +92,6 @@ func (c *EnterCommand) Init(args []string) error {
 		return fmt.Errorf("seeder detection failed: %w", err)
 	}
 	c.detected = detected
-
-	c.StartUI()
 
 	return nil
 }
@@ -139,8 +141,8 @@ func (c *EnterCommand) run() error {
 	c.PushCleanup(sd.Cleanup)
 	defer sd.Cleanup()
 
-	c.SetupPrinters("enter")
-	defer c.FlushPrinters()
+	sd.SetStdout(c.printer)
+	sd.SetStderr(c.errPrinter)
 
 	// Classify targets into absolute dirs and bare names.
 	var chrootDirs []string
@@ -271,8 +273,15 @@ func (c *EnterCommand) resolveNames(sps SeedersParams, names []string) ([]string
 // enterChroot sets up mounts, runs an interactive shell inside the
 // chroot, and tears down mounts afterwards.
 func (c *EnterCommand) enterChroot(sd seeder.ISeeder, chrootDir string) error {
+	name := filepath.Base(chrootDir)
+	c.SetupPrinters(name)
+	defer c.FlushPrinters()
+
+	sd.SetStdout(c.printer)
+	sd.SetStderr(c.errPrinter)
+
 	c.Printf("\n%s%sEntering seed %s: %s%s\n",
-		c.cBold, c.iconRocket, filepath.Base(chrootDir), chrootDir, c.cReset)
+		c.cBold, c.iconRocket, name, chrootDir, c.cReset)
 	c.Println(c.separator)
 
 	if c.skipLock {
@@ -280,7 +289,7 @@ func (c *EnterCommand) enterChroot(sd seeder.ISeeder, chrootDir string) error {
 			c.cYellow, c.iconWarn, c.cReset)
 		if err := c.enterChrootWorker(sd, chrootDir); err != nil {
 			return fmt.Errorf(
-				"seeder %s chroot enter failed: %w", filepath.Base(chrootDir), err,
+				"seeder %s chroot enter failed: %w", name, err,
 			)
 		}
 		return nil
