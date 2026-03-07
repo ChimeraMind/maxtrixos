@@ -25,10 +25,11 @@ type SeederFilterFunc func(name string) bool
 
 // SeederInfo holds the resolved paths for a single discovered seeder.
 type SeederInfo struct {
-	Name        string // e.g. "00-bedrock"
-	Dir         string // absolute directory path
-	ChrootExec  string // path to the chroot executable
-	PrepperExec string // path to the prepper executable
+	Name             string // e.g. "00-bedrock"
+	Dir              string // absolute directory path
+	ChrootExec       string // path to the chroot executable
+	ChrootChrootExec string // path to the chroot executable inside the chroot
+	PrepperExec      string // path to the prepper executable
 }
 
 // NewSeederOptions contains options for creating a new Seeder.
