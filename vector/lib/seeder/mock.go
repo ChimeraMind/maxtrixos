@@ -257,7 +257,7 @@ func (m *MockSeeder) MarkSeederDone(
 	return m.MarkSeederDoneErr
 }
 func (m *MockSeeder) ParseSeederParams(
-	paramsPath string,
+	name, paramsPath string,
 ) (*SeederParams, error) {
 	return m.ParseSeederParams_, m.ParseSeederParamsErr
 }
