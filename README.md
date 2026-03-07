@@ -123,8 +123,7 @@ If you are partitioning manually, **strict adherence** to the following layout i
 After your first boot, run the setup script to configure credentials and LUKS passwords. Run this from a VT or Desktop terminal.
 
 ```shell
-/matrixos/install/setupOS
-reboot
+vector setupOS
 ```
 
 To enable Docker: `systemctl enable --now docker`.
