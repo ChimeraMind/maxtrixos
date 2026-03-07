@@ -100,6 +100,7 @@ type MockSeeder struct {
 	RetryableCmdCalled               bool
 	MaybeInitializePrivateRepoCalled bool
 	ExecuteWithSeederLockCalled      bool
+	ExecuteWithSeederLockName        string
 	ImportGentooGpgKeysCalled        bool
 	ExecutePrepperCalled             bool
 	SetupChrootMountsCalled          bool
@@ -215,6 +216,7 @@ func (m *MockSeeder) SeederLockPath(name string) (string, error) {
 
 func (m *MockSeeder) ExecuteWithSeederLock(name string, fn func() error) error {
 	m.ExecuteWithSeederLockCalled = true
+	m.ExecuteWithSeederLockName = name
 	if m.ExecuteWithSeederLockErr != nil {
 		return m.ExecuteWithSeederLockErr
 	}

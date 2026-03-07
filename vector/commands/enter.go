@@ -209,21 +209,63 @@ func (c *EnterCommand) enterChroot(chrootDir string) error {
 	c.PushCleanup(sd.Cleanup)
 	defer sd.Cleanup()
 
-	seedName := filepath.Base(chrootDir)
-	fmt.Printf("Entering seed %s: %s\n", seedName, chrootDir)
+	fmt.Printf("Entering seed %s: %s\n", filepath.Base(chrootDir), chrootDir)
 
 	if c.skipLock {
 		fmt.Println("Skipping seeder lock acquisition (--skiplock).")
 		if err := c.enterChrootWorker(sd, chrootDir); err != nil {
 			return fmt.Errorf(
-				"seeder %s chroot enter failed: %w", seedName, err,
+				"seeder %s chroot enter failed: %w", filepath.Base(chrootDir), err,
 			)
 		}
 		return nil
 	}
 
+	return c.enterChrootWithLock(sd, chrootDir)
+}
+
+func (c *EnterCommand) enterChrootWithLock(sd seeder.ISeeder, chrootDir string) error {
+	paramsName, err := sd.ParamsExecutableName()
+	if err != nil {
+		return fmt.Errorf("failed to get params executable name: %w", err)
+	}
+
+	seeders, err := c.det.Detect(nil, nil)
+	if err != nil {
+		return fmt.Errorf("seeder detection failed: %w", err)
+	}
+
+	// Find the corresponding seeder chroot dir matching it with chrootDir.
+	var seeder *seeder.SeederInfo
+	for _, info := range seeders {
+		paramsPath := filepath.Join(info.Dir, paramsName)
+		if !filesystems.FileExists(paramsPath) {
+			continue
+		}
+		params, err := sd.ParseSeederParams(info.Name, paramsPath)
+		if err != nil {
+			// Skip seeders whose params cannot be parsed.
+			continue
+		}
+		for _, dir := range params.AllChrootDirs {
+			if dir == chrootDir {
+				seeder = &info
+				break
+			}
+		}
+		if seeder != nil {
+			break
+		}
+	}
+	if seeder == nil {
+		return fmt.Errorf(
+			"no valid seeder chroot found for chroot dir %s. Try with --skiplock.",
+			chrootDir,
+		)
+	}
+
 	return sd.ExecuteWithSeederLock(
-		seedName,
+		seeder.Name,
 		func() error { return c.enterChrootWorker(sd, chrootDir) },
 	)
 }
