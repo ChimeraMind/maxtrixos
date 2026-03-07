@@ -32,6 +32,7 @@ echo "${SEEDER_CHROOT_NAME}"
 echo "${SEEDER_CHROOTS_DIR}"
 echo "${PREFERRED_SEEDER_CHROOT_DIR}"
 echo $("{{.SeedName}}_params.find_latest_chroot_dir" {{shq .Name}} || true)
+{{.SeedName}}_params.find_all_chroot_dirs {{shq .Name}} || echo ""
 `))
 )
 
@@ -44,6 +45,7 @@ type SeederParams struct {
 	// This points to the latest effectively available directory, which may
 	// differ from PREFERRED_SEEDER_CHROOT_DIR if that directory is missing or not ready.
 	LatestAvailableChrootDir string
+	AllChrootDirs            []string
 }
 
 // PrepperOptions configures how the prepper script is executed.
@@ -138,11 +140,19 @@ func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, e
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
-	if len(lines) < 4 {
+	if len(lines) < 5 {
 		return nil, fmt.Errorf(
-			"expected 4 lines from params %s, got %d",
+			"expected 5 lines from params %s, got %d",
 			paramsPath, len(lines),
 		)
+	}
+
+	var allChrootDirs []string
+	for _, line := range lines[4:] {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			allChrootDirs = append(allChrootDirs, line)
+		}
 	}
 
 	params := &SeederParams{
@@ -150,6 +160,7 @@ func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, e
 		ChrootsDir:               strings.TrimSpace(lines[1]),
 		PreferredChrootDir:       strings.TrimSpace(lines[2]),
 		LatestAvailableChrootDir: strings.TrimSpace(lines[3]),
+		AllChrootDirs:            allChrootDirs,
 	}
 
 	if params.ChrootName == "" {
