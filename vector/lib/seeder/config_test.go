@@ -25,6 +25,12 @@ func stringAccessors() []configAccessorTestCase {
 			wantVal: "/build/seeders",
 		},
 		{
+			name:    "SeedersDir",
+			key:     "Seeder.SeedersDir",
+			call:    func(s *Seeder) (string, error) { return s.SeedersDir() },
+			wantVal: "/build/seeders",
+		},
+		{
 			name:    "DisabledSeederFile",
 			key:     "Seeder.SeederDisabledFileName",
 			call:    func(s *Seeder) (string, error) { return s.DisabledSeederFile() },

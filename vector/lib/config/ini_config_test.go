@@ -41,6 +41,7 @@ SecureBootKekPublicKey=sb-keys/KEK.pem
 DefaultSecureBootPrivateKey=sb-keys/db.key
 DefaultSecureBootPublicKey=sb-keys/db.pem
 LocksDir=locks/seeder
+SeedersDir=build/seeders
 ChrootSeedersDir=build/seeders
 
 [Releaser]
@@ -96,6 +97,7 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 	check("matrixOS.LocksDir", filepath.Join(rootPath, "locks"))
 	check("matrixOS.LogsDir", "/var/log/matrixos")
 
+	check("Seeder.SeedersDir", filepath.Join(rootPath, "build/seeders"))
 	check("Seeder.LocksDir", filepath.Join(rootPath, "locks/seeder"))
 	check("Seeder.DownloadsDir", filepath.Join(rootPath, "out/seeder/downloads"))
 	check("Seeder.DistfilesDir", filepath.Join(rootPath, "out/seeder/distfiles"))

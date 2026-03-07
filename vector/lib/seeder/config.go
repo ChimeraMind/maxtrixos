@@ -14,6 +14,10 @@ func (s *Seeder) configItem(key string) (string, error) {
 	return v, nil
 }
 
+func (s *Seeder) SeedersDir() (string, error) {
+	return s.configItem("Seeder.SeedersDir")
+}
+
 func (s *Seeder) ChrootSeedersDir() (string, error) {
 	return s.configItem("Seeder.ChrootSeedersDir")
 }

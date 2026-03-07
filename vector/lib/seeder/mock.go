@@ -17,6 +17,8 @@ type MockSeeder struct {
 	stderr io.Writer
 
 	// Config accessors
+	SeedersDir_                    string
+	SeedersDirErr                  error
 	ChrootSeedersDir_              string
 	ChrootSeedersDirErr            error
 	ChrootBuildArtifactsDir_       string
@@ -138,6 +140,9 @@ func (m *MockSeeder) PrintError(format string, args ...any) {
 	fmt.Fprintf(m.Stderr(), format, args...)
 }
 
+func (m *MockSeeder) SeedersDir() (string, error) {
+	return m.SeedersDir_, m.SeedersDirErr
+}
 func (m *MockSeeder) ChrootSeedersDir() (string, error) {
 	return m.ChrootSeedersDir_, m.ChrootSeedersDirErr
 }

@@ -69,12 +69,12 @@ func (d *SeederDetector) configItem(key string) (string, error) {
 // Detect scans the seeders directory and returns all valid seeders
 // after applying the skip and only filter functions.
 func (d *SeederDetector) Detect(skip, only SeederFilterFunc) ([]SeederInfo, error) {
-	chrootSeedersDir, err := d.configItem("Seeder.ChrootSeedersDir")
+	seedersDir, err := d.configItem("Seeder.SeedersDir")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get seeders dir: %w", err)
 	}
-	if !filesystems.DirectoryExists(chrootSeedersDir) {
-		return nil, fmt.Errorf("%s seeders dir is not a directory", chrootSeedersDir)
+	if !filesystems.DirectoryExists(seedersDir) {
+		return nil, fmt.Errorf("%s seeders dir is not a directory", seedersDir)
 	}
 
 	disabledFile, err := d.configItem("Seeder.SeederDisabledFileName")
@@ -90,9 +90,9 @@ func (d *SeederDetector) Detect(skip, only SeederFilterFunc) ([]SeederInfo, erro
 		return nil, fmt.Errorf("failed to get prepper exec name: %w", err)
 	}
 
-	entries, err := os.ReadDir(chrootSeedersDir)
+	entries, err := os.ReadDir(seedersDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read seeders dir %s: %w", chrootSeedersDir, err)
+		return nil, fmt.Errorf("failed to read seeders dir %s: %w", seedersDir, err)
 	}
 
 	var seeders []SeederInfo
@@ -101,7 +101,7 @@ func (d *SeederDetector) Detect(skip, only SeederFilterFunc) ([]SeederInfo, erro
 			continue
 		}
 
-		seederDir := filepath.Join(chrootSeedersDir, entry.Name())
+		seederDir := filepath.Join(seedersDir, entry.Name())
 
 		// Check for disabled marker file.
 		disabled := filepath.Join(seederDir, disabledFile)
