@@ -2,12 +2,12 @@ package ostree
 
 import (
 	"matrixos/vector/lib/config"
+	"matrixos/vector/lib/runner"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"matrixos/vector/lib/runner"
 )
 
 // ---------------------------------------------------------------------------
@@ -287,9 +287,9 @@ func TestCommitIntegration(t *testing.T) {
 	}
 
 	// Verify the ref exists.
-	refs, err := ListLocalRefs(repoDir, false)
+	refs, err := o.LocalRefs()
 	if err != nil {
-		t.Fatalf("ListLocalRefs: %v", err)
+		t.Fatalf("LocalRefs: %v", err)
 	}
 	found := false
 	for _, r := range refs {
