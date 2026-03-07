@@ -31,12 +31,12 @@ func (im *Image) cleanAndStripRef() (string, error) {
 	if im.ref == "" {
 		return "", errors.New("missing ref, set Ref in NewImageOptions")
 	}
-	ref := ostree.CleanRemoteFromRef(im.ref)
-	im.ostree.SetRef(ref)
 	stripped, err := im.ostree.RemoveFullFromBranch()
 	if err != nil {
 		return "", err
 	}
+
+	stripped = ostree.CleanRemoteFromRef(stripped)
 	if stripped == "" {
 		return "", errors.New("invalid ref parameter after cleaning")
 	}

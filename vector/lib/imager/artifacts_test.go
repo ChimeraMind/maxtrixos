@@ -474,7 +474,7 @@ func TestShowImageTestInfo(t *testing.T) {
 
 func TestCleanAndStripRef(t *testing.T) {
 	t.Run("WithRemoteAndFull", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImage(baseImageConfig(), &ostree.MockOstree{Ref_: "origin:matrixos/amd64/gnome-full"})
 		im.ref = "origin:matrixos/amd64/gnome-full"
 		result, err := im.cleanAndStripRef()
 		if err != nil {
@@ -486,7 +486,7 @@ func TestCleanAndStripRef(t *testing.T) {
 	})
 
 	t.Run("WithoutSuffix", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImage(baseImageConfig(), &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"})
 		im.ref = "matrixos/amd64/gnome"
 		result, err := im.cleanAndStripRef()
 		if err != nil {

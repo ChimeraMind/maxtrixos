@@ -137,14 +137,20 @@ func (im *Image) SetupHooks() error {
 
 	hooksSrcDir := filepath.Join(devDir, "image", "hooks")
 	if !filesystems.DirectoryExists(hooksSrcDir) {
-		im.PrintError("hooks source dir %s does not exist\n", hooksSrcDir)
-		return nil
+		im.PrintError(
+			"hooks source dir %s does not exist. Create an empty directory at least.\n",
+			hooksSrcDir,
+		)
+		return fmt.Errorf("hooks source directory does not exist: %s", hooksSrcDir)
 	}
 
 	hookExec := filepath.Join(hooksSrcDir, ref+".sh")
 	if !filesystems.FileExists(hookExec) {
-		im.PrintError("hook script %s does not exist\n", hookExec)
-		return nil
+		im.PrintError(
+			"hook script %s does not exist. Create an empty executable file at least.\n",
+			hookExec,
+		)
+		return fmt.Errorf("hook script does not exist: %s", hookExec)
 	}
 
 	info, err := os.Stat(hookExec)
