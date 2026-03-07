@@ -535,3 +535,43 @@ func TestRemoteRefs(t *testing.T) {
 		}
 	})
 }
+
+func TestLocalRefs(t *testing.T) {
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.RepoDir": {"/repo"},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	if err != nil {
+		t.Fatalf("NewOstree failed: %v", err)
+	}
+
+	o.runner = func(cmd *runner.Cmd) error {
+		stdout := cmd.Stdout
+		stdout.Write([]byte("ref1\nostree-metadata\nref2\n"))
+		return nil
+	}
+
+	refs, err := o.LocalRefs()
+	if err != nil {
+		t.Fatalf("LocalRefs failed: %v", err)
+	}
+
+	for _, ref := range refs {
+		if ref == "ostree-metadata" {
+			t.Errorf("LocalRefs() should not return 'ostree-metadata'")
+		}
+	}
+
+	if len(refs) != 2 {
+		t.Errorf("expected 2 refs, got %d", len(refs))
+	}
+
+	if refs[0] != "ref1" {
+		t.Errorf("refs[0] = %q, want %q", refs[0], "ref1")
+	}
+	if refs[1] != "ref2" {
+		t.Errorf("refs[1] = %q, want %q", refs[1], "ref2")
+	}
+}

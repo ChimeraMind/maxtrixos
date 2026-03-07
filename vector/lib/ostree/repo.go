@@ -121,7 +121,14 @@ func (o *Ostree) listLocalRefsFromRepo(repoDir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return readerToList(stdout)
+	refs, err := readerToList(stdout)
+	if err != nil {
+		return nil, err
+	}
+	// remove ostree-metadata from the list.
+	return slices.DeleteFunc(refs, func(ref string) bool {
+		return ref == "ostree-metadata"
+	}), nil
 }
 
 // listRemoteRefsFromRepo lists remote refs using the instance runner.
