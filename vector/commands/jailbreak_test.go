@@ -496,6 +496,84 @@ func TestJailbreakCleanConfigFixSrvDanglingSymlink(t *testing.T) {
 	}
 }
 
+func TestJailbreakCloneToSysrootCopiesVar(t *testing.T) {
+	runner := testRunner()
+	runner.stat = statAllowAll
+
+	var cmdsRun []string
+	runner.execCommand = func(name string, args ...string) cmdRunner {
+		full := name
+		if len(args) > 0 {
+			full = name + " " + strings.Join(args, " ")
+		}
+		cmdsRun = append(cmdsRun, full)
+		return &mockCmdRunner{}
+	}
+
+	cfg := defaultTestConfig()
+	cmd, err := newTestJailbreakCommand(defaultTestMockOstree(), cfg, runner)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	if err := cmd.cloneToSysroot("/sysroot"); err != nil {
+		t.Fatalf("cloneToSysroot failed: %v", err)
+	}
+
+	// Verify that a cpio command targeting /sysroot/var was issued.
+	found := false
+	for _, c := range cmdsRun {
+		if strings.Contains(c, "/ostree/deploy/matrixos/var") &&
+			strings.Contains(c, "cpio") &&
+			strings.Contains(c, "/sysroot/var") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected a cpio command copying /ostree/deploy/matrixos/var to /sysroot/var, got commands:\n%s",
+			strings.Join(cmdsRun, "\n"))
+	}
+}
+
+func TestJailbreakCloneToSysrootSkipsVarWhenMissing(t *testing.T) {
+	runner := testRunner()
+	runner.stat = func(path string) (os.FileInfo, error) {
+		// Return error only for the var dir, success for everything else.
+		if path == "/ostree/deploy/matrixos/var" {
+			return nil, fmt.Errorf("not found")
+		}
+		return fakeFileInfo{}, nil
+	}
+
+	var cmdsRun []string
+	runner.execCommand = func(name string, args ...string) cmdRunner {
+		full := name
+		if len(args) > 0 {
+			full = name + " " + strings.Join(args, " ")
+		}
+		cmdsRun = append(cmdsRun, full)
+		return &mockCmdRunner{}
+	}
+
+	cfg := defaultTestConfig()
+	cmd, err := newTestJailbreakCommand(defaultTestMockOstree(), cfg, runner)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	if err := cmd.cloneToSysroot("/sysroot"); err != nil {
+		t.Fatalf("cloneToSysroot failed: %v", err)
+	}
+
+	// No cpio command should reference /ostree/deploy/matrixos/var.
+	for _, c := range cmdsRun {
+		if strings.Contains(c, "/ostree/deploy/matrixos/var") {
+			t.Errorf("expected no cpio for /var when dir is missing, but got: %s", c)
+		}
+	}
+}
+
 func TestJailbreakPrintTitle(t *testing.T) {
 	runner := testRunner()
 	var stderr bytes.Buffer

@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -9,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
 )
@@ -138,9 +136,10 @@ func getMountInfoFromSystem(mnt string) (*mountInfo, error) {
 type JailbreakCommand struct {
 	BaseCommand
 	UI
-	fs     *flag.FlagSet
-	run    *jailbreakRunner
-	prompt *Prompter
+	fs                    *flag.FlagSet
+	run                   *jailbreakRunner
+	prompt                *Prompter
+	yoloSkipFullBranchChk bool
 }
 
 // NewJailbreakCommand creates a new JailbreakCommand.
@@ -173,6 +172,8 @@ func (c *JailbreakCommand) Init(args []string) error {
 
 func (c *JailbreakCommand) parseArgs(args []string) error {
 	c.fs = flag.NewFlagSet("jailbreak", flag.ContinueOnError)
+	c.fs.BoolVar(&c.yoloSkipFullBranchChk, "yolo-skip-full-branch-check", false,
+		"skip the check that requires being on a -full branch")
 	c.fs.Usage = func() {
 		fmt.Printf("Usage: vector %s\n", c.Name())
 		c.fs.PrintDefaults()
@@ -235,9 +236,6 @@ func (c *JailbreakCommand) Run() error {
 	if err := c.cleanConfig(sysroot, bootRoot, efiRoot); err != nil {
 		return err
 	}
-	if err := c.syncPortage(sysroot); err != nil {
-		return err
-	}
 	if err := c.cleanPackages(sysroot); err != nil {
 		return err
 	}
@@ -290,8 +288,10 @@ func (c *JailbreakCommand) sanityChecks(sysroot, bootRoot, efiRoot, fullSuffix s
 	if err := c.checkSysrootExists(sysroot); err != nil {
 		return err
 	}
-	if err := c.checkOnFullBranch(fullSuffix); err != nil {
-		return err
+	if !c.yoloSkipFullBranchChk {
+		if err := c.checkOnFullBranch(fullSuffix); err != nil {
+			return err
+		}
 	}
 	if err := c.checkVdbExists(fullSuffix); err != nil {
 		return err
@@ -464,6 +464,36 @@ func (c *JailbreakCommand) cloneToSysroot(sysroot string) error {
 		return fmt.Errorf("failed to clone deployment to sysroot: %w", err)
 	}
 
+	// Copy /var separately — in OSTree, /var lives outside the deployment
+	// directory (at /ostree/deploy/<osname>/var) and is bind-mounted in.
+	// The -xdev flag above prevents find from crossing into it, so user
+	// data under /var/home is silently skipped without this extra pass.
+	varDir := filepath.Join("/ostree/deploy", osName, "var")
+	if _, err := c.run.stat(varDir); err == nil {
+		fmt.Fprintf(c.run.stdout, "%s%sCopying /var from %s ...%s\n",
+			c.cBlue, c.iconDownload, varDir, c.cReset)
+
+		sysrootVar := filepath.Join(sysroot, "var")
+		if err := c.run.mkdirAll(sysrootVar, 0755); err != nil {
+			return fmt.Errorf("failed to create %s: %w", sysrootVar, err)
+		}
+
+		cpioVarCmd := c.run.execCommand("sh", "-c",
+			fmt.Sprintf(
+				`cd %q && find . -xdev -depth `+
+					`-not -path "./lib/nfs*" `+
+					`-not -path "./tmp*" `+
+					`-printf '%%P\0' | cpio --null -pd0lu %q`,
+				varDir, sysrootVar,
+			),
+		)
+		cpioVarCmd.SetStdout(c.run.stdout)
+		cpioVarCmd.SetStderr(c.run.stderr)
+		if err := cpioVarCmd.Run(); err != nil {
+			return fmt.Errorf("failed to clone /var to sysroot: %w", err)
+		}
+	}
+
 	// Restore /efi and /boot directories.
 	for _, dir := range []string{"efi", "boot"} {
 		p := filepath.Join(sysroot, dir)
@@ -521,7 +551,7 @@ func (c *JailbreakCommand) bootloaderSetup(bootRoot string) error {
 		return err
 	}
 
-	bootKernelPath, initramfsBootPath, err := c.copyKernelAndInitramfs(bootedKernel, bootRoot)
+	bootKernelPath, initramfsBootPath, err := c.copyKernelAndInitramfs(bootedKernel)
 	if err != nil {
 		return err
 	}
@@ -572,7 +602,7 @@ func (c *JailbreakCommand) resolveKernelPath(bootedKernel string) (string, error
 
 // copyKernelAndInitramfs copies the kernel and (if found) the matching
 // initramfs to /boot, returning the destination paths.
-func (c *JailbreakCommand) copyKernelAndInitramfs(bootedKernel, bootRoot string) (bootKernelPath, initramfsBootPath string, err error) {
+func (c *JailbreakCommand) copyKernelAndInitramfs(bootedKernel string) (bootKernelPath, initramfsBootPath string, err error) {
 	fmt.Fprintf(c.run.stdout, "%s%sCopying booted kernel ...%s\n",
 		c.cBold, c.iconGear, c.cReset)
 
@@ -757,61 +787,6 @@ func (c *JailbreakCommand) cleanConfigSetupSecurebootKeys(efiRoot string) error 
 	if err := opensslCmd.Run(); err != nil {
 		fmt.Fprintf(c.run.stderr, "%s%sFailed to generate MOK file: %v%s\n",
 			c.cYellow, c.iconWarn, err, c.cReset)
-	}
-
-	return nil
-}
-
-func (c *JailbreakCommand) syncPortage(sysroot string) error {
-	fmt.Fprintf(c.run.stdout, "%s%sLet me prep the Portage tree for ya... Downloading Portage ...%s\n",
-		c.cBold, c.iconDownload, c.cReset)
-
-	// emerge-webrsync (best effort).
-	webrsyncCmd := c.run.execCommand("emerge-webrsync")
-	webrsyncCmd.SetStdout(c.run.stdout)
-	webrsyncCmd.SetStderr(c.run.stderr)
-	webrsyncCmd.Run() // best effort
-
-	// Clone overlay repositories that use git.
-	reposConfPath := filepath.Join(sysroot, "etc", "portage", "repos.conf", "eselect-repo.conf")
-	reposData, err := c.run.readFile(reposConfPath)
-	if err != nil {
-		fmt.Fprintf(c.run.stderr, "%s%sCannot read repos config: %v%s\n",
-			c.cYellow, c.iconWarn, err, c.cReset)
-		return nil
-	}
-
-	ini, err := config.ParseIni(bytes.NewReader(reposData))
-	if err != nil {
-		fmt.Fprintf(c.run.stderr, "%s%sCannot parse repos config: %v%s\n",
-			c.cYellow, c.iconWarn, err, c.cReset)
-		return nil
-	}
-
-	for section, items := range ini {
-		if section == "" {
-			continue
-		}
-		if items["sync-type"] != "git" {
-			fmt.Fprintf(c.run.stderr, "%s%sRepository %s does not use git. Not supported...%s\n",
-				c.cYellow, c.iconWarn, section, c.cReset)
-			continue
-		}
-		repoDir := items["location"]
-		gitURL := items["sync-uri"]
-		if repoDir == "" || gitURL == "" {
-			continue
-		}
-
-		fmt.Fprintf(c.run.stdout, "%s%sCloning %s into %s for %s ...%s\n",
-			c.cBlue, c.iconDownload, gitURL, repoDir, section, c.cReset)
-		gitCmd := c.run.execCommand(
-			"git", "clone", "--depth", "1", gitURL,
-			filepath.Join(sysroot, repoDir),
-		)
-		gitCmd.SetStdout(c.run.stdout)
-		gitCmd.SetStderr(c.run.stderr)
-		gitCmd.Run() // best effort
 	}
 
 	return nil
