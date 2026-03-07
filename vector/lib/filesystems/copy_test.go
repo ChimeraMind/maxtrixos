@@ -284,7 +284,7 @@ func TestCheckHardlinkPreservation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := CheckHardlinkPreservation(srcDir, dstDir); err != nil {
+	if err := CheckHardlinkPreservation(srcDir, dstDir, CheckHardlinkPreservationOptions{}); err != nil {
 		t.Errorf("CheckHardlinkPreservation failed when links preserved: %v", err)
 	}
 
@@ -298,7 +298,7 @@ func TestCheckHardlinkPreservation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := CheckHardlinkPreservation(srcDir, dstDirBroken); err == nil {
+	if err := CheckHardlinkPreservation(srcDir, dstDirBroken, CheckHardlinkPreservationOptions{}); err == nil {
 		t.Error("CheckHardlinkPreservation should fail when links are broken")
 	}
 }
