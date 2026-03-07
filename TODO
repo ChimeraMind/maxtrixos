@@ -1,17 +1,17 @@
 # Overall TODO
 
 Golang migration:
-    - Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
-        now that we have separate mount namespaces via unshare.
-          -> no chance of leaking mounts when SIGKILL is sent.
     - Required vector commands:
         - seeders_lib.maybe_initialize_matrixos_private_example in vector command.
         - check_environment_setup.sh replacement.
         - setupOS.
         - install.device.
+        - Wrap ostree admin kargs edit-in-place ...
     - Check releaser when using rsync, check for /dev device nodes.
+    - Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
+        now that we have separate mount namespaces via unshare.
+          -> no chance of leaking mounts when SIGKILL is sent.
     - Consider if possible to implement unshare in code.
-    - Wrap ostree admin kargs edit-in-place ...
     - Add support of ostree admin post-copy in imager (right before umounting)
 
 Features:
