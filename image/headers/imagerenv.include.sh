@@ -7,6 +7,9 @@ if [ -z "${__MATRIXOS_IMAGER_ENV_PARSED:-}" ]; then
 
 source "${MATRIXOS_DEV_DIR}/lib/env_lib.sh"
 
+MATRIXOS_CONF_DIR=$(env_lib.get_confroot "${MATRIXOS_DEV_DIR}")
+
+MATRIXOS_LIVEOS_HOOKS_DIR=$(env_lib.get_root_var "${MATRIXOS_CONF_DIR}" "Imager" "HooksDir")
 MATRIXOS_LIVEOS_IMAGE_SIZE=$(env_lib.get_simple_var "Imager" "ImageSize")
 MATRIXOS_LIVEOS_EFI_SIZE=$(env_lib.get_simple_var "Imager" "EfiPartitionSize")
 MATRIXOS_LIVEOS_BOOT_SIZE=$(env_lib.get_simple_var "Imager" "BootPartitionSize")

@@ -837,13 +837,13 @@ image_lib.setup_hooks() {
     ref=$(ostree_lib.clean_remote_from_ref "${ref}")
     ref=$(ostree_lib.remove_full_from_branch "${ref}")
 
-    local hooks_src_dir="${MATRIXOS_DEV_DIR}/image/hooks"
+    local hooks_src_dir="${MATRIXOS_LIVEOS_HOOKS_DIR}"
     if [ ! -d "${hooks_src_dir}" ]; then
         echo "image_lib.setup_hooks: hooks source dir ${hooks_src_dir} does not exist" >&2
         return 0
     fi
 
-    local hook_exec="${MATRIXOS_DEV_DIR}/image/hooks/${ref}.sh"
+    local hook_exec="${hooks_src_dir}/${ref}.sh"
     if [ ! -f "${hook_exec}" ]; then
         echo "image_lib.setup_hooks: hook script ${hook_exec} does not exist" >&2
         return 0
