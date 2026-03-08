@@ -207,14 +207,17 @@ func TestEnterRunWithDirectoryTarget(t *testing.T) {
 
 func TestEnterRunWithNamedTarget(t *testing.T) {
 	// Create a chroot directory that will be found by name resolution.
+	// The bare name "bedrock" falls through to seedersParams lookup,
+	// so the detected seeder must use Name="bedrock" to match.
 	chrootsDir := t.TempDir()
 	chrootDir := filepath.Join(chrootsDir, "bedrock")
 	if err := os.MkdirAll(chrootDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	// Create seeder structure.
-	seederDir := filepath.Join(t.TempDir(), "00-bedrock")
+	// Create seeder structure — use bare name "bedrock" as the seeder name
+	// so that seedersParams["bedrock"] exists for the fall-through lookup.
+	seederDir := filepath.Join(t.TempDir(), "bedrock")
 	if err := os.MkdirAll(seederDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -239,7 +242,7 @@ func TestEnterRunWithNamedTarget(t *testing.T) {
 	det := &seeder.MockSeederDetector{
 		Detect_: []seeder.SeederInfo{
 			{
-				Name:        "00-bedrock",
+				Name:        "bedrock",
 				Dir:         seederDir,
 				ChrootExec:  filepath.Join(seederDir, "chroot.sh"),
 				PrepperExec: filepath.Join(seederDir, "prepper.sh"),
@@ -388,6 +391,8 @@ func TestEnterRunEmptyTarget(t *testing.T) {
 
 func TestEnterRunUnrecognizedPath(t *testing.T) {
 	// Target that looks like a path but doesn't exist as a directory.
+	// With no "unrecognized argument" error, the target is silently
+	// skipped, resulting in "no chroot dirs or names found".
 	sd := seeder.DefaultMockSeeder()
 	restore := withMockSeeder(sd)
 	defer restore()
@@ -403,7 +408,7 @@ func TestEnterRunUnrecognizedPath(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "unrecognized argument") {
+	if !strings.Contains(err.Error(), "no chroot dirs or names found") {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -846,7 +851,8 @@ func TestEnterMakeSeederParamsSkipsUnparseable(t *testing.T) {
 	}
 
 	// run() still proceeds; the broken seeder is just absent from the map.
-	// Since "somename" can't resolve to any chroot, we expect "no chroot dirs or names found".
+	// "somename" gets added to chrootNames but can't be resolved, so we
+	// get "no chroot dirs or names found".
 	err = cmd.run()
 	if err == nil {
 		t.Fatal("Expected error, got nil")
@@ -880,8 +886,8 @@ func TestEnterMakeSeederParamsSkipsMissingParamsFile(t *testing.T) {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
 
-	// The seeder is skipped due to missing params file, so no chroot
-	// can be resolved from the bare name.
+	// The seeder is skipped due to missing params file, so "somename"
+	// gets added to chrootNames but can't be resolved.
 	err = cmd.run()
 	if err == nil {
 		t.Fatal("Expected error, got nil")
@@ -1083,7 +1089,7 @@ func TestEnterRunSeederNameTargetNotInParams(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "unrecognized argument") {
+	if !strings.Contains(err.Error(), "no chroot dirs or names found") {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -1248,8 +1254,8 @@ func TestEnterResolveNamesSeederNotInSps(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
-	// The bare name "somename" can't resolve because the seeder's params
-	// were unparseable, so it's absent from sps.
+	// "somename" gets added to chrootNames but can't be resolved
+	// because the seeder's params were unparseable.
 	if !strings.Contains(err.Error(), "no chroot dirs or names found") {
 		t.Errorf("Unexpected error: %v", err)
 	}
