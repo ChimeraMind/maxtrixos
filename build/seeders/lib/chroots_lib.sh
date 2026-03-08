@@ -6,8 +6,6 @@ set -eu
 source "${MATRIXOS_DEV_DIR:-/matrixos}/headers/env.include.sh"
 source "${MATRIXOS_DEV_DIR}"/build/seeders/headers/seedersenv.include.sh
 
-source "${MATRIXOS_DEV_DIR}/lib/qa_lib.sh"
-
 _get_phase_path() {
     echo "${MATRIXOS_SEEDERS_PHASES_STATE_DIR}/${1}.done"
 }
@@ -77,12 +75,33 @@ chroots_lib.validate_matrixos_git_repo() {
     fi
 }
 
+_mos_private_message() {
+    echo "Please set it in conf/matrixos.conf, matrixOS.PrivateGitRepoPath." >&2
+    echo "See README.md and https://github.com/lxnay/matrixos-private-example for more details." >&2
+    echo "This directory contains YOUR GPG private keys and SecureBoot certs necessary to build" >&2
+    echo "and release a custom matrixOS Gentoo build." >&2
+}
+
+chroots_lib.check_matrixos_private() {
+    local matrixos_private="${1}"
+    if [ -z "${matrixos_private}" ]; then
+        echo "matrixOS.PrivateGitRepoPath is empty ..." >&2
+        _mos_private_message
+        return 1
+    fi
+    if [ ! -d "${matrixos_private}" ]; then
+        echo "${matrixos_private} does not exist ..." >&2
+        _mos_private_message
+        return 1
+    fi
+}
+
 chroots_lib.validate_matrixos_private() {
     # Inside chroots, we always place matrixos-private into /etc/matrixos-private.
     # This is because many pieces of the codebase, including the Portage config,
     # expect it to be there.
     local matrixos_private="${MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH}"
-    qa_lib.check_matrixos_private "${matrixos_private}"
+    chroots_lib.check_matrixos_private "${matrixos_private}"
 
     # This is usually bind-mount. Make sure it is and not
     # copied over.
