@@ -15,11 +15,7 @@ import (
 
 // ReleasesCommand orchestrates the release workflow across all detected
 // seeders — detecting, resolving branches, and committing each seeder's
-// chroot filesystem into the ostree repository.  It is the Go port of
-// release/release.seeds, wrapping the single-ref ReleaseCommand logic:
-// it scans for available seeders, filters them with --skip-seeders /
-// --only-seeders, and sequentially releases each seeder under an
-// exclusive lock.
+// chroot filesystem into the ostree repository.
 type ReleasesCommand struct {
 	BaseCommand
 	UI
@@ -165,8 +161,7 @@ func (c *ReleasesCommand) updateStdWriters(name string) (*styledWriter, *styledW
 	return stdoutWriter, stderrWriter
 }
 
-// runReleases implements the multi-seeder release workflow, mirroring
-// the bash release.seeds main().
+// runReleases implements the multi-seeder release workflow.
 func (c *ReleasesCommand) runReleases() error {
 	writerSetup := func() {
 		stdoutWriter, stderrWriter := c.updateStdWriters("main")
