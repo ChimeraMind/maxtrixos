@@ -762,9 +762,11 @@ func TestIniConfig_ConcurrentReadWrite(t *testing.T) {
 func TestIniConfig_Clone(t *testing.T) {
 	original := &IniConfig{
 		sp: &searchPath{
-			fileName:    "test.conf",
-			dirPath:     "/etc/test",
-			defaultRoot: "/opt/test",
+			fileName:      "test.conf",
+			dirPath:       "/etc/test",
+			confRoot:      "/etc/test/conf",
+			artifactsRoot: "/var/cache/test",
+			defaultRoot:   "/opt/test",
 		},
 		cfg: map[string][]string{
 			"A.Key": {"v1", "v2"},
@@ -843,7 +845,13 @@ func TestIniConfig_Clone_Nil(t *testing.T) {
 
 func TestIniConfig_Clone_Empty(t *testing.T) {
 	cfg := &IniConfig{
-		sp:  &searchPath{fileName: "a.conf", dirPath: "/d", defaultRoot: "/r"},
+		sp: &searchPath{
+			fileName:      "a.conf",
+			dirPath:       "/d",
+			confRoot:      "/c",
+			artifactsRoot: "/a",
+			defaultRoot:   "/r",
+		},
 		cfg: map[string][]string{},
 	}
 	clone := cfg.Clone()
@@ -857,9 +865,268 @@ func TestIniConfig_Clone_Empty(t *testing.T) {
 	if cloneConcrete.sp.fileName != "a.conf" || cloneConcrete.sp.dirPath != "/d" || cloneConcrete.sp.defaultRoot != "/r" {
 		t.Errorf("Clone searchPath mismatch: got %+v", cloneConcrete.sp)
 	}
+	if cloneConcrete.sp.confRoot != "/c" {
+		t.Errorf("Clone confRoot mismatch: expected /c, got %q", cloneConcrete.sp.confRoot)
+	}
+	if cloneConcrete.sp.artifactsRoot != "/a" {
+		t.Errorf("Clone artifactsRoot mismatch: expected /a, got %q", cloneConcrete.sp.artifactsRoot)
+	}
 	if len(cloneConcrete.cfg) != 0 {
 		t.Errorf("Clone cfg should be empty, got %v", cloneConcrete.cfg)
 	}
+}
+
+func TestIniConfig_NewFromPath_Validation(t *testing.T) {
+	// nil params
+	_, err := NewIniConfigFromPath(nil)
+	if err == nil {
+		t.Fatal("Expected error for nil params")
+	}
+
+	// missing ConfigPath
+	_, err = NewIniConfigFromPath(&ConfigFromPathParams{
+		DefaultRoot:   "/r",
+		ConfRoot:      "/c",
+		ArtifactsRoot: "/a",
+	})
+	if err == nil {
+		t.Fatal("Expected error for empty ConfigPath")
+	}
+
+	// missing DefaultRoot
+	_, err = NewIniConfigFromPath(&ConfigFromPathParams{
+		ConfigPath:    "/tmp/test.conf",
+		ConfRoot:      "/c",
+		ArtifactsRoot: "/a",
+	})
+	if err == nil {
+		t.Fatal("Expected error for empty DefaultRoot")
+	}
+
+	// missing ConfRoot
+	_, err = NewIniConfigFromPath(&ConfigFromPathParams{
+		ConfigPath:    "/tmp/test.conf",
+		DefaultRoot:   "/r",
+		ArtifactsRoot: "/a",
+	})
+	if err == nil {
+		t.Fatal("Expected error for empty ConfRoot")
+	}
+
+	// missing ArtifactsRoot
+	_, err = NewIniConfigFromPath(&ConfigFromPathParams{
+		ConfigPath:  "/tmp/test.conf",
+		DefaultRoot: "/r",
+		ConfRoot:    "/c",
+	})
+	if err == nil {
+		t.Fatal("Expected error for empty ArtifactsRoot")
+	}
+}
+
+func TestIniConfig_ArtifactsRoot_Expansion(t *testing.T) {
+	// Verify that ArtifactsRoot-dependent paths expand against ArtifactsRoot
+	// while Root-dependent and ConfRoot-dependent paths remain with their own base.
+	tmpDir, err := os.MkdirTemp("", "matrixos-test-artifacts-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	configContent := `
+[matrixOS]
+Root=/the/root
+ConfRoot=/the/confroot
+ArtifactsRoot=/the/artifacts
+LogsDir=logs
+LocksDir=locks
+
+[Seeder]
+LocksDir=locks/seeder
+SeedersDir=build/seeders
+DownloadsDir=seeder/downloads
+DistfilesDir=seeder/distfiles
+BinpkgsDir=seeder/binpkgs
+PortageReposDir=seeder/repos
+GpgKeysDir=seeder-gpg/
+
+[Imager]
+LocksDir=locks/imager
+ImagesDir=images
+MountDir=mounts
+
+[Ostree]
+RepoDir=ostree/repo
+DevGpgHomeDir=ostree-gpg/
+GpgOfficialPublicKey=pubkeys/ostree.gpg
+
+[Releaser]
+LocksDir=locks/releaser
+HooksDir=release/hooks
+`
+	configPath := filepath.Join(tmpDir, "matrixos.conf")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	params := ConfigFromPathParams{
+		ConfigPath:    configPath,
+		DefaultRoot:   "/the/root",
+		ConfRoot:      "/the/confroot",
+		ArtifactsRoot: "/the/artifacts",
+	}
+	cfg, err := NewIniConfigFromPath(&params)
+	if err != nil {
+		t.Fatalf("Failed to create config: %v", err)
+	}
+	if err := cfg.Load(); err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	check := func(key, expected string) {
+		t.Helper()
+		val, err := cfg.GetItem(key)
+		if err != nil {
+			t.Errorf("GetItem(%q) error: %v", key, err)
+			return
+		}
+		if val != expected {
+			t.Errorf("Key %q: expected %q, got %q", key, expected, val)
+		}
+	}
+
+	// Root-dependent
+	check("matrixOS.LogsDir", "/the/root/logs")
+	check("matrixOS.LocksDir", "/the/root/locks")
+	check("Seeder.LocksDir", "/the/root/locks/seeder")
+	check("Seeder.SeedersDir", "/the/root/build/seeders")
+	check("Imager.LocksDir", "/the/root/locks/imager")
+	check("Ostree.RepoDir", "/the/root/ostree/repo")
+	check("Releaser.LocksDir", "/the/root/locks/releaser")
+	check("Releaser.HooksDir", "/the/root/release/hooks")
+
+	// ConfRoot-dependent
+	check("Ostree.GpgOfficialPublicKey", "/the/confroot/pubkeys/ostree.gpg")
+
+	// ArtifactsRoot-dependent
+	check("Seeder.DownloadsDir", "/the/artifacts/seeder/downloads")
+	check("Seeder.DistfilesDir", "/the/artifacts/seeder/distfiles")
+	check("Seeder.BinpkgsDir", "/the/artifacts/seeder/binpkgs")
+	check("Seeder.PortageReposDir", "/the/artifacts/seeder/repos")
+	check("Seeder.GpgKeysDir", "/the/artifacts/seeder-gpg")
+	check("Imager.ImagesDir", "/the/artifacts/images")
+	check("Imager.MountDir", "/the/artifacts/mounts")
+	check("Ostree.DevGpgHomeDir", "/the/artifacts/ostree-gpg")
+}
+
+func TestIniConfig_ArtifactsRoot_Default(t *testing.T) {
+	// When ArtifactsRoot is NOT set in the config file, it should default
+	// to the searchPath's artifactsRoot value.
+	tmpDir, err := os.MkdirTemp("", "matrixos-test-artifacts-default-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	configContent := `
+[matrixOS]
+Root=/the/root
+
+[Seeder]
+DownloadsDir=seeder/downloads
+
+[Imager]
+ImagesDir=images
+`
+	configPath := filepath.Join(tmpDir, "matrixos.conf")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	params := ConfigFromPathParams{
+		ConfigPath:    configPath,
+		DefaultRoot:   tmpDir,
+		ConfRoot:      tmpDir,
+		ArtifactsRoot: "/fallback/artifacts",
+	}
+	cfg, err := NewIniConfigFromPath(&params)
+	if err != nil {
+		t.Fatalf("Failed to create config: %v", err)
+	}
+	if err := cfg.Load(); err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	check := func(key, expected string) {
+		t.Helper()
+		val, err := cfg.GetItem(key)
+		if err != nil {
+			t.Errorf("GetItem(%q) error: %v", key, err)
+			return
+		}
+		if val != expected {
+			t.Errorf("Key %q: expected %q, got %q", key, expected, val)
+		}
+	}
+
+	// ArtifactsRoot defaults to the searchPath.artifactsRoot
+	check("matrixOS.ArtifactsRoot", "/fallback/artifacts")
+	check("Seeder.DownloadsDir", "/fallback/artifacts/seeder/downloads")
+	check("Imager.ImagesDir", "/fallback/artifacts/images")
+}
+
+func TestIniConfig_ArtifactsRoot_Relative(t *testing.T) {
+	// When ArtifactsRoot is set to a relative path in the config file,
+	// it should be expanded using smartRootify against searchPath.artifactsRoot.
+	tmpDir, err := os.MkdirTemp("", "matrixos-test-artifacts-rel-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	configContent := `
+[matrixOS]
+Root=/the/root
+ArtifactsRoot=out/
+
+[Seeder]
+DownloadsDir=seeder/downloads
+`
+	configPath := filepath.Join(tmpDir, "matrixos.conf")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	params := ConfigFromPathParams{
+		ConfigPath:    configPath,
+		DefaultRoot:   tmpDir,
+		ConfRoot:      tmpDir,
+		ArtifactsRoot: "/base/artifacts",
+	}
+	cfg, err := NewIniConfigFromPath(&params)
+	if err != nil {
+		t.Fatalf("Failed to create config: %v", err)
+	}
+	if err := cfg.Load(); err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	check := func(key, expected string) {
+		t.Helper()
+		val, err := cfg.GetItem(key)
+		if err != nil {
+			t.Errorf("GetItem(%q) error: %v", key, err)
+			return
+		}
+		if val != expected {
+			t.Errorf("Key %q: expected %q, got %q", key, expected, val)
+		}
+	}
+
+	// Relative ArtifactsRoot "out/" should be resolved against the
+	// searchPath.artifactsRoot which is "/base/artifacts".
+	check("matrixOS.ArtifactsRoot", "/base/artifacts/out")
+	check("Seeder.DownloadsDir", "/base/artifacts/out/seeder/downloads")
 }
 
 func TestIniConfig_AddOverlay(t *testing.T) {
