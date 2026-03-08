@@ -97,6 +97,17 @@ test.os_release() {
     fi
 }
 
+test.portage() {
+    if ! command -v emerge > /dev/null 2>&1; then
+        echo "emerge command not found, Portage may be broken"
+        return 1
+    fi
+    if [ ! -e "/etc/portage/make.conf" ]; then
+        echo "Portage /etc/portage/make.conf not found"
+        return 1
+    fi
+}
+
 test.wait_boot_complete() {
     echo "Waiting for boot to complete..."
     systemctl is-system-running --wait || {
@@ -184,6 +195,7 @@ main() {
         test.etc_resolv_conf
         test.build_file
         test.os_release
+        test.portage
         test.systemctl_status
         test.ostree_status
         test.flatpak
