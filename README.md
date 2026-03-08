@@ -9,22 +9,38 @@ Our two main goals are:
 - **Reliability**: Providing a stable, immutable base system through OSTree, which allows for atomic upgrades and rollbacks.
 - **Gaming-Friendly**: Shipping with the Steam loader, Lutris, and optimizations to get you gaming on both NVIDIA and AMD GPUs with minimal fuss.
 
-..and our motto is: `emerge once, deploy everywhere`.
+...and our motto is: `emerge once, deploy everywhere`.
 
 TL;DR: Download from: [Cloudflare](https://images.matrixos.org)
+
+## Table of Contents
+
+- [Disambiguation](#️-disambiguation)
+- [Disclaimer](#️-disclaimer)
+- [Features](#-features)
+- [Prerequisites](#-prerequisites)
+- [Available Desktops](#️-available-desktops)
+- [Available Images & Keys](#-available-images--keys)
+- [Installation](#-installation)
+- [System Management](#️-system-management)
+- [Build Your Own Distro](#️-build-your-own-distro)
+- [Known Issues](#️-known-issues)
+- [Roadmap Milestones](#-roadmap-milestones)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 <table align="center">
   <tr>
     <td align="center">
       <a href="./screenshots/1.png">
-        <img src="./screenshots/1.png" width="250" alt="Desktop 1" />
+        <img src="./screenshots/1.png" width="250" alt="GNOME Desktop with Steam and GNOME Software" />
       </a>
       <br />
       <sub>GNOME Desktop w/Steam and GNOME Software</sub>
     </td>
     <td align="center">
       <a href="./screenshots/2.png">
-        <img src="./screenshots/2.png" width="250" alt="Desktop 2" />
+        <img src="./screenshots/2.png" width="250" alt="System and Flatpak integration" />
       </a>
       <br />
       <sub>System/OS and Flatpak integration</sub>
@@ -33,17 +49,24 @@ TL;DR: Download from: [Cloudflare](https://images.matrixos.org)
   <tr>
     <td align="center">
       <a href="./screenshots/3.png">
-        <img src="./screenshots/3.png" width="250" alt="Terminal" />
+        <img src="./screenshots/3.png" width="250" alt="OSTree integration in terminal" />
       </a>
       <br />
       <sub>OSTree integration</sub>
     </td>
     <td align="center">
-      <a href="./screenshots/5.png">
-        <img src="./screenshots/5.png" width="250" alt="Dontknow"/>
+      <a href="./screenshots/4.png">
+        <img src="./screenshots/4.png" width="250" alt="Coding and AI"/>
       </a>
       <br />
       <sub>Coding and AI</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <a href="./screenshots/5.png">
+        <img src="./screenshots/5.png" width="250" alt="Additional desktop view"/>
+      </a>
     </td>
   </tr>
 </table>
@@ -74,7 +97,18 @@ matrixOS is a hobby project created for homelab setups. It is **not** intended f
 - **Architecture**: x86_64/amd64 with `x86-64-v3` support (AVX, AVX2, BMP1/2, FMA, etc.).
 - **Storage**: At least 32GB (64GB recommended) on USB/SSD/NVMe.
 
-## 💿 Available Images & Keys
+## 🖥️ Available Desktops
+
+matrixOS ships the following desktop environments as separate OSTree branches:
+
+| Desktop | Branch example | Notes |
+|---------|---------------|-------|
+| **GNOME** | `matrixos/amd64/gnome` | Default and most tested. |
+| **Cosmic** | `matrixos/amd64/cosmic` | [System76 COSMIC](https://system76.com/cosmic) desktop. |
+
+Switch between desktops with `sudo vector branch switch` and reboot.
+
+## 📦 Available Images & Keys
 
 Images are available in `raw` (for flashing) and `qcow2` (for VM) formats, compressed with `xz`.
 **Trusted Source**: [Cloudflare](https://images.matrixos.org)
@@ -86,16 +120,16 @@ Use these keys to verify the authenticity of images and commits:
 - **GPG (OSTree, Images)**: `DC474F4CBD1D3260D9CC6D9275DD33E282BE47CE`
 - **SecureBoot Fingerprint**: `sha256 Fingerprint=38:02:D7:FC:A7:6F:08:04:9C:7F:D5:D7:AF:9A:24:6C:9B:C2:28:F3:45:99:7B:DF:79:EE:F3:35:0A:81:87:1B`
 
-## 💿 Installation
+## 🔧 Installation
 
 ### Option 1: Flash to Drive
 
 Download the image (compressed with `xz`) and its `.sha256` file, then flash it to your target drive using `dd` or similar tools.
 
 ```shell
-sha256sum matrixos_amd64_gnome-DATE.img.xz.sha256
+sha256sum -c matrixos_amd64_gnome-DATE.img.xz.sha256
 xz -d matrixos_amd64_gnome-DATE.img.xz
-dd if=matrixos_amd64_gnome-DATE.img.xz of=/dev/sdX bs=4M status=progress conv=sparse,sync
+dd if=matrixos_amd64_gnome-DATE.img of=/dev/sdX bs=4M status=progress conv=sparse,sync
 ```
 
 There are two default users:
@@ -153,7 +187,7 @@ matrixOS uses OSTree for atomic updates.
 Update to the latest image:
 
 ```shell
-vector upgrade
+sudo vector upgrade
 ```
 
 ### Rollbacks
@@ -161,27 +195,27 @@ vector upgrade
 If an update fails, simply boot into the previous entry (`ostree:1`). To make it permanent:
 
 ```shell
-vector branch deployment  # to show which deployments are available.
-vector branch pin 1       # to pin deployment 1.
-vector branch unpin 1     # in case you want to clean up the pinning of deployment 1.
+sudo vector branch deployment  # to show which deployments are available.
+sudo vector branch pin 1       # to pin deployment 1.
+sudo vector branch unpin 1     # in case you want to clean up the pinning of deployment 1.
 ```
 
 ### Branch Switching
 
-List available branches and switch between them (e.g., from `gnome` to `kde` if available):
+List available branches and switch between them (e.g., from `gnome` to `cosmic`):
 
 ```shell
-vector branch switch
+sudo vector branch switch
 reboot
 ```
 
 ### Mutability & Jailbreaking
 
-- **Temporary Mutability**: `vector readwrite` (resets on upgrade). So that you can run `emerge` as much as you like (important: switch to a `*-full` OSTree branch before doing this).
+- **Temporary Mutability**: `sudo vector readwrite` (resets on upgrade). So that you can run `emerge` as much as you like (important: switch to a `*-full` OSTree branch before doing this).
 - **Permanent Jailbreak**: matrixOS is immutable by default. However, if you want full control to modify system files, compile custom kernels, or use Portage directly, you can "jailbreak" the system. This converts your immutable OSTree installation into a standard, mutable Gentoo Linux installation.
   - **Warning:** This is a **one-way process**. Once you jailbreak, you cannot go back to automatic OSTree updates. You are responsible for maintaining the system yourself.
-  - List available branches: `vector branch list`
-  - Switch to the `-full` branch: `vector branch switch <branch>-full`
+  - List available branches: `sudo vector branch list`
+  - Switch to the `-full` branch: `sudo vector branch switch <branch>-full`
   - Run the jailbreak script: `sudo vector jailbreak`
 
 ## 🛠️ Build Your Own Distro
@@ -190,11 +224,11 @@ You can build custom versions of matrixOS using the provided `dev/build.sh` scri
 
 ### Customization Directories
 
-- **`build/seeders/`**: Contains the build layers (e.g., `00-bedrock`, `10-server`). Each subdirectory has scripts/configs defining packages and settings for that layer.
+- **`build/seeders/`**: Contains the build layers (`00-bedrock`, `10-server`, `20-gnome`, `21-cosmic`). Each subdirectory has scripts/configs defining packages and settings for that layer.
 - **`release/`**: Configuration for the release process.
   - **`hooks/`**: Scripts running at different release stages.
   - **`services/`**: Systemd services to enable/disable/mask.
-  - *Note*: `hooks/` and `services/` follow the `OSNAME/ARCH/SEEDER_NAME` pattern (e.g., `matrixos/amd64/gnome`) for branch-specific configs.
+  - *Note*: `hooks/` and `services/` follow the `OSNAME/ARCH/SEEDER_NAME.{sh,conf}` pattern (e.g., `matrixos/amd64/gnome.sh`) for branch-specific configs.
 - **`image/`**: Configuration for the image creation process.
   - **`hooks/`**: Scripts for partition setup, bootloader install, etc.
   - **`image.releases`**: Defines which releases are built into images.
@@ -202,7 +236,7 @@ You can build custom versions of matrixOS using the provided `dev/build.sh` scri
 ### Configuration Rules
 
 The base configuration is centralized in `conf/matrixos.conf`. Vector client-side tooling
-also read from `conf/client.conf` (e.g. the upgrade command).
+also reads from `conf/client.conf` (e.g. the upgrade command).
 
 - **Project Info**: OS name, architecture, git repositories.
 - **Paths**: Directories for logs, downloads, and output artifacts.
@@ -221,16 +255,30 @@ Run the build script as root. It handles the entire pipeline.
 
 - **Resume**: `./dev/build.sh --resume`
 - **Force specific steps**: `--force-release`, `--force-images`, `--only-images`
-- **Enter a chroot**: `./vector/vector dev enter <name>-<date>`
-- **Clean artifacts**: `./vector/vector dev janitor`
+
+### Vector Build Commands
+
+The `vector` CLI also provides direct access to individual build stages:
+
+| Command | Description |
+|---------|-------------|
+| `vector build seeds` | Run the seeding stage. |
+| `vector build release` | Run a single release. |
+| `vector build releases` | Run all releases. |
+| `vector build image` | Build a single image. |
+| `vector build images` | Build all images. |
+| `vector dev enter <name>` | Enter a build chroot. |
+| `vector dev janitor` | Clean up build artifacts. |
+| `vector dev check` | Verify host has required tools/data. |
+| `vector dev vm` | Test a generated image with QEMU. |
 
 **Resource Requirements**: x86-64-v3 CPU, 32GB+ RAM, ~70GB Disk.
 
-## Known Issues
+## ⚠️ Known Issues
 
-### GNOME aspect ratio is either 100% or 200%
+### GNOME fractional scaling
 
-GNOME 48 currently lacks fine-grained scaling (not getting into details here, but it's fixed in 49). Workaround:
+If GNOME only offers 100% or 200% scaling, enable fractional scaling:
 
 ```shell
 gsettings set org.gnome.mutter experimental-features "['scale-monitor-framebuffer']"
@@ -251,7 +299,7 @@ The current focus is on **User Friendliness (Milestone 3)** and **New Technologi
 
 ### Milestone 4 (Future)
 
-- [ ] Rewrite core tooling in Go (`vector`) to replace bash scripts.
+- [x] Rewrite core tooling in Go (`vector`) — in progress, most user-facing commands migrated.
 - [ ] Implement proper CI/CD pipelines and testing.
 - [ ] Migrate to `bootc` or wrapper on top of `ostree` + UKI support, moving away from direct `ostree` usage.
 
@@ -265,5 +313,5 @@ Contributions are welcome!
 
 ## 📄 License
 
-First-party code is released under the **BSD 2-Clause "Simplified" License**.
+First-party code is released under the **BSD 2-Clause "Simplified" License**. See [LICENSE](LICENSE) for the full text.
 Third-party applications retain their respective licenses.
