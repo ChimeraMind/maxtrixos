@@ -43,9 +43,9 @@ _is_help_in_args() {
 
 _print_build_warning() {
     echo "ATTENTION PLEASE"
-    echo "Using Git repo: ${MATRIXOS_GIT_REPO} (from conf/matrixos.conf)"
+    echo "Using Git repo: from conf/matrixos.conf."
     echo "If you want to make changes to the build configs, it's preferred to fork the official repo"
-    echo "and > edit conf/matrixos.conf GitRepo parameter, setting the URL to your ${MATRIXOS_OSNAME}.git repo fork."
+    echo "and > edit conf/matrixos.conf GitRepo parameter, setting the URL to your git repo fork."
     echo
     echo "Alternatively, use UseLocalGitRepoInsideChroot and optionally also DeleteDotGitFromGitRepo conf/matrixos.conf"
     echo "settings, to do a local clone of the git repository inside the chroot for bootstrapping."
