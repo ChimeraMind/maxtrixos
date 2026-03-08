@@ -34,7 +34,6 @@ _seeders_dir="$(dirname "${_prepper_dir}")"
 _seeder_name="$(basename "${_prepper_dir}")"
 
 source "${MATRIXOS_DEV_DIR}"/headers/env.include.sh
-source "${MATRIXOS_DEV_DIR}"/lib/fs_lib.sh
 source "${MATRIXOS_DEV_DIR}"/build/seeders/lib/preppers_lib.sh
 
 
@@ -70,9 +69,9 @@ download_latest_stage3() {
         download_path="${download_dir}/${filename}"
 
         local tmp_file=
-        tmp_file=$(fs_lib.create_temp_file "${download_dir}" "${filename}")
+        tmp_file=$(preppers_lib.create_temp_file "${download_dir}" "${filename}")
         local tmp_asc_file=
-        tmp_asc_file=$(fs_lib.create_temp_file "${download_dir}" "${filename}.asc")
+        tmp_asc_file=$(preppers_lib.create_temp_file "${download_dir}" "${filename}.asc")
 
         if [ ! -f "${download_path}" ] || [ ! -f "${download_path}.asc" ]; then
             echo "Downloading real stage3 from ${url} ..."
