@@ -466,12 +466,12 @@ func (c *IniConfig) loadArtifactsRootConfigs(fullPath string) error {
 - Those paths are:
   - %s`,
 			fullPath,
-			c.sp.defaultRoot,
+			c.sp.artifactsRoot,
 			strings.Join(artifactsRootDependents, "\n  - "),
 		)
-		c.setVal("matrixOS.ArtifactsRoot", c.sp.defaultRoot)
+		c.setVal("matrixOS.ArtifactsRoot", c.sp.artifactsRoot)
 	} else {
-		artifactsRootVal, err := smartRootify(artifactsRootVal, c.sp.defaultRoot)
+		artifactsRootVal, err := smartRootify(artifactsRootVal, c.sp.artifactsRoot)
 		if err != nil {
 			return err
 		}
