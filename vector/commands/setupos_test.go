@@ -418,7 +418,7 @@ func TestSetupOSKeymapOstree(t *testing.T) {
 
 	cmd := initSetupOSCmd(runner)
 
-	err := cmd.setupLocalizationKeymap("/efi", "matrixos-jailbroken.conf")
+	err := cmd.setupLocalizationKeymap("matrixos-jailbroken.conf")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -454,7 +454,7 @@ func TestSetupOSKeymapJailbroken(t *testing.T) {
 
 	cmd := initSetupOSCmd(runner)
 
-	err := cmd.setupLocalizationKeymap("/efi", "matrixos-jailbroken.conf")
+	err := cmd.setupLocalizationKeymap("matrixos-jailbroken.conf")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -541,7 +541,7 @@ func TestSetupOSDetectWindowsFound(t *testing.T) {
 	}
 }
 
-func TestSetupOSAddMatrixOSBoot(t *testing.T) {
+func TestSetupOSAddOSBoot(t *testing.T) {
 	var efibootmgrCalled bool
 	var efiArgs string
 	runner := testSetupOSRunner()
@@ -562,7 +562,7 @@ func TestSetupOSAddMatrixOSBoot(t *testing.T) {
 	var stdout bytes.Buffer
 	cmd.run.stdout = &stdout
 
-	err := cmd.addMatrixOSBoot("/efi", "matrixOS", `\EFI\BOOT\BOOTX64.EFI`)
+	err := cmd.addOSBoot("/efi", "matrixOS", `\EFI\BOOT\BOOTX64.EFI`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -577,7 +577,7 @@ func TestSetupOSAddMatrixOSBoot(t *testing.T) {
 	}
 }
 
-func TestSetupOSAddMatrixOSBootNoLabel(t *testing.T) {
+func TestSetupOSAddOSBootNoLabel(t *testing.T) {
 	runner := testSetupOSRunner()
 	runner.getMountDevice = func(mnt string) (string, error) { return "/dev/sda1", nil }
 	runner.getPartitionNumber = func(device string) (string, error) { return "1", nil }
@@ -585,7 +585,7 @@ func TestSetupOSAddMatrixOSBootNoLabel(t *testing.T) {
 
 	cmd := initSetupOSCmd(runner)
 
-	err := cmd.addMatrixOSBoot("/efi", "matrixOS", `\EFI\BOOT\BOOTX64.EFI`)
+	err := cmd.addOSBoot("/efi", "matrixOS", `\EFI\BOOT\BOOTX64.EFI`)
 	if err == nil || !strings.Contains(err.Error(), "unable to get partition label") {
 		t.Fatalf("expected partition label error, got: %v", err)
 	}
