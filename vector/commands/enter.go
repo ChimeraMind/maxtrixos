@@ -145,30 +145,48 @@ func (c *EnterCommand) run() error {
 		return fmt.Errorf("failed to make params map: %w", err)
 	}
 
+	allChrootDirs := make(map[string]bool)
+	for _, params := range seedersParams {
+		for _, dir := range params.AllChrootDirs {
+			allChrootDirs[dir] = true
+		}
+	}
+
 	for _, target := range c.targets {
 		if target == "" {
 			continue
 		}
+
+		if params, ok := seedersParams[target]; ok {
+			preferred := params.PreferredChrootDir
+			if preferred != "" && filesystems.DirectoryExists(preferred) {
+				chrootNames = append(chrootNames, filepath.Base(preferred))
+				continue
+			}
+
+			latest := params.LatestAvailableChrootDir
+			if latest != "" && filesystems.DirectoryExists(latest) {
+				chrootName := filepath.Base(latest)
+				chrootNames = append(chrootNames, chrootName)
+				continue
+			}
+		}
+
+		if allChrootDirs[target] {
+			chrootDirs = append(chrootDirs, target)
+			continue
+		}
+
 		if filesystems.DirectoryExists(target) {
 			chrootDirs = append(chrootDirs, target)
 			continue
 		}
+
 		name := filepath.Base(target)
 		if target == name {
 			// Bare name — will be resolved against detected seeders.
 			chrootNames = append(chrootNames, target)
-			// continue and try also to collect more chroot names via params.
-		}
-
-		if params, ok := seedersParams[target]; ok {
-			if params.PreferredChrootDir != "" {
-				chrootName := filepath.Base(params.PreferredChrootDir)
-				chrootNames = append(chrootNames, chrootName)
-			}
-			if params.LatestAvailableChrootDir != "" {
-				chrootName := filepath.Base(params.LatestAvailableChrootDir)
-				chrootNames = append(chrootNames, chrootName)
-			}
+			continue
 		}
 	}
 
