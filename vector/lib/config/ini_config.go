@@ -13,6 +13,7 @@ import (
 type searchPath struct {
 	fileName    string
 	dirPath     string
+	confRoot    string
 	defaultRoot string
 }
 
@@ -94,6 +95,7 @@ func searchPaths(cfgName string) []searchPath {
 		sps = append(sps, searchPath{
 			fileName:    cfgName,
 			dirPath:     filepath.Join(markerDir, "conf"),
+			confRoot:    markerDir,
 			defaultRoot: markerDir,
 		})
 	}
@@ -104,6 +106,7 @@ func searchPaths(cfgName string) []searchPath {
 		// with config in /etc/matrixos/conf.
 		fileName:    cfgName,
 		dirPath:     "/etc/matrixos/conf",
+		confRoot:    "/etc/matrixos",
 		defaultRoot: "/usr/lib/matrixos",
 	})
 
@@ -322,28 +325,7 @@ func (c *IniConfig) generateParent(ini IniFile) error {
 	return nil
 }
 
-func (c *IniConfig) Load() error {
-	if c == nil {
-		return fmt.Errorf("config is nil")
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.sp == nil {
-		return fmt.Errorf("no configuration found in any of the search paths.")
-	}
-	fullPath := c.sp.ConfigPath()
-	ini, err := LoadConfig(fullPath)
-	if err != nil {
-		return err
-	}
-
-	c.generateParent(ini)
-	c.generateConfig(ini)
-	if err := c.generateSubConfigs(fullPath); err != nil {
-		return err
-	}
-
+func (c *IniConfig) loadRootConfigs(fullPath string) error {
 	rootDependents := []string{
 		"matrixOS.PrivateGitRepoPath",
 		"matrixOS.LogsDir",
@@ -361,11 +343,6 @@ func (c *IniConfig) Load() error {
 		"Imager.LocksDir",
 		"Imager.MountDir",
 		"Ostree.RepoDir",
-		"Ostree.DevGpgHomeDir",
-		"Ostree.GpgOfficialPublicKey",
-	}
-	defaultRootDependents := []string{
-		"Seeder.ChrootSeedersDir",
 	}
 
 	// Set defaults for base paths if missing, to allow expansion
@@ -395,6 +372,18 @@ func (c *IniConfig) Load() error {
 		return err
 	}
 
+	for _, key := range rootDependents {
+		c.expand(key, "matrixOS.Root")
+	}
+
+	return nil
+}
+
+func (c *IniConfig) loadDefaultRootConfigs(fullPath string) error {
+	defaultRootDependents := []string{
+		"Seeder.ChrootSeedersDir",
+	}
+
 	// Some very minimal sanity checks at this stage.
 	_, foundDefaultRoot := c.getVal("matrixOS.DefaultRoot")
 	if !foundDefaultRoot {
@@ -411,10 +400,47 @@ func (c *IniConfig) Load() error {
 		c.setVal("matrixOS.DefaultRoot", c.sp.defaultRoot)
 	}
 
-	for _, key := range rootDependents {
-		c.expand(key, "matrixOS.Root")
+	for _, key := range defaultRootDependents {
+		c.expand(key, "matrixOS.DefaultRoot")
+	}
+	return nil
+}
+
+func (c *IniConfig) loadConfRootConfigs(fullPath string) error {
+	confRootDependents := []string{
+		"Ostree.DevGpgHomeDir",
+		"Ostree.GpgOfficialPublicKey",
 	}
 
+	confRootVal, foundConfRoot := c.getVal("matrixOS.ConfRoot")
+	if !foundConfRoot {
+		log.Printf(
+			`WARNING WARNING WARNING:
+- matrixOS.ConfRoot is not set in %s.
+- Relative paths depending on it will be expanded using %s.
+- Those paths are:
+  - %s`,
+			fullPath,
+			c.sp.confRoot,
+			strings.Join(confRootDependents, "\n  - "),
+		)
+		c.setVal("matrixOS.ConfRoot", c.sp.confRoot)
+	} else {
+		confRootVal, err := smartRootify(confRootVal, c.sp.confRoot)
+		if err != nil {
+			return err
+		}
+		c.setVal("matrixOS.ConfRoot", confRootVal)
+	}
+
+	// Expand paths depending on base paths.
+	for _, key := range confRootDependents {
+		c.expand(key, "matrixOS.ConfRoot")
+	}
+	return nil
+}
+
+func (c *IniConfig) loadPrivateRepoConfigs() error {
 	privateRepoDependents := []string{
 		"Seeder.SecureBootPrivateKey",
 		"Seeder.SecureBootPublicKey",
@@ -432,9 +458,45 @@ func (c *IniConfig) Load() error {
 	for _, key := range defaultPrivateRepoDependents {
 		c.expand(key, "matrixOS.DefaultPrivateGitRepoPath")
 	}
+	return nil
+}
 
-	for _, key := range defaultRootDependents {
-		c.expand(key, "matrixOS.DefaultRoot")
+func (c *IniConfig) Load() error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.sp == nil {
+		return fmt.Errorf("no configuration found in any of the search paths.")
+	}
+	fullPath := c.sp.ConfigPath()
+	ini, err := LoadConfig(fullPath)
+	if err != nil {
+		return err
+	}
+
+	c.generateParent(ini)
+	c.generateConfig(ini)
+	if err := c.generateSubConfigs(fullPath); err != nil {
+		return err
+	}
+
+	if err := c.loadRootConfigs(fullPath); err != nil {
+		return err
+	}
+
+	if err := c.loadDefaultRootConfigs(fullPath); err != nil {
+		return err
+	}
+
+	if err := c.loadConfRootConfigs(fullPath); err != nil {
+		return err
+	}
+
+	if err := c.loadPrivateRepoConfigs(); err != nil {
+		return err
 	}
 
 	return nil
