@@ -150,9 +150,10 @@ func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, e
 
 	var allChrootDirs []string
 	for _, line := range lines[4:] {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			allChrootDirs = append(allChrootDirs, line)
+		for _, field := range strings.Fields(line) {
+			if field != "" {
+				allChrootDirs = append(allChrootDirs, field)
+			}
 		}
 	}
 

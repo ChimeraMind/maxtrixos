@@ -289,6 +289,50 @@ func TestParseSeederParams_Success(t *testing.T) {
 	}
 }
 
+func TestParseSeederParams_SpaceSeparatedAllChrootDirs(t *testing.T) {
+	requireBash(t)
+	tmp := t.TempDir()
+	latestDir := filepath.Join(tmp, "chroots", "bedrock-20260228")
+	os.MkdirAll(latestDir, 0755)
+
+	// Create a params.sh where find_all_chroot_dirs echoes
+	// all directories on a SINGLE line, space-separated (no xargs).
+	allDirs := []string{
+		"/mnt/chroots/bedrock-20260228",
+		"/mnt/chroots/bedrock-20260104",
+		"/mnt/chroots/bedrock-20251015",
+	}
+	script := fmt.Sprintf(
+		"#!/bin/bash\n"+
+			"SEEDER_CHROOT_NAME=bedrock-20260228\n"+
+			"SEEDER_CHROOTS_DIR=/mnt/chroots\n"+
+			"PREFERRED_SEEDER_CHROOT_DIR=/mnt/chroots/bedrock-20260228\n"+
+			"bedrock_params.find_latest_chroot_dir() { echo %q; }\n"+
+			"bedrock_params.find_all_chroot_dirs() { echo %q; }",
+		latestDir, strings.Join(allDirs, " "),
+	)
+	paramsFile := filepath.Join(tmp, "params.sh")
+	os.WriteFile(paramsFile, []byte(script), 0755)
+
+	sd := newRealSeeder(tmp)
+	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	if err != nil {
+		t.Fatalf("ParseSeederParams: %v", err)
+	}
+
+	if len(params.AllChrootDirs) != 3 {
+		t.Fatalf("len(AllChrootDirs): got %d, want 3 (entries: %v)",
+			len(params.AllChrootDirs), params.AllChrootDirs)
+	}
+
+	for i, want := range allDirs {
+		if params.AllChrootDirs[i] != want {
+			t.Errorf("AllChrootDirs[%d]: got %q, want %q",
+				i, params.AllChrootDirs[i], want)
+		}
+	}
+}
+
 func TestParseSeederParams_UsesDevDir(t *testing.T) {
 	requireBash(t)
 	tmp := t.TempDir()
