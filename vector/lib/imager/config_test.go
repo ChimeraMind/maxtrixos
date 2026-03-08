@@ -44,6 +44,7 @@ func TestConfigAccessors(t *testing.T) {
 		{"DevDir", im.DevDir, "/opt/matrixos"},
 		{"LockDir", im.LockDir, "/tmp/locks"},
 		{"LockWaitSeconds", im.LockWaitSeconds, "300"},
+		{"HooksDir", im.HooksDir, "/tmp/image/hooks"},
 	}
 
 	for _, tt := range tests {
@@ -70,6 +71,7 @@ func TestConfigAccessorsEmptyValue(t *testing.T) {
 		{"Imager.ImageSize", "ImageSize", func(im *Image) (string, error) { return im.ImageSize() }},
 		{"matrixOS.OsName", "OsName", func(im *Image) (string, error) { return im.OsName() }},
 		{"Imager.LocksDir", "LockDir", func(im *Image) (string, error) { return im.LockDir() }},
+		{"Imager.HooksDir", "HooksDir", func(im *Image) (string, error) { return im.HooksDir() }},
 	}
 
 	for _, tt := range accessors {
@@ -101,6 +103,7 @@ func TestConfigAccessorsConfigError(t *testing.T) {
 		{"BootRoot", im.BootRoot},
 		{"EfiRoot", im.EfiRoot},
 		{"LockDir", im.LockDir},
+		{"HooksDir", im.HooksDir},
 	}
 
 	for _, tt := range accessors {

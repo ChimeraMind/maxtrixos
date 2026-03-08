@@ -415,6 +415,7 @@ func (c *IniConfig) loadDefaultRootConfigs(fullPath string) error {
 func (c *IniConfig) loadConfRootConfigs(fullPath string) error {
 	confRootDependents := []string{
 		"Ostree.GpgOfficialPublicKey",
+		"Imager.HooksDir",
 	}
 
 	confRootVal, foundConfRoot := c.getVal("matrixOS.ConfRoot")

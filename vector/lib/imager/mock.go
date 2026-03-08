@@ -183,6 +183,7 @@ func (m *MockImage) EfiCertificateFileNameKek() (string, error)    { return "", 
 func (m *MockImage) EfiCertificateFileNameKekDer() (string, error) { return "", nil }
 func (m *MockImage) ReadOnlyVdb() (string, error)                  { return "", nil }
 func (m *MockImage) DevDir() (string, error)                       { return "", nil }
+func (m *MockImage) HooksDir() (string, error)                     { return "", nil }
 func (m *MockImage) LockDir() (string, error)                      { return "", nil }
 func (m *MockImage) LockWaitSeconds() (string, error)              { return "", nil }
 func (m *MockImage) BuildMetadataFile() (string, error)            { return "", nil }
