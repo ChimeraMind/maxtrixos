@@ -121,7 +121,7 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 	check("Imager.ImagesDir", filepath.Join(artifactsRootPath, "out/images"))
 	check("Imager.MountDir", filepath.Join(artifactsRootPath, "out/mounts"))
 
-	check("Ostree.DevGpgHomeDir", filepath.Join(confRootPath, "gpg-home"))
+	check("Ostree.DevGpgHomeDir", filepath.Join(artifactsRootPath, "gpg-home"))
 	check("Ostree.GpgOfficialPublicKey", filepath.Join(confRootPath, "pubkeys/ostree.gpg"))
 	check("Ostree.RepoDir", filepath.Join(rootPath, "ostree/repo"))
 
