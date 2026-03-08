@@ -297,12 +297,12 @@ func (r *Releaser) ReleaseHook() error {
 	env := os.Environ()
 	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
 	env = config.FilterEnvKey(env, "REF")
-	env = config.FilterEnvKey(env, "MATRIXOS_PRIVATE_GIT_REPO_PATH")
+	env = config.FilterEnvKey(env, "MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH")
 	cmd.Env = append(
 		env,
 		"CHROOT_DIR="+r.imageDir,
 		"MATRIXOS_DEV_DIR="+devDir,
-		"MATRIXOS_PRIVATE_GIT_REPO_PATH="+defaultPrivPath,
+		"MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH="+defaultPrivPath,
 	)
 	cmd.Stdout = r.stdout
 	cmd.Stderr = r.stderr
