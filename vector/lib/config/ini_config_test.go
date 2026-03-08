@@ -18,6 +18,7 @@ func TestIniConfig_Load_Expansion(t *testing.T) {
 	rootPath := "/tmp/matrixos-root"
 	defaultRootPath := "/tmp/matrixos-default-root"
 	confRootPath := "/tmp/matrixos-conf-root"
+	artifactsRootPath := "/tmp/matrixos-artifacts"
 	privateRepoPath := "/tmp/matrixos-private"
 	defaultPrivateRepoPath := "/tmp/matrixos-default-private"
 
@@ -26,6 +27,7 @@ func TestIniConfig_Load_Expansion(t *testing.T) {
 Root=` + rootPath + `
 DefaultRoot=` + defaultRootPath + `
 ConfRoot=` + confRootPath + `
+ArtifactsRoot=` + artifactsRootPath + `
 PrivateGitRepoPath=` + privateRepoPath + `
 DefaultPrivateGitRepoPath=` + defaultPrivateRepoPath + `
 LogsDir=/var/log/matrixos
@@ -68,8 +70,10 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 	tmpFile.Close()
 
 	params := ConfigFromPathParams{
-		ConfigPath:  tmpFile.Name(),
-		DefaultRoot: rootPath,
+		ConfigPath:    tmpFile.Name(),
+		DefaultRoot:   rootPath,
+		ConfRoot:      confRootPath,
+		ArtifactsRoot: artifactsRootPath,
 	}
 	cfg, err := NewIniConfigFromPath(&params)
 	if err != nil {
@@ -93,6 +97,7 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 
 	check("matrixOS.Root", rootPath)
 	check("matrixOS.ConfRoot", confRootPath)
+	check("matrixOS.ArtifactsRoot", artifactsRootPath)
 
 	// Relative to matrixOS.Root
 	check("matrixOS.PrivateGitRepoPath", privateRepoPath)
@@ -102,18 +107,19 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 
 	check("Seeder.SeedersDir", filepath.Join(rootPath, "build/seeders"))
 	check("Seeder.LocksDir", filepath.Join(rootPath, "locks/seeder"))
-	check("Seeder.DownloadsDir", filepath.Join(rootPath, "out/seeder/downloads"))
-	check("Seeder.DistfilesDir", filepath.Join(rootPath, "out/seeder/distfiles"))
-	check("Seeder.BinpkgsDir", filepath.Join(rootPath, "out/seeder/binpkgs"))
-	check("Seeder.PortageReposDir", filepath.Join(rootPath, "out/seeder/repos"))
+	// Relative to matrixOS.ArtifactsRoot
+	check("Seeder.DownloadsDir", filepath.Join(artifactsRootPath, "out/seeder/downloads"))
+	check("Seeder.DistfilesDir", filepath.Join(artifactsRootPath, "out/seeder/distfiles"))
+	check("Seeder.BinpkgsDir", filepath.Join(artifactsRootPath, "out/seeder/binpkgs"))
+	check("Seeder.PortageReposDir", filepath.Join(artifactsRootPath, "out/seeder/repos"))
 	check("Seeder.GpgKeysDir", filepath.Join(confRootPath, "out/seeder/gpg-keys"))
 
 	check("Releaser.LocksDir", filepath.Join(rootPath, "locks/releaser"))
 	check("Releaser.HooksDir", filepath.Join(rootPath, "release/hooks"))
 
 	check("Imager.LocksDir", filepath.Join(rootPath, "locks/imager"))
-	check("Imager.ImagesDir", filepath.Join(rootPath, "out/images"))
-	check("Imager.MountDir", filepath.Join(rootPath, "out/mounts"))
+	check("Imager.ImagesDir", filepath.Join(artifactsRootPath, "out/images"))
+	check("Imager.MountDir", filepath.Join(artifactsRootPath, "out/mounts"))
 
 	check("Ostree.DevGpgHomeDir", filepath.Join(confRootPath, "gpg-home"))
 	check("Ostree.GpgOfficialPublicKey", filepath.Join(confRootPath, "pubkeys/ostree.gpg"))
@@ -144,8 +150,10 @@ func TestIniConfig_Defaults(t *testing.T) {
 	tmpFile.Close()
 
 	params := ConfigFromPathParams{
-		ConfigPath:  tmpFile.Name(),
-		DefaultRoot: filepath.Dir(tmpFile.Name()),
+		ConfigPath:    tmpFile.Name(),
+		DefaultRoot:   filepath.Dir(tmpFile.Name()),
+		ConfRoot:      filepath.Dir(tmpFile.Name()),
+		ArtifactsRoot: filepath.Dir(tmpFile.Name()),
 	}
 
 	cfg, err := NewIniConfigFromPath(&params)
@@ -241,8 +249,10 @@ Key3=OverrideValue3
 	}
 
 	params := ConfigFromPathParams{
-		ConfigPath:  configPath,
-		DefaultRoot: tmpDir,
+		ConfigPath:    configPath,
+		DefaultRoot:   tmpDir,
+		ConfRoot:      tmpDir,
+		ArtifactsRoot: tmpDir,
 	}
 	cfg, err := NewIniConfigFromPath(&params)
 	if err != nil {
@@ -306,6 +316,7 @@ BinpkgsDir=parent-binpkgs
 [matrixOS]
 ParentConfig=parent.conf
 Root=/main/root
+ArtifactsRoot=/main/root
 LogsDir=logs-from-main
 
 [Seeder]
@@ -317,8 +328,10 @@ DownloadsDir=main-downloads
 	}
 
 	params := ConfigFromPathParams{
-		ConfigPath:  mainPath,
-		DefaultRoot: tmpDir,
+		ConfigPath:    mainPath,
+		DefaultRoot:   tmpDir,
+		ConfRoot:      tmpDir,
+		ArtifactsRoot: tmpDir,
 	}
 	cfg, err := NewIniConfigFromPath(&params)
 	if err != nil {
@@ -369,8 +382,10 @@ Root=/some/root
 	}
 
 	params := ConfigFromPathParams{
-		ConfigPath:  mainPath,
-		DefaultRoot: tmpDir,
+		ConfigPath:    mainPath,
+		DefaultRoot:   tmpDir,
+		ConfRoot:      tmpDir,
+		ArtifactsRoot: tmpDir,
 	}
 	cfg, err := NewIniConfigFromPath(&params)
 	if err != nil {
@@ -408,8 +423,10 @@ LogsDir=logs
 	}
 
 	params := ConfigFromPathParams{
-		ConfigPath:  mainPath,
-		DefaultRoot: tmpDir,
+		ConfigPath:    mainPath,
+		DefaultRoot:   tmpDir,
+		ConfRoot:      tmpDir,
+		ArtifactsRoot: tmpDir,
 	}
 	cfg, err := NewIniConfigFromPath(&params)
 	if err != nil {
@@ -464,6 +481,7 @@ DistfilesDir=parent-distfiles
 [matrixOS]
 ParentConfig=parent.conf
 Root=/chain/root
+ArtifactsRoot=/chain/root
 
 [Seeder]
 DownloadsDir=main-downloads
@@ -490,8 +508,10 @@ DownloadsDir=sub-downloads
 	}
 
 	params := ConfigFromPathParams{
-		ConfigPath:  mainPath,
-		DefaultRoot: tmpDir,
+		ConfigPath:    mainPath,
+		DefaultRoot:   tmpDir,
+		ConfRoot:      tmpDir,
+		ArtifactsRoot: tmpDir,
 	}
 	cfg, err := NewIniConfigFromPath(&params)
 	if err != nil {
@@ -555,6 +575,7 @@ DownloadsDir=from-parent
 [matrixOS]
 ParentConfig=parent.conf
 Root=/main/root
+ArtifactsRoot=/main/root
 
 [Seeder]
 DownloadsDir=from-main
@@ -565,8 +586,10 @@ DownloadsDir=from-main
 	}
 
 	params := ConfigFromPathParams{
-		ConfigPath:  mainPath,
-		DefaultRoot: tmpDir,
+		ConfigPath:    mainPath,
+		DefaultRoot:   tmpDir,
+		ConfRoot:      tmpDir,
+		ArtifactsRoot: tmpDir,
 	}
 	cfg, err := NewIniConfigFromPath(&params)
 	if err != nil {
@@ -668,6 +691,11 @@ func TestSearchPaths(t *testing.T) {
 			evalConfRoot, _ := filepath.EvalSymlinks(sp.confRoot)
 			if evalConfRoot != evalTmp {
 				t.Errorf("Expected confRoot %q, got %q", evalTmp, evalConfRoot)
+			}
+
+			evalArtifactsRoot, _ := filepath.EvalSymlinks(sp.artifactsRoot)
+			if evalArtifactsRoot != evalTmp {
+				t.Errorf("Expected artifactsRoot %q, got %q", evalTmp, evalArtifactsRoot)
 			}
 			break
 		}
