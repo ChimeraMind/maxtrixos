@@ -415,7 +415,6 @@ func (c *IniConfig) loadDefaultRootConfigs(fullPath string) error {
 func (c *IniConfig) loadConfRootConfigs(fullPath string) error {
 	confRootDependents := []string{
 		"Seeder.GpgKeysDir",
-		"Ostree.DevGpgHomeDir",
 		"Ostree.GpgOfficialPublicKey",
 	}
 
@@ -449,6 +448,7 @@ func (c *IniConfig) loadConfRootConfigs(fullPath string) error {
 
 func (c *IniConfig) loadArtifactsRootConfigs(fullPath string) error {
 	artifactsRootDependents := []string{
+		"Ostree.DevGpgHomeDir",
 		"Seeder.DownloadsDir",
 		"Seeder.DistfilesDir",
 		"Seeder.BinpkgsDir",
