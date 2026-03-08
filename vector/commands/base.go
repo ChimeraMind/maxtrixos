@@ -1,11 +1,67 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/ostree"
+	"regexp"
 	"strings"
 )
+
+// Prompter provides interactive input prompting with validation.
+// It is designed to be reusable across any command that needs user input.
+type Prompter struct {
+	Scanner *bufio.Scanner
+	Stdout  io.Writer
+	Stderr  io.Writer
+	UI      *UI
+}
+
+// NewPrompter creates a Prompter from a reader and writers.
+func NewPrompter(stdin io.Reader, stdout, stderr io.Writer, ui *UI) *Prompter {
+	return &Prompter{
+		Scanner: bufio.NewScanner(stdin),
+		Stdout:  stdout,
+		Stderr:  stderr,
+		UI:      ui,
+	}
+}
+
+// AskInput prompts the user for input with a default value and optional
+// regex validation.  Returns the user's input or the default value if
+// empty input is given (or on EOF).
+func (p *Prompter) AskInput(prompt, defaultVal string, pattern *regexp.Regexp) (string, error) {
+	for {
+		defDisplay := defaultVal
+		if defDisplay == "" {
+			defDisplay = "none"
+		}
+		fmt.Fprintf(p.Stdout, "   %s%s%s (default: %s): %s",
+			p.UI.cYellow, p.UI.iconQuestion, prompt, defDisplay, p.UI.cReset)
+
+		if !p.Scanner.Scan() {
+			if err := p.Scanner.Err(); err != nil {
+				return "", fmt.Errorf("failed to read input: %w", err)
+			}
+			// EOF — use default.
+			return defaultVal, nil
+		}
+		input := strings.TrimSpace(p.Scanner.Text())
+
+		if input == "" {
+			return defaultVal, nil
+		}
+
+		if pattern != nil && !pattern.MatchString(input) {
+			fmt.Fprintf(p.Stderr, "   %s%sInvalid input format. Please try again.%s\n",
+				p.UI.cRed, p.UI.iconError, p.UI.cReset)
+			continue
+		}
+		return input, nil
+	}
+}
 
 type BaseCommand struct {
 	cfg config.IConfig
