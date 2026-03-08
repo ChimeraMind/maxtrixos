@@ -106,6 +106,12 @@ func TestVMCommandInitDefaults(t *testing.T) {
 	if c.audioDev != "pipewire" {
 		t.Errorf("default audioDev should be %q, got %q", "pipewire", c.audioDev)
 	}
+	if c.extraDisk {
+		t.Error("default extraDisk should be false")
+	}
+	if c.extraDiskSize != "64G" {
+		t.Errorf("default extraDiskSize should be %q, got %q", "64G", c.extraDiskSize)
+	}
 }
 
 func TestVMCommandFlagOverrides(t *testing.T) {
@@ -126,6 +132,8 @@ func TestVMCommandFlagOverrides(t *testing.T) {
 		"-audio_dev", "alsa",
 		"-display", "gtk",
 		"-gpu_memory", "1G",
+		"-extra_disk",
+		"-extra_disk_size", "128G",
 	})
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
@@ -175,6 +183,12 @@ func TestVMCommandFlagOverrides(t *testing.T) {
 	}
 	if c.audioDev != "alsa" {
 		t.Errorf("audioDev: got %q, want %q", c.audioDev, "alsa")
+	}
+	if !c.extraDisk {
+		t.Error("extraDisk should be true")
+	}
+	if c.extraDiskSize != "128G" {
+		t.Errorf("extraDiskSize: got %q, want %q", c.extraDiskSize, "128G")
 	}
 }
 
@@ -500,6 +514,63 @@ func TestVMCommandGpuAccelExplicitTrue(t *testing.T) {
 	}
 	if !c.gpuAccel {
 		t.Error("gpuAccel should be true when explicitly set to true")
+	}
+}
+
+// --- extra_disk flags ---
+
+func TestVMCommandExtraDiskDefault(t *testing.T) {
+	c := NewVMCommand()
+	if err := c.fs.Parse([]string{}); err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if c.extraDisk {
+		t.Error("extraDisk should default to false")
+	}
+	if c.extraDiskSize != "64G" {
+		t.Errorf("extraDiskSize should default to %q, got %q", "64G", c.extraDiskSize)
+	}
+}
+
+func TestVMCommandExtraDiskEnabled(t *testing.T) {
+	c := NewVMCommand()
+	if err := c.fs.Parse([]string{"-extra_disk"}); err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if !c.extraDisk {
+		t.Error("extraDisk should be true after -extra_disk")
+	}
+	// Size should still be the default.
+	if c.extraDiskSize != "64G" {
+		t.Errorf("extraDiskSize should be %q, got %q", "64G", c.extraDiskSize)
+	}
+}
+
+func TestVMCommandExtraDiskSizeOverride(t *testing.T) {
+	c := NewVMCommand()
+	if err := c.fs.Parse([]string{"-extra_disk", "-extra_disk_size", "256G"}); err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if !c.extraDisk {
+		t.Error("extraDisk should be true")
+	}
+	if c.extraDiskSize != "256G" {
+		t.Errorf("extraDiskSize: got %q, want %q", c.extraDiskSize, "256G")
+	}
+}
+
+func TestVMCommandExtraDiskSizeWithoutExtraDisk(t *testing.T) {
+	// Setting the size without enabling extra_disk should parse fine;
+	// the size is simply ignored at runtime.
+	c := NewVMCommand()
+	if err := c.fs.Parse([]string{"-extra_disk_size", "100G"}); err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if c.extraDisk {
+		t.Error("extraDisk should be false")
+	}
+	if c.extraDiskSize != "100G" {
+		t.Errorf("extraDiskSize: got %q, want %q", c.extraDiskSize, "100G")
 	}
 }
 
