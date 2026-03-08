@@ -6,4 +6,4 @@ shift
 
 cd "$(realpath "$(dirname "${0}")")"
 cd ..
-./vector dev vm -image "${IMAGE_PATH}" -noaudio -nographic "${@}"
+./vector dev vm -image "${IMAGE_PATH}" --audio=false --graphical=false "${@}"

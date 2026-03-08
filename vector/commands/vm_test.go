@@ -73,17 +73,26 @@ func TestVMCommandInitDefaults(t *testing.T) {
 	if c.cpus != "4" {
 		t.Errorf("default cpus should be %q, got %q", "4", c.cpus)
 	}
-	if c.noGraphic {
-		t.Error("default noGraphic should be false")
+	if !c.graphical {
+		t.Error("default graphical should be true")
 	}
-	if c.noGpuaccel {
-		t.Error("default noGpuaccel should be false")
+	if !c.gpuAccel {
+		t.Error("default gpuAccel should be true")
 	}
-	if c.noAudio {
-		t.Error("default noAudio should be false")
+	if !c.audio {
+		t.Error("default audio should be true")
 	}
 	if c.interactive {
 		t.Error("default interactive should be false")
+	}
+	if c.venusAccel {
+		t.Error("default venusAccel should be false")
+	}
+	if c.display != "sdl" {
+		t.Errorf("default display should be %q, got %q", "sdl", c.display)
+	}
+	if c.gpuMemory != "512M" {
+		t.Errorf("default gpuMemory should be %q, got %q", "512M", c.gpuMemory)
 	}
 	if c.waitBoot != 120*time.Second {
 		t.Errorf("default waitBoot should be %v, got %v", 120*time.Second, c.waitBoot)
@@ -106,14 +115,17 @@ func TestVMCommandFlagOverrides(t *testing.T) {
 		"-memory", "8G",
 		"-port", "3333",
 		"-cpus", "8",
-		"-nographic",
-		"-nogpuaccel",
-		"-noaudio",
+		"-graphical=false",
+		"-gpuaccel=false",
+		"-audio=false",
 		"-interactive",
+		"-venus",
 		"-wait_boot", "60s",
 		"-wait_tests", "90s",
 		"-max_run_time", "600s",
 		"-audio_dev", "alsa",
+		"-display", "gtk",
+		"-gpu_memory", "1G",
 	})
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
@@ -131,17 +143,26 @@ func TestVMCommandFlagOverrides(t *testing.T) {
 	if c.cpus != "8" {
 		t.Errorf("cpus: got %q, want %q", c.cpus, "8")
 	}
-	if !c.noGraphic {
-		t.Error("noGraphic should be true")
+	if c.graphical {
+		t.Error("graphical should be false")
 	}
-	if !c.noGpuaccel {
-		t.Error("noGpuaccel should be true")
+	if c.gpuAccel {
+		t.Error("gpuAccel should be false")
 	}
-	if !c.noAudio {
-		t.Error("noAudio should be true")
+	if c.audio {
+		t.Error("audio should be false")
 	}
 	if !c.interactive {
 		t.Error("interactive should be true")
+	}
+	if !c.venusAccel {
+		t.Error("venusAccel should be true")
+	}
+	if c.display != "gtk" {
+		t.Errorf("display: got %q, want %q", c.display, "gtk")
+	}
+	if c.gpuMemory != "1G" {
+		t.Errorf("gpuMemory: got %q, want %q", c.gpuMemory, "1G")
 	}
 	if c.waitBoot != 60*time.Second {
 		t.Errorf("waitBoot: got %v, want %v", c.waitBoot, 60*time.Second)
@@ -435,50 +456,50 @@ func TestSendAndExpect(t *testing.T) {
 	}
 }
 
-// --- noGpuaccel flag ---
+// --- gpuAccel flag ---
 
-func TestVMCommandNoGpuaccelDefault(t *testing.T) {
+func TestVMCommandGpuAccelDefault(t *testing.T) {
 	c := NewVMCommand()
 	if err := c.fs.Parse([]string{}); err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	if c.noGpuaccel {
-		t.Error("noGpuaccel should default to false")
+	if !c.gpuAccel {
+		t.Error("gpuAccel should default to true")
 	}
 }
 
-func TestVMCommandNoGpuaccelEnabled(t *testing.T) {
+func TestVMCommandGpuAccelDisabled(t *testing.T) {
 	c := NewVMCommand()
-	if err := c.fs.Parse([]string{"-nogpuaccel"}); err != nil {
+	if err := c.fs.Parse([]string{"-gpuaccel=false"}); err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	if !c.noGpuaccel {
-		t.Error("noGpuaccel should be true after -nogpuaccel")
+	if c.gpuAccel {
+		t.Error("gpuAccel should be false after -gpuaccel=false")
 	}
 }
 
-func TestVMCommandNoGpuaccelWithNographic(t *testing.T) {
-	// Both flags can coexist; noGpuaccel is irrelevant when nographic is set,
+func TestVMCommandGpuAccelDisabledWithNonGraphical(t *testing.T) {
+	// Both flags can coexist; gpuAccel is irrelevant when graphical is off,
 	// but parsing should still succeed.
 	c := NewVMCommand()
-	if err := c.fs.Parse([]string{"-nogpuaccel", "-nographic"}); err != nil {
+	if err := c.fs.Parse([]string{"-gpuaccel=false", "-graphical=false"}); err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	if !c.noGpuaccel {
-		t.Error("noGpuaccel should be true")
+	if c.gpuAccel {
+		t.Error("gpuAccel should be false")
 	}
-	if !c.noGraphic {
-		t.Error("noGraphic should be true")
+	if c.graphical {
+		t.Error("graphical should be false")
 	}
 }
 
-func TestVMCommandNoGpuaccelExplicitFalse(t *testing.T) {
+func TestVMCommandGpuAccelExplicitTrue(t *testing.T) {
 	c := NewVMCommand()
-	if err := c.fs.Parse([]string{"-nogpuaccel=false"}); err != nil {
+	if err := c.fs.Parse([]string{"-gpuaccel=true"}); err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	if c.noGpuaccel {
-		t.Error("noGpuaccel should be false when explicitly set to false")
+	if !c.gpuAccel {
+		t.Error("gpuAccel should be true when explicitly set to true")
 	}
 }
 
