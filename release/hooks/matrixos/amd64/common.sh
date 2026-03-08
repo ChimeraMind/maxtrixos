@@ -170,3 +170,84 @@ release_common.list_top_packages() {
         equery size '*' | sed 's/\(.*\):.*(\(.*\))$/\2 \1/' \
             | sort -n | numfmt --to=iec-i | tail -n 20
 }
+
+release_common.check_leaking_buckets() {
+    local imagedir="${1}"
+    if [ -z "${imagedir}" ]; then
+        echo "release_common.check_leaking_buckets: missing parameter imagedir" >&2
+        return 1
+    fi
+    if [ ! -d "${imagedir}" ]; then
+        echo "release_common.check_leaking_buckets: ${imagedir} is not a directory" >&2
+        return 1
+    fi
+
+    local failure=
+
+    local private_git_repo_path="${imagedir}/${MATRIXOS_PRIVATE_GIT_REPO_PATH}"
+    if [ -d "${private_git_repo_path}" ] && [ "$(ls -A "${private_git_repo_path}")" ]; then
+        echo "ERROR: Leaking files found in private git repo path: ${MATRIXOS_PRIVATE_GIT_REPO_PATH}" >&2
+        echo "Leaking files:" >&2
+        ls -la "${private_git_repo_path}" >&2
+        failure=1
+    fi
+
+    # Scan for PEM-encoded private keys (SSH, GPG, X.509/secureboot, EC, etc.)
+    # -I skips binary files (ELF, .so, firmware) that embed PEM strings in code.
+    local leaking_key_files=()
+    mapfile -t leaking_key_files < <(
+        grep -rlFI \
+            --exclude='*.xml' \
+            --exclude='*.go' \
+            --exclude='*.pem' \
+            --exclude='*.html' \
+            --exclude-dir='firmware' \
+            --exclude-dir='doc' \
+            -e '-----BEGIN OPENSSH PRIVATE KEY-----' \
+            -e '-----BEGIN RSA PRIVATE KEY-----' \
+            -e '-----BEGIN DSA PRIVATE KEY-----' \
+            -e '-----BEGIN EC PRIVATE KEY-----' \
+            -e '-----BEGIN PRIVATE KEY-----' \
+            -e '-----BEGIN ENCRYPTED PRIVATE KEY-----' \
+            -e '-----BEGIN PGP PRIVATE KEY BLOCK-----' \
+            "${imagedir}" 2>/dev/null || true
+    )
+    if [ "${#leaking_key_files[@]}" -gt 0 ]; then
+        echo "ERROR: Files containing private key material found:" >&2
+        printf '  %s\n' "${leaking_key_files[@]}" >&2
+        failure=1
+    fi
+
+    # Check for GnuPG private key storage (binary keybox format, not PEM)
+    local gpg_private_dirs=()
+    mapfile -t gpg_private_dirs < <(
+        find "${imagedir}" -type d -name 'private-keys-v1.d' 2>/dev/null || true
+    )
+    local gpg_dir=
+    for gpg_dir in "${gpg_private_dirs[@]}"; do
+        if [ -n "$(ls -A "${gpg_dir}" 2>/dev/null)" ]; then
+            echo "ERROR: GnuPG private keys found in: ${gpg_dir}" >&2
+            ls -la "${gpg_dir}" >&2
+            failure=1
+        fi
+    done
+
+    # Check for well-known SSH private key filenames
+    local ssh_key_files=()
+    mapfile -t ssh_key_files < <(
+        find "${imagedir}" -type f \
+            \( -name 'id_rsa' -o -name 'id_ecdsa' -o -name 'id_ecdsa_sk' \
+               -o -name 'id_ed25519' -o -name 'id_ed25519_sk' -o -name 'id_dsa' \
+               -o -name 'ssh_host_*_key' \) \
+            2>/dev/null || true
+    )
+    if [ "${#ssh_key_files[@]}" -gt 0 ]; then
+        echo "ERROR: SSH private key files found:" >&2
+        printf '  %s\n' "${ssh_key_files[@]}" >&2
+        failure=1
+    fi
+
+    if [ -n "${failure}" ]; then
+        return 1
+    fi
+}
