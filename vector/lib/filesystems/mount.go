@@ -74,6 +74,19 @@ func MountpointToFSType(mnt string) (string, error) {
 	return entry.FSType, nil
 }
 
+// RemountReadWrite remounts the given mountpoint as read-write.
+// RemountReadWrite remounts the given mountpoint as read-write.
+func RemountReadWrite(mnt string) error {
+	if mnt == "" {
+		return fmt.Errorf("missing mnt parameter")
+	}
+
+	return execRun(&runner.Cmd{
+		Name: "mount",
+		Args: []string{"-o", "remount,rw", "--", mnt},
+	})
+}
+
 // CleanupMountsOptions represents the options for cleaning up mounts.
 type CleanupMountsOptions struct {
 	Mounts []string
