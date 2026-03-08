@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -eu
 
 release_common.chroot() {
