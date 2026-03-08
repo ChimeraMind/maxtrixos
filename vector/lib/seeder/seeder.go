@@ -1,6 +1,5 @@
 // Package seeder provides seed detection, locking, and execution utilities
 // for managing matrixOS seeders from outside their root filesystem.
-// It is the Go port of build/seeders/lib/seeders_lib.sh.
 package seeder
 
 import (

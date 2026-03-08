@@ -6,8 +6,6 @@ set -eu
 source "${MATRIXOS_DEV_DIR:-/matrixos}"/headers/env.include.sh
 source "${MATRIXOS_DEV_DIR}"/build/seeders/headers/preppersenv.include.sh
 
-source "${MATRIXOS_DEV_DIR}"/build/seeders/lib/seeders_lib.sh
-
 # START: Vectorized functions. These functions are now living in vector.
 # We may want to add small helper commands to vector to execute the checks
 # and not have to duplicate their logic here. Preppers library is still executed
@@ -194,6 +192,64 @@ preppers_lib.create_temp_file() {
         return 1
     fi
     echo "${new_path}"
+}
+
+preppers_lib.seeder_chroot_dir_to_name() {
+    local chroot_dir="${1}"
+    if [ -z "${chroot_dir}" ]; then
+        echo "Missing parameter to seeder_chroot_dir_to_name" >&2
+        return 1
+    fi
+    local seeder_name
+    seeder_name=$(basename "${chroot_dir}")
+    echo "${seeder_name}"
+}
+
+preppers_lib.seeder_lock_dir() {
+    local lock_dir="${MATRIXOS_SEEDER_LOCK_DIR}"
+    mkdir -p "${lock_dir}"
+    echo "${lock_dir}"
+}
+
+preppers_lib.seeder_lock_path() {
+    local seeder_name="${1}"
+    local lock_dir
+    lock_dir="$(preppers_lib.seeder_lock_dir)"
+    local lock_file="${lock_dir}/${seeder_name}.lock"
+    echo "${lock_file}"
+}
+
+preppers_lib.execute_with_seeder_lock() {
+    local func="${1}"
+    local seeder_name="${2}"
+    shift 2
+
+    local lock_path
+    lock_path=$(preppers_lib.seeder_lock_path "${seeder_name}")
+    echo "Acquiring seeder ${seeder_name} lock via ${lock_path} ... (remove lock and re-run to force)"
+
+    local lock_fd=
+    # Do not use a subshell otherwise the global cleanup variables used in trap will not
+    # be filled properly. Like: ${MOUNTS} in seeder.
+    exec {lock_fd}>"${lock_path}"
+
+    if ! flock -x --timeout "${MATRIXOS_SEEDER_LOCK_WAIT_SECS}" "${lock_fd}"; then
+        echo "Timed out waiting for lock ${lock_path}" >&2
+        exec {lock_fd}>&-
+        return 1
+    fi
+
+    echo "Lock for seeder ${seeder_name}, ${lock_path} on FD ${lock_fd} acquired!"
+
+    # We do NOT use a trap. We rely on standard flow control.
+    # If "${func}" crashes (set -e), the script dies and OS closes the FD.
+    # If "${func}" returns (success or fail), we capture it.
+    "${func}" "${@}"
+    local ret=${?}
+
+    # Release the lock.
+    exec {lock_fd}>&-
+    return ${ret}
 }
 
 # END: Vectorized functions.
@@ -480,8 +536,8 @@ preppers_lib.rsync_from_bedrock() {
 
     # Lock bedrock.
     local seeder_name
-    seeder_name=$(seeders_lib.seeder_chroot_dir_to_name "${latest_bedrock}")
-    seeders_lib.execute_with_seeder_lock "preppers_lib._rsync_from_bedrock" "${seeder_name}" \
+    seeder_name=$(preppers_lib.seeder_chroot_dir_to_name "${latest_bedrock}")
+    preppers_lib.execute_with_seeder_lock "preppers_lib._rsync_from_bedrock" "${seeder_name}" \
         "${chroot_dir}" "${latest_bedrock}"
 }
 
