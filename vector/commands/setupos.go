@@ -293,21 +293,37 @@ func (c *SetupOSCommand) Run() error {
 
 	// Step 5: Localization
 	fmt.Fprintf(c.run.stdout, "%s%sStep 5: Localization%s\n", c.cBold, c.iconGear, c.cReset)
-	if err := c.setupLocalization(username, jailbrokenEntry); err != nil {
+	if err := c.setupLocalization(); err != nil {
 		return fmt.Errorf("localization setup failed: %w", err)
 	}
 	fmt.Fprintln(c.run.stdout)
 
-	// Step 6: Windows detection
-	fmt.Fprintf(c.run.stdout, "%s%sStep 6: Windows Detection%s\n", c.cBold, c.iconSearch, c.cReset)
+	// Step 6: AccountsService
+	fmt.Fprintf(c.run.stdout, "%s%sStep 6: AccountsService%s\n", c.cBold, c.iconGear, c.cReset)
+	if err := c.setupAccountsService(username); err != nil {
+		fmt.Fprintf(c.run.stderr, "   %s%sAccountsService setup warning: %v%s\n",
+			c.cYellow, c.iconWarn, err, c.cReset)
+	}
+	fmt.Fprintln(c.run.stdout)
+
+	// Step 7: Keymap
+	fmt.Fprintf(c.run.stdout, "%s%sStep 7: Keyboard Mapping%s\n", c.cBold, c.iconGear, c.cReset)
+	if err := c.setupLocalizationKeymap(jailbrokenEntry); err != nil {
+		fmt.Fprintf(c.run.stderr, "   %s%sKeymap setup warning: %v%s\n",
+			c.cYellow, c.iconWarn, err, c.cReset)
+	}
+	fmt.Fprintln(c.run.stdout)
+
+	// Step 8: Windows detection
+	fmt.Fprintf(c.run.stdout, "%s%sStep 8: Windows Detection%s\n", c.cBold, c.iconSearch, c.cReset)
 	if err := c.detectWindows(efiRoot, relativeEfiBoot); err != nil {
 		fmt.Fprintf(c.run.stderr, "   %s%sWindows detection warning: %v%s\n",
 			c.cYellow, c.iconWarn, err, c.cReset)
 	}
 	fmt.Fprintln(c.run.stdout)
 
-	// Step 7: EFI boot entry
-	fmt.Fprintf(c.run.stdout, "%s%sStep 7: EFI Boot Entry%s\n", c.cBold, c.iconRocket, c.cReset)
+	// Step 9: EFI boot entry
+	fmt.Fprintf(c.run.stdout, "%s%sStep 9: EFI Boot Entry%s\n", c.cBold, c.iconRocket, c.cReset)
 	if err := c.addOSBoot(efiRoot, fancyOsName, efiExecPath); err != nil {
 		fmt.Fprintf(c.run.stderr, "   %s%sEFI boot entry warning: %v%s\n",
 			c.cYellow, c.iconWarn, err, c.cReset)
@@ -458,8 +474,8 @@ func (c *SetupOSCommand) changeLuksPassword() error {
 
 	uuid := ""
 	for _, field := range strings.Fields(string(cmdlineData)) {
-		if strings.HasPrefix(field, "rd.luks.uuid=") {
-			uuid = strings.TrimPrefix(field, "rd.luks.uuid=")
+		if v, found := strings.CutPrefix(field, "rd.luks.uuid="); found {
+			uuid = v
 			break
 		}
 	}
@@ -504,8 +520,8 @@ func (c *SetupOSCommand) changeLuksPassword() error {
 	return nil
 }
 
-// setupLocalization runs systemd-firstboot and configures AccountsService + keymap.
-func (c *SetupOSCommand) setupLocalization(username, jailbrokenEntry string) error {
+// setupLocalization runs systemd-firstboot and configures locale settings.
+func (c *SetupOSCommand) setupLocalization() error {
 	fmt.Fprintf(c.run.stdout, "   %s%sConfiguring system locale and timezone...%s\n",
 		c.cBold, c.iconGear, c.cReset)
 
@@ -521,6 +537,19 @@ func (c *SetupOSCommand) setupLocalization(username, jailbrokenEntry string) err
 		return fmt.Errorf("systemd-firstboot failed: %w", err)
 	}
 
+	// env-update for Gentoo locale fix.
+	fmt.Fprintf(c.run.stdout, "   %s%sRunning env-update for locale configuration...%s\n",
+		c.cGreen, c.iconGear, c.cReset)
+	envUpdateCmd := c.run.execCommand("env-update")
+	envUpdateCmd.Run() // best effort
+
+	fmt.Fprintf(c.run.stdout, "   %s%sLocalization configured.%s\n",
+		c.cGreen, c.iconCheck, c.cReset)
+	return nil
+}
+
+// setupAccountsService configures AccountsService for the given user.
+func (c *SetupOSCommand) setupAccountsService(username string) error {
 	// Setup AccountsService directories.
 	asDir := "/var/lib/AccountsService"
 	asUsersDir := filepath.Join(asDir, "users")
@@ -534,49 +563,45 @@ func (c *SetupOSCommand) setupLocalization(username, jailbrokenEntry string) err
 	lang := ""
 	if localeData, err := c.run.readFile("/etc/locale.conf"); err == nil {
 		for _, line := range strings.Split(string(localeData), "\n") {
-			if strings.HasPrefix(line, "LANG=") {
-				lang = strings.TrimPrefix(line, "LANG=")
-				lang = strings.TrimSpace(lang)
+			if v, found := strings.CutPrefix(line, "LANG="); found {
+				lang = strings.TrimSpace(v)
 				break
 			}
 		}
 	}
 
-	if lang != "" && username != "" {
-		if _, err := c.run.stat(asUsersDir); err == nil {
-			userCfg := filepath.Join(asUsersDir, username)
+	if lang == "" || username == "" {
+		fmt.Fprintf(c.run.stdout, "   %s%sSkipping AccountsService (no locale or username).%s\n",
+			c.cYellow, c.iconWarn, c.cReset)
+		return nil
+	}
 
-			// Determine icon path.
-			srcIconPath := "/usr/share/pixmaps/faces/tree.jpg"
-			dstIconPath := "/home/" + username + "/.face"
-			if c.run.fileExists(srcIconPath) {
-				dstIconPath = filepath.Join(asIconsDir, username)
-				c.run.copyFile(srcIconPath, dstIconPath)
-				c.run.chmod(dstIconPath, 0644)
-			}
+	fmt.Fprintf(
+		c.run.stdout,
+		"   %s%sConfiguring AccountsService for user %s with LANG=%s...%s\n",
+		c.cBold, c.iconGear, username, lang, c.cReset,
+	)
+	if _, err := c.run.stat(asUsersDir); err == nil {
+		userCfg := filepath.Join(asUsersDir, username)
 
-			content := fmt.Sprintf("[User]\nLanguages=%s;\nSession=\nIcon=%s\nSystemAccount=false\n",
-				lang, dstIconPath)
-			c.run.writeFile(userCfg, []byte(content), 0600)
-			c.run.chown(userCfg, 0, 0)
-
-			fmt.Fprintf(c.run.stdout, "   %s%sAccountsService configured for %s (lang=%s).%s\n",
-				c.cGreen, c.iconCheck, username, lang, c.cReset)
+		// Determine icon path.
+		srcIconPath := "/usr/share/pixmaps/faces/tree.jpg"
+		dstIconPath := "/home/" + username + "/.face"
+		if c.run.fileExists(srcIconPath) {
+			dstIconPath = filepath.Join(asIconsDir, username)
+			c.run.copyFile(srcIconPath, dstIconPath)
+			c.run.chmod(dstIconPath, 0644)
 		}
+
+		content := fmt.Sprintf("[User]\nLanguages=%s;\nSession=\nIcon=%s\nSystemAccount=false\n",
+			lang, dstIconPath)
+		c.run.writeFile(userCfg, []byte(content), 0600)
+		c.run.chown(userCfg, 0, 0)
+
+		fmt.Fprintf(c.run.stdout, "   %s%sAccountsService configured for %s (lang=%s).%s\n",
+			c.cGreen, c.iconCheck, username, lang, c.cReset)
 	}
 
-	// env-update for Gentoo locale fix.
-	envUpdateCmd := c.run.execCommand("env-update")
-	envUpdateCmd.Run() // best effort
-
-	// Configure keymap in boot args.
-	if err := c.setupLocalizationKeymap(jailbrokenEntry); err != nil {
-		fmt.Fprintf(c.run.stderr, "   %s%sKeymap setup warning: %v%s\n",
-			c.cYellow, c.iconWarn, err, c.cReset)
-	}
-
-	fmt.Fprintf(c.run.stdout, "   %s%sLocalization configured.%s\n",
-		c.cGreen, c.iconCheck, c.cReset)
 	return nil
 }
 
@@ -585,9 +610,8 @@ func (c *SetupOSCommand) setupLocalizationKeymap(jailbrokenEntry string) error {
 	keymap := ""
 	if vconsoleData, err := c.run.readFile("/etc/vconsole.conf"); err == nil {
 		for _, line := range strings.Split(string(vconsoleData), "\n") {
-			if strings.HasPrefix(line, "KEYMAP=") {
-				keymap = strings.TrimPrefix(line, "KEYMAP=")
-				keymap = strings.TrimSpace(keymap)
+			if v, found := strings.CutPrefix(line, "KEYMAP="); found {
+				keymap = strings.TrimSpace(v)
 				break
 			}
 		}
@@ -607,8 +631,11 @@ func (c *SetupOSCommand) setupLocalizationKeymap(jailbrokenEntry string) error {
 	jailbrokenConfig := filepath.Join("/boot/loader/entries", jailbrokenEntry)
 
 	if isOstree {
-		fmt.Fprintf(c.run.stdout, "   %sConfiguring early boot keyboard mapping via ostree kargs...%s\n",
-			c.iconGear, c.cReset)
+		fmt.Fprintf(
+			c.run.stdout,
+			"   %sConfiguring early boot keyboard mapping via ostree kargs...%s\n",
+			c.iconGear, c.cReset,
+		)
 		kargsCmd := c.run.execCommand("ostree", "admin", "kargs", "edit-in-place",
 			"--append-if-missing=vconsole.keymap="+keymap)
 		kargsCmd.SetStdout(c.run.stdout)
@@ -617,8 +644,11 @@ func (c *SetupOSCommand) setupLocalizationKeymap(jailbrokenEntry string) error {
 			return fmt.Errorf("ostree kargs failed: %w", err)
 		}
 	} else if c.run.fileExists(jailbrokenConfig) {
-		fmt.Fprintf(c.run.stdout, "   %sConfiguring early boot keyboard mapping via BLS config...%s\n",
-			c.iconGear, c.cReset)
+		fmt.Fprintf(
+			c.run.stdout,
+			"   %sConfiguring early boot keyboard mapping via BLS config...%s\n",
+			c.iconGear, c.cReset,
+		)
 		data, err := c.run.readFile(jailbrokenConfig)
 		if err != nil {
 			return fmt.Errorf("failed to read %s: %w", jailbrokenConfig, err)

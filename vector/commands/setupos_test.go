@@ -337,19 +337,33 @@ func TestSetupOSChangeUserPassword(t *testing.T) {
 }
 
 func TestSetupOSSetupLocalization(t *testing.T) {
-	writtenFiles := make(map[string][]byte)
 	runner := testSetupOSRunner()
 	runner.execCommand = func(name string, args ...string) cmdRunner {
 		return &mockCmdRunner{}
 	}
+
+	cmd := initSetupOSCmd(runner)
+
+	var stdout bytes.Buffer
+	cmd.run.stdout = &stdout
+
+	err := cmd.setupLocalization()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(stdout.String(), "Localization configured") {
+		t.Errorf("expected localization message, got: %s", stdout.String())
+	}
+}
+
+func TestSetupOSSetupAccountsService(t *testing.T) {
+	writtenFiles := make(map[string][]byte)
+	runner := testSetupOSRunner()
 	runner.readFile = func(path string) ([]byte, error) {
 		switch path {
 		case "/etc/locale.conf":
 			return []byte("LANG=en_US.UTF-8\n"), nil
-		case "/etc/vconsole.conf":
-			return []byte("KEYMAP=us\n"), nil
-		case "/proc/cmdline":
-			return []byte("root=UUID=abc ostree=/ostree/boot rw"), nil
 		}
 		return nil, fmt.Errorf("not mocked: %s", path)
 	}
@@ -372,7 +386,7 @@ func TestSetupOSSetupLocalization(t *testing.T) {
 	var stdout bytes.Buffer
 	cmd.run.stdout = &stdout
 
-	err := cmd.setupLocalization("alice", "matrixos-jailbroken.conf")
+	err := cmd.setupAccountsService("alice")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -387,8 +401,8 @@ func TestSetupOSSetupLocalization(t *testing.T) {
 		}
 	}
 
-	if !strings.Contains(stdout.String(), "Localization configured") {
-		t.Errorf("expected localization message, got: %s", stdout.String())
+	if !strings.Contains(stdout.String(), "AccountsService configured") {
+		t.Errorf("expected AccountsService message, got: %s", stdout.String())
 	}
 }
 
