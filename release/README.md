@@ -55,7 +55,7 @@ These directories provide a clean way to customize the release for different see
 
 ## Usage
 
-For the most part, you shouldn't need to run these scripts manually. The `weekly_builder.sh` script in the `dev/` directory is the intended entry point for automated builds.
+For the most part, you shouldn't need to run these scripts manually. The `vector_builder.sh` script in the `dev/` directory is the intended entry point for automated builds.
 
 However, if you need to do a manual release, you'll use `release.seeds`. For example, to release only the `gnome` seed in `dev` mode, you would run something like:
 

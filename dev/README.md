@@ -26,4 +26,4 @@ These scripts are used to build live USB images of matrixOS.
 
 ### Automated Build Script
 
-*   `weekly_builder.sh`: This script is designed to be run on a weekly basis to automate the build and release process of matrixOS. It utilizes a chroot environment to build the seeds and then releases them. This script is crucial for the continuous integration and delivery of the OS.
+*   `vector_builder.sh`: This script is designed to be run on a weekly basis to automate the build and release process of matrixOS. It utilizes a chroot environment to build the seeds and then releases them. This script is crucial for the continuous integration and delivery of the OS.
