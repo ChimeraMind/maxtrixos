@@ -3,7 +3,6 @@
 set -eu
 
 source "${MATRIXOS_DEV_DIR:-/matrixos}/headers/env.include.sh"
-source "${MATRIXOS_DEV_DIR}"/image/headers/imagerenv.include.sh
 
 
 ostree_lib.setup_environment() {
