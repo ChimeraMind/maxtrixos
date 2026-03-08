@@ -243,6 +243,29 @@ chroots_lib.get_current_portage_counter() {
 chroots_lib.try_get_emerge_jobs_flags() {
     local num_procs=
     num_procs=$(nproc || true)
+    # Assume 1C/2G
+    num_gib=$(free -g | awk '/^Mem:/{print $2}' || true)
+
+    if [ -z "${num_procs}" ] || [ -z "${num_gib}" ]; then
+        echo "WARNING: Could not determine number of processors or amount of memory. Using default 2C/4G." >&2
+        num_procs=2
+        num_gib=4
+    else
+        # Normalize num_procs based on memory, to avoid OOMs.
+        # For example, on a 4GiB RAM machine, we don't want to
+        # spawn 8 emerge processes just because there are 8 cores.
+        local num_gib_procs=
+        num_gib_procs=$(( num_gib / 2 ))
+        # If num_gib_procs is odd, make it even
+        if [ $(( num_gib_procs % 2 )) -ne 0 ]; then
+            num_gib_procs=$(( num_gib_procs + 1 ))
+        fi
+        if [ "${num_gib_procs}" -lt "${num_procs}" ]; then
+            echo "WARNING: Limiting emerge jobs to ${num_gib_procs} based on available memory (${num_gib} GiB)." >&2
+            num_procs="${num_gib_procs}"
+        fi
+    fi
+
     local flags=()
     if [ -n "${num_procs}" ]; then
         flags+=(
