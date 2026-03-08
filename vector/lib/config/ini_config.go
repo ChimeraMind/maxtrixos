@@ -335,7 +335,6 @@ func (c *IniConfig) loadRootConfigs(fullPath string) error {
 		"Seeder.DistfilesDir",
 		"Seeder.BinpkgsDir",
 		"Seeder.PortageReposDir",
-		"Seeder.GpgKeysDir",
 		"Releaser.HooksDir",
 		"Seeder.SeedersDir",
 		"Releaser.LocksDir",
@@ -408,6 +407,7 @@ func (c *IniConfig) loadDefaultRootConfigs(fullPath string) error {
 
 func (c *IniConfig) loadConfRootConfigs(fullPath string) error {
 	confRootDependents := []string{
+		"Seeder.GpgKeysDir",
 		"Ostree.DevGpgHomeDir",
 		"Ostree.GpgOfficialPublicKey",
 	}
