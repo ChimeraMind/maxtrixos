@@ -177,6 +177,11 @@ func (c *EnterCommand) run() error {
 
 	// Resolve bare names by scanning seeder params for SEEDER_CHROOTS_DIR.
 	if len(chrootNames) > 0 {
+		fmt.Printf("Resolving chroot names:\n")
+		for _, name := range chrootNames {
+			fmt.Printf("  %s\n", name)
+		}
+
 		resolved, err := c.resolveNames(sd, seedersParams, chrootNames)
 		if err != nil {
 			return err
