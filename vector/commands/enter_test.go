@@ -893,8 +893,13 @@ func TestEnterMakeSeederParamsSkipsMissingParamsFile(t *testing.T) {
 
 func TestEnterRunSeederNameTargetPreferredChrootDir(t *testing.T) {
 	// A target that is a seeder name (containing /) resolves via
-	// PreferredChrootDir from the seeder params.
-	chrootDir := t.TempDir()
+	// PreferredChrootDir from the seeder params. The basename is extracted
+	// and resolved through resolveNames using ChrootsDir.
+	chrootsDir := t.TempDir()
+	chrootDir := filepath.Join(chrootsDir, "bedrock")
+	if err := os.MkdirAll(chrootDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 	seederDir := filepath.Join(t.TempDir(), "sub", "00-bedrock")
 	if err := os.MkdirAll(seederDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
@@ -913,6 +918,7 @@ func TestEnterRunSeederNameTargetPreferredChrootDir(t *testing.T) {
 	sd := seeder.DefaultMockSeeder()
 	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
+		ChrootsDir:         chrootsDir,
 		PreferredChrootDir: chrootDir,
 		AllChrootDirs:      []string{chrootDir},
 	}
@@ -952,7 +958,12 @@ func TestEnterRunSeederNameTargetPreferredChrootDir(t *testing.T) {
 
 func TestEnterRunSeederNameTargetLatestAvailableChrootDir(t *testing.T) {
 	// When PreferredChrootDir is empty, LatestAvailableChrootDir is used.
-	chrootDir := t.TempDir()
+	// The basename is extracted and resolved through resolveNames using ChrootsDir.
+	chrootsDir := t.TempDir()
+	chrootDir := filepath.Join(chrootsDir, "server")
+	if err := os.MkdirAll(chrootDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 	seederDir := filepath.Join(t.TempDir(), "sub", "00-server")
 	if err := os.MkdirAll(seederDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
@@ -971,6 +982,7 @@ func TestEnterRunSeederNameTargetLatestAvailableChrootDir(t *testing.T) {
 	sd := seeder.DefaultMockSeeder()
 	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
+		ChrootsDir:               chrootsDir,
 		PreferredChrootDir:       "",
 		LatestAvailableChrootDir: chrootDir,
 		AllChrootDirs:            []string{chrootDir},
@@ -1245,8 +1257,13 @@ func TestEnterResolveNamesSeederNotInSps(t *testing.T) {
 
 func TestEnterRunMixedTargetsSeederNameAndDirectory(t *testing.T) {
 	// Mix of a direct directory target and a seeder-name target (with /).
+	// The seeder-name target resolves via PreferredChrootDir basename + ChrootsDir.
 	chrootDir1 := t.TempDir()
-	chrootDir2 := t.TempDir()
+	chrootsDir := t.TempDir()
+	chrootDir2 := filepath.Join(chrootsDir, "server")
+	if err := os.MkdirAll(chrootDir2, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 	seederDir := filepath.Join(t.TempDir(), "sub", "00-server")
 	if err := os.MkdirAll(seederDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
@@ -1265,6 +1282,7 @@ func TestEnterRunMixedTargetsSeederNameAndDirectory(t *testing.T) {
 	sd := seeder.DefaultMockSeeder()
 	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
+		ChrootsDir:         chrootsDir,
 		PreferredChrootDir: chrootDir2,
 		AllChrootDirs:      []string{chrootDir1, chrootDir2},
 	}

@@ -162,11 +162,13 @@ func (c *EnterCommand) run() error {
 
 		if params, ok := seedersParams[target]; ok {
 			if params.PreferredChrootDir != "" {
-				chrootDirs = append(chrootDirs, params.PreferredChrootDir)
+				chrootName := filepath.Base(params.PreferredChrootDir)
+				chrootNames = append(chrootNames, chrootName)
 				continue
 			}
 			if params.LatestAvailableChrootDir != "" {
-				chrootDirs = append(chrootDirs, params.LatestAvailableChrootDir)
+				chrootName := filepath.Base(params.LatestAvailableChrootDir)
+				chrootNames = append(chrootNames, chrootName)
 				continue
 			}
 		}
