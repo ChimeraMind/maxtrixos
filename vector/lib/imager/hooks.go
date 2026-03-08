@@ -136,7 +136,11 @@ func (im *Image) SetupHooks() error {
 		return err
 	}
 
-	hooksSrcDir := filepath.Join(devDir, "image", "hooks")
+	hooksSrcDir, err := im.HooksDir()
+	if err != nil {
+		return err
+	}
+
 	if !filesystems.DirectoryExists(hooksSrcDir) {
 		im.PrintError(
 			"hooks source dir %s does not exist. Create an empty directory at least.\n",

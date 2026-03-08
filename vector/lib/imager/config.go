@@ -2,252 +2,115 @@ package imager
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 )
 
 // --- Config accessors ---
 // Each method retrieves a single configuration value and validates it.
 
-func (im *Image) ImagesDir() (string, error) {
-	v, err := im.cfg.GetItem("Imager.ImagesDir")
+// configItem retrieves a non-empty config string or returns an error.
+func (im *Image) configItem(key string) (string, error) {
+	v, err := im.cfg.GetItem(key)
 	if err != nil {
 		return "", err
 	}
 	if v == "" {
-		return "", errors.New("invalid Imager.ImagesDir")
+		return "", fmt.Errorf("invalid %s", key)
 	}
 	return v, nil
+}
+
+func (im *Image) ImagesDir() (string, error) {
+	return im.configItem("Imager.ImagesDir")
 }
 
 func (im *Image) MountDir() (string, error) {
-	v, err := im.cfg.GetItem("Imager.MountDir")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.MountDir")
-	}
-	return v, nil
+	return im.configItem("Imager.MountDir")
 }
 
 func (im *Image) ImageSize() (string, error) {
-	v, err := im.cfg.GetItem("Imager.ImageSize")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.ImageSize")
-	}
-	return v, nil
+	return im.configItem("Imager.ImageSize")
 }
 
 func (im *Image) EfiPartitionSize() (string, error) {
-	v, err := im.cfg.GetItem("Imager.EfiPartitionSize")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.EfiPartitionSize")
-	}
-	return v, nil
+	return im.configItem("Imager.EfiPartitionSize")
 }
 
 func (im *Image) BootPartitionSize() (string, error) {
-	v, err := im.cfg.GetItem("Imager.BootPartitionSize")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.BootPartitionSize")
-	}
-	return v, nil
+	return im.configItem("Imager.BootPartitionSize")
 }
 
 func (im *Image) Compressor() (string, error) {
-	v, err := im.cfg.GetItem("Imager.Compressor")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.Compressor")
-	}
-	return v, nil
+	return im.configItem("Imager.Compressor")
 }
 
 func (im *Image) EspPartitionType() (string, error) {
-	v, err := im.cfg.GetItem("Imager.EspPartitionType")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.EspPartitionType")
-	}
-	return v, nil
+	return im.configItem("Imager.EspPartitionType")
 }
 
 func (im *Image) BootPartitionType() (string, error) {
-	v, err := im.cfg.GetItem("Imager.BootPartitionType")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.BootPartitionType")
-	}
-	return v, nil
+	return im.configItem("Imager.BootPartitionType")
 }
 
 func (im *Image) RootPartitionType() (string, error) {
-	v, err := im.cfg.GetItem("Imager.RootPartitionType")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.RootPartitionType")
-	}
-	return v, nil
+	return im.configItem("Imager.RootPartitionType")
 }
 
 func (im *Image) OsName() (string, error) {
-	v, err := im.cfg.GetItem("matrixOS.OsName")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid matrixOS.OsName")
-	}
-	return v, nil
+	return im.configItem("matrixOS.OsName")
 }
 
 func (im *Image) BootRoot() (string, error) {
-	v, err := im.cfg.GetItem("Imager.BootRoot")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.BootRoot")
-	}
-	return v, nil
+	return im.configItem("Imager.BootRoot")
 }
 
 func (im *Image) EfiRoot() (string, error) {
-	v, err := im.cfg.GetItem("Imager.EfiRoot")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.EfiRoot")
-	}
-	return v, nil
+	return im.configItem("Imager.EfiRoot")
 }
 
 func (im *Image) RelativeEfiBootPath() (string, error) {
-	v, err := im.cfg.GetItem("Imager.RelativeEfiBootPath")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.RelativeEfiBootPath")
-	}
-	return v, nil
+	return im.configItem("Imager.RelativeEfiBootPath")
 }
 
 func (im *Image) EfiExecutable() (string, error) {
-	v, err := im.cfg.GetItem("Imager.EfiExecutable")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.EfiExecutable")
-	}
-	return v, nil
+	return im.configItem("Imager.EfiExecutable")
 }
 
 func (im *Image) EfiCertificateFileName() (string, error) {
-	v, err := im.cfg.GetItem("Imager.EfiCertificateFileName")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.EfiCertificateFileName")
-	}
-	return v, nil
+	return im.configItem("Imager.EfiCertificateFileName")
 }
 
 func (im *Image) EfiCertificateFileNameDer() (string, error) {
-	v, err := im.cfg.GetItem("Imager.EfiCertificateFileNameDer")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.EfiCertificateFileNameDer")
-	}
-	return v, nil
+	return im.configItem("Imager.EfiCertificateFileNameDer")
 }
 
 func (im *Image) EfiCertificateFileNameKek() (string, error) {
-	v, err := im.cfg.GetItem("Imager.EfiCertificateFileNameKek")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.EfiCertificateFileNameKek")
-	}
-	return v, nil
+	return im.configItem("Imager.EfiCertificateFileNameKek")
 }
 
 func (im *Image) EfiCertificateFileNameKekDer() (string, error) {
-	v, err := im.cfg.GetItem("Imager.EfiCertificateFileNameKekDer")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.EfiCertificateFileNameKekDer")
-	}
-	return v, nil
+	return im.configItem("Imager.EfiCertificateFileNameKekDer")
 }
 
 func (im *Image) ReadOnlyVdb() (string, error) {
-	v, err := im.cfg.GetItem("Releaser.ReadOnlyVdb")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Releaser.ReadOnlyVdb")
-	}
-	return v, nil
+	return im.configItem("Releaser.ReadOnlyVdb")
 }
 
 func (im *Image) DevDir() (string, error) {
-	v, err := im.cfg.GetItem("matrixOS.Root")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid matrixOS.Root")
-	}
-	return v, nil
+	return im.configItem("matrixOS.Root")
+}
+
+func (im *Image) HooksDir() (string, error) {
+	return im.configItem("Imager.HooksDir")
 }
 
 func (im *Image) LockDir() (string, error) {
-	v, err := im.cfg.GetItem("Imager.LocksDir")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.LocksDir")
-	}
-	return v, nil
+	return im.configItem("Imager.LocksDir")
 }
 
 func (im *Image) LockWaitSeconds() (string, error) {
-	v, err := im.cfg.GetItem("Imager.LockWaitSeconds")
-	if err != nil {
-		return "", err
-	}
-	if v == "" {
-		return "", errors.New("invalid Imager.LockWaitSeconds")
-	}
-	return v, nil
+	return im.configItem("Imager.LockWaitSeconds")
 }
 
 func (im *Image) BuildMetadataFile() (string, error) {
@@ -269,25 +132,13 @@ func (im *Image) BuildMetadataFile() (string, error) {
 }
 
 func (im *Image) CreateQcow2() (bool, error) {
-	v, err := im.cfg.GetBool("Imager.CreateQcow2")
-	if err != nil {
-		return false, err
-	}
-	return v, nil
+	return im.cfg.GetBool("Imager.CreateQcow2")
 }
 
 func (im *Image) Productionize() (bool, error) {
-	v, err := im.cfg.GetBool("Imager.Productionize")
-	if err != nil {
-		return false, err
-	}
-	return v, nil
+	return im.cfg.GetBool("Imager.Productionize")
 }
 
 func (im *Image) ImageTests() (bool, error) {
-	v, err := im.cfg.GetBool("Imager.ImageTests")
-	if err != nil {
-		return false, err
-	}
-	return v, nil
+	return im.cfg.GetBool("Imager.ImageTests")
 }
