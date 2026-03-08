@@ -24,7 +24,7 @@ The imaging process follows a strict pipeline to ensure reproducibility and boot
 
 ### Usage
 
-This script is typically invoked by `dev/weekly_builder.sh`, but can be run manually for debugging or custom image generation.
+This script is typically invoked by `dev/vector_builder.sh`, but can be run manually for debugging or custom image generation.
 
 ```bash
 # Generate images for specific releases from the local repo

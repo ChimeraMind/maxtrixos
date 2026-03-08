@@ -14,7 +14,7 @@ The heart of this directory is the `seeder` script (located at `build/seeder`). 
 
 ### Usage
 
-While typically invoked by the high-level `dev/build.sh` or `dev/weekly_builder.sh` wrappers, `seeder` can be run manually for debugging or specific build tasks:
+While typically invoked by the high-level `dev/build.sh` or `dev/vector_builder.sh` wrappers, `seeder` can be run manually for debugging or specific build tasks:
 
 ```bash
 # Build all seeders
