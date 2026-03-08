@@ -3,7 +3,6 @@
 Golang migration:
     - Required vector commands:
         - seeders_lib.maybe_initialize_matrixos_private_example in vector command.
-        - install.device.
         - Wrap ostree admin kargs edit-in-place ...
     - Check releaser when using rsync, check for /dev device nodes.
     - Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
@@ -13,6 +12,11 @@ Golang migration:
     - Add support of ostree admin post-copy in imager (right before umounting)
     - move all distro flavor specific business logic out of vector (once bash
       scripts are gone)
+    - add integration tests for vector usage inside VM to run manually first
+      - vector upgrade
+      - vector flash
+      - vector setupOS
+      - vector jailbreak
 
 Features:
     - Test and consider migration to systemd-boot (while supporting GRUB).
