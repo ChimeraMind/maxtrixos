@@ -347,9 +347,15 @@ func (im *Image) installSystemComponents() error {
 	if err := im.InstallBootloader(); err != nil {
 		return fmt.Errorf("failed to install bootloader: %w", err)
 	}
-	if err := im.SetupVmtestConfig(); err != nil {
-		return fmt.Errorf("failed to setup vmtest config: %w", err)
+
+	// Set up VM test config only if creating an image file, not flashing to a device.
+	switch im.ImageMode() {
+	case ModeCreateImageFile:
+		if err := im.SetupVmtestConfig(); err != nil {
+			return fmt.Errorf("failed to setup vmtest config: %w", err)
+		}
 	}
+
 	if err := im.InstallSecurebootCerts(); err != nil {
 		return fmt.Errorf("failed to install secureboot certs: %w", err)
 	}
