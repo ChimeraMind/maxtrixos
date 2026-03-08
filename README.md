@@ -106,10 +106,12 @@ There are two default users:
 
 ### Option 2: Install from matrixOS
 
-Once booted into matrixOS (e.g., from a USB stick), you can install it onto another drive using the built-in installer.
+Once booted into matrixOS (e.g., from a USB stick), you can install it onto another drive using the built-in installer. It partitions your drive, formats it, and copies the running system to the new drive.
+
+> **Warning:** This will wipe the target drive!
 
 ```shell
-/matrixos/install/install.device
+sudo vector flash
 ```
 
 If you are partitioning manually, **strict adherence** to the following layout is required:
@@ -120,11 +122,18 @@ If you are partitioning manually, **strict adherence** to the following layout i
 
 ### Post-Installation Setup
 
-After your first boot, run the setup script to configure credentials and LUKS passwords. Run this from a VT or Desktop terminal.
+After your first boot, run the setup wizard to configure your system. Run this from a VT or Desktop terminal.
 
 ```shell
-vector setupOS
+sudo vector setupOS
 ```
+
+This will:
+
+* Set the `root` password.
+* Set the user password.
+* Set the LUKS encryption password (if you used encryption).
+* Regenerate SSH host keys for security.
 
 To enable Docker: `systemctl enable --now docker`.
 
@@ -169,10 +178,11 @@ reboot
 ### Mutability & Jailbreaking
 
 - **Temporary Mutability**: `vector readwrite` (resets on upgrade). So that you can run `emerge` as much as you like (important: switch to a `*-full` OSTree branch before doing this).
-- **Permanent Jailbreak**: Convert to a standard Gentoo system.
+- **Permanent Jailbreak**: matrixOS is immutable by default. However, if you want full control to modify system files, compile custom kernels, or use Portage directly, you can "jailbreak" the system. This converts your immutable OSTree installation into a standard, mutable Gentoo Linux installation.
+  - **Warning:** This is a **one-way process**. Once you jailbreak, you cannot go back to automatic OSTree updates. You are responsible for maintaining the system yourself.
   - List available branches: `vector branch list`
   - Switch to the `-full` branch: `vector branch switch <branch>-full`
-  - Run the jailbreak script: `vector jailbreak`
+  - Run the jailbreak script: `sudo vector jailbreak`
 
 ## 🛠️ Build Your Own Distro
 
