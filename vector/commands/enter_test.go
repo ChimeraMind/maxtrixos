@@ -41,6 +41,7 @@ func newTestEnterCommand(
 	if err := cmd.parseArgs(args); err != nil {
 		return nil, err
 	}
+	cmd.StartUI()
 	return cmd, nil
 }
 
