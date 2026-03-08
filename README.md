@@ -255,7 +255,6 @@ You can build custom versions of matrixOS using the provided `dev/build.sh` scri
   - *Note*: `hooks/` and `services/` follow the `OSNAME/ARCH/SEEDER_NAME.{sh,conf}` pattern (e.g., `matrixos/amd64/gnome.sh`) for branch-specific configs.
 - **`image/`**: Configuration for the image creation process.
   - **`hooks/`**: Scripts for partition setup, bootloader install, etc.
-  - **`image.releases`**: Defines which releases are built into images.
 
 ### Configuration Rules
 

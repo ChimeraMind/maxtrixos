@@ -12,10 +12,7 @@ import (
 )
 
 // ImagesCommand is a command for building matrixOS images for all detected
-// ostree refs.  It is the Go counterpart of the image.releases bash script,
-// wrapping the single-ref ImageCommand logic: it scans for available refs
-// (local or remote), filters them with --skip-releases / --only-releases,
-// and sequentially builds an image for each ref under an exclusive lock.
+// ostree refs.
 type ImagesCommand struct {
 	BaseCommand
 	UI
@@ -159,8 +156,7 @@ func (c *ImagesCommand) onlyFilter() releaser.RefFilterFunc {
 	return makeOnlyFilter(c.onlyReleases)
 }
 
-// runImages implements the main images building logic, mirroring
-// image.releases main().
+// runImages implements the main images building logic.
 func (c *ImagesCommand) runImages() error {
 	// Set up styled writers for top-level output.
 	stdoutWriter := c.SetStdout("all")
@@ -225,7 +221,6 @@ func (c *ImagesCommand) runImages() error {
 
 // imageWorker creates a per-ref imager instance, acquires an image lock,
 // and delegates to the ImageCommand-style image building pipeline.
-// This mirrors the bash `image_worker()` function in image.releases.
 func (c *ImagesCommand) imageWorker(ref string) error {
 	// Create per-ref styled writers.
 	stdoutWriter := c.NewStdoutWriter(fmt.Sprintf("image:%s", c.shortRef(ref)))

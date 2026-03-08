@@ -23,8 +23,7 @@ type ICommand interface {
 
 // SignalGuard manages a LIFO stack of cleanup functions that are executed
 // on process termination signals (SIGINT, SIGTERM) or when RunWithGuard
-// catches a panic.  It mirrors the bash `trap clean_exit EXIT` pattern
-// used, for example, in image_main.sh.
+// catches a panic.
 //
 // Embed it in any command struct and call Arm() + PushCleanup() to register
 // cleanup work.  Disarm() stops the signal listener (idempotent).
