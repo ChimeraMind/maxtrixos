@@ -255,7 +255,7 @@ func (c *EnterCommand) enterChrootWithLock(sd seeder.ISeeder, chrootDir string) 
 	}
 	if seeder == nil {
 		return fmt.Errorf(
-			"no valid seeder chroot found for chroot dir %s. Try with --skiplock.",
+			"no valid seeder chroot found for chroot dir %s. Try with --skiplock and full chroot path.",
 			chrootDir,
 		)
 	}
