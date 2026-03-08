@@ -11,6 +11,8 @@ source "${MATRIXOS_DEV_DIR}"/lib/env_lib.sh
 
 # Re-initialize MATRIXOS_DEV_DIR from config.
 MATRIXOS_DEV_DIR=$(env_lib.get_root "${MATRIXOS_DEV_DIR}")
+MATRIXOS_CONF_DIR=$(env_lib.get_confroot "${MATRIXOS_DEV_DIR}")
+MATRIXOS_ARTIFACTS_DIR=$(env_lib.get_artifactsroot "${MATRIXOS_DEV_DIR}")
 
 # Directory used for file locks, to synchronize operations of various kind.
 MATRIXOS_LOCKS_DIR=$(env_lib.get_root_var "${MATRIXOS_DEV_DIR}" "matrixOS" "LocksDir")
@@ -43,12 +45,12 @@ MATRIXOS_SEEDER_DOWNLOADS_DIR=$(env_lib.get_root_var "${MATRIXOS_DEV_DIR}" "Seed
 MATRIXOS_SEEDER_DISTFILES_DIR=$(env_lib.get_root_var "${MATRIXOS_DEV_DIR}" "Seeder" "DistfilesDir")
 MATRIXOS_SEEDER_BINPKGS_DIR=$(env_lib.get_root_var "${MATRIXOS_DEV_DIR}" "Seeder" "BinpkgsDir")
 MATRIXOS_SEEDER_PORTAGE_REPOS_DIR=$(env_lib.get_root_var "${MATRIXOS_DEV_DIR}" "Seeder" "PortageReposDir")
-MATRIXOS_SEEDER_GPG_KEYS_DIR=$(env_lib.get_root_var "${MATRIXOS_DEV_DIR}" "Seeder" "GpgKeysDir")
+MATRIXOS_SEEDER_GPG_KEYS_DIR=$(env_lib.get_root_var "${MATRIXOS_ARTIFACTS_DIR}" "Seeder" "GpgKeysDir")
 
 # OSTree GPG Support.
 MATRIXOS_OSTREE_GPG_ENABLED=$(env_lib.get_bool_var "Ostree" "Gpg" "true")
-MATRIXOS_OSTREE_DEV_GPG_HOMEDIR=$(env_lib.get_root_var "${MATRIXOS_DEV_DIR}" "Ostree" "DevGpgHomeDir")
-MATRIXOS_OSTREE_OFFICIAL_GPG_PUB_PATH=$(env_lib.get_root_var "${MATRIXOS_DEV_DIR}" "Ostree" "GpgOfficialPublicKey")
+MATRIXOS_OSTREE_DEV_GPG_HOMEDIR=$(env_lib.get_root_var "${MATRIXOS_ARTIFACTS_DIR}" "Ostree" "DevGpgHomeDir")
+MATRIXOS_OSTREE_OFFICIAL_GPG_PUB_PATH=$(env_lib.get_root_var "${MATRIXOS_CONF_DIR}" "Ostree" "GpgOfficialPublicKey")
 
 # /etc/matrixos-private derived configs.
 MATRIXOS_OSTREE_GPG_KEY_PATH=$(env_lib.get_root_var "${MATRIXOS_PRIVATE_GIT_REPO_PATH}" "Ostree" "GpgPrivateKey")

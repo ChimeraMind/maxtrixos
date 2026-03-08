@@ -79,6 +79,46 @@ env_lib.get_root() {
     fi
 }
 
+env_lib.get_confroot() {
+    local default_value="${1:-}"
+
+    local value
+    value=$(_env_lib_get_config_value "matrixOS" "ConfRoot" "${default_value}")
+    if [ -z "${value}" ]; then
+        echo "matrixOS.ConfRoot is not set in the configuration file and no default value provided." >&2
+        return 1
+    fi
+
+    # Support for relative paths.
+    if _is_absolute_path "${value}"; then
+        # If value is an absolute path, return it as-is.
+        echo "${value}"
+    else
+        # If value is a relative path, make it absolute.
+        echo "$(realpath "${__cur_dev_dir}/${value}")"
+    fi
+}
+
+env_lib.get_artifactsroot() {
+    local default_value="${1:-}"
+
+    local value
+    value=$(_env_lib_get_config_value "matrixOS" "ArtifactsRoot" "${default_value}")
+    if [ -z "${value}" ]; then
+        echo "matrixOS.ArtifactsRoot is not set in the configuration file and no default value provided." >&2
+        return 1
+    fi
+
+    # Support for relative paths.
+    if _is_absolute_path "${value}"; then
+        # If value is an absolute path, return it as-is.
+        echo "${value}"
+    else
+        # If value is a relative path, make it absolute.
+        echo "$(realpath "${__cur_dev_dir}/${value}")"
+    fi
+}
+
 env_lib.get_root_var() {
     local root="${1}"
     if [ -z "${root}" ]; then
