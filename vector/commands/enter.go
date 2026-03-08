@@ -164,13 +164,12 @@ func (c *EnterCommand) run() error {
 			if params.PreferredChrootDir != "" {
 				chrootName := filepath.Base(params.PreferredChrootDir)
 				chrootNames = append(chrootNames, chrootName)
-				continue
 			}
 			if params.LatestAvailableChrootDir != "" {
 				chrootName := filepath.Base(params.LatestAvailableChrootDir)
 				chrootNames = append(chrootNames, chrootName)
-				continue
 			}
+			continue
 		}
 
 		return fmt.Errorf("unable to accept %s, unrecognized argument", target)

@@ -1022,7 +1022,7 @@ func TestEnterRunSeederNameTargetLatestAvailableChrootDir(t *testing.T) {
 func TestEnterRunSeederNameTargetNoChrootDirs(t *testing.T) {
 	// Target matches a seeder name in seedersParams, but both
 	// PreferredChrootDir and LatestAvailableChrootDir are empty →
-	// falls through to "unrecognized argument".
+	// no names are added, so resolution finds nothing.
 	seederDir := filepath.Join(t.TempDir(), "sub", "00-empty")
 	if err := os.MkdirAll(seederDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
@@ -1059,7 +1059,7 @@ func TestEnterRunSeederNameTargetNoChrootDirs(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "unrecognized argument") {
+	if !strings.Contains(err.Error(), "no chroot dirs or names found") {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
