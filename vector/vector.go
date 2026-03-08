@@ -21,7 +21,7 @@ Usage:
     show            show the currently booted branch and its metadata.
     deployment      show local branch deployments with their associated metadata.
     pin <index>     pin a deployment to preserve it as rollback target at boot.
-	unpin <index>   unpin a deployment (inverse of pin).
+    unpin <index>   unpin a deployment (inverse of pin).
     remote          list all the remote OS branches available.
     local           list all the local OS branches available.
     switch <ref>    switch to a new OS branch from those available.
