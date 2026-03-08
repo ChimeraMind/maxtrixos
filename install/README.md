@@ -1,6 +1,7 @@
 # Installation & Management Tools
 
-Welcome to the `install/` directory. These scripts are shipped inside matrixOS to help you manage the lifecycle of your operating system. They handle everything from the initial installation to upgrades and system recovery.
+Welcome to the `install/` directory. These scripts are shipped inside matrixOS to help you manage the lifecycle of your operating system. They handle everything from the initial installation to upgrades and system recovery. Some tools have already moved to
+a more robust `vector` sub-command.
 
 You will typically find these scripts at `/matrixos/install/` on a running system.
 
@@ -14,7 +15,7 @@ This script installs matrixOS from your current live environment (USB stick) ont
 * **How to use:** Run `sudo /matrixos/install/install.device` and follow the prompts.
 * **Warning:** This will wipe the target drive!
 
-## 🛠️ `setupOS`
+## 🛠️ `setupOS (moved to vector)`
 
 **The First-Boot Wizard.**
 
@@ -25,9 +26,9 @@ You should run this script immediately after installing matrixOS and booting int
   * Sets the user password.
   * Sets the LUKS encryption password (if you used encryption).
   * Regenerates SSH host keys for security.
-* **How to use:** Run `sudo /matrixos/install/setupOS`.
+* **How to use:** Run `sudo vector setupOS`.
 
-## 🔓 `jailbreak`
+## 🔓 `jailbreak (moved to vector)`
 
 **The Escape Hatch.**
 
@@ -35,5 +36,5 @@ matrixOS is immutable by default (you can't easily break the core system). Howev
 
 * **What it does:** It converts your immutable OSTree installation into a standard, mutable Gentoo Linux installation.
 * **Warning:** This is a **one-way process**. Once you jailbreak, you cannot go back to the automatic OSTree updates. You are responsible for maintaining the system (updates, kernel, etc.) yourself.
-* **Prerequisite:** You must switch to a `-full` branch before running this (e.g., `ostree admin switch matrixos/amd64/gnome-full`).
-* **How to use:** Run `sudo /matrixos/install/jailbreak`.
+* **Prerequisite:** You must switch to a `-full` branch before running this (e.g., `vector branch switch matrixos/amd64/gnome-full`).
+* **How to use:** Run `sudo vector jailbreak`.

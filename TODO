@@ -3,7 +3,6 @@
 Golang migration:
     - Required vector commands:
         - seeders_lib.maybe_initialize_matrixos_private_example in vector command.
-        - setupOS.
         - install.device.
         - Wrap ostree admin kargs edit-in-place ...
     - Check releaser when using rsync, check for /dev device nodes.
