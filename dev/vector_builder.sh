@@ -399,8 +399,6 @@ main() {
 
         local imager_args=(
             --local-ostree
-            --productionize
-            --create-qcow2
         )
         local execute_imager=
         if _skip_images_flag; then
