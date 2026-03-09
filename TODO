@@ -5,6 +5,9 @@ Golang migration:
         - Wrap ostree admin kargs edit-in-place ...
     - Fix hooks.go: testDir := filepath.Join(devDir, "image", "tests", ref)
         - create Imager.TestsDir like we created Imager.HooksDir.
+    - Integrate readwrite command into ostree lib.
+      - --transient: save to RAM (does not taint the system)
+      - --hotfix: save to disk (taints the system, but survives reboot)
     - Check releaser when using rsync, check for /dev device nodes.
     - Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
         now that we have separate mount namespaces via unshare.
