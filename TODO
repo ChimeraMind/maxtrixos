@@ -1,12 +1,14 @@
 # Overall TODO
 
 Golang migration:
-    - Check releaser when using rsync, check for /dev device nodes.
-    - Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
-        now that we have separate mount namespaces via unshare.
-          -> no chance of leaking mounts when SIGKILL is sent.
-    - Consider if possible to implement unshare in code.
+    - [WAITING] Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
+        chroot.sh code implemented. Now wait for deployment before
+        changing code vector side.
+    - [WAITING] Reduce dependence of env vars in chroot.sh scripts, provide all
+      env vars via vector.
     - Add support of ostree admin post-copy in imager (right before umounting)
+    - Check releaser when using rsync, check for /dev device nodes.
+    - Consider if possible to implement unshare in code.
     - move all distro flavor specific business logic out of vector (once bash
       scripts are gone)
     - add integration tests for vector usage inside VM to run manually first
