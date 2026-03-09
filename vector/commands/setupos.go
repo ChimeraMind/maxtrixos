@@ -61,6 +61,8 @@ type setupOSRunner struct {
 	stdout io.Writer
 	// stderr is the writer for error/warning output.
 	stderr io.Writer
+	// glob returns paths matching a pattern.
+	glob func(pattern string) ([]string, error)
 }
 
 func defaultSetupOSRunner() *setupOSRunner {
@@ -130,6 +132,7 @@ func defaultSetupOSRunner() *setupOSRunner {
 		stdin:          os.Stdin,
 		stdout:         os.Stdout,
 		stderr:         os.Stderr,
+		glob:           filepath.Glob,
 	}
 }
 
@@ -609,7 +612,7 @@ func (c *SetupOSCommand) setupAccountsService(username string) error {
 func (c *SetupOSCommand) setupLocalizationKeymap(jailbrokenEntry string) error {
 	keymap := ""
 	if vconsoleData, err := c.run.readFile("/etc/vconsole.conf"); err == nil {
-		for _, line := range strings.Split(string(vconsoleData), "\n") {
+		for line := range strings.SplitSeq(string(vconsoleData), "\n") {
 			if v, found := strings.CutPrefix(line, "KEYMAP="); found {
 				keymap = strings.TrimSpace(v)
 				break
@@ -627,21 +630,30 @@ func (c *SetupOSCommand) setupLocalizationKeymap(jailbrokenEntry string) error {
 	}
 	cmdline := string(cmdlineData)
 	isOstree := strings.Contains(cmdline, "ostree=")
-
 	jailbrokenConfig := filepath.Join("/boot/loader/entries", jailbrokenEntry)
+	karg := "vconsole.keymap=" + keymap
 
 	if isOstree {
 		fmt.Fprintf(
 			c.run.stdout,
-			"   %sConfiguring early boot keyboard mapping via ostree kargs...%s\n",
+			"   %sConfiguring early boot keyboard mapping via BLS entries...%s\n",
 			c.iconGear, c.cReset,
 		)
-		kargsCmd := c.run.execCommand("ostree", "admin", "kargs", "edit-in-place",
-			"--append-if-missing=vconsole.keymap="+keymap)
-		kargsCmd.SetStdout(c.run.stdout)
-		kargsCmd.SetStderr(c.run.stderr)
-		if err := kargsCmd.Run(); err != nil {
-			return fmt.Errorf("ostree kargs failed: %w", err)
+		entries, err := listBLSEntryPaths(c.run.glob)
+		if err != nil {
+			return fmt.Errorf("BLS keymap setup failed: %w", err)
+		}
+		for _, entry := range entries {
+			_, err := addKargsToBLSFile(
+				entry, []string{karg},
+				c.run.readFile, c.run.writeFile,
+			)
+			if err != nil {
+				return fmt.Errorf(
+					"failed to add keymap to %s: %w",
+					filepath.Base(entry), err,
+				)
+			}
 		}
 	} else if c.run.fileExists(jailbrokenConfig) {
 		fmt.Fprintf(
@@ -649,25 +661,20 @@ func (c *SetupOSCommand) setupLocalizationKeymap(jailbrokenEntry string) error {
 			"   %sConfiguring early boot keyboard mapping via BLS config...%s\n",
 			c.iconGear, c.cReset,
 		)
-		data, err := c.run.readFile(jailbrokenConfig)
+		_, err := addKargsToBLSFile(
+			jailbrokenConfig, []string{karg},
+			c.run.readFile, c.run.writeFile,
+		)
 		if err != nil {
-			return fmt.Errorf("failed to read %s: %w", jailbrokenConfig, err)
-		}
-		content := string(data)
-		// Append keymap to the options line.
-		var newLines []string
-		for _, line := range strings.Split(content, "\n") {
-			if strings.HasPrefix(line, "options") {
-				line = line + " vconsole.keymap=" + keymap
-			}
-			newLines = append(newLines, line)
-		}
-		if err := c.run.writeFile(jailbrokenConfig, []byte(strings.Join(newLines, "\n")), 0644); err != nil {
-			return fmt.Errorf("failed to write %s: %w", jailbrokenConfig, err)
+			return err
 		}
 	} else {
-		fmt.Fprintf(c.run.stdout, "   %s%sJailbroken matrixOS without original boot config. Skipping keymap setup.%s\n",
-			c.cYellow, c.iconWarn, c.cReset)
+		fmt.Fprintf(
+			c.run.stdout,
+			"   %s%sJailbroken matrixOS without original boot config."+
+				" Skipping keymap setup.%s\n",
+			c.cYellow, c.iconWarn, c.cReset,
+		)
 	}
 
 	return nil

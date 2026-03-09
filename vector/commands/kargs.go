@@ -164,16 +164,7 @@ func (c *KargsCommand) rm() error {
 
 // listBLSEntries returns all .conf files in the BLS entries directory.
 func (c *KargsCommand) listBLSEntries() ([]string, error) {
-	pattern := filepath.Join(blsEntriesDir, "*.conf")
-	entries, err := c.run.glob(pattern)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list BLS entries in %s: %w", blsEntriesDir, err)
-	}
-	if len(entries) == 0 {
-		return nil, fmt.Errorf("no BLS entries found in %s", blsEntriesDir)
-	}
-	slices.Sort(entries)
-	return entries, nil
+	return listBLSEntryPaths(c.run.glob)
 }
 
 // parseBLSEntry reads a BLS config file and returns its lines.
@@ -205,16 +196,26 @@ func getOptionsLine(lines []string) (int, string) {
 	return -1, ""
 }
 
-// addKargsToEntry appends kernel arguments to a BLS entry, skipping duplicates.
-func (c *KargsCommand) addKargsToEntry(path string, kargs []string) error {
-	lines, err := c.parseBLSEntry(path)
+// addKargsToBLSFile reads a BLS config file, appends kernel arguments that
+// are not already present on the options line, and writes it back.
+// Returns the list of kargs that were actually added (empty if all were
+// already present, in which case the file is not rewritten).
+// This is a shared helper used by both KargsCommand and SetupOSCommand.
+func addKargsToBLSFile(
+	path string,
+	kargs []string,
+	readFile func(string) ([]byte, error),
+	writeFile func(string, []byte, os.FileMode) error,
+) ([]string, error) {
+	data, err := readFile(path)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to read %s: %w", path, err)
 	}
+	lines := strings.Split(string(data), "\n")
 
 	idx, options := getOptionsLine(lines)
 	if idx < 0 {
-		return fmt.Errorf("no 'options' line found in %s", filepath.Base(path))
+		return nil, fmt.Errorf("no 'options' line found in %s", filepath.Base(path))
 	}
 
 	existingArgs := strings.Fields(options)
@@ -234,9 +235,38 @@ func (c *KargsCommand) addKargsToEntry(path string, kargs []string) error {
 	if len(added) > 0 {
 		newOptions := options + " " + strings.Join(added, " ")
 		lines[idx] = "options " + newOptions
-		if err := c.writeBLSEntry(path, lines); err != nil {
-			return err
+		output := strings.Join(lines, "\n")
+		if err := writeFile(path, []byte(output), 0644); err != nil {
+			return nil, fmt.Errorf("failed to write %s: %w", path, err)
 		}
+	}
+
+	return added, nil
+}
+
+// listBLSEntryPaths returns sorted .conf files from the BLS entries directory.
+// This is a shared helper used by both KargsCommand and SetupOSCommand.
+func listBLSEntryPaths(glob func(string) ([]string, error)) ([]string, error) {
+	pattern := filepath.Join(blsEntriesDir, "*.conf")
+	entries, err := glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list BLS entries in %s: %w", blsEntriesDir, err)
+	}
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("no BLS entries found in %s", blsEntriesDir)
+	}
+	slices.Sort(entries)
+	return entries, nil
+}
+
+// addKargsToEntry appends kernel arguments to a BLS entry, skipping duplicates.
+func (c *KargsCommand) addKargsToEntry(path string, kargs []string) error {
+	added, err := addKargsToBLSFile(path, kargs, c.run.readFile, c.run.writeFile)
+	if err != nil {
+		return err
+	}
+
+	if len(added) > 0 {
 		c.Printf("Added [%s] to %s\n",
 			strings.Join(added, ", "), filepath.Base(path))
 	} else {
