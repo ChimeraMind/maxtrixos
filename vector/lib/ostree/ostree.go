@@ -144,6 +144,9 @@ type IOstree interface {
 	BootedHash() (string, error)
 	// Switch runs `ostree admin switch` to switch to the instance ref.
 	Switch() error
+	// PostCopy runs `ostree admin post-copy` to perform post-copy operations
+	// (e.g. after copying an OS image to a new disk).
+	PostCopy() error
 	// Deploy deploys an ostree commit.
 	Deploy(sysroot string, bootArgs []string) error
 	// Upgrade runs `ostree admin upgrade`.

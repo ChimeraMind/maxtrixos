@@ -254,6 +254,14 @@ func (o *Ostree) Switch() error {
 	return o.ostreeRun("admin", "switch", "--sysroot="+sysroot, o.ref)
 }
 
+func (o *Ostree) PostCopy() error {
+	sysroot, err := o.Sysroot()
+	if err != nil {
+		return err
+	}
+	return o.ostreeRun("admin", "post-copy", fmt.Sprintf("--sysroot=%s", sysroot))
+}
+
 func (o *Ostree) Deploy(sysroot string, bootArgs []string) error {
 	ref := o.ref
 	repoDir, err := o.RepoDir()

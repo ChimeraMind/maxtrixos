@@ -3,12 +3,12 @@ package ostree
 import (
 	"fmt"
 	"matrixos/vector/lib/config"
+	"matrixos/vector/lib/runner"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"matrixos/vector/lib/runner"
 )
 
 func TestDeploy(t *testing.T) {
@@ -671,6 +671,112 @@ func TestSwitch_Verbose(t *testing.T) {
 	}
 
 	expectedCmd := fmt.Sprintf("ostree --verbose admin switch --sysroot=%s %s", sysroot, ref)
+	gotCmd := strings.Join(lastCmdArgs, " ")
+	if gotCmd != expectedCmd {
+		t.Errorf("Command mismatch:\nGot:  %s\nWant: %s", gotCmd, expectedCmd)
+	}
+}
+
+func TestPostCopy(t *testing.T) {
+	var lastCmdArgs []string
+	sysroot := t.TempDir()
+
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.Sysroot": {sysroot},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	if err != nil {
+		t.Fatalf("NewOstree failed: %v", err)
+	}
+
+	o.runner = func(cmd *runner.Cmd) error {
+		args, name := cmd.Args, cmd.Name
+		lastCmdArgs = append([]string{name}, args...)
+		return nil
+	}
+
+	err = o.PostCopy()
+	if err != nil {
+		t.Fatalf("PostCopy failed: %v", err)
+	}
+
+	expectedCmd := fmt.Sprintf("ostree admin post-copy --sysroot=%s", sysroot)
+	gotCmd := strings.Join(lastCmdArgs, " ")
+	if gotCmd != expectedCmd {
+		t.Errorf("Command mismatch:\nGot:  %s\nWant: %s", gotCmd, expectedCmd)
+	}
+}
+
+func TestPostCopy_MissingSysroot(t *testing.T) {
+	cfg := &config.MockConfig{
+		Items: map[string][]string{},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	if err != nil {
+		t.Fatalf("NewOstree failed: %v", err)
+	}
+
+	o.runner = func(cmd *runner.Cmd) error {
+		return nil
+	}
+
+	err = o.PostCopy()
+	if err == nil {
+		t.Fatal("PostCopy should fail when Ostree.Sysroot is missing")
+	}
+}
+
+func TestPostCopy_CommandError(t *testing.T) {
+	sysroot := t.TempDir()
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.Sysroot": {sysroot},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	if err != nil {
+		t.Fatalf("NewOstree failed: %v", err)
+	}
+
+	o.runner = func(cmd *runner.Cmd) error {
+		return fmt.Errorf("ostree admin post-copy failed")
+	}
+
+	err = o.PostCopy()
+	if err == nil {
+		t.Fatal("PostCopy should propagate command error")
+	}
+}
+
+func TestPostCopy_Verbose(t *testing.T) {
+	var lastCmdArgs []string
+	sysroot := t.TempDir()
+
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.Sysroot": {sysroot},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	if err != nil {
+		t.Fatalf("NewOstree failed: %v", err)
+	}
+
+	o.runner = func(cmd *runner.Cmd) error {
+		args, name := cmd.Args, cmd.Name
+		lastCmdArgs = append([]string{name}, args...)
+		return nil
+	}
+
+	o.SetVerbose(true)
+	err = o.PostCopy()
+	if err != nil {
+		t.Fatalf("PostCopy failed: %v", err)
+	}
+
+	expectedCmd := fmt.Sprintf("ostree --verbose admin post-copy --sysroot=%s", sysroot)
 	gotCmd := strings.Join(lastCmdArgs, " ")
 	if gotCmd != expectedCmd {
 		t.Errorf("Command mismatch:\nGot:  %s\nWant: %s", gotCmd, expectedCmd)

@@ -98,6 +98,9 @@ type MockOstree struct {
 	ReadwriteErr       error
 	ReadwriteCalled    bool
 	ReadwritePermanent bool
+
+	PostCopyErr    error
+	PostCopyCalled bool
 }
 
 func (m *MockOstree) CloneForRef(ref string) (IOstree, error) {
@@ -127,7 +130,7 @@ func (m *MockOstree) RemoveFullFromBranch() (string, error) {
 	// Default: strip -full suffix if present.
 	return strings.TrimSuffix(m.Ref_, "-full"), nil
 }
-func (m *MockOstree) GpgEnabled() (bool, error)                  { return m.GpgEnabled_, m.GpgEnabledErr }
+func (m *MockOstree) GpgEnabled() (bool, error) { return m.GpgEnabled_, m.GpgEnabledErr }
 func (m *MockOstree) GpgPrivateKeyPath() (string, error) {
 	return m.GpgPrivateKeyPath_, m.GpgPrivateKeyPathErr
 }
@@ -143,11 +146,11 @@ func (m *MockOstree) AvailableGpgPubKeyPaths() ([]string, error) { return nil, n
 func (m *MockOstree) GpgBestPubKeyPath() (string, error) {
 	return m.GpgBestPubKeyPath_, m.GpgBestPubKeyPathErr
 }
-func (m *MockOstree) ClientSideGpgArgs() ([]string, error)       { return nil, nil }
-func (m *MockOstree) GpgHomeDir() (string, error)                { return "", nil }
-func (m *MockOstree) GpgKeyID() (string, error)                  { return "", nil }
-func (m *MockOstree) FancyOsName() (string, error)               { return m.FancyOsName_, m.FancyOsNameErr }
-func (m *MockOstree) GpgArgs() ([]string, error)                 { return m.GpgArgs_, m.GpgArgsErr }
+func (m *MockOstree) ClientSideGpgArgs() ([]string, error) { return nil, nil }
+func (m *MockOstree) GpgHomeDir() (string, error)          { return "", nil }
+func (m *MockOstree) GpgKeyID() (string, error)            { return "", nil }
+func (m *MockOstree) FancyOsName() (string, error)         { return m.FancyOsName_, m.FancyOsNameErr }
+func (m *MockOstree) GpgArgs() ([]string, error)           { return m.GpgArgs_, m.GpgArgsErr }
 func (m *MockOstree) SetGpg(enabled bool) error {
 	m.SetGpgCalled = true
 	m.SetGpgArg = enabled
@@ -211,8 +214,12 @@ func (m *MockOstree) ListEtcChanges(string, string) ([]EtcChange, error) { retur
 func (m *MockOstree) DeployedRootfs() (string, error)                    { return "", nil }
 func (m *MockOstree) BootedRef() (string, error)                         { return "", nil }
 func (m *MockOstree) BootedHash() (string, error)                        { return "", nil }
-func (m *MockOstree) Deploy(string, []string) error                      { return nil }
-func (m *MockOstree) ConfigDiff() (map[string][]string, error)           { return nil, nil }
+func (m *MockOstree) PostCopy() error {
+	m.PostCopyCalled = true
+	return m.PostCopyErr
+}
+func (m *MockOstree) Deploy(string, []string) error            { return nil }
+func (m *MockOstree) ConfigDiff() (map[string][]string, error) { return nil, nil }
 func (m *MockOstree) Readwrite(permanent bool) error {
 	m.ReadwriteCalled = true
 	m.ReadwritePermanent = permanent
