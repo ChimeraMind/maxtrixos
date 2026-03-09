@@ -55,6 +55,8 @@ server.tweak_resolved() {
 
 main() {
 
+    chroots_lib.maybe_mount_common_filesystems
+
     local phases=(
         server.buildenv_bootstrap
         server.portage_bootstrap

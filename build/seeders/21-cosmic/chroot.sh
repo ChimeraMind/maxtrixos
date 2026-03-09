@@ -64,6 +64,8 @@ cosmic.tweak_resolved() {
 
 main() {
 
+    chroots_lib.maybe_mount_common_filesystems
+
     local phases=(
         cosmic.buildenv_bootstrap
         cosmic.portage_bootstrap

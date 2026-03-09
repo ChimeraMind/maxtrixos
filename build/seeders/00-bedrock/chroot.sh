@@ -132,6 +132,8 @@ bedrock.tweak_nsswitch() {
 
 main() {
     cd /
+
+    chroots_lib.maybe_mount_common_filesystems
     setup_portage_counter
 
     local phases=(
