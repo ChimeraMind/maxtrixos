@@ -19,7 +19,7 @@ import (
 // bypassing Init() which requires real config, ostree binary, etc.
 func newTestFlashCommand(
 	ot ostree.IOstree,
-	im *imager.MockImage,
+	im *imager.MockImager,
 	fsenc *filesystems.MockFsenc,
 	cfg *config.MockConfig,
 	args []string,
@@ -177,7 +177,7 @@ func TestFlashResolveRefMissingPair(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
 		[]string{"--ref", "matrixos/x86_64/dev/gnome"})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -198,7 +198,7 @@ func TestFlashResolveBootedRefEmpty(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestFlashResolveExplicitRefNotFound(t *testing.T) {
 	}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
 		[]string{"--ref", "matrixos/x86_64/dev/gnome", "--ostree-repo", repoDir})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -246,7 +246,7 @@ func TestFlashResolveExplicitRefFound(t *testing.T) {
 	}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
 		[]string{"--ref", "matrixos/x86_64/dev/gnome", "--ostree-repo", repoDir})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -376,7 +376,7 @@ func TestResolveDevicesBatchSummary(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
 		[]string{"--batch", "--dry-run", "--install-device", "/dev/null"})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -401,7 +401,7 @@ func TestShowSummaryWholeDevice(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
 	}
@@ -418,7 +418,7 @@ func TestShowSummaryPartitions(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
 	}
@@ -449,7 +449,7 @@ func TestResolveDevicesBatchWholeDevice(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
 		[]string{"--batch", "--install-device", tmpFile.Name()})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -482,7 +482,7 @@ func TestResolveDevicesBatchAllPartitions(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
 		[]string{
 			"--batch",
 			"--efi-device-path", efiFile.Name(),
@@ -509,7 +509,7 @@ func TestResolveDevicesNonExistent(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
 		[]string{"--batch", "--install-device", "/dev/nonexistent-flash-test-xyz"})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -538,7 +538,7 @@ func TestFlashResolveExplicitRefShortname(t *testing.T) {
 	}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
 		[]string{"--ref", "gnome", "--ostree-repo", repoDir})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -563,7 +563,7 @@ func TestResolveDevicesInteractiveCancelled(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
 		[]string{})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)

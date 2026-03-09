@@ -27,7 +27,7 @@ type BuildOptions struct {
 // Build implements the core image setup logic.
 // It partitions, formats, mounts, deploys ostree, installs the bootloader,
 // and performs post-processing (productionization, compression, signing).
-func (im *Image) Build(opts *BuildOptions) error {
+func (im *Imager) Build(opts *BuildOptions) error {
 	mountRootfs, err := im.prepareRootfs()
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func (im *Image) Build(opts *BuildOptions) error {
 
 // prepareRootfs creates the temporary rootfs directory and configures
 // the sysroot overlay for the build.
-func (im *Image) prepareRootfs() (string, error) {
+func (im *Imager) prepareRootfs() (string, error) {
 	mountDir, err := im.MountDir()
 	if err != nil {
 		return "", err
@@ -90,7 +90,7 @@ func (im *Image) prepareRootfs() (string, error) {
 // setupDevices reads partition size configs and configures block devices
 // based on the build options. It handles three modes: whole device,
 // image file creation, and existing device partitions.
-func (im *Image) setupDevices(opts *BuildOptions) error {
+func (im *Imager) setupDevices(opts *BuildOptions) error {
 	efiSize, err := im.EfiPartitionSize()
 	if err != nil {
 		return err
@@ -125,7 +125,7 @@ func (im *Image) setupDevices(opts *BuildOptions) error {
 
 // setupWholeDevice flashes to a whole device by clearing the partition table,
 // partitioning, and formatting the EFI partition.
-func (im *Image) setupWholeDevice(device, efiSize, bootSize, imageSize string) error {
+func (im *Imager) setupWholeDevice(device, efiSize, bootSize, imageSize string) error {
 	im.SetDevicePath(device)
 	if err := im.SetImageMode(ModeFlashToDevice); err != nil {
 		return err
@@ -171,7 +171,7 @@ func (im *Image) setupWholeDevice(device, efiSize, bootSize, imageSize string) e
 
 // setupImageFile creates a disk image file, sets up a loop device,
 // partitions it, and formats the EFI partition.
-func (im *Image) setupImageFile(efiSize, bootSize, imageSize string) error {
+func (im *Imager) setupImageFile(efiSize, bootSize, imageSize string) error {
 	imagePath, err := im.BuildImagePath()
 	if err != nil {
 		return err
@@ -224,7 +224,7 @@ func (im *Image) setupImageFile(efiSize, bootSize, imageSize string) error {
 
 // setupExistingPartitions configures the build to deploy onto
 // pre-existing device partitions without reformatting EFI.
-func (im *Image) setupExistingPartitions(opts *BuildOptions) error {
+func (im *Imager) setupExistingPartitions(opts *BuildOptions) error {
 	im.Print("EFI System Partition at %s will NOT be formatted. (yay?)\n", opts.EfiDevice)
 	im.Print("Boot device %s will be used to derive parent block device, and install bootloader.\n", opts.BootDevice)
 	im.SetEfiDevice(opts.EfiDevice)
@@ -244,7 +244,7 @@ func (im *Image) setupExistingPartitions(opts *BuildOptions) error {
 
 // formatAndMountFilesystems formats boot/root partitions (with optional
 // encryption), mounts rootfs, EFI, and boot, and returns the root device UUID.
-func (im *Image) formatAndMountFilesystems(mountRootfs string) (string, error) {
+func (im *Imager) formatAndMountFilesystems(mountRootfs string) (string, error) {
 	if err := im.FormatBootfs(); err != nil {
 		return "", fmt.Errorf("failed to format boot: %w", err)
 	}
@@ -291,7 +291,7 @@ func (im *Image) formatAndMountFilesystems(mountRootfs string) (string, error) {
 
 // deployOstree generates kernel boot arguments, deploys the ostree ref
 // into the mounted rootfs, and verifies the deployed environment.
-func (im *Image) deployOstree(mountRootfs, rootDeviceUUID string) error {
+func (im *Imager) deployOstree(mountRootfs, rootDeviceUUID string) error {
 	kernelBootArgs, err := im.GenerateKernelBootArgs()
 	if err != nil {
 		return fmt.Errorf("failed to generate kernel boot args: %w", err)
@@ -337,7 +337,7 @@ func (im *Image) deployOstree(mountRootfs, rootDeviceUUID string) error {
 
 // installSystemComponents sets up the bootloader, passwords, secureboot
 // certificates, memtest, and runs post-deploy hooks.
-func (im *Image) installSystemComponents() error {
+func (im *Imager) installSystemComponents() error {
 	if err := im.SetupBootloaderConfig(); err != nil {
 		return fmt.Errorf("failed to setup bootloader config: %w", err)
 	}
@@ -370,7 +370,7 @@ func (im *Image) installSystemComponents() error {
 
 // extractBuildMetadata retrieves the package list and release version
 // from the deployed rootfs.
-func (im *Image) extractBuildMetadata() (string, []string, error) {
+func (im *Imager) extractBuildMetadata() (string, []string, error) {
 	pkgList, err := im.ExtractPackageList()
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to get package list: %w", err)
@@ -384,7 +384,7 @@ func (im *Image) extractBuildMetadata() (string, []string, error) {
 
 // finalizeBuild finalizes filesystems, cleans up mounts, and handles
 // post-processing based on the image mode.
-func (im *Image) finalizeBuild(releaseVersion string, pkgList []string) error {
+func (im *Imager) finalizeBuild(releaseVersion string, pkgList []string) error {
 	if err := im.FinalizeFilesystems(); err != nil {
 		return fmt.Errorf("failed to finalize filesystems: %w", err)
 	}
@@ -410,7 +410,7 @@ func (im *Image) finalizeBuild(releaseVersion string, pkgList []string) error {
 }
 
 // addSysrootOverlay updates the config with the sysroot overlay and validates it.
-func (im *Image) addSysrootOverlay(mountRootfs string) error {
+func (im *Imager) addSysrootOverlay(mountRootfs string) error {
 	sysrootOverlay := map[string][]string{
 		"Ostree.Sysroot": {mountRootfs},
 	}
@@ -431,7 +431,7 @@ func (im *Image) addSysrootOverlay(mountRootfs string) error {
 
 // postImageCreation handles the post-build processing for image files,
 // including optional productionization steps.
-func (im *Image) postImageCreation(releaseVersion string, pkgList []string) error {
+func (im *Imager) postImageCreation(releaseVersion string, pkgList []string) error {
 	var generatedArtifacts []string
 
 	productionize, err := im.Productionize()
@@ -462,7 +462,7 @@ func (im *Image) postImageCreation(releaseVersion string, pkgList []string) erro
 
 // productionizeImage handles post-build image processing:
 // renaming with version, testing, QCOW2 creation, compression, checksums, GPG signing.
-func (im *Image) productionizeImage(releaseVersion string, pkgList []string) ([]string, error) {
+func (im *Imager) productionizeImage(releaseVersion string, pkgList []string) ([]string, error) {
 	var artifacts []string
 
 	productionize, err := im.Productionize()
@@ -555,7 +555,7 @@ func (im *Image) productionizeImage(releaseVersion string, pkgList []string) ([]
 
 // maybeGenerateGpgSignatures creates GPG signatures for the image and QCOW2 (if created),
 // and returns the paths to the signature files.
-func (im *Image) maybeGenerateGpgSignatures(compressedImageCreated, qcow2Created bool) ([]string, error) {
+func (im *Imager) maybeGenerateGpgSignatures(compressedImageCreated, qcow2Created bool) ([]string, error) {
 	gpgEnabled, err := im.ostree.GpgEnabled()
 	if err != nil {
 		return nil, err
@@ -625,7 +625,7 @@ func (im *Image) maybeGenerateGpgSignatures(compressedImageCreated, qcow2Created
 }
 
 // buildCreateQcow2 creates a QCOW2 image if enabled in settings, and returns whether it was created.
-func (im *Image) buildCreateQcow2() (bool, error) {
+func (im *Imager) buildCreateQcow2() (bool, error) {
 	createQcow2, err := im.CreateQcow2()
 	if err != nil {
 		return false, err
@@ -648,7 +648,7 @@ func (im *Image) buildCreateQcow2() (bool, error) {
 
 // createPackageListFile creates a text file listing the packages included in the
 // image, and returns the path to the file.
-func (im *Image) createPackageListFile(pkgList []string) (string, error) {
+func (im *Imager) createPackageListFile(pkgList []string) (string, error) {
 	pkgListPath := im.ImagePath() + PackagesFileExt
 	im.Print("Creating package list file: %s\n", pkgListPath)
 	pkgListData := strings.Join(pkgList, "\n") + "\n"
@@ -660,7 +660,7 @@ func (im *Image) createPackageListFile(pkgList []string) (string, error) {
 
 // buildSha256sums creates sha256 checksum files for the image and returns
 // the paths to the checksum files.
-func (im *Image) buildSha256sums(compressedImageCreated, qcow2Created bool) ([]string, error) {
+func (im *Imager) buildSha256sums(compressedImageCreated, qcow2Created bool) ([]string, error) {
 	var sha256Paths []string
 
 	imagePath := im.ImagePath()

@@ -24,7 +24,7 @@ func defaultMockOstree() *ostree.MockOstree {
 // bypassing Init() which requires real config, ostree binary, etc.
 func newTestImageCommand(
 	ot ostree.IOstree,
-	im *imager.MockImage,
+	im *imager.MockImager,
 	fsenc *filesystems.MockFsenc,
 	cfg *config.MockConfig,
 	args []string,
@@ -191,7 +191,7 @@ func TestImageRunLuksValidationFail(t *testing.T) {
 	defer func() { getEuid = origEuid }()
 
 	ot := defaultMockOstree()
-	im := imager.DefaultMockImage()
+	im := imager.DefaultMockImager()
 	fsenc := filesystems.DefaultMockFsenc()
 	// Enable encryption in config but omit the encryption key so that
 	// the real Fsenc created by runImage fails ValidateLuksVariables.
@@ -366,7 +366,7 @@ func TestInitializeOstreeRemote(t *testing.T) {
 	cfg := defaultImageTestConfig()
 
 	cmd, err := newTestImageCommand(
-		mock, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
+		mock, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
 		[]string{"--ref", "matrixos/x86_64/dev/someref"},
 	)
 	if err != nil {
@@ -401,7 +401,7 @@ func TestImageRunShortNameRefRejected(t *testing.T) {
 
 	// Use a branch shortname (no slashes — IsBranchShortName returns true).
 	cmd, err := newTestImageCommand(
-		ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
+		ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
 		[]string{"--ref", "mybranch"},
 	)
 	if err != nil {

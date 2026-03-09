@@ -19,7 +19,7 @@ type ImageCommand struct {
 	fs *flag.FlagSet
 
 	// Library instances
-	im    imager.IImage
+	im    imager.IImager
 	fsenc filesystems.IFsenc
 	qa    *validation.QA
 
@@ -123,7 +123,7 @@ func (c *ImageCommand) Run() error {
 	return c.RunWithGuard(c.runImage)
 }
 
-func failFastChecks(ot ostree.IOstree, im imager.IImage) error {
+func failFastChecks(ot ostree.IOstree, im imager.IImager) error {
 	if _, err := im.CreateQcow2(); err != nil {
 		return err
 	}
@@ -187,8 +187,8 @@ func (c *ImageCommand) runImage() error {
 		return fmt.Errorf("LUKS validation failed: %w", err)
 	}
 
-	opts := imager.NewImageOptions{}
-	im, err := imager.NewImage(c.cfg, c.ot, c.fsenc, &opts)
+	opts := imager.NewImagerOptions{}
+	im, err := imager.NewImager(c.cfg, c.ot, c.fsenc, &opts)
 	if err != nil {
 		return fmt.Errorf("failed to initialize imager: %w", err)
 	}

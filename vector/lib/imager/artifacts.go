@@ -18,7 +18,7 @@ import (
 // --- Helpers ---
 
 // buildImagePath builds the full image file path from a suffix.
-func (im *Image) buildImagePath(suffix string) (string, error) {
+func (im *Imager) buildImagePath(suffix string) (string, error) {
 	outDir, err := im.ImagesDir()
 	if err != nil {
 		return "", err
@@ -27,9 +27,9 @@ func (im *Image) buildImagePath(suffix string) (string, error) {
 }
 
 // cleanAndStripRef cleans a remote prefix and removes the -full suffix from the stored ref.
-func (im *Image) cleanAndStripRef() (string, error) {
+func (im *Imager) cleanAndStripRef() (string, error) {
 	if im.ref == "" {
-		return "", errors.New("missing ref, set Ref in NewImageOptions")
+		return "", errors.New("missing ref, set Ref in NewImagerOptions")
 	}
 	stripped, err := im.ostree.RemoveFullFromBranch()
 	if err != nil {
@@ -50,7 +50,7 @@ func refToSuffix(ref string) string {
 
 // validateImageModeForCreation checks that the image mode is set to
 // ModeCreateImageFile and that the imagePath is not empty.
-func (im *Image) validateImageModeForCreation() error {
+func (im *Imager) validateImageModeForCreation() error {
 	if im.mode != ModeCreateImageFile {
 		return errors.New("invalid image creation mode")
 	}
@@ -62,7 +62,7 @@ func (im *Image) validateImageModeForCreation() error {
 
 // --- Operations ---
 
-func (im *Image) extractSeedName(data []byte) (string, error) {
+func (im *Imager) extractSeedName(data []byte) (string, error) {
 	// Extract version from SEED_NAME= line.
 	var releaseVersion string
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -89,7 +89,7 @@ func (im *Image) extractSeedName(data []byte) (string, error) {
 	return releaseVersion, nil
 }
 
-func (im *Image) ExtractReleaseVersion() (string, error) {
+func (im *Imager) ExtractReleaseVersion() (string, error) {
 	if im.rootfs == "" {
 		return "", errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -125,18 +125,18 @@ func (im *Image) ExtractReleaseVersion() (string, error) {
 	return releaseVersion, nil
 }
 
-func (im *Image) BuildImagePath() (string, error) {
+func (im *Imager) BuildImagePath() (string, error) {
 	if im.ref == "" {
-		return "", errors.New("missing ref, set Ref in NewImageOptions")
+		return "", errors.New("missing ref, set Ref in NewImagerOptions")
 	}
 	ref := ostree.CleanRemoteFromRef(im.ref)
 	suffix := refToSuffix(ref) + ".img"
 	return im.buildImagePath(suffix)
 }
 
-func (im *Image) BuildImagePathWithReleaseVersion(releaseVersion string) (string, error) {
+func (im *Imager) BuildImagePathWithReleaseVersion(releaseVersion string) (string, error) {
 	if im.ref == "" {
-		return "", errors.New("missing ref, set Ref in NewImageOptions")
+		return "", errors.New("missing ref, set Ref in NewImagerOptions")
 	}
 	if releaseVersion == "" {
 		return "", errors.New("missing releaseVersion parameter")
@@ -146,7 +146,7 @@ func (im *Image) BuildImagePathWithReleaseVersion(releaseVersion string) (string
 	return im.buildImagePath(suffix)
 }
 
-func (im *Image) CompressedImagePath() (string, error) {
+func (im *Imager) CompressedImagePath() (string, error) {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return "", err
 	}
@@ -164,7 +164,7 @@ func (im *Image) CompressedImagePath() (string, error) {
 	return im.imagePath + "." + parts[0], nil
 }
 
-func (im *Image) CompressImage() error {
+func (im *Imager) CompressImage() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
 	}
@@ -203,14 +203,14 @@ func (im *Image) CompressImage() error {
 	return nil
 }
 
-func (im *Image) Qcow2ImagePath() (string, error) {
+func (im *Imager) Qcow2ImagePath() (string, error) {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return "", err
 	}
 	return im.imagePath + ".qcow2", nil
 }
 
-func (im *Image) CreateQcow2Image() error {
+func (im *Imager) CreateQcow2Image() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
 	}
@@ -231,7 +231,7 @@ func (im *Image) CreateQcow2Image() error {
 	})
 }
 
-func (im *Image) RemoveImageFile() error {
+func (im *Imager) RemoveImageFile() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
 	}
@@ -243,9 +243,9 @@ func (im *Image) RemoveImageFile() error {
 	return nil
 }
 
-func (im *Image) ShowFinalFilesystemInfo() error {
+func (im *Imager) ShowFinalFilesystemInfo() error {
 	if im.devicePath == "" {
-		return errors.New("missing devicePath, not set in NewImageOptions")
+		return errors.New("missing devicePath, not set in NewImagerOptions")
 	}
 	if im.bootfsMount == "" {
 		return errors.New("missing bootfsMount, call MountBootfs first")
@@ -273,7 +273,7 @@ func (im *Image) ShowFinalFilesystemInfo() error {
 	return nil
 }
 
-func (im *Image) ShowImageTestInfo(artifacts []string) error {
+func (im *Imager) ShowImageTestInfo(artifacts []string) error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
 	}

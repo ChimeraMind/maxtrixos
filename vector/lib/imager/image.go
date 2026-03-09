@@ -24,8 +24,8 @@ const (
 	ModeCreateImageFile
 )
 
-// NewImageOptions contains device configuration for image creation.
-type NewImageOptions struct {
+// NewImagerOptions contains device configuration for image creation.
+type NewImagerOptions struct {
 	EfiDevice  string
 	BootDevice string
 	RootDevice string
@@ -33,9 +33,9 @@ type NewImageOptions struct {
 	Mode       ImageMode
 }
 
-// IImage defines the interface for image operations.
-// It mirrors all public methods of Image for testability.
-type IImage interface {
+// IImager defines the interface for image operations.
+// It mirrors all public methods of Imager for testability.
+type IImager interface {
 	// SetStdout replaces the writer used for informational output.
 	SetStdout(w io.Writer)
 	// SetStderr replaces the writer used for warnings and errors.
@@ -215,7 +215,7 @@ type IImage interface {
 	// grub-install inside a chroot of the deployed rootfs, then replaces the
 	// unsigned GRUBX64.EFI with the signed version.
 	InstallBootloader() error
-	// Cleanup unmounts all mount points tracked by this Image instance in
+	// Cleanup unmounts all mount points tracked by this Imager instance in
 	// reverse order, detaches loop devices, syncs, and removes temp dirs.
 	// It is safe to call multiple times.
 	Cleanup()
@@ -248,8 +248,8 @@ type IImage interface {
 	ExecuteWithImageLock(fn func() error) error
 }
 
-// Image provides image creation and manipulation operations.
-type Image struct {
+// Imager provides image creation and manipulation operations.
+type Imager struct {
 	cfg                 config.IConfig
 	ostree              ostree.IOstree
 	fsenc               filesystems.IFsenc
@@ -276,7 +276,7 @@ type Image struct {
 	// QA validation instance.
 	qa *validation.QA
 
-	// trackedMounts records every mount point created by this Image
+	// trackedMounts records every mount point created by this Imager
 	// so that Cleanup can attempt to unmount them all on failure or signal.
 	trackedMountsMu      sync.Mutex
 	trackedMounts        []string
@@ -286,55 +286,55 @@ type Image struct {
 	trackedLoopDevices   []*filesystems.Loop
 }
 
-func (im *Image) SetStdout(w io.Writer) { im.stdout = w }
+func (im *Imager) SetStdout(w io.Writer) { im.stdout = w }
 
-func (im *Image) SetStderr(w io.Writer) { im.stderr = w }
+func (im *Imager) SetStderr(w io.Writer) { im.stderr = w }
 
-func (im *Image) Stdout() io.Writer { return im.stdout }
+func (im *Imager) Stdout() io.Writer { return im.stdout }
 
-func (im *Image) Stderr() io.Writer { return im.stderr }
+func (im *Imager) Stderr() io.Writer { return im.stderr }
 
-func (im *Image) Print(format string, args ...any) {
+func (im *Imager) Print(format string, args ...any) {
 	fmt.Fprintf(im.stdout, format, args...)
 }
 
-func (im *Image) PrintWarning(format string, args ...any) {
+func (im *Imager) PrintWarning(format string, args ...any) {
 	fmt.Fprintf(im.stderr, format, args...)
 }
 
-func (im *Image) PrintError(format string, args ...any) {
+func (im *Imager) PrintError(format string, args ...any) {
 	fmt.Fprintf(im.stderr, format, args...)
 }
 
 // trackMount appends a single mount point to the tracked list.
-func (im *Image) trackMount(mnt string) {
+func (im *Imager) trackMount(mnt string) {
 	im.trackedMountsMu.Lock()
 	defer im.trackedMountsMu.Unlock()
 	im.trackedMounts = append(im.trackedMounts, mnt)
 }
 
 // trackMounts appends multiple mount points to the tracked list.
-func (im *Image) trackMounts(mnts []string) {
+func (im *Imager) trackMounts(mnts []string) {
 	im.trackedMountsMu.Lock()
 	defer im.trackedMountsMu.Unlock()
 	im.trackedMounts = append(im.trackedMounts, mnts...)
 }
 
 // trackTmpDir appends a single temporary directory to the tracked list.
-func (im *Image) trackTmpDir(tmpDir string) {
+func (im *Imager) trackTmpDir(tmpDir string) {
 	im.trackedTmpDirsMu.Lock()
 	defer im.trackedTmpDirsMu.Unlock()
 	im.trackedTmpDirs = append(im.trackedTmpDirs, tmpDir)
 }
 
 // trackLoopDevice appends a loop device to the tracked list.
-func (im *Image) trackLoopDevice(loop *filesystems.Loop) {
+func (im *Imager) trackLoopDevice(loop *filesystems.Loop) {
 	im.trackedLoopDevicesMu.Lock()
 	defer im.trackedLoopDevicesMu.Unlock()
 	im.trackedLoopDevices = append(im.trackedLoopDevices, loop)
 }
 
-func (im *Image) Cleanup() {
+func (im *Imager) Cleanup() {
 	im.trackedMountsMu.Lock()
 	mounts := slices.Clone(im.trackedMounts)
 	im.trackedMounts = nil
@@ -375,8 +375,8 @@ func (im *Image) Cleanup() {
 	}
 }
 
-// NewImage creates a new Image instance.
-func NewImage(cfg config.IConfig, ot ostree.IOstree, fsenc filesystems.IFsenc, opts *NewImageOptions) (*Image, error) {
+// NewImager creates a new Imager instance.
+func NewImager(cfg config.IConfig, ot ostree.IOstree, fsenc filesystems.IFsenc, opts *NewImagerOptions) (*Imager, error) {
 	if cfg == nil {
 		return nil, errors.New("missing config parameter")
 	}
@@ -396,7 +396,7 @@ func NewImage(cfg config.IConfig, ot ostree.IOstree, fsenc filesystems.IFsenc, o
 		return nil, fmt.Errorf("failed to initialize QA: %w", err)
 	}
 
-	im := &Image{
+	im := &Imager{
 		cfg:    cfg,
 		ostree: ot,
 		fsenc:  fsenc,
@@ -416,29 +416,29 @@ func NewImage(cfg config.IConfig, ot ostree.IOstree, fsenc filesystems.IFsenc, o
 	return im, nil
 }
 
-func (im *Image) SetEfiDevice(device string) { im.efiDevice = device }
+func (im *Imager) SetEfiDevice(device string) { im.efiDevice = device }
 
-func (im *Image) EfiDevice() string { return im.efiDevice }
+func (im *Imager) EfiDevice() string { return im.efiDevice }
 
-func (im *Image) SetBootDevice(device string) { im.bootDevice = device }
+func (im *Imager) SetBootDevice(device string) { im.bootDevice = device }
 
-func (im *Image) BootDevice() string { return im.bootDevice }
+func (im *Imager) BootDevice() string { return im.bootDevice }
 
-func (im *Image) SetRootDevice(device string) { im.rootDevice = device }
+func (im *Imager) SetRootDevice(device string) { im.rootDevice = device }
 
-func (im *Image) RootDevice() string { return im.rootDevice }
+func (im *Imager) RootDevice() string { return im.rootDevice }
 
-func (im *Image) SetDevicePath(devicePath string) { im.devicePath = devicePath }
+func (im *Imager) SetDevicePath(devicePath string) { im.devicePath = devicePath }
 
-func (im *Image) DevicePath() string { return im.devicePath }
+func (im *Imager) DevicePath() string { return im.devicePath }
 
-func (im *Image) SetRootfs(rootfs string) { im.rootfs = rootfs }
+func (im *Imager) SetRootfs(rootfs string) { im.rootfs = rootfs }
 
-func (im *Image) SetImagePath(imagePath string) { im.imagePath = imagePath }
+func (im *Imager) SetImagePath(imagePath string) { im.imagePath = imagePath }
 
-func (im *Image) ImagePath() string { return im.imagePath }
+func (im *Imager) ImagePath() string { return im.imagePath }
 
-func (im *Image) SetImageMode(mode ImageMode) error {
+func (im *Imager) SetImageMode(mode ImageMode) error {
 	switch mode {
 	case ModeFlashToDevice:
 		if im.devicePath == "" {
@@ -456,16 +456,16 @@ func (im *Image) SetImageMode(mode ImageMode) error {
 	return nil
 }
 
-func (im *Image) ImageMode() ImageMode { return im.mode }
+func (im *Imager) ImageMode() ImageMode { return im.mode }
 
-func (im *Image) Rootfs() string { return im.rootfs }
+func (im *Imager) Rootfs() string { return im.rootfs }
 
-func (im *Image) Ref() string { return im.ref }
+func (im *Imager) Ref() string { return im.ref }
 
-func (im *Image) SetRef(ref string) { im.ref = ref }
+func (im *Imager) SetRef(ref string) { im.ref = ref }
 
-func (im *Image) EfifsMount() string { return im.efifsMount }
+func (im *Imager) EfifsMount() string { return im.efifsMount }
 
-func (im *Image) BootfsMount() string { return im.bootfsMount }
+func (im *Imager) BootfsMount() string { return im.bootfsMount }
 
-func (im *Image) RootfsMount() string { return im.rootfsMount }
+func (im *Imager) RootfsMount() string { return im.rootfsMount }

@@ -16,7 +16,7 @@ import (
 	"matrixos/vector/lib/filesystems"
 )
 
-func (im *Image) GetKernelPath() (string, error) {
+func (im *Imager) GetKernelPath() (string, error) {
 	if im.rootfs == "" {
 		return "", errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -40,7 +40,7 @@ func (im *Image) GetKernelPath() (string, error) {
 	return dirs[0], nil
 }
 
-func (im *Image) SetupPasswords() error {
+func (im *Imager) SetupPasswords() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -83,7 +83,7 @@ func (im *Image) SetupPasswords() error {
 	return os.WriteFile(shadowFile, []byte(strings.Join(lines, "\n")+"\n"), 0640)
 }
 
-func (im *Image) ExtractPackageList() ([]string, error) {
+func (im *Imager) ExtractPackageList() ([]string, error) {
 	if im.rootfs == "" {
 		return nil, errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -121,7 +121,7 @@ func (im *Image) ExtractPackageList() ([]string, error) {
 	return pkgList, nil
 }
 
-func (im *Image) SetupHooks() error {
+func (im *Imager) SetupHooks() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -182,7 +182,7 @@ func (im *Image) SetupHooks() error {
 	return cmd.Run()
 }
 
-func (im *Image) TestImage() error {
+func (im *Imager) TestImage() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
 	}

@@ -17,7 +17,7 @@ import (
 
 func TestInstallBootloader(t *testing.T) {
 	t.Run("EmptyOstreeDeployRootfs", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.devicePath = "/dev/sda"
 		im.efifsMount = "/mnt/efi"
 		im.bootfsMount = "/mnt/boot"
@@ -31,7 +31,7 @@ func TestInstallBootloader(t *testing.T) {
 	})
 
 	t.Run("EmptyEfifsMount", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.devicePath = "/dev/sda"
 		im.SetRootfs("/rootfs")
 		im.bootfsMount = "/mnt/boot"
@@ -45,7 +45,7 @@ func TestInstallBootloader(t *testing.T) {
 	})
 
 	t.Run("EmptyBootfsMount", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.devicePath = "/dev/sda"
 		im.SetRootfs("/rootfs")
 		im.efifsMount = "/mnt/efi"
@@ -59,7 +59,7 @@ func TestInstallBootloader(t *testing.T) {
 	})
 
 	t.Run("EmptyDevicePath", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.SetRootfs("/rootfs")
 		im.efifsMount = "/mnt/efi"
 		im.bootfsMount = "/mnt/boot"
@@ -76,7 +76,7 @@ func TestInstallBootloader(t *testing.T) {
 		// Missing EfiRoot config
 		cfg := baseImageConfig()
 		delete(cfg.Items, "Imager.EfiRoot")
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImager(cfg, &ostree.MockOstree{})
 		im.devicePath = "/dev/sda"
 		im.SetRootfs("/rootfs")
 		im.efifsMount = "/mnt/efi"
@@ -89,7 +89,7 @@ func TestInstallBootloader(t *testing.T) {
 		// Missing BootRoot config
 		cfg2 := baseImageConfig()
 		delete(cfg2.Items, "Imager.BootRoot")
-		im2 := newTestImage(cfg2, &ostree.MockOstree{})
+		im2 := newTestImager(cfg2, &ostree.MockOstree{})
 		im2.devicePath = "/dev/sda"
 		im2.SetRootfs("/rootfs")
 		im2.efifsMount = "/mnt/efi"
@@ -102,7 +102,7 @@ func TestInstallBootloader(t *testing.T) {
 		// Missing OsName config
 		cfg3 := baseImageConfig()
 		delete(cfg3.Items, "matrixOS.OsName")
-		im3 := newTestImage(cfg3, &ostree.MockOstree{})
+		im3 := newTestImager(cfg3, &ostree.MockOstree{})
 		im3.devicePath = "/dev/sda"
 		im3.SetRootfs("/rootfs")
 		im3.efifsMount = "/mnt/efi"
@@ -115,7 +115,7 @@ func TestInstallBootloader(t *testing.T) {
 		// Missing EfiExecutable config
 		cfg4 := baseImageConfig()
 		delete(cfg4.Items, "Imager.EfiExecutable")
-		im4 := newTestImage(cfg4, &ostree.MockOstree{})
+		im4 := newTestImager(cfg4, &ostree.MockOstree{})
 		im4.devicePath = "/dev/sda"
 		im4.SetRootfs("/rootfs")
 		im4.efifsMount = "/mnt/efi"
@@ -131,7 +131,7 @@ func TestInstallBootloader(t *testing.T) {
 
 func TestSetupBootloaderConfig(t *testing.T) {
 	t.Run("EmptyRef", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.SetRootfs("/rootfs")
 		im.rootfsMount = "/sysroot"
 		im.bootfsMount = "/boot"
@@ -144,7 +144,7 @@ func TestSetupBootloaderConfig(t *testing.T) {
 
 	t.Run("OstreeError", func(t *testing.T) {
 		mo := &ostree.MockOstree{RemoveFullErr: errors.New("ostree error")}
-		im := newTestImage(baseImageConfig(), mo)
+		im := newTestImager(baseImageConfig(), mo)
 		im.SetRootfs("/rootfs")
 		im.ref = "ref"
 		im.rootfsMount = "/sysroot"
@@ -157,7 +157,7 @@ func TestSetupBootloaderConfig(t *testing.T) {
 	})
 
 	t.Run("EmptyOtherParams", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.ref = "ref"
 		im.rootfsMount = "/sysroot"
 		im.bootfsMount = "/boot"
@@ -195,7 +195,7 @@ func TestSetupBootloaderConfig(t *testing.T) {
 
 func TestSetupVmtestConfig(t *testing.T) {
 	t.Run("EmptyParam", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		err := im.SetupVmtestConfig()
 		if err == nil {
 			t.Error("should error for empty bootfsMount")
@@ -204,7 +204,7 @@ func TestSetupVmtestConfig(t *testing.T) {
 
 	t.Run("NoLoaderConf", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.bootfsMount = tmpDir
 		err := im.SetupVmtestConfig()
 		if err == nil {
@@ -219,7 +219,7 @@ func TestSetupVmtestConfig(t *testing.T) {
 		confContent := "title matrixos\noptions root=UUID=xxx quiet splash rw\n"
 		os.WriteFile(filepath.Join(loaderDir, "ostree-1.conf"), []byte(confContent), 0644)
 
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.SetImagePath(filepath.Join(tmpDir, "test.img"))
 		im.SetImageMode(ModeCreateImageFile)
 		im.bootfsMount = tmpDir
@@ -250,7 +250,7 @@ func TestSetupVmtestConfig(t *testing.T) {
 
 func TestInstallSecurebootCerts(t *testing.T) {
 	t.Run("EmptyParams", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		if err := im.InstallSecurebootCerts(); err == nil {
 			t.Error("should error for empty rootfs")
 		}
@@ -262,7 +262,7 @@ func TestInstallSecurebootCerts(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		im, _ := NewImager(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		im.SetRootfs("/rootfs")
 		im.efifsMount = "/efi"
 		err := im.InstallSecurebootCerts()
@@ -276,7 +276,7 @@ func TestInstallSecurebootCerts(t *testing.T) {
 
 func TestInstallMemtest(t *testing.T) {
 	t.Run("EmptyParams", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		if err := im.InstallMemtest(); err == nil {
 			t.Error("should error for empty rootfs")
 		}
@@ -284,7 +284,7 @@ func TestInstallMemtest(t *testing.T) {
 
 	t.Run("NoMemtest", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.SetRootfs(tmpDir)
 		im.efifsMount = filepath.Join(tmpDir, "efimount")
 		os.MkdirAll(filepath.Join(im.efifsMount, "EFI/BOOT"), 0755)
@@ -303,7 +303,7 @@ func TestInstallMemtest(t *testing.T) {
 		efibootdir := filepath.Join(efiMount, "EFI/BOOT")
 		os.MkdirAll(efibootdir, 0755)
 
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.SetRootfs(tmpDir)
 		im.efifsMount = efiMount
 		err := im.InstallMemtest()
@@ -321,7 +321,7 @@ func TestInstallMemtest(t *testing.T) {
 
 func TestGenerateKernelBootArgs(t *testing.T) {
 	t.Run("EmptyRef", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		// ref is empty
 		_, err := im.GenerateKernelBootArgs()
 		if err == nil {
@@ -331,7 +331,7 @@ func TestGenerateKernelBootArgs(t *testing.T) {
 
 	t.Run("OstreeRefError", func(t *testing.T) {
 		mo := &ostree.MockOstree{RemoveFullErr: errors.New("ostree error")}
-		im := newTestImage(baseImageConfig(), mo)
+		im := newTestImager(baseImageConfig(), mo)
 		im.ref = "ref"
 		_, err := im.GenerateKernelBootArgs()
 		if err == nil {
@@ -341,7 +341,7 @@ func TestGenerateKernelBootArgs(t *testing.T) {
 
 	t.Run("EmptyEfiDevice", func(t *testing.T) {
 		mo := &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"}
-		im := newTestImage(baseImageConfig(), mo)
+		im := newTestImager(baseImageConfig(), mo)
 		im.ref = "matrixos/amd64/gnome"
 		// efiDevice empty
 		_, err := im.GenerateKernelBootArgs()
@@ -355,7 +355,7 @@ func TestGenerateKernelBootArgs(t *testing.T) {
 
 	t.Run("EmptyBootDevice", func(t *testing.T) {
 		mo := &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"}
-		im := newTestImage(baseImageConfig(), mo)
+		im := newTestImager(baseImageConfig(), mo)
 		im.ref = "matrixos/amd64/gnome"
 		im.efiDevice = "/dev/sda1"
 		// bootDevice empty
@@ -370,7 +370,7 @@ func TestGenerateKernelBootArgs(t *testing.T) {
 
 	t.Run("EmptyRootDevice", func(t *testing.T) {
 		mo := &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"}
-		im := newTestImage(baseImageConfig(), mo)
+		im := newTestImager(baseImageConfig(), mo)
 		im.ref = "matrixos/amd64/gnome"
 		im.efiDevice = "/dev/sda1"
 		im.bootDevice = "/dev/sda2"
@@ -387,12 +387,12 @@ func TestGenerateKernelBootArgs(t *testing.T) {
 	t.Run("EncryptedMissingRealRootDevice", func(t *testing.T) {
 		mo := &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"}
 		fsenc := &filesystems.MockFsenc{EncryptionEnabled_: true}
-		opts := &NewImageOptions{
+		opts := &NewImagerOptions{
 			EfiDevice:  "/dev/sda1",
 			BootDevice: "/dev/sda2",
 			RootDevice: "/dev/sda3",
 		}
-		im, err := NewImage(baseImageConfig(), mo, fsenc, opts)
+		im, err := NewImager(baseImageConfig(), mo, fsenc, opts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -411,7 +411,7 @@ func TestGenerateKernelBootArgs(t *testing.T) {
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
 		mo := &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"}
-		im, _ := NewImage(ec, mo, filesystems.DefaultMockFsenc(), nil)
+		im, _ := NewImager(ec, mo, filesystems.DefaultMockFsenc(), nil)
 		im.ref = "matrixos/amd64/gnome"
 		im.efiDevice = "/dev/sda1"
 		im.bootDevice = "/dev/sda2"
@@ -430,7 +430,7 @@ func TestGenerateKernelBootArgs(t *testing.T) {
 
 func TestSetupBootloaderConfigAdditional(t *testing.T) {
 	t.Run("EmptyEfifsMount", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"})
 		im.ref = "matrixos/amd64/gnome"
 		im.SetRootfs("/rootfs")
 		im.efiDevice = "/dev/sda1"
@@ -447,7 +447,7 @@ func TestSetupBootloaderConfigAdditional(t *testing.T) {
 	t.Run("ConfigEfiRootError", func(t *testing.T) {
 		cfg := baseImageConfig()
 		delete(cfg.Items, "Imager.RelativeEfiBootPath")
-		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"})
+		im := newTestImager(cfg, &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"})
 		im.ref = "matrixos/amd64/gnome"
 		im.SetRootfs("/rootfs")
 		im.efiDevice = "/dev/sda1"
@@ -468,7 +468,7 @@ func TestInstallBootloaderAdditional(t *testing.T) {
 	t.Run("EfiBootDirError", func(t *testing.T) {
 		cfg := baseImageConfig()
 		delete(cfg.Items, "Imager.RelativeEfiBootPath")
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImager(cfg, &ostree.MockOstree{})
 		im.SetRootfs("/rootfs")
 		im.efifsMount = "/efi"
 		im.bootfsMount = "/boot"
@@ -491,7 +491,7 @@ func TestInstallSecurebootCertsAdditional(t *testing.T) {
 
 		cfg := baseImageConfig()
 		mockRunner := runner.NewMockRunner()
-		im := newTestImageWithRunner(cfg, &ostree.MockOstree{}, mockRunner)
+		im := newTestImagerWithRunner(cfg, &ostree.MockOstree{}, mockRunner)
 		im.SetRootfs(tmpDir)
 		im.efifsMount = efiMount
 		// No certs exist in rootfs, no shim dir either.

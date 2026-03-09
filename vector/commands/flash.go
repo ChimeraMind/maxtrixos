@@ -26,7 +26,7 @@ type FlashCommand struct {
 	fs *flag.FlagSet
 
 	// Library instances
-	im    imager.IImage
+	im    imager.IImager
 	fsenc filesystems.IFsenc
 	qa    *validation.QA
 
@@ -176,7 +176,7 @@ func (c *FlashCommand) runFlash() error {
 		return fmt.Errorf("LUKS validation failed: %w", err)
 	}
 
-	im, err := imager.NewImage(c.cfg, c.ot, c.fsenc, nil)
+	im, err := imager.NewImager(c.cfg, c.ot, c.fsenc, nil)
 	if err != nil {
 		return fmt.Errorf("failed to initialize imager: %w", err)
 	}
@@ -483,12 +483,12 @@ func (c *FlashCommand) loadPartitionTypes() (*partitionTypes, error) {
 }
 
 // tempImager creates a temporary imager instance solely for reading config values.
-func (c *FlashCommand) tempImager() (imager.IImage, error) {
+func (c *FlashCommand) tempImager() (imager.IImager, error) {
 	fsenc, err := filesystems.NewFsenc(c.cfg, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	return imager.NewImage(c.cfg, c.ot, fsenc, nil)
+	return imager.NewImager(c.cfg, c.ot, fsenc, nil)
 }
 
 // promptPartition interactively asks for a partition device and validates
