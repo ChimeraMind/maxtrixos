@@ -184,6 +184,7 @@ func (m *MockImager) EfiCertificateFileNameKekDer() (string, error) { return "",
 func (m *MockImager) ReadOnlyVdb() (string, error)                  { return "", nil }
 func (m *MockImager) DevDir() (string, error)                       { return "", nil }
 func (m *MockImager) HooksDir() (string, error)                     { return "", nil }
+func (m *MockImager) TestsDir() (string, error)                     { return "", nil }
 func (m *MockImager) LockDir() (string, error)                      { return "", nil }
 func (m *MockImager) LockWaitSeconds() (string, error)              { return "", nil }
 func (m *MockImager) BuildMetadataFile() (string, error)            { return "", nil }

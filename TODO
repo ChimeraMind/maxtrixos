@@ -1,8 +1,6 @@
 # Overall TODO
 
 Golang migration:
-    - Fix hooks.go: testDir := filepath.Join(devDir, "image", "tests", ref)
-        - create Imager.TestsDir like we created Imager.HooksDir.
     - Check releaser when using rsync, check for /dev device nodes.
     - Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
         now that we have separate mount namespaces via unshare.

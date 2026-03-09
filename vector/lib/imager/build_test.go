@@ -1098,6 +1098,11 @@ func TestProductionizeImageWithImageTests(t *testing.T) {
 	cfg.Items["Imager.ImagesDir"] = []string{tmpDir}
 	cfg.Items["matrixOS.Root"] = []string{tmpDir}
 	cfg.Items["Imager.MountDir"] = []string{tmpDir}
+
+	testsDir := filepath.Join(tmpDir, "image", "tests")
+	os.MkdirAll(testsDir, 0755)
+	cfg.Items["Imager.TestsDir"] = []string{testsDir}
+
 	if cfg.Bools == nil {
 		cfg.Bools = make(map[string]bool)
 	}

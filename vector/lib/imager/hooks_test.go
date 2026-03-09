@@ -213,10 +213,28 @@ func TestTestImageMethod(t *testing.T) {
 		}
 	})
 
+	t.Run("NoTestsSrcDir", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := baseImageConfig()
+		cfg.Items["Imager.TestsDir"] = []string{filepath.Join(tmpDir, "nonexistent")}
+		im := newTestImagerWithRunner(cfg, &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"}, runner.NewMockRunner())
+		im.ref = "matrixos/amd64/gnome"
+		im.imagePath = "/tmp/test.img"
+		im.mode = ModeCreateImageFile
+
+		err := im.TestImage()
+		if err == nil {
+			t.Fatal("expected error when tests source dir does not exist")
+		}
+		if !strings.Contains(err.Error(), "tests source directory does not exist") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
 	t.Run("NoTestDir", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := baseImageConfig()
-		cfg.Items["matrixOS.Root"] = []string{tmpDir}
+		cfg.Items["Imager.TestsDir"] = []string{tmpDir}
 		runner := runner.NewMockRunner()
 		im := newTestImagerWithRunner(cfg, &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"}, runner)
 		im.ref = "matrixos/amd64/gnome"
@@ -440,12 +458,14 @@ func TestSetupHooksConfigError(t *testing.T) {
 func TestTestImageWithScripts(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := baseImageConfig()
-	cfg.Items["matrixOS.Root"] = []string{tmpDir}
 	cfg.Items["matrixOS.LogsDir"] = []string{tmpDir}
 	cfg.Items["Imager.MountDir"] = []string{tmpDir}
 
+	testsDir := filepath.Join(tmpDir, "image", "tests")
+	cfg.Items["Imager.TestsDir"] = []string{testsDir}
+
 	ref := "matrixos/amd64/gnome"
-	testDir := filepath.Join(tmpDir, "image", "tests", ref)
+	testDir := filepath.Join(testsDir, ref)
 	os.MkdirAll(testDir, 0755)
 
 	// Create a test script that succeeds.
@@ -485,12 +505,14 @@ func TestTestImageWithScripts(t *testing.T) {
 func TestTestImageScriptFails(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := baseImageConfig()
-	cfg.Items["matrixOS.Root"] = []string{tmpDir}
 	cfg.Items["matrixOS.LogsDir"] = []string{tmpDir}
 	cfg.Items["Imager.MountDir"] = []string{tmpDir}
 
+	testsDir := filepath.Join(tmpDir, "image", "tests")
+	cfg.Items["Imager.TestsDir"] = []string{testsDir}
+
 	ref := "matrixos/amd64/gnome"
-	testDir := filepath.Join(tmpDir, "image", "tests", ref)
+	testDir := filepath.Join(testsDir, ref)
 	os.MkdirAll(testDir, 0755)
 
 	// Create a test script that fails.

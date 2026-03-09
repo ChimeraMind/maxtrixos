@@ -197,7 +197,19 @@ func (im *Imager) TestImage() error {
 		return err
 	}
 
-	testDir := filepath.Join(devDir, "image", "tests", ref)
+	testsSrcDir, err := im.TestsDir()
+	if err != nil {
+		return err
+	}
+	if !filesystems.DirectoryExists(testsSrcDir) {
+		im.PrintError(
+			"tests source dir %s does not exist. Create an empty directory at least.\n",
+			testsSrcDir,
+		)
+		return fmt.Errorf("tests source directory does not exist: %s", testsSrcDir)
+	}
+
+	testDir := filepath.Join(testsSrcDir, ref)
 	if !filesystems.DirectoryExists(testDir) {
 		im.PrintError("test dir %s does not exist, skipping test\n", testDir)
 		return nil
