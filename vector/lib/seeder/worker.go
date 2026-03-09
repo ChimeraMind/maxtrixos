@@ -248,6 +248,11 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 		return err
 	}
 
+	metadataFile, err := s.BuildMetadataFile()
+	if err != nil {
+		return err
+	}
+
 	resume := ""
 	if opts.Resume {
 		resume = "1"
@@ -255,6 +260,7 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 
 	env := os.Environ()
 	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
+	env = config.FilterEnvKey(env, "SEEDER_BUILD_METADATA_FILE")
 	env = config.FilterEnvKey(env, "SEEDER_CHROOT_NAME")
 	env = config.FilterEnvKey(env, "SEEDER_CHROOTS_DIR")
 	env = config.FilterEnvKey(env, "PREFERRED_SEEDER_CHROOT_DIR")
@@ -266,6 +272,7 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 
 	env = append(env,
 		"MATRIXOS_DEV_DIR="+devDir,
+		"SEEDER_BUILD_METADATA_FILE="+metadataFile,
 		"SEEDER_CHROOT_NAME="+params.ChrootName,
 		"SEEDER_CHROOTS_DIR="+params.ChrootsDir,
 		"PREFERRED_SEEDER_CHROOT_DIR="+params.PreferredChrootDir,

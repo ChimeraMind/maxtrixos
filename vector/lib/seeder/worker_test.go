@@ -679,9 +679,11 @@ EOF
 func newPrepperSeeder(devDir, downloadsDir, stage3URL string) *Seeder {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"matrixOS.Root":            {devDir},
-			"Seeder.DownloadsDir":      {downloadsDir},
-			"Seeder.Stage3DownloadUrl": {stage3URL},
+			"matrixOS.Root":                         {devDir},
+			"Seeder.DownloadsDir":                   {downloadsDir},
+			"Seeder.Stage3DownloadUrl":              {stage3URL},
+			"Seeder.ChrootMetadataDir":              {"/build/.metadata"},
+			"Seeder.ChrootMetadataDirBuildFileName": {"build.json"},
 		},
 		Bools: map[string]bool{},
 	}

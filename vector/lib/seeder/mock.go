@@ -17,40 +17,46 @@ type MockSeeder struct {
 	stderr io.Writer
 
 	// Config accessors
-	SeedersDir_                    string
-	SeedersDirErr                  error
-	ChrootSeedersDir_              string
-	ChrootSeedersDirErr            error
-	ChrootBuildArtifactsDir_       string
-	ChrootBuildArtifactsDirErr     error
-	DisabledSeederFile_            string
-	DisabledSeederFileErr          error
-	UseLocalGitRepoInsideChroot_   bool
-	UseLocalGitRepoInsideChrootErr error
-	DeleteDotGitFromGitRepo_       bool
-	DeleteDotGitFromGitRepoErr     error
-	GitCloneArgs_                  string
-	GitCloneArgsErr                error
-	ChrootExecName_                string
-	ChrootExecNameErr              error
-	ParamsExecutableName_          string
-	ParamsExecutableNameErr        error
-	PrepperExecName_               string
-	PrepperExecNameErr             error
-	PhasesStateDir_                string
-	PhasesStateDirErr              error
-	SeederDoneFlagFilePrefix_      string
-	SeederDoneFlagFilePrefixErr    error
-	PrivateExampleGitRepo_         string
-	PrivateExampleGitRepoErr       error
-	PrivateGitRepoPath_            string
-	PrivateGitRepoPathErr          error
-	LockDir_                       string
-	LockDirErr                     error
-	LockWaitSeconds_               string
-	LockWaitSecondsErr             error
-	Stage3DownloadUrl_             string
-	Stage3DownloadUrlErr           error
+	SeedersDir_                       string
+	SeedersDirErr                     error
+	ChrootSeedersDir_                 string
+	ChrootSeedersDirErr               error
+	ChrootBuildArtifactsDir_          string
+	ChrootBuildArtifactsDirErr        error
+	DisabledSeederFile_               string
+	DisabledSeederFileErr             error
+	UseLocalGitRepoInsideChroot_      bool
+	UseLocalGitRepoInsideChrootErr    error
+	DeleteDotGitFromGitRepo_          bool
+	DeleteDotGitFromGitRepoErr        error
+	GitCloneArgs_                     string
+	GitCloneArgsErr                   error
+	ChrootExecName_                   string
+	ChrootExecNameErr                 error
+	ParamsExecutableName_             string
+	ParamsExecutableNameErr           error
+	PrepperExecName_                  string
+	PrepperExecNameErr                error
+	ChrootMetadataDir_                string
+	ChrootMetadataDirErr              error
+	ChrootMetadataDirBuildFileName_   string
+	ChrootMetadataDirBuildFileNameErr error
+	BuildMetadataFile_                string
+	BuildMetadataFileErr              error
+	PhasesStateDir_                   string
+	PhasesStateDirErr                 error
+	SeederDoneFlagFilePrefix_         string
+	SeederDoneFlagFilePrefixErr       error
+	PrivateExampleGitRepo_            string
+	PrivateExampleGitRepoErr          error
+	PrivateGitRepoPath_               string
+	PrivateGitRepoPathErr             error
+	LockDir_                          string
+	LockDirErr                        error
+	LockWaitSeconds_                  string
+	LockWaitSecondsErr                error
+	Stage3DownloadUrl_                string
+	Stage3DownloadUrlErr              error
 
 	// New config accessors
 	DownloadsDir_                string
@@ -173,6 +179,15 @@ func (m *MockSeeder) ParamsExecutableName() (string, error) {
 }
 func (m *MockSeeder) PrepperExecName() (string, error) {
 	return m.PrepperExecName_, m.PrepperExecNameErr
+}
+func (m *MockSeeder) ChrootMetadataDir() (string, error) {
+	return m.ChrootMetadataDir_, m.ChrootMetadataDirErr
+}
+func (m *MockSeeder) ChrootMetadataDirBuildFileName() (string, error) {
+	return m.ChrootMetadataDirBuildFileName_, m.ChrootMetadataDirBuildFileNameErr
+}
+func (m *MockSeeder) BuildMetadataFile() (string, error) {
+	return m.BuildMetadataFile_, m.BuildMetadataFileErr
 }
 func (m *MockSeeder) PhasesStateDir() (string, error) {
 	return m.PhasesStateDir_, m.PhasesStateDirErr

@@ -96,6 +96,18 @@ func stringAccessors() []configAccessorTestCase {
 			call:    func(s *Seeder) (string, error) { return s.Stage3DownloadUrl() },
 			wantVal: "https://distfiles.gentoo.org/releases/amd64/autobuilds/current-stage3-amd64-systemd/latest-stage3-amd64-systemd.txt",
 		},
+		{
+			name:    "ChrootMetadataDir",
+			key:     "Seeder.ChrootMetadataDir",
+			call:    func(s *Seeder) (string, error) { return s.ChrootMetadataDir() },
+			wantVal: "/build/.metadata",
+		},
+		{
+			name:    "ChrootMetadataDirBuildFileName",
+			key:     "Seeder.ChrootMetadataDirBuildFileName",
+			call:    func(s *Seeder) (string, error) { return s.ChrootMetadataDirBuildFileName() },
+			wantVal: "build.json",
+		},
 	}
 }
 
@@ -127,6 +139,43 @@ func TestConfigAccessors_ErrorOnEmpty(t *testing.T) {
 				t.Fatal("expected error for empty config value, got nil")
 			}
 		})
+	}
+}
+
+func TestBuildMetadataFile_ReturnsJoinedPath(t *testing.T) {
+	s := newTestSeeder()
+	s.cfg.(*config.MockConfig).Items["Seeder.ChrootMetadataDir"] = []string{"/build/.metadata"}
+	s.cfg.(*config.MockConfig).Items["Seeder.ChrootMetadataDirBuildFileName"] = []string{"build.json"}
+
+	got, err := s.BuildMetadataFile()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "/build/.metadata/build.json"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestBuildMetadataFile_ErrorOnMissingDir(t *testing.T) {
+	s := newTestSeeder()
+	// ChrootMetadataDir key absent => error
+	s.cfg.(*config.MockConfig).Items["Seeder.ChrootMetadataDirBuildFileName"] = []string{"build.json"}
+
+	_, err := s.BuildMetadataFile()
+	if err == nil {
+		t.Fatal("expected error for missing ChrootMetadataDir, got nil")
+	}
+}
+
+func TestBuildMetadataFile_ErrorOnMissingFileName(t *testing.T) {
+	s := newTestSeeder()
+	s.cfg.(*config.MockConfig).Items["Seeder.ChrootMetadataDir"] = []string{"/build/.metadata"}
+	// ChrootMetadataDirBuildFileName key absent => error
+
+	_, err := s.BuildMetadataFile()
+	if err == nil {
+		t.Fatal("expected error for missing ChrootMetadataDirBuildFileName, got nil")
 	}
 }
 
