@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -442,5 +443,82 @@ func TestCleanRemoteFromRefIntegration(t *testing.T) {
 	cleaned = ostree.CleanRemoteFromRef("matrixos/x86_64/dev/mybranch")
 	if cleaned != "matrixos/x86_64/dev/mybranch" {
 		t.Errorf("Expected same ref, got %q", cleaned)
+	}
+}
+
+// --- detectRemotedAndPlainRefs call-site tests ---
+
+func TestImageDetectRemotedAndPlainRefs_Clean(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	ot := &ostree.MockOstree{
+		LocalRefs_: []string{
+			"matrixos/x86_64/dev/gnome",
+			"matrixos/x86_64/dev/cosmic",
+		},
+	}
+	cfg := defaultImageTestConfig()
+	cmd, err := newTestImageCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+		[]string{"--ref", "matrixos/x86_64/dev/gnome"})
+	if err != nil {
+		t.Fatalf("newTestImageCommand failed: %v", err)
+	}
+
+	// No duplicates — should pass.
+	if err := cmd.detectRemotedAndPlainRefs(cmd.im.PrintError); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestImageDetectRemotedAndPlainRefs_Ambiguous(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	ot := &ostree.MockOstree{
+		LocalRefs_: []string{
+			"origin:matrixos/x86_64/dev/gnome",
+			"matrixos/x86_64/dev/gnome",
+		},
+	}
+	cfg := defaultImageTestConfig()
+	cmd, err := newTestImageCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+		[]string{"--ref", "matrixos/x86_64/dev/gnome"})
+	if err != nil {
+		t.Fatalf("newTestImageCommand failed: %v", err)
+	}
+
+	err = cmd.detectRemotedAndPlainRefs(cmd.im.PrintError)
+	if err == nil {
+		t.Fatal("expected error for ambiguous refs, got nil")
+	}
+	if !strings.Contains(err.Error(), "ambiguous refs detected") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestImageDetectRemotedAndPlainRefs_LocalRefsError(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	ot := &ostree.MockOstree{
+		LocalRefsErr: fmt.Errorf("localrefs failed"),
+	}
+	cfg := defaultImageTestConfig()
+	cmd, err := newTestImageCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+		[]string{"--ref", "matrixos/x86_64/dev/gnome"})
+	if err != nil {
+		t.Fatalf("newTestImageCommand failed: %v", err)
+	}
+
+	err = cmd.detectRemotedAndPlainRefs(cmd.im.PrintError)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to list local refs") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }

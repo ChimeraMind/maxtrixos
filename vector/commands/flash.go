@@ -189,6 +189,10 @@ func (c *FlashCommand) runFlash() error {
 		return err
 	}
 
+	if err := c.detectRemotedAndPlainRefs(c.im.PrintError); err != nil {
+		return err
+	}
+
 	rr, err := c.resolveRefRemote(ref, c.im.PrintWarning)
 	if err != nil {
 		return err
