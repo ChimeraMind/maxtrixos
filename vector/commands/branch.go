@@ -11,6 +11,7 @@ import (
 // BranchCommand is a command for managing branches
 type BranchCommand struct {
 	BaseCommand
+	UI
 	fs   *flag.FlagSet
 	sub  string
 	args []string
@@ -37,6 +38,9 @@ func (c *BranchCommand) Init(args []string) error {
 	if err := c.initOstree(); err != nil {
 		return err
 	}
+
+	c.StartUI()
+	c.SetupPlainPrinters()
 
 	return nil
 }
@@ -68,18 +72,18 @@ func (c *BranchCommand) parseArgs(args []string) error {
 
 func (c *BranchCommand) printDeployment(dep *ostree.Deployment) error {
 	if dep.Booted {
-		fmt.Println("Booted deployment:")
+		c.Println("Booted deployment:")
 	} else {
-		fmt.Println("Available deployment:")
+		c.Println("Available deployment:")
 	}
-	fmt.Printf("  Name: %s\n", dep.Stateroot)
-	fmt.Printf("  Index: %d\n", dep.Index)
-	fmt.Printf("  Branch/Refspec: %s\n", dep.Refspec)
-	fmt.Printf("  Checksum: %s\n", dep.Checksum)
-	fmt.Printf("  Serial: %d\n", dep.Serial)
-	fmt.Printf("  Pending: %t\n", dep.Pending)
-	fmt.Printf("  Staged: %t\n", dep.Staged)
-	fmt.Printf("  Rollback: %t\n", dep.Rollback)
+	c.Printf("  Name: %s\n", dep.Stateroot)
+	c.Printf("  Index: %d\n", dep.Index)
+	c.Printf("  Branch/Refspec: %s\n", dep.Refspec)
+	c.Printf("  Checksum: %s\n", dep.Checksum)
+	c.Printf("  Serial: %d\n", dep.Serial)
+	c.Printf("  Pending: %t\n", dep.Pending)
+	c.Printf("  Staged: %t\n", dep.Staged)
+	c.Printf("  Rollback: %t\n", dep.Rollback)
 	return nil
 }
 
@@ -90,7 +94,7 @@ func (c *BranchCommand) show() error {
 	}
 
 	if len(deployments) == 0 {
-		fmt.Println("No deployments found.")
+		c.Println("No deployments found.")
 		return nil
 	}
 
@@ -120,7 +124,7 @@ func (c *BranchCommand) deployment() error {
 	}
 
 	if len(deployments) == 0 {
-		fmt.Println("No deployments found.")
+		c.Println("No deployments found.")
 		return nil
 	}
 
@@ -176,7 +180,7 @@ func (c *BranchCommand) pinOrUnpin(pin bool) error {
 	}
 
 	if len(deployments) == 0 {
-		fmt.Println("No deployments found.")
+		c.Println("No deployments found.")
 		return nil
 	}
 
@@ -220,7 +224,7 @@ func (c *BranchCommand) remote() error {
 		return fmt.Errorf("failed to list remote refs: %w", err)
 	}
 	for _, ref := range refs {
-		fmt.Println(ref)
+		c.Println(ref)
 	}
 	return nil
 }
@@ -231,7 +235,7 @@ func (c *BranchCommand) local() error {
 		return fmt.Errorf("failed to list local refs: %w", err)
 	}
 	for _, ref := range refs {
-		fmt.Println(ref)
+		c.Println(ref)
 	}
 	return nil
 }
@@ -259,6 +263,8 @@ func (c *BranchCommand) subcommands() map[string]func() error {
 }
 
 func (c *BranchCommand) Run() error {
+	defer c.FlushPrinters()
+
 	scs := c.subcommands()
 	cmd, ok := scs[c.sub]
 	if !ok {

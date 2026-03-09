@@ -14,6 +14,9 @@ import (
 	"matrixos/vector/lib/ostree"
 )
 
+// Ensure UpgradeCommand implements ICommand.
+var _ ICommand = (*UpgradeCommand)(nil)
+
 var (
 	grubEfiBinary = "GRUBX64.EFI"
 	bootloaders   = []string{
@@ -26,6 +29,7 @@ type UpgradeCommand struct {
 	BaseCommand
 	UI
 	fs            *flag.FlagSet
+	prompt        *Prompter
 	assumeYes     bool
 	updBootloader bool
 	pretend       bool
@@ -77,6 +81,11 @@ func (c *UpgradeCommand) parseArgs(args []string) error {
 }
 
 func (c *UpgradeCommand) Run() error {
+	c.SetupPrinters(c.Name())
+	defer c.FlushPrinters()
+
+	c.prompt = NewPrompter(os.Stdin, c.StdoutWriter(), c.StderrWriter(), &c.UI)
+
 	// Check if we are running as root. If running as user, exit with error.
 	if getEuid() != 0 {
 		return fmt.Errorf("this command must be run as root")
@@ -87,11 +96,11 @@ func (c *UpgradeCommand) Run() error {
 		return fmt.Errorf("failed to get current state: %w", err)
 	}
 
-	fmt.Printf("%s%sChecking for updates on branch: %s%s\n",
+	c.Printf("%s%sChecking for updates on branch: %s%s\n",
 		c.cBlue, c.iconSearch, ref, c.cReset)
-	fmt.Printf("  %sCurrent version: %s%s\n", c.cBold, oldCommit, c.cReset)
+	c.Printf("  %sCurrent version: %s%s\n", c.cBold, oldCommit, c.cReset)
 
-	fmt.Printf("\n%s%sFetching updates...%s\n",
+	c.Printf("\n%s%sFetching updates...%s\n",
 		c.cBold, c.iconDownload, c.cReset)
 	if err := c.upgradePull(); err != nil {
 		return fmt.Errorf("failed to fetch updates: %w", err)
@@ -113,47 +122,47 @@ func (c *UpgradeCommand) Run() error {
 	}
 
 	if oldCommit == newCommit {
-		fmt.Printf("\n%s%sSystem is already up to date.%s\n",
+		c.Printf("\n%s%sSystem is already up to date.%s\n",
 			c.cGreen, c.iconCheck, c.cReset)
 		if !c.force {
 			return updateBootloader()
 		}
-		fmt.Printf("\n%s%sForcing update despite no changes...%s\n",
+		c.Printf("\n%s%sForcing update despite no changes...%s\n",
 			c.cYellow, c.iconWarn, c.cReset)
 	} else {
-		fmt.Printf("\n%s%sUpdate Available: %s%s\n",
+		c.Printf("\n%s%sUpdate Available: %s%s\n",
 			c.cGreen, c.iconNew, newCommit, c.cReset)
 	}
-	fmt.Println(c.separator)
+	c.Println(c.separator)
 
-	fmt.Printf("\n%s%sAnalyzing package changes...%s\n",
+	c.Printf("\n%s%sAnalyzing package changes...%s\n",
 		c.cBold, c.iconPackage, c.cReset)
 	if err := c.analyzeDiff(oldCommit, newCommit); err != nil {
-		fmt.Printf("Warning: failed to analyze diff: %v\n", err)
+		c.PrintErrf("Warning: failed to analyze diff: %v\n", err)
 	}
 	if err := c.analyzeEtcChanges(oldCommit, newCommit); err != nil {
-		fmt.Printf("Warning: failed to analyze /etc changes: %v\n", err)
+		c.PrintErrf("Warning: failed to analyze /etc changes: %v\n", err)
 	}
-	fmt.Println(c.separator)
+	c.Println(c.separator)
 
 	if c.pretend {
-		fmt.Printf("\n%sRunning in pretend mode. Exiting.%s\n", c.cYellow, c.cReset)
+		c.Printf("\n%sRunning in pretend mode. Exiting.%s\n", c.cYellow, c.cReset)
 		return nil
 	}
 
 	if !c.assumeYes {
-		fmt.Println("")
+		c.Println("")
 		promptMsg := fmt.Sprintf(
 			"%s%sDo you want to apply this upgrade? [y/N] %s",
 			c.cYellow, c.iconQuestion, c.cReset,
 		)
 		if !c.promptUser(promptMsg) {
-			fmt.Printf("%sAborted.%s\n", c.iconError, c.cReset)
+			c.Printf("%sAborted.%s\n", c.iconError, c.cReset)
 			return nil
 		}
 	}
 
-	fmt.Printf("\n%s%sDeploying update...%s\n", c.cBold, c.iconRocket, c.cReset)
+	c.Printf("\n%s%sDeploying update...%s\n", c.cBold, c.iconRocket, c.cReset)
 	if err := c.upgradeDeploy(); err != nil {
 		return fmt.Errorf("failed to deploy update: %w", err)
 	}
@@ -162,9 +171,9 @@ func (c *UpgradeCommand) Run() error {
 		return err
 	}
 
-	fmt.Printf("\n%s%sUpgrade successful!%s\n", c.cGreen, c.iconCheck, c.cReset)
+	c.Printf("\n%s%sUpgrade successful!%s\n", c.cGreen, c.iconCheck, c.cReset)
 
-	fmt.Printf("%s%sPlease reboot at your earliest convenience.%s\n",
+	c.Printf("%s%sPlease reboot at your earliest convenience.%s\n",
 		c.cYellow, c.iconWarn, c.cReset)
 	return nil
 }
@@ -193,7 +202,7 @@ func (c *UpgradeCommand) upgradeDeploy() error {
 }
 
 func (c *UpgradeCommand) updateBootloader(commit string) error {
-	fmt.Printf("\n%s%sUpdating bootloader binaries...%s\n",
+	c.Printf("\n%s%sUpdating bootloader binaries...%s\n",
 		c.cBold, c.iconGear, c.cReset)
 
 	if err := c.updateGrub_x64(commit); err != nil {
@@ -203,7 +212,7 @@ func (c *UpgradeCommand) updateBootloader(commit string) error {
 	// This is a placeholder for the actual bootloader update logic.
 	// In a real implementation, this would involve copying files from the new
 	// commit to /boot or /efi.
-	fmt.Printf("%s%sBootloader updated successfully for commit %s.%s\n",
+	c.Printf("%s%sBootloader updated successfully for commit %s.%s\n",
 		c.cGreen, c.iconCheck, commit, c.cReset)
 	return nil
 }
@@ -253,19 +262,19 @@ func (c *UpgradeCommand) updateGrub_x64(commit string) error {
 		}
 		fname := d.Name()
 		if slices.Contains(bootloaders, fname) {
-			fmt.Printf("   Found EFI file: %s%s%s\n", c.cBlue, path, c.cReset)
+			c.Printf("   Found EFI file: %s%s%s\n", c.cBlue, path, c.cReset)
 
 			cmd := execCommand("sbverify", "--cert", sbCertPath, path)
 			// cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 
 			if err := cmd.Run(); err != nil {
-				fmt.Fprintf(os.Stderr,
+				c.PrintErrf(
 					"   %s%sError verifying EFI file %s: %v%s\n",
 					c.cRed, c.iconError, path, err, c.cReset)
 				return nil
 			}
-			fmt.Printf("   %sVerified EFI file: %s%s%s\n",
+			c.Printf("   %sVerified EFI file: %s%s%s\n",
 				c.iconCheck, c.cGreen, path, c.cReset)
 			efis = append(efis, path)
 		}
@@ -276,19 +285,19 @@ func (c *UpgradeCommand) updateGrub_x64(commit string) error {
 	}
 	for _, efi := range efis {
 		efiDir := filepath.Dir(efi)
-		fmt.Printf("   %sUpdating bootloader binaries in %s...\n",
+		c.Printf("   %sUpdating bootloader binaries in %s...\n",
 			c.iconPackage, efiDir)
 		if err := c.updateGrubDir_x64(efiDir, commit); err != nil {
 			return fmt.Errorf("failed to update bootloader binaries: %w", err)
 		}
-		fmt.Printf("   %sBootloader binaries updated successfully in %s.\n",
+		c.Printf("   %sBootloader binaries updated successfully in %s.\n",
 			c.iconCheck, efiDir)
 	}
 	return nil
 }
 
 func (c *UpgradeCommand) updateGrubDir_x64(efiDir, commit string) error {
-	fmt.Printf(
+	c.Printf(
 		"   %sUpdating GRUB/Shim in %s%s%s for commit %s%s%s...\n",
 		c.iconUpdate, c.cBlue, efiDir, c.cReset, c.cBold, commit, c.cReset,
 	)
@@ -343,7 +352,7 @@ func (c *UpgradeCommand) updateGrubDir_x64(efiDir, commit string) error {
 			filesToCopy = append(filesToCopy, [2]string{srcPath, dstPath})
 		}
 	} else {
-		fmt.Fprintf(os.Stderr,
+		c.PrintErrf(
 			"%s%sWarning: failed to read %s directory for new commit: %v%s\n",
 			c.cYellow, c.iconWarn, shimDir, err, c.cReset)
 	}
@@ -351,7 +360,7 @@ func (c *UpgradeCommand) updateGrubDir_x64(efiDir, commit string) error {
 	for _, pair := range filesToCopy {
 		src, dst := pair[0], pair[1]
 		if _, err := os.Stat(src); os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr,
+			c.PrintErrf(
 				"%s%sExpected file was not found in new commit: %s%s\n",
 				c.cYellow, c.iconWarn, src, c.cReset)
 			return nil
@@ -359,7 +368,7 @@ func (c *UpgradeCommand) updateGrubDir_x64(efiDir, commit string) error {
 			return fmt.Errorf("failed to stat expected file: %w", err)
 		}
 
-		fmt.Printf("   %sCopying %s to %s%s%s...\n",
+		c.Printf("   %sCopying %s to %s%s%s...\n",
 			c.iconDoc, filepath.Base(src), c.cBold, dst, c.cReset)
 		if err := filesystems.CopyFile(src, dst); err != nil {
 			return fmt.Errorf("failed to copy file: %w", err)
@@ -370,11 +379,7 @@ func (c *UpgradeCommand) updateGrubDir_x64(efiDir, commit string) error {
 }
 
 func (c *UpgradeCommand) promptUser(prompt string) bool {
-	fmt.Print(prompt)
-	var response string
-	fmt.Scanln(&response)
-	response = strings.ToLower(strings.TrimSpace(response))
-	return response == "y" || response == "yes"
+	return c.prompt.AskConfirm(prompt)
 }
 
 func (c *UpgradeCommand) analyzeDiff(oldSHA, newSHA string) error {
@@ -411,7 +416,7 @@ func (c *UpgradeCommand) analyzeDiff(oldSHA, newSHA string) error {
 	}
 
 	if len(removed) == 0 && len(added) == 0 {
-		fmt.Printf(
+		c.Printf(
 			"   %s%sNo package changes detected (Config/Binary only update).%s\n",
 			c.cBlue, c.iconPackage, c.cReset,
 		)
@@ -435,12 +440,12 @@ func (c *UpgradeCommand) analyzeDiff(oldSHA, newSHA string) error {
 		}
 
 		if newVer != "" {
-			fmt.Printf("   %s %s%s%s -> %s%s%s\n",
+			c.Printf("   %s %s%s%s -> %s%s%s\n",
 				c.iconUpdate, c.cYellow, pkg, c.cReset,
 				c.cGreen, newVer, c.cReset)
 			delete(added, newVer)
 		} else {
-			fmt.Printf("   %s %s%s%s (Removed)\n",
+			c.Printf("   %s %s%s%s (Removed)\n",
 				c.iconError, c.cRed, pkg, c.cReset)
 		}
 	}
@@ -452,11 +457,11 @@ func (c *UpgradeCommand) analyzeDiff(oldSHA, newSHA string) error {
 	sort.Strings(addedList)
 
 	for _, pkg := range addedList {
-		fmt.Printf("   %s %s%s%s (New)\n",
+		c.Printf("   %s %s%s%s (New)\n",
 			c.iconNew, c.cGreen, pkg, c.cReset)
 	}
 
-	fmt.Println(c.separator)
+	c.Println(c.separator)
 	return nil
 }
 
@@ -467,13 +472,13 @@ func (c *UpgradeCommand) analyzeEtcChanges(oldSHA, newSHA string) error {
 	}
 
 	if len(changes) == 0 {
-		fmt.Printf(
+		c.Printf(
 			"   %s%sNo /etc changes detected (Config/Binary only update).%s\n",
 			c.cBlue, c.iconPackage, c.cReset,
 		)
 		return nil
 	}
-	fmt.Printf("   %s%s/etc changes detected:%s\n", c.cYellow, c.iconPackage, c.cReset)
+	c.Printf("   %s%s/etc changes detected:%s\n", c.cYellow, c.iconPackage, c.cReset)
 
 	output := c.formatEtcChanges(changes)
 
@@ -482,7 +487,7 @@ func (c *UpgradeCommand) analyzeEtcChanges(oldSHA, newSHA string) error {
 	if lines > 30 && !c.assumeYes {
 		return c.showWithPager(output)
 	}
-	fmt.Print(output)
+	c.Printf("%s", output)
 	return nil
 }
 

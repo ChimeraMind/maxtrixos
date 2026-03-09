@@ -3,7 +3,6 @@ package commands
 import (
 	"flag"
 	"fmt"
-	"os"
 
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/imager"
@@ -22,10 +21,6 @@ type ImageCommand struct {
 	im    imager.IImager
 	fsenc filesystems.IFsenc
 	qa    *validation.QA
-
-	// Styled I/O writers
-	stdout *styledWriter
-	stderr *styledWriter
 
 	// Flags
 	ref            string
@@ -68,20 +63,6 @@ func (c *ImageCommand) Init(args []string) error {
 	c.StartUI()
 
 	return nil
-}
-
-// SetStdout creates a fancy styled stdout writer using the UI theme.
-// Every line written to it is prefixed with a bold green "[image]" label.
-func (c *ImageCommand) SetStdout(ref string) *styledWriter {
-	c.stdout = c.NewStdoutWriter(fmt.Sprintf("image:%s", c.shortRef(ref)))
-	return c.stdout
-}
-
-// SetStderr creates a fancy styled stderr writer using the UI theme.
-// Every line written to it is prefixed with a bold red/yellow "[image]" label.
-func (c *ImageCommand) SetStderr(ref string) *styledWriter {
-	c.stderr = c.NewStderrWriter(fmt.Sprintf("image:%s", c.shortRef(ref)))
-	return c.stderr
 }
 
 // parseArgs parses the command-line arguments without initializing config or ostree.
@@ -145,6 +126,9 @@ func failFastChecks(ot ostree.IOstree, im imager.IImager) error {
 
 // runImage implements the image building logic.
 func (c *ImageCommand) runImage() error {
+	c.SetupPrinters(fmt.Sprintf("image:%s", c.shortRef(c.ref)))
+	defer c.FlushPrinters()
+
 	ref := c.ref
 	if ostree.IsBranchShortName(ref) {
 		return fmt.Errorf(
@@ -153,12 +137,8 @@ func (c *ImageCommand) runImage() error {
 		)
 	}
 	// Set up styled writers for subprocess output.
-	stdoutWriter := c.SetStdout(ref)
-	stderrWriter := c.SetStderr(ref)
-
-	// Pass the styled writers to ostree for consistent output styling.
-	c.ot.SetStdout(stdoutWriter)
-	c.ot.SetStderr(stderrWriter)
+	c.ot.SetStdout(c.StdoutWriter())
+	c.ot.SetStderr(c.StderrWriter())
 	c.ot.SetVerbose(false) // ostree's own verbose flag, separate from ours.
 
 	// Verify imager environment.
@@ -169,12 +149,12 @@ func (c *ImageCommand) runImage() error {
 	fsenc, err := filesystems.NewFsenc(
 		c.cfg,
 		func(mapperName string) {
-			fmt.Fprintf(
-				stdoutWriter, "Opening encrypted rootfs as %s ...\n", mapperName)
+			c.Printf(
+				"Opening encrypted rootfs as %s ...\n", mapperName)
 		},
 		func(mapperName string) {
-			fmt.Fprintf(
-				stdoutWriter, "Closing encrypted rootfs as %s ...\n", mapperName)
+			c.Printf(
+				"Closing encrypted rootfs as %s ...\n", mapperName)
 		},
 	)
 	if err != nil {
@@ -193,8 +173,8 @@ func (c *ImageCommand) runImage() error {
 		return fmt.Errorf("failed to initialize imager: %w", err)
 	}
 	c.im = im
-	c.im.SetStdout(stdoutWriter)
-	c.im.SetStderr(stderrWriter)
+	c.im.SetStdout(c.StdoutWriter())
+	c.im.SetStderr(c.StderrWriter())
 
 	// Fail fast on bad params.
 	if err := failFastChecks(c.ot, im); err != nil {
@@ -225,10 +205,7 @@ func (c *ImageCommand) runImage() error {
 	return c.im.ExecuteWithImageLock(func() error {
 		c.PushCleanup(c.im.Cleanup)
 		c.PushCleanup(c.fsenc.Cleanup)
-		c.PushCleanup(func() {
-			stdoutWriter.Flush()
-			stderrWriter.Flush()
-		})
+		c.PushCleanup(c.FlushPrinters)
 
 		if err := c.initGpg(); err != nil {
 			return err
@@ -262,7 +239,7 @@ func (c *ImageCommand) validateDevicePaths() (*imager.BuildOptions, error) {
 		if !filesystems.PathExists(opts.EfiDevice) {
 			return nil, fmt.Errorf("%s does not exist", opts.EfiDevice)
 		}
-		fmt.Printf("Selected the following device as EFI System Partition: %s (WILL NOT BE FORMATTED)\n", opts.EfiDevice)
+		c.Printf("Selected the following device as EFI System Partition: %s (WILL NOT BE FORMATTED)\n", opts.EfiDevice)
 	}
 	if opts.BootDevice != "" {
 		if !filesystems.PathExists(opts.BootDevice) {
@@ -295,7 +272,7 @@ func (c *ImageCommand) validateDevicePaths() (*imager.BuildOptions, error) {
 	}
 
 	if opts.WholeDevice != "" {
-		fmt.Fprintf(os.Stderr, "Specified whole device %s to flash.\n", opts.WholeDevice)
+		c.PrintErrf("Specified whole device %s to flash.\n", opts.WholeDevice)
 	}
 
 	return opts, nil

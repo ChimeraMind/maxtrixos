@@ -22,10 +22,6 @@ type ImagesCommand struct {
 	// Library instances
 	qa *validation.QA
 
-	// Styled I/O writers
-	stdout *styledWriter
-	stderr *styledWriter
-
 	// Flags
 	localOstree         bool
 	includeFullBranches bool
@@ -69,18 +65,6 @@ func (c *ImagesCommand) Init(args []string) error {
 	c.StartUI()
 
 	return nil
-}
-
-// SetStdout creates a fancy styled stdout writer using the UI theme.
-func (c *ImagesCommand) SetStdout(label string) *styledWriter {
-	c.stdout = c.NewStdoutWriter(fmt.Sprintf("images:%s", label))
-	return c.stdout
-}
-
-// SetStderr creates a fancy styled stderr writer using the UI theme.
-func (c *ImagesCommand) SetStderr(label string) *styledWriter {
-	c.stderr = c.NewStderrWriter(fmt.Sprintf("images:%s", label))
-	return c.stderr
 }
 
 // parseArgs parses the command-line arguments without initializing config or ostree.
@@ -158,12 +142,11 @@ func (c *ImagesCommand) onlyFilter() releaser.RefFilterFunc {
 
 // runImages implements the main images building logic.
 func (c *ImagesCommand) runImages() error {
-	// Set up styled writers for top-level output.
-	stdoutWriter := c.SetStdout("all")
-	stderrWriter := c.SetStderr("all")
+	c.SetupPrinters("images:all")
+	defer c.FlushPrinters()
 
-	c.ot.SetStdout(stdoutWriter)
-	c.ot.SetStderr(stderrWriter)
+	c.ot.SetStdout(c.StdoutWriter())
+	c.ot.SetStderr(c.StderrWriter())
 	c.ot.SetVerbose(false)
 
 	// Verify imager environment.
@@ -172,13 +155,13 @@ func (c *ImagesCommand) runImages() error {
 	}
 
 	// Detect available refs.
-	refs, err := c.detectReleases(stderrWriter)
+	refs, err := c.detectReleases(c.StderrWriter())
 	if err != nil {
 		return err
 	}
 
 	if len(refs) == 0 {
-		fmt.Fprintln(stderrWriter, "No release refs found.")
+		c.PrintErr("No release refs found.")
 		return fmt.Errorf("No release refs found, detected or surviving the filters.")
 	}
 
@@ -198,22 +181,22 @@ func (c *ImagesCommand) runImages() error {
 			return fmt.Errorf("failed to check full branch suffix for %s: %w", ref, err)
 		}
 		if isFull && !c.includeFullBranches {
-			fmt.Fprintf(stdoutWriter,
+			c.Printf(
 				"Skipping full branch: %s (use --include-full-branches to include)\n", ref)
 			continue
 		}
 
-		fmt.Fprintf(stdoutWriter, "Working on release branch: %s ...\n", ref)
+		c.Printf("Working on release branch: %s ...\n", ref)
 		if err := c.imageWorker(ref); err != nil {
 			return fmt.Errorf("image build failed for ref %s: %w", ref, err)
 		}
 		released = append(released, ref)
 	}
 
-	fmt.Fprintf(stdoutWriter, "Successfully built images for %d releases:\n",
+	c.Printf("Successfully built images for %d releases:\n",
 		len(released))
 	for _, r := range released {
-		fmt.Fprintf(stdoutWriter, "  %s\n", r)
+		c.Printf("  %s\n", r)
 	}
 
 	return nil

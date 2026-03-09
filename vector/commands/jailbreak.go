@@ -165,7 +165,10 @@ func (c *JailbreakCommand) Init(args []string) error {
 		return err
 	}
 	c.StartUI()
+	c.SetupPrinters(c.Name())
 	c.run = defaultRunner()
+	c.run.stdout = c.StdoutWriter()
+	c.run.stderr = c.StderrWriter()
 	c.prompt = NewPrompter(c.run.stdin, c.run.stdout, c.run.stderr, &c.UI)
 	return nil
 }

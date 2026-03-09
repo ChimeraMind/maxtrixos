@@ -19,10 +19,6 @@ type ReleaseCommand struct {
 	// Library instances
 	rel releaser.IRelease
 
-	// Styled I/O writers
-	stdout *styledWriter
-	stderr *styledWriter
-
 	// Flags
 	ref       string
 	chrootDir string
@@ -55,18 +51,6 @@ func (c *ReleaseCommand) Init(args []string) error {
 	c.StartUI()
 
 	return nil
-}
-
-// SetStdout creates a fancy styled stdout writer using the UI theme.
-func (c *ReleaseCommand) SetStdout(ref string) *styledWriter {
-	c.stdout = c.NewStdoutWriter(fmt.Sprintf("release:%s", c.shortRef(ref)))
-	return c.stdout
-}
-
-// SetStderr creates a fancy styled stderr writer using the UI theme.
-func (c *ReleaseCommand) SetStderr(ref string) *styledWriter {
-	c.stderr = c.NewStderrWriter(fmt.Sprintf("release:%s", c.shortRef(ref)))
-	return c.stderr
 }
 
 // parseArgs parses the command-line arguments without initializing config or ostree.
@@ -126,12 +110,11 @@ func (c *ReleaseCommand) runRelease() error {
 	}
 
 	// Set up styled writers for subprocess output.
-	stdoutWriter := c.SetStdout(ref)
-	stderrWriter := c.SetStderr(ref)
+	c.SetupPrinters(fmt.Sprintf("release:%s", c.shortRef(ref)))
+	defer c.FlushPrinters()
 
-	// Pass the styled writers to ostree for consistent output styling.
-	c.ot.SetStdout(stdoutWriter)
-	c.ot.SetStderr(stderrWriter)
+	c.ot.SetStdout(c.StdoutWriter())
+	c.ot.SetStderr(c.StderrWriter())
 	c.ot.SetVerbose(false) // ostree's own verbose flag, separate from ours.
 
 	c.ot.SetRef(ref)
@@ -153,16 +136,15 @@ func (c *ReleaseCommand) runRelease() error {
 		return fmt.Errorf("failed to initialize releaser: %w", err)
 	}
 	c.rel = rel
-	c.rel.SetStdout(stdoutWriter)
-	c.rel.SetStderr(stderrWriter)
+	c.rel.SetStdout(c.StdoutWriter())
+	c.rel.SetStderr(c.StderrWriter())
 
 	// Execute the release pipeline under an exclusive release lock.
 	return c.rel.ExecuteWithReleaseLock(func() error {
 		// Register cleanup.
 		c.PushCleanup(func() {
 			c.rel.Cleanup()
-			stdoutWriter.Flush()
-			stderrWriter.Flush()
+			c.FlushPrinters()
 		})
 
 		if err := c.rel.Build(); err != nil {

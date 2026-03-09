@@ -27,10 +27,6 @@ type ReleasesCommand struct {
 	det seeder.ISeederDetector
 	qa  *validation.QA
 
-	// Styled I/O writers
-	stdout *styledWriter
-	stderr *styledWriter
-
 	// Flags
 	releaseStage      string
 	skipSeedersRaw    string
@@ -89,22 +85,6 @@ func (c *ReleasesCommand) Init(args []string) error {
 	return nil
 }
 
-// SetStdout creates a styled stdout writer for the releases command.
-func (c *ReleasesCommand) SetStdout(label string) *styledWriter {
-	c.stdout = c.NewStdoutWriter(
-		fmt.Sprintf("releases:%s", label),
-	)
-	return c.stdout
-}
-
-// SetStderr creates a styled stderr writer for the releases command.
-func (c *ReleasesCommand) SetStderr(label string) *styledWriter {
-	c.stderr = c.NewStderrWriter(
-		fmt.Sprintf("releases:%s", label),
-	)
-	return c.stderr
-}
-
 // parseArgs parses command-line arguments without initializing config.
 func (c *ReleasesCommand) parseArgs(args []string) error {
 	c.fs = flag.NewFlagSet("releases", flag.ContinueOnError)
@@ -152,23 +132,18 @@ func (c *ReleasesCommand) Run() error {
 
 // updateStdWriters updates the stdout and stderr writers with the given
 // label and propagates them to the seeder library.
-func (c *ReleasesCommand) updateStdWriters(name string) (*styledWriter, *styledWriter) {
-	stdoutWriter := c.SetStdout(name)
-	stderrWriter := c.SetStderr(name)
-	c.sd.SetStdout(stdoutWriter)
-	c.sd.SetStderr(stderrWriter)
-	c.det.SetStderr(stderrWriter)
-	return stdoutWriter, stderrWriter
+func (c *ReleasesCommand) updateStdWriters(name string) {
+	c.SetupPrinters(fmt.Sprintf("releases:%s", name))
+	c.sd.SetStdout(c.StdoutWriter())
+	c.sd.SetStderr(c.StderrWriter())
+	c.det.SetStderr(c.StderrWriter())
 }
 
 // runReleases implements the multi-seeder release workflow.
 func (c *ReleasesCommand) runReleases() error {
 	writerSetup := func() {
-		stdoutWriter, stderrWriter := c.updateStdWriters("main")
-		c.PushCleanup(func() {
-			stdoutWriter.Flush()
-			stderrWriter.Flush()
-		})
+		c.updateStdWriters("main")
+		c.PushCleanup(c.FlushPrinters)
 	}
 	writerSetup()
 
@@ -236,11 +211,8 @@ func (c *ReleasesCommand) releaseWorker(info seeder.SeederInfo) (string, error) 
 	// (e.g. "00-bedrock" → "bedrock").
 	branchShortname := seeder.SeederNameWithoutOrderPrefix(seederName)
 
-	stdoutWriter, stderrWriter := c.updateStdWriters(seederName)
-	c.PushCleanup(func() {
-		stdoutWriter.Flush()
-		stderrWriter.Flush()
-	})
+	c.updateStdWriters(seederName)
+	c.PushCleanup(c.FlushPrinters)
 
 	c.sd.Print(
 		"Working on seeder %s, ostree branch short name: %s\n",

@@ -30,10 +30,6 @@ type FlashCommand struct {
 	fsenc filesystems.IFsenc
 	qa    *validation.QA
 
-	// Styled I/O writers
-	stdout *styledWriter
-	stderr *styledWriter
-
 	// Flags
 	batch          bool
 	dryRun         bool
@@ -128,18 +124,6 @@ func (c *FlashCommand) parseArgs(args []string) error {
 	return nil
 }
 
-// SetStdout creates a styled stdout writer for the flash command.
-func (c *FlashCommand) SetStdout(ref string) *styledWriter {
-	c.stdout = c.NewStdoutWriter(fmt.Sprintf("flash:%s", c.shortRef(ref)))
-	return c.stdout
-}
-
-// SetStderr creates a styled stderr writer for the flash command.
-func (c *FlashCommand) SetStderr(ref string) *styledWriter {
-	c.stderr = c.NewStderrWriter(fmt.Sprintf("flash:%s", c.shortRef(ref)))
-	return c.stderr
-}
-
 // Run delegates to runFlash inside a SignalGuard.
 func (c *FlashCommand) Run() error {
 	return c.RunWithGuard(c.runFlash)
@@ -147,15 +131,19 @@ func (c *FlashCommand) Run() error {
 
 // runFlash implements the main flash/install logic.
 func (c *FlashCommand) runFlash() error {
+	c.SetupPrinters(c.Name())
+
 	ref, err := c.resolveRef()
 	if err != nil {
 		return err
 	}
 
-	stdoutWriter := c.SetStdout(ref)
-	stderrWriter := c.SetStderr(ref)
-	c.ot.SetStdout(stdoutWriter)
-	c.ot.SetStderr(stderrWriter)
+	// Narrow the prefix now that we know the ref.
+	c.SetupPrinters(fmt.Sprintf("flash:%s", c.shortRef(ref)))
+	defer c.FlushPrinters()
+
+	c.ot.SetStdout(c.StdoutWriter())
+	c.ot.SetStderr(c.StderrWriter())
 	c.ot.SetVerbose(false)
 
 	if err := c.qa.VerifyImagerEnvironmentSetup("/"); err != nil {
@@ -164,8 +152,8 @@ func (c *FlashCommand) runFlash() error {
 
 	fsenc, err := filesystems.NewFsenc(
 		c.cfg,
-		func(n string) { fmt.Fprintf(stdoutWriter, "Opening encrypted rootfs as %s ...\n", n) },
-		func(n string) { fmt.Fprintf(stdoutWriter, "Closing encrypted rootfs as %s ...\n", n) },
+		func(n string) { c.Printf("Opening encrypted rootfs as %s ...\n", n) },
+		func(n string) { c.Printf("Closing encrypted rootfs as %s ...\n", n) },
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize fsenc: %w", err)
@@ -181,8 +169,8 @@ func (c *FlashCommand) runFlash() error {
 		return fmt.Errorf("failed to initialize imager: %w", err)
 	}
 	c.im = im
-	c.im.SetStdout(stdoutWriter)
-	c.im.SetStderr(stderrWriter)
+	c.im.SetStdout(c.StdoutWriter())
+	c.im.SetStderr(c.StderrWriter())
 
 	buildOpts, err := c.resolveDevices()
 	if err != nil {
@@ -204,10 +192,7 @@ func (c *FlashCommand) runFlash() error {
 
 	c.PushCleanup(c.im.Cleanup)
 	c.PushCleanup(c.fsenc.Cleanup)
-	c.PushCleanup(func() {
-		stdoutWriter.Flush()
-		stderrWriter.Flush()
-	})
+	c.PushCleanup(c.FlushPrinters)
 
 	if err := c.initGpg(); err != nil {
 		return err
@@ -573,7 +558,7 @@ func (c *FlashCommand) getPrompter() *Prompter {
 	if c.prompter != nil {
 		return c.prompter
 	}
-	c.prompter = NewPrompter(os.Stdin, os.Stdout, os.Stderr, &c.UI)
+	c.prompter = NewPrompter(os.Stdin, c.StdoutWriter(), c.StderrWriter(), &c.UI)
 	return c.prompter
 }
 
