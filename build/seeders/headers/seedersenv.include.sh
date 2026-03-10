@@ -8,8 +8,6 @@ if [ -z "${__MATRIXOS_SEEDERS_ENV_PARSED:-}" ]; then
 source "${MATRIXOS_DEV_DIR}"/lib/env_lib.sh
 
 # See conf/matrixos.conf for documentation on these variables.
-MATRIXOS_SEEDER_GIT_CLONE_ARGS=$(env_lib.get_simple_var "Seeder" "GitCloneArgs")
-
 _seeder_flag_prefix=$(env_lib.get_simple_var "Seeder" "ChrootSeederDoneFlagFileNamePrefix")
 MATRIXOS_SEEDER_DONE_FLAG_FILE="${SEEDERS_PHASES_STATE_DIR}/${_seeder_flag_prefix}"
 
