@@ -206,7 +206,7 @@ preppers_lib.seeder_chroot_dir_to_name() {
 }
 
 preppers_lib.seeder_lock_dir() {
-    local lock_dir="${MATRIXOS_SEEDER_LOCK_DIR}"
+    local lock_dir="${SEEDER_LOCK_DIR}"
     mkdir -p "${lock_dir}"
     echo "${lock_dir}"
 }
@@ -233,7 +233,7 @@ preppers_lib.execute_with_seeder_lock() {
     # be filled properly. Like: ${MOUNTS} in seeder.
     exec {lock_fd}>"${lock_path}"
 
-    if ! flock -x --timeout "${MATRIXOS_SEEDER_LOCK_WAIT_SECS}" "${lock_fd}"; then
+    if ! flock -x --timeout "${SEEDER_LOCK_WAIT_SECS}" "${lock_fd}"; then
         echo "Timed out waiting for lock ${lock_path}" >&2
         exec {lock_fd}>&-
         return 1
@@ -370,7 +370,7 @@ preppers_lib.sanity_check_chroot_dir() {
 _get_prep_phase_path() {
     local chroot_dir="${1}"
     local prep_phase="${2}"
-    echo "${chroot_dir%/}${MATRIXOS_PREPPERS_PHASES_STATE_DIR}/${prep_phase}.done"
+    echo "${chroot_dir%/}${PREPPERS_PHASES_STATE_DIR}/${prep_phase}.done"
 }
 
 preppers_lib.touch_done_prep_phase() {

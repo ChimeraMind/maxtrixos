@@ -30,15 +30,15 @@
 # The file path to the build metadata file. This file is used to store important metadata
 # about the build, such as the stage3 file used, the release version of the seed, and more.
 #
-# MATRIXOS_SEEDER_LOCK_DIR=/path/to/seeder/locks
+# SEEDER_LOCK_DIR=/path/to/seeder/locks
 # The directory path in which seeder locks are stored. Seeder locks are used to coordinate
 # between multiple seeder processes that might be running concurrently, to avoid conflicts.
 #
-# MATRIXOS_SEEDER_LOCK_WAIT_SECS=number_of_seconds
+# SEEDER_LOCK_WAIT_SECS=number_of_seconds
 # The number of seconds to wait for acquiring a seeder lock before giving up. This is
 # used to prevent seeder processes from waiting indefinitely in case of a deadlock or other issues.
 #
-# MATRIXOS_PREPPERS_PHASES_STATE_DIR=/path/to/preppers/phases/state
+# PREPPERS_PHASES_STATE_DIR=/path/to/preppers/phases/state
 # The directory path in which prepper phase state files are stored. These files are used to
 # keep track of which prepper phases have been completed, to allow resuming the prepper execution.
 # This path is relative to the seed chroot dir.
