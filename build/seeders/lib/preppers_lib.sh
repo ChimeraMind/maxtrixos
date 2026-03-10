@@ -4,7 +4,6 @@
 set -eu
 
 source "${MATRIXOS_DEV_DIR:-/matrixos}"/headers/env.include.sh
-source "${MATRIXOS_DEV_DIR}"/build/seeders/headers/preppersenv.include.sh
 
 # START: Vectorized functions. These functions are now living in vector.
 # We may want to add small helper commands to vector to execute the checks
