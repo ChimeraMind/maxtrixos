@@ -38,6 +38,11 @@
 # The number of seconds to wait for acquiring a seeder lock before giving up. This is
 # used to prevent seeder processes from waiting indefinitely in case of a deadlock or other issues.
 #
+# SEEDER_DONE_FLAG_FILE_PREFIX
+# The prefix for the seeder done flag file, which is used by the chroot.sh scripts
+# to determine if a seeder has completed its process and the chroot is in a state
+# that can be used as a base for derived seeders.
+#
 # PREPPERS_PHASES_STATE_DIR=/path/to/preppers/phases/state
 # The directory path in which prepper phase state files are stored. These files are used to
 # keep track of which prepper phases have been completed, to allow resuming the prepper execution.

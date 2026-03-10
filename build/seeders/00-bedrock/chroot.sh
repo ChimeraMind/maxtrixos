@@ -18,6 +18,11 @@
 # keep track of which phases have been completed. This is used by the chroot.sh scripts
 # to implement idempotency and resumability.
 #
+# SEEDER_DONE_FLAG_FILE_PREFIX
+# The prefix for the seeder done flag file, which is used by the chroot.sh scripts
+# to determine if a seeder has completed its process and the chroot is in a state
+# that can be used as a base for derived seeders.
+#
 set -eu
 
 source "${MATRIXOS_DEV_DIR}/headers/env.include.sh"
