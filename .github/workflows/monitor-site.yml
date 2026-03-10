@@ -1,0 +1,32 @@
+name: WWW Edge Monitor
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Runs at minute 0 past every hour
+  workflow_dispatch:    # Allows manual triggering via the UI
+
+jobs:
+  probe-redirect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert www.matrixos.org redirects to GitHub
+        run: |
+          TARGET_URL="https://github.com/lxnay/matrixos"
+          
+          # Fetch HTTP status and the exact redirect Location header
+          RESULT=$(curl -s -o /dev/null -w "%{http_code}|%{redirect_url}" https://www.matrixos.org)
+          STATUS=$(echo "$RESULT" | cut -d'|' -f1)
+          LOCATION=$(echo "$RESULT" | cut -d'|' -f2)
+          
+          if [ "$STATUS" != "301" ]; then
+            echo "::error::Redirect failed. Expected HTTP 301, got $STATUS"
+            exit 1
+          fi
+          
+          # Match the prefix to allow for trailing slashes
+          if [[ "$LOCATION" != "$TARGET_URL"* ]]; then
+            echo "::error::Hijacked or broken route. Expected $TARGET_URL, got $LOCATION"
+            exit 1
+          fi
+          
+          echo "Success: Edge returned $STATUS and routed to $LOCATION"
