@@ -27,9 +27,11 @@ type MockSeeder struct {
 	DisabledSeederFileErr             error
 	UseLocalGitRepoInsideChroot_      bool
 	UseLocalGitRepoInsideChrootErr    error
-	DeleteDotGitFromGitRepo_          bool
-	DeleteDotGitFromGitRepoErr        error
-	GitCloneArgs_                     string
+	DeleteDotGitFromGitRepo_              bool
+	DeleteDotGitFromGitRepoErr            error
+	UseCpReflinkModeInsteadOfRsync_       bool
+	UseCpReflinkModeInsteadOfRsyncErr     error
+	GitCloneArgs_                         string
 	GitCloneArgsErr                   error
 	ChrootExecName_                   string
 	ChrootExecNameErr                 error
@@ -167,6 +169,10 @@ func (m *MockSeeder) UseLocalGitRepoInsideChroot() (bool, error) {
 
 func (m *MockSeeder) DeleteDotGitFromGitRepo() (bool, error) {
 	return m.DeleteDotGitFromGitRepo_, m.DeleteDotGitFromGitRepoErr
+}
+
+func (m *MockSeeder) UseCpReflinkModeInsteadOfRsync() (bool, error) {
+	return m.UseCpReflinkModeInsteadOfRsync_, m.UseCpReflinkModeInsteadOfRsyncErr
 }
 
 func (m *MockSeeder) GitCloneArgs() (string, error) {
