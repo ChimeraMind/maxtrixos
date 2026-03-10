@@ -43,6 +43,10 @@
 # keep track of which prepper phases have been completed, to allow resuming the prepper execution.
 # This path is relative to the seed chroot dir.
 #
+# USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC=<*/1>
+# If set to 1, it tells preppers to clone parent chroots using cp --reflink=auto instead of rsync,
+# if allowed by the system and the chroots.
+#
 set -eu
 
 _prepper_dir="$(dirname "${0}")"

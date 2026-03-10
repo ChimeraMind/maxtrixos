@@ -514,7 +514,7 @@ preppers_lib._rsync_from_bedrock() {
 
     # Active mounts check already done by sanity_check_chroot_dir.
 
-    local use_cp="${MATRIXOS_PREPPERS_USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC}"
+    local use_cp="${USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC}"
 
     if preppers_lib.cp_reflink_copy_allowed "${latest_bedrock}" "${chroot_dir}" "${use_cp}"; then
         echo "Using experimental cp --reflink=auto copy mode ..."

@@ -262,6 +262,15 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 		return err
 	}
 
+	useCpReflink, err := s.UseCpReflinkModeInsteadOfRsync()
+	if err != nil {
+		return err
+	}
+	var useCpReflinkStr string
+	if useCpReflink {
+		useCpReflinkStr = "1"
+	}
+
 	metadataFile, err := s.BuildMetadataFile()
 	if err != nil {
 		return err
@@ -278,6 +287,7 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 	env = config.FilterEnvKey(env, "MATRIXOS_SEEDER_LOCK_DIR")
 	env = config.FilterEnvKey(env, "MATRIXOS_SEEDER_LOCK_WAIT_SECS")
 	env = config.FilterEnvKey(env, "MATRIXOS_PREPPERS_PHASES_STATE_DIR")
+	env = config.FilterEnvKey(env, "USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC")
 	env = config.FilterEnvKey(env, "SEEDER_CHROOT_NAME")
 	env = config.FilterEnvKey(env, "SEEDER_CHROOTS_DIR")
 	env = config.FilterEnvKey(env, "PREFERRED_SEEDER_CHROOT_DIR")
@@ -293,6 +303,7 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 		"MATRIXOS_SEEDER_LOCK_DIR="+lockDir,
 		"MATRIXOS_SEEDER_LOCK_WAIT_SECS="+lockWaitSeconds,
 		"MATRIXOS_PREPPERS_PHASES_STATE_DIR="+preppersPhasesStateDir,
+		"USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC="+useCpReflinkStr,
 		"SEEDER_CHROOT_NAME="+params.ChrootName,
 		"SEEDER_CHROOTS_DIR="+params.ChrootsDir,
 		"PREFERRED_SEEDER_CHROOT_DIR="+params.PreferredChrootDir,
