@@ -121,10 +121,17 @@ func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, e
 	// Source params.sh and echo the required variables.
 	script := scriptBuf.String()
 
+	env := os.Environ()
+	env, err = s.generateSharedEnvVars(env)
+	if err != nil {
+		return nil, err
+	}
+
 	var stdout bytes.Buffer
 	cmd := &runner.Cmd{
 		Name:   "bash",
 		Args:   []string{"-c", script},
+		Env:    env,
 		Stdout: &stdout,
 		Stderr: s.stderr,
 	}
@@ -231,40 +238,58 @@ func (s *Seeder) ImportGentooGpgKeys() error {
 	})
 }
 
-// --- Prepper execution ---
-
-// ExecutePrepper runs the prepper script with the required env vars.
-func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *PrepperOptions) error {
-	devDir, err := s.DevDir()
+// generateSharedEnvVars generates the environment variables that need to be shared
+// between the seeder and prepper scripts. Those variables must be valid both inside
+// and outside the chroot, meaning that either one of these conditions holds:
+//   - The variable is set to the same value both inside and outside the chroot, value is
+//     valid in both cases, for example if used by params.sh.
+//   - For inside-of-chroot paths, values must be used only via chroot.sh.
+//   - For outside-of-chroot paths, values must be used only via prepper.sh and not passed
+//     into the chroot.
+func (s *Seeder) generateSharedEnvVars(env []string) ([]string, error) {
+	seederPhasesStateDir, err := s.PhasesStateDir()
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	env = config.FilterEnvKey(env, "SEEDERS_PHASES_STATE_DIR")
+	env = append(env,
+		"SEEDERS_PHASES_STATE_DIR="+seederPhasesStateDir,
+	)
+	return env, nil
+}
+
+// generatePrepperEnvVars generates the environment variables that are
+// needed by the prepper script.
+func (s *Seeder) generatePrepperEnvVars(env []string, params *SeederParams, opts *PrepperOptions) ([]string, error) {
 	downloadsDir, err := s.DownloadsDir()
 	if err != nil {
-		return err
+		return nil, err
 	}
+
 	stage3URL, err := s.Stage3DownloadUrl()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	lockDir, err := s.LockDir()
 	if err != nil {
-		return err
+		return nil, err
 	}
+
 	lockWaitSeconds, err := s.LockWaitSeconds()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	preppersPhasesStateDir, err := s.PreppersPhasesStateDir()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	useCpReflink, err := s.UseCpReflinkModeInsteadOfRsync()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var useCpReflinkStr string
 	if useCpReflink {
@@ -273,53 +298,76 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 
 	metadataFile, err := s.BuildMetadataFile()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	resume := ""
+	var resume string
 	if opts.Resume {
 		resume = "1"
 	}
 
-	env := os.Environ()
-	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
-	env = config.FilterEnvKey(env, "SEEDER_BUILD_METADATA_FILE")
+	env = config.FilterEnvKey(env, "CHROOT_DIR")
+	env = config.FilterEnvKey(env, "CHROOT_RESUME")
+	env = config.FilterEnvKey(env, "DOWNLOAD_DIR")
+	env = config.FilterEnvKey(env, "STAGE3_URL")
+	env = config.FilterEnvKey(env, "STAGE3_FILE")
 	env = config.FilterEnvKey(env, "SEEDER_LOCK_DIR")
 	env = config.FilterEnvKey(env, "SEEDER_LOCK_WAIT_SECS")
-	env = config.FilterEnvKey(env, "PREPPERS_PHASES_STATE_DIR")
-	env = config.FilterEnvKey(env, "USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC")
 	env = config.FilterEnvKey(env, "SEEDER_CHROOT_NAME")
 	env = config.FilterEnvKey(env, "SEEDER_CHROOTS_DIR")
+	env = config.FilterEnvKey(env, "SEEDER_BUILD_METADATA_FILE")
 	env = config.FilterEnvKey(env, "PREFERRED_SEEDER_CHROOT_DIR")
-	env = config.FilterEnvKey(env, "CHROOT_DIR")
-	env = config.FilterEnvKey(env, "DOWNLOAD_DIR")
-	env = config.FilterEnvKey(env, "CHROOT_RESUME")
-	env = config.FilterEnvKey(env, "STAGE3_FILE")
-	env = config.FilterEnvKey(env, "STAGE3_URL")
-
+	env = config.FilterEnvKey(env, "USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC")
+	env = config.FilterEnvKey(env, "PREPPERS_PHASES_STATE_DIR")
 	env = append(env,
-		"MATRIXOS_DEV_DIR="+devDir,
-		"SEEDER_BUILD_METADATA_FILE="+metadataFile,
+		"CHROOT_DIR="+opts.ChrootDir,
+		"CHROOT_RESUME="+resume,
+		"DOWNLOAD_DIR="+downloadsDir,
+		"STAGE3_URL="+stage3URL,
+		"STAGE3_FILE="+opts.Stage3File,
 		"SEEDER_LOCK_DIR="+lockDir,
 		"SEEDER_LOCK_WAIT_SECS="+lockWaitSeconds,
-		"PREPPERS_PHASES_STATE_DIR="+preppersPhasesStateDir,
-		"USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC="+useCpReflinkStr,
 		"SEEDER_CHROOT_NAME="+params.ChrootName,
 		"SEEDER_CHROOTS_DIR="+params.ChrootsDir,
+		"SEEDER_BUILD_METADATA_FILE="+metadataFile,
 		"PREFERRED_SEEDER_CHROOT_DIR="+params.PreferredChrootDir,
-		"CHROOT_DIR="+opts.ChrootDir,
-		"DOWNLOAD_DIR="+downloadsDir,
-		"CHROOT_RESUME="+resume,
-		"STAGE3_FILE="+opts.Stage3File,
-		"STAGE3_URL="+stage3URL,
+		"USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC="+useCpReflinkStr,
+		"PREPPERS_PHASES_STATE_DIR="+preppersPhasesStateDir,
+	)
+
+	return env, nil
+}
+
+// --- Prepper execution ---
+
+// ExecutePrepper runs the prepper script with the required env vars.
+func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *PrepperOptions) error {
+	devDir, err := s.DevDir()
+	if err != nil {
+		return err
+	}
+
+	env := os.Environ()
+	env, err = s.generateSharedEnvVars(env)
+	if err != nil {
+		return err
+	}
+	env, err = s.generatePrepperEnvVars(env, params, opts)
+	if err != nil {
+		return err
+	}
+
+	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
+	env = append(env,
+		"MATRIXOS_DEV_DIR="+devDir,
 	)
 
 	cmd := &runner.Cmd{
 		Name:   info.PrepperExec,
+		Env:    env,
 		Stdout: s.stdout,
 		Stderr: s.stderr,
 	}
-	cmd.Env = env
 	return s.runner(cmd)
 }
 
@@ -651,18 +699,15 @@ func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
 		return err
 	}
 
-	seederPhasesStateDir, err := s.PhasesStateDir()
+	env := os.Environ()
+	env, err = s.generateSharedEnvVars(env)
 	if err != nil {
 		return err
 	}
-
-	env := os.Environ()
 	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
-	env = config.FilterEnvKey(env, "SEEDERS_PHASES_STATE_DIR")
 	// Inside the chroot, we always want /matrixos.
 	env = append(env,
 		"MATRIXOS_DEV_DIR="+defaultDevDir,
-		"SEEDERS_PHASES_STATE_DIR="+seederPhasesStateDir,
 	)
 
 	return s.chrootRunner(&runner.ChrootCmd{

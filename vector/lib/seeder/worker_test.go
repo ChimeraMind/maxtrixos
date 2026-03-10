@@ -212,7 +212,8 @@ func writeParamsScript(t *testing.T, dir, seedName, chrootName, chrootsDir, pref
 func newRealSeeder(devDir string) *Seeder {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"matrixOS.Root": {devDir},
+			"matrixOS.Root":                      {devDir},
+			"Seeder.ChrootSeedersPhasesStateDir": {"/build/.seeders_phases"},
 		},
 		Bools: map[string]bool{},
 	}
@@ -692,6 +693,7 @@ func newPrepperSeeder(devDir, downloadsDir, stage3URL string) *Seeder {
 			"Seeder.LocksDir":                       {"/locks/seeder"},
 			"Seeder.LockWaitSeconds":                {"86400"},
 			"Seeder.ChrootPreppersPhasesStateDir":   {"/build/preppers/.preppers_phases"},
+			"Seeder.ChrootSeedersPhasesStateDir":    {"/build/.seeders_phases"},
 		},
 		Bools: map[string]bool{},
 	}
