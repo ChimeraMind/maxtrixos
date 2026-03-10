@@ -55,6 +55,12 @@ func stringAccessors() []configAccessorTestCase {
 			wantVal: "/build/.seeders_phases",
 		},
 		{
+			name:    "PreppersPhasesStateDir",
+			key:     "Seeder.ChrootPreppersPhasesStateDir",
+			call:    func(s *Seeder) (string, error) { return s.PreppersPhasesStateDir() },
+			wantVal: "/build/preppers/.preppers_phases",
+		},
+		{
 			name:    "SeederDoneFlagFilePrefix",
 			key:     "Seeder.ChrootSeederDoneFlagFileNamePrefix",
 			call:    func(s *Seeder) (string, error) { return s.SeederDoneFlagFilePrefix() },

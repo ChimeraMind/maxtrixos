@@ -659,6 +659,10 @@ func writePrepperScript(t *testing.T, dir, outputFile string) string {
 set -eu
 cat > %q <<EOF
 MATRIXOS_DEV_DIR=${MATRIXOS_DEV_DIR}
+SEEDER_BUILD_METADATA_FILE=${SEEDER_BUILD_METADATA_FILE}
+MATRIXOS_SEEDER_LOCK_DIR=${MATRIXOS_SEEDER_LOCK_DIR}
+MATRIXOS_SEEDER_LOCK_WAIT_SECS=${MATRIXOS_SEEDER_LOCK_WAIT_SECS}
+MATRIXOS_PREPPERS_PHASES_STATE_DIR=${MATRIXOS_PREPPERS_PHASES_STATE_DIR}
 SEEDER_CHROOT_NAME=${SEEDER_CHROOT_NAME}
 SEEDER_CHROOTS_DIR=${SEEDER_CHROOTS_DIR}
 PREFERRED_SEEDER_CHROOT_DIR=${PREFERRED_SEEDER_CHROOT_DIR}
@@ -684,6 +688,9 @@ func newPrepperSeeder(devDir, downloadsDir, stage3URL string) *Seeder {
 			"Seeder.Stage3DownloadUrl":              {stage3URL},
 			"Seeder.ChrootMetadataDir":              {"/build/.metadata"},
 			"Seeder.ChrootMetadataDirBuildFileName": {"build.json"},
+			"Seeder.LocksDir":                       {"/locks/seeder"},
+			"Seeder.LockWaitSeconds":                {"86400"},
+			"Seeder.ChrootPreppersPhasesStateDir":   {"/build/preppers/.preppers_phases"},
 		},
 		Bools: map[string]bool{},
 	}
@@ -747,15 +754,19 @@ func TestExecutePrepper_Success(t *testing.T) {
 	env := readEnvFile(t, outputFile)
 
 	checks := map[string]string{
-		"MATRIXOS_DEV_DIR":            "/my/dev",
-		"SEEDER_CHROOT_NAME":          "bedrock-20260228",
-		"SEEDER_CHROOTS_DIR":          "/mnt/chroots",
-		"PREFERRED_SEEDER_CHROOT_DIR": "/mnt/chroots/bedrock-20260228",
-		"CHROOT_DIR":                  "/mnt/chroots/bedrock-20260228",
-		"DOWNLOAD_DIR":                "/my/downloads",
-		"CHROOT_RESUME":               "",
-		"STAGE3_FILE":                 "stage3-amd64-latest.tar.xz",
-		"STAGE3_URL":                  "https://example.com/stage3.tar.xz",
+		"MATRIXOS_DEV_DIR":                   "/my/dev",
+		"SEEDER_BUILD_METADATA_FILE":         "/build/.metadata/build.json",
+		"MATRIXOS_SEEDER_LOCK_DIR":           "/locks/seeder",
+		"MATRIXOS_SEEDER_LOCK_WAIT_SECS":     "86400",
+		"MATRIXOS_PREPPERS_PHASES_STATE_DIR": "/build/preppers/.preppers_phases",
+		"SEEDER_CHROOT_NAME":                 "bedrock-20260228",
+		"SEEDER_CHROOTS_DIR":                 "/mnt/chroots",
+		"PREFERRED_SEEDER_CHROOT_DIR":        "/mnt/chroots/bedrock-20260228",
+		"CHROOT_DIR":                         "/mnt/chroots/bedrock-20260228",
+		"DOWNLOAD_DIR":                       "/my/downloads",
+		"CHROOT_RESUME":                      "",
+		"STAGE3_FILE":                        "stage3-amd64-latest.tar.xz",
+		"STAGE3_URL":                         "https://example.com/stage3.tar.xz",
 	}
 	for k, want := range checks {
 		got := env[k]

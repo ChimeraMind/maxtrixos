@@ -88,6 +88,8 @@ type ISeeder interface {
 	BuildMetadataFile() (string, error)
 	// PhasesStateDir returns the chroot-side directory for seeder phase checkpoints.
 	PhasesStateDir() (string, error)
+	// PreppersPhasesStateDir returns the chroot-side directory for prepper phase checkpoints.
+	PreppersPhasesStateDir() (string, error)
 	// SeederDoneFlagFilePrefix returns the prefix for done-flag files.
 	SeederDoneFlagFilePrefix() (string, error)
 	// PrivateExampleGitRepo returns the URL for the private example git repository.
