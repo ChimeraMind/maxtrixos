@@ -7,7 +7,7 @@ source "${MATRIXOS_DEV_DIR:-/matrixos}/headers/env.include.sh"
 source "${MATRIXOS_DEV_DIR}"/build/seeders/headers/seedersenv.include.sh
 
 _get_phase_path() {
-    echo "${MATRIXOS_SEEDERS_PHASES_STATE_DIR}/${1}.done"
+    echo "${SEEDERS_PHASES_STATE_DIR}/${1}.done"
 }
 
 chroots_lib.touch_done_phase() {
@@ -258,7 +258,7 @@ chroots_lib.rebuild_before_portage_counter() {
 }
 
 _get_counter_path() {
-    local counter_path="${MATRIXOS_SEEDERS_PHASES_STATE_DIR}/.portage_counter.tmp"
+    local counter_path="${SEEDERS_PHASES_STATE_DIR}/.portage_counter.tmp"
     echo "${counter_path}"
 }
 

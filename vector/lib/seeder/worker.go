@@ -651,10 +651,19 @@ func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
 		return err
 	}
 
+	seederPhasesStateDir, err := s.PhasesStateDir()
+	if err != nil {
+		return err
+	}
+
 	env := os.Environ()
 	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
+	env = config.FilterEnvKey(env, "SEEDERS_PHASES_STATE_DIR")
 	// Inside the chroot, we always want /matrixos.
-	env = append(env, "MATRIXOS_DEV_DIR="+defaultDevDir)
+	env = append(env,
+		"MATRIXOS_DEV_DIR="+defaultDevDir,
+		"SEEDERS_PHASES_STATE_DIR="+seederPhasesStateDir,
+	)
 
 	return s.chrootRunner(&runner.ChrootCmd{
 		Cmd: runner.Cmd{
