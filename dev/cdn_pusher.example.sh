@@ -7,8 +7,7 @@ fi
 set -eu
 
 # Local directory paths.
-MATRIXOS_DEV_DIR=/matrixos
-source "${MATRIXOS_DEV_DIR}"/headers/env.include.sh
+MATRIXOS_DEV_DIR="${MATRIXOS_DEV_DIR:-/matrixos}"
 
 LOCAL_OSTREE_REPO="${MATRIXOS_DEV_DIR}/ostree/repo"
 LOCAL_IMAGES_DIR="${MATRIXOS_DEV_DIR}/out/images"

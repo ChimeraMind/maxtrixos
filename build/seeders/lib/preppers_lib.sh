@@ -3,8 +3,6 @@
 #                   that are used OUTSIDE of chroots.
 set -eu
 
-source "${MATRIXOS_DEV_DIR:-/matrixos}"/headers/env.include.sh
-
 # START: Vectorized functions. These functions are now living in vector.
 # We may want to add small helper commands to vector to execute the checks
 # and not have to duplicate their logic here. Preppers library is still executed
