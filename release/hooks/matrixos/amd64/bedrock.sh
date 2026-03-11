@@ -24,7 +24,7 @@
 # RELEASER_DEFAULT_USERNAME=username
 # The default user account name configured for the OS.
 #
-# MATRIXOS_OSNAME=matrixos
+# RELEASER_OSNAME=matrixos
 # The OS name identifier.
 #
 set -e

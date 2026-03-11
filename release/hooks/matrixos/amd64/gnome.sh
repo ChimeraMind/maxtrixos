@@ -24,7 +24,7 @@
 # RELEASER_DEFAULT_USERNAME=username
 # The default user account name configured for the OS.
 #
-# MATRIXOS_OSNAME=matrixos
+# RELEASER_OSNAME=matrixos
 # The OS name identifier.
 #
 set -e
@@ -54,7 +54,7 @@ setup_gnome_accounts() {
     mkdir -p "${as_users_dir}"
 
     local user_cfg="${as_users_dir}/${RELEASER_DEFAULT_USERNAME}"
-    local icon_path="/usr/share/pixmaps/faces/${MATRIXOS_OSNAME}.jpg"
+    local icon_path="/usr/share/pixmaps/faces/${RELEASER_OSNAME}.jpg"
     local src_icon_path="${imagedir}${icon_path}"
     if [ ! -e "${src_icon_path}" ]; then
         echo "ERROR: Image shipped without ${icon_path}." >&2
