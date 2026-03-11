@@ -2,9 +2,6 @@
 # Temporary library for migrating codebase to Golang.
 set -eu
 
-# The "special var".
-DEFAULT_MATRIXOS_DEV_DIR=/matrixos
-MATRIXOS_DEV_DIR=${MATRIXOS_DEV_DIR:-"${DEFAULT_MATRIXOS_DEV_DIR}"}
 source "${MATRIXOS_DEV_DIR}"/lib/ini_lib.sh
 
 __cfg="${MATRIXOS_DEV_DIR}/conf/matrixos.conf"
