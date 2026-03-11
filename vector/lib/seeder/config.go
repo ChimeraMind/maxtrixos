@@ -144,3 +144,24 @@ func (s *Seeder) GitRepo() (string, error) {
 func (s *Seeder) DefaultPrivateGitRepoPath() (string, error) {
 	return s.configItem("matrixOS.DefaultPrivateGitRepoPath")
 }
+
+// SeedsVersioningCadence returns the configured seed versioning cadence.
+// Valid values are "daily", "weekly", or "monthly".
+// If the value is not set, it defaults to "weekly".
+func (s *Seeder) SeedsVersioningCadence() (string, error) {
+	v, err := s.cfg.GetItem("Seeder.SeedsVersioningCadence")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "weekly", nil
+	}
+	switch v {
+	case "daily", "weekly", "monthly":
+		return v, nil
+	default:
+		return "", fmt.Errorf(
+			"invalid Seeder.SeedsVersioningCadence %q: must be daily, weekly, or monthly", v,
+		)
+	}
+}

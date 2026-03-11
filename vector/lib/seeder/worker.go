@@ -257,10 +257,17 @@ func (s *Seeder) generateSharedEnvVars(env []string) ([]string, error) {
 		return nil, err
 	}
 
+	seedsVersioningCadence, err := s.SeedsVersioningCadence()
+	if err != nil {
+		return nil, err
+	}
+
 	env = config.FilterEnvKey(env, "SEEDERS_PHASES_STATE_DIR")
+	env = config.FilterEnvKey(env, "SEEDER_DATE_CADENCE")
 	env = append(env,
 		"SEEDERS_PHASES_STATE_DIR="+seederPhasesStateDir,
 		"SEEDER_DONE_FLAG_FILE_PREFIX="+seederDoneFlagFilePrefix,
+		"SEEDER_DATE_CADENCE="+seedsVersioningCadence,
 	)
 	return env, nil
 }

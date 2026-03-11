@@ -1,9 +1,27 @@
 #!/bin/bash
 set -eu
 
-# The default dating scheme is "YYYYMMDD" anchored to the first past Monday.
+# The dating scheme is determined by SEEDER_DATE_CADENCE (daily, weekly, monthly).
+# - daily:   YYYYMMDD of today.
+# - weekly:  YYYYMMDD anchored to the most recent Monday (default).
+# - monthly: YYYYMM01 anchored to the first day of the current month.
 params_lib.get_chroot_date() {
-    date -d "$(( $(date +%u) - 1 )) days ago" +%Y%m%d
+    local cadence="${SEEDER_DATE_CADENCE:-weekly}"
+    case "${cadence}" in
+        daily)
+            date +%Y%m%d
+            ;;
+        weekly)
+            date -d "$(( $(date +%u) - 1 )) days ago" +%Y%m%d
+            ;;
+        monthly)
+            date +%Y%m01
+            ;;
+        *)
+            echo "params_lib.get_chroot_date: invalid SEEDER_DATE_CADENCE '${cadence}'" >&2
+            return 1
+            ;;
+    esac
 }
 
 params_lib.get_chroot_seeder_done_flag_file() {

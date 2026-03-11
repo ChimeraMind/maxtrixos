@@ -203,6 +203,60 @@ func TestConfigAccessors_PropagatesGetItemError(t *testing.T) {
 	}
 }
 
+func TestSeedsVersioningCadence_ValidValues(t *testing.T) {
+	for _, val := range []string{"daily", "weekly", "monthly"} {
+		t.Run(val, func(t *testing.T) {
+			s := newTestSeeder()
+			s.cfg.(*config.MockConfig).Items["Seeder.SeedsVersioningCadence"] = []string{val}
+
+			got, err := s.SeedsVersioningCadence()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != val {
+				t.Errorf("got %q, want %q", got, val)
+			}
+		})
+	}
+}
+
+func TestSeedsVersioningCadence_DefaultsToWeekly(t *testing.T) {
+	s := newTestSeeder()
+	// Key absent => GetItem returns "" => defaults to "weekly".
+
+	got, err := s.SeedsVersioningCadence()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "weekly" {
+		t.Errorf("got %q, want %q", got, "weekly")
+	}
+}
+
+func TestSeedsVersioningCadence_InvalidValue(t *testing.T) {
+	s := newTestSeeder()
+	s.cfg.(*config.MockConfig).Items["Seeder.SeedsVersioningCadence"] = []string{"biweekly"}
+
+	_, err := s.SeedsVersioningCadence()
+	if err == nil {
+		t.Fatal("expected error for invalid cadence value, got nil")
+	}
+}
+
+func TestSeedsVersioningCadence_PropagatesError(t *testing.T) {
+	wantErr := errors.New("cfg broken")
+	s := newTestSeeder()
+	s.cfg = &config.ErrConfig{Err: wantErr}
+
+	_, err := s.SeedsVersioningCadence()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("got error %v, want %v", err, wantErr)
+	}
+}
+
 func TestUseCpReflinkModeInsteadOfRsync_ReturnsTrue(t *testing.T) {
 	s := newTestSeeder()
 	s.cfg.(*config.MockConfig).Bools["Seeder.UseCpReflinkModeInsteadOfRsync"] = true
