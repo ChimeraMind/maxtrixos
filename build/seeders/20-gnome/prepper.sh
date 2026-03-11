@@ -30,6 +30,10 @@
 # The file path to the build metadata file. This file is used to store important metadata
 # about the build, such as the stage3 file used, the release version of the seed, and more.
 #
+# SEEDER_GPG_KEYS_DIR=/path/to/seeder/gpg/keys
+# The directory path in which the seeder's GPG keys are stored. These keys are
+# used for verifying the integrity of downloaded files, such as stage3 tarballs.
+#
 # SEEDER_LOCK_DIR=/path/to/seeder/locks
 # The directory path in which seeder locks are stored. Seeder locks are used to coordinate
 # between multiple seeder processes that might be running concurrently, to avoid conflicts.
