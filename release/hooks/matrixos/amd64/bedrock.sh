@@ -21,7 +21,7 @@
 # REF=matrixos/amd64/bedrock
 # The cleaned and stripped ostree ref (branch) name for the current release.
 #
-# MATRIXOS_DEFAULT_USERNAME=username
+# RELEASER_DEFAULT_USERNAME=username
 # The default user account name configured for the OS.
 #
 # MATRIXOS_OSNAME=matrixos
