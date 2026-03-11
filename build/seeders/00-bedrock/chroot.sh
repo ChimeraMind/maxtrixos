@@ -14,6 +14,15 @@
 # The path to the matrixOS dev directory from within the chroot, which is the root of the
 # matrixOS repository, and the main directory where seeders should read/write data.
 #
+# SEEDER_OVERLAY_GIT_REPO
+# The Git repository URL for the seeder overlay, which is a repository containing the ebuilds
+# and configs for the seeder. This is used by the chroot scripts to setup the
+# Portage overlay for the seeder.
+#
+# DEFAULT_PRIVATE_GIT_REPO_PATH
+# The directory path to the private git repository. This directory is expected to
+# be already empty at this stage.
+#
 # SEEDERS_PHASES_STATE_DIR: the path to the directory where seeders can read/write files to
 # keep track of which phases have been completed. This is used by the chroot.sh scripts
 # to implement idempotency and resumability.
@@ -74,7 +83,7 @@ bedrock.buildenv_bootstrap() {
 }
 
 bedrock._setup_matrixos_overlay() {
-    if [ -z "${MATRIXOS_OVERLAY_GIT_REPO}" ]; then
+    if [ -z "${SEEDER_OVERLAY_GIT_REPO}" ]; then
         echo "bedrock._setup_matrixos_overlay: mssing parameter to setup_matrixos_overlay" >&2
         return 1
     fi
@@ -82,7 +91,7 @@ bedrock._setup_matrixos_overlay() {
     # matrixos is not in repositories.xml yet.
     echo "Preparing matrixos overlay ..."
     eselect repository disable -f matrixos
-    eselect repository add matrixos git "${MATRIXOS_OVERLAY_GIT_REPO}"
+    eselect repository add matrixos git "${SEEDER_OVERLAY_GIT_REPO}"
 }
 
 bedrock.portage_bootstrap() {

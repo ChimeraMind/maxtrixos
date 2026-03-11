@@ -21,6 +21,15 @@
 # name of the chroot directory for the seeder, and to determine when to create a new
 # chroot or reuse an existing one.
 #
+# SEEDER_OVERLAY_GIT_REPO
+# The Git repository URL for the seeder overlay, which is a repository containing the ebuilds
+# and configs for the seeder. This is used by the chroot scripts to setup the
+# Portage overlay for the seeder.
+#
+# DEFAULT_PRIVATE_GIT_REPO_PATH
+# The directory path to the private git repository. This directory is expected to
+# be already empty at this stage.
+#
 set -eu
 
 source "${MATRIXOS_DEV_DIR}"/headers/env.include.sh

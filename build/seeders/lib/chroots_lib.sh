@@ -99,7 +99,7 @@ chroots_lib.validate_matrixos_private() {
     # Inside chroots, we always place matrixos-private into /etc/matrixos-private.
     # This is because many pieces of the codebase, including the Portage config,
     # expect it to be there.
-    local matrixos_private="${MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH}"
+    local matrixos_private="${DEFAULT_PRIVATE_GIT_REPO_PATH}"
     chroots_lib.check_matrixos_private "${matrixos_private}"
 
     # This is usually bind-mount. Make sure it is and not
