@@ -212,9 +212,9 @@ func writeParamsScript(t *testing.T, dir, seedName, chrootName, chrootsDir, pref
 func newRealSeeder(devDir string) *Seeder {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"matrixOS.Root":                              {devDir},
-			"Seeder.ChrootSeedersPhasesStateDir":         {"/build/.seeders_phases"},
-			"Seeder.ChrootSeederDoneFlagFileNamePrefix":  {"seeder.complete"},
+			"matrixOS.Root":                             {devDir},
+			"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
+			"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
 		},
 		Bools: map[string]bool{},
 	}
@@ -686,13 +686,13 @@ EOF
 func newPrepperSeeder(devDir, downloadsDir, stage3URL string) *Seeder {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"matrixOS.Root":                         {devDir},
-			"Seeder.DownloadsDir":                   {downloadsDir},
-			"Seeder.Stage3DownloadUrl":              {stage3URL},
-			"Seeder.ChrootMetadataDir":              {"/build/.metadata"},
-			"Seeder.ChrootMetadataDirBuildFileName": {"build.json"},
-			"Seeder.LocksDir":                       {"/locks/seeder"},
-			"Seeder.LockWaitSeconds":                {"86400"},
+			"matrixOS.Root":                             {devDir},
+			"Seeder.DownloadsDir":                       {downloadsDir},
+			"Seeder.Stage3DownloadUrl":                  {stage3URL},
+			"Seeder.ChrootMetadataDir":                  {"/build/.metadata"},
+			"Seeder.ChrootMetadataDirBuildFileName":     {"build.json"},
+			"Seeder.LocksDir":                           {"/locks/seeder"},
+			"Seeder.LockWaitSeconds":                    {"86400"},
 			"Seeder.ChrootPreppersPhasesStateDir":       {"/build/preppers/.preppers_phases"},
 			"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
 			"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
@@ -2388,5 +2388,79 @@ func TestSetupChrootMounts_SkipIfMountedFalse_MountsAll(t *testing.T) {
 	if strings.Contains(stdout.String(), "Skipping (already mounted)") {
 		t.Errorf("did not expect 'Skipping (already mounted)' with SkipIfMounted=false, got:\n%s",
 			stdout.String())
+	}
+}
+
+// --- ParseSeederParams integration test with real seeders ---
+
+func TestParseSeederParams_RealSeeders(t *testing.T) {
+	requireBash(t)
+
+	cfg, err := config.NewBaseConfig()
+	if err != nil {
+		t.Skipf("skipping: unable to load base config: %v", err)
+	}
+	if err := cfg.Load(); err != nil {
+		t.Skipf("skipping: unable to load base config: %v", err)
+	}
+
+	sd, err := NewSeeder(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewSeeder: %v", err)
+	}
+
+	devDir, err := sd.DevDir()
+	if err != nil {
+		t.Fatalf("DevDir: %v", err)
+	}
+	t.Logf("DevDir: %s", devDir)
+
+	det, err := NewSeederDetector(cfg)
+	if err != nil {
+		t.Fatalf("NewSeederDetector: %v", err)
+	}
+
+	seeders, err := det.Detect(nil, nil)
+	if err != nil {
+		t.Fatalf("Detect: %v", err)
+	}
+	if len(seeders) == 0 {
+		t.Fatal("Detect returned no seeders")
+	}
+
+	paramsName, err := sd.ParamsExecutableName()
+	if err != nil {
+		t.Fatalf("ParamsExecutableName: %v", err)
+	}
+
+	for _, info := range seeders {
+		paramsPath := filepath.Join(info.Dir, paramsName)
+		if !filesystems.FileExists(paramsPath) {
+			t.Errorf("%s not found for seeder %s", paramsName, info.Name)
+			continue
+		}
+
+		t.Run(info.Name, func(t *testing.T) {
+			params, err := sd.ParseSeederParams(info.Name, paramsPath)
+			if err != nil {
+				t.Fatalf("ParseSeederParams(%s): %v", info.Name, err)
+			}
+
+			if params.ChrootName == "" {
+				t.Errorf("ChrootName is empty for %s", info.Name)
+			}
+			if params.ChrootsDir == "" {
+				t.Errorf("ChrootsDir is empty for %s", info.Name)
+			}
+			if params.PreferredChrootDir == "" {
+				t.Errorf("PreferredChrootDir is empty for %s", info.Name)
+			}
+
+			t.Logf("  ChrootName:         %s", params.ChrootName)
+			t.Logf("  ChrootsDir:         %s", params.ChrootsDir)
+			t.Logf("  PreferredChrootDir: %s", params.PreferredChrootDir)
+			t.Logf("  LatestAvailable:    %s", params.LatestAvailableChrootDir)
+			t.Logf("  AllChrootDirs:      %v", params.AllChrootDirs)
+		})
 	}
 }
