@@ -6,4 +6,4 @@ net-wireless/wpa_supplicant -gui
 gnome-base/gdm plymouth
 
 # Keep this around until spidermonkey-128 is gone
-=dev-lang/spidermonkey-128* llvm_slot_19
+=dev-lang/spidermonkey-128* llvm_slot_20
