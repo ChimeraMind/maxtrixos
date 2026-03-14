@@ -394,23 +394,6 @@ func (o *Ostree) Pull() error {
 	return o.pullFromRepo(repoDir, remote, ref)
 }
 
-// PullWithRemote runs `ostree pull` with the provided remote for
-// the instance ref.
-func (o *Ostree) PullWithRemote(remote string) error {
-	if remote == "" {
-		return errors.New("invalid remote parameter")
-	}
-	ref := o.ref
-	if ref == "" {
-		return errors.New("invalid ref parameter")
-	}
-	repoDir, err := o.RepoDir()
-	if err != nil {
-		return err
-	}
-	return o.pullFromRepo(repoDir, remote, ref)
-}
-
 // Prune prunes the ostree repo for the instance ref.
 func (o *Ostree) Prune() error {
 	ref := o.ref

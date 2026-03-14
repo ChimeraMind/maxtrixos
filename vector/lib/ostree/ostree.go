@@ -71,7 +71,6 @@ type IOstree interface {
 	MaybeInitializeGpg() error
 	MaybeInitializeRemote() error
 	Pull() error
-	PullWithRemote(remote string) error
 	Prune() error
 	GenerateStaticDelta() error
 	UpdateSummary() error
@@ -88,7 +87,7 @@ type IOstree interface {
 	Upgrade(args []string) error
 	ListPackages(commit string) ([]string, error)
 	ListContents(commit, path string) (*[]filesystems.PathInfo, error)
-	ListEtcChanges(oldSHA, newSHA string) ([]EtcChange, error)
+	ListEtcChanges(aCommit, bCommit string) ([]EtcChange, error)
 }
 
 // runCommand runs a generic binary with args and stdout/stderr handling.

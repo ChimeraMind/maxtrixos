@@ -216,23 +216,19 @@ func TestAddRemoteToRootfs(t *testing.T) {
 }
 
 func TestPullWithRemoteExplicit(t *testing.T) {
-	var lastArgs []string
-	cfg := &config.MockConfig{
-		Items: map[string][]string{
-			"Ostree.RepoDir": {"/repo"},
-		},
-	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "myref"})
-	if err != nil {
-		t.Fatalf("NewOstree failed: %v", err)
-	}
+	origRunCommand := runCommand
+	defer func() { runCommand = origRunCommand }()
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	var lastArgs []string
+	runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		lastArgs = args
 		return nil
 	}
 
-	if err := o.PullWithRemote("myremote"); err != nil {
+	repoDir := "/repo"
+	ref := "myref"
+
+	if err := PullWithRemote(repoDir, "myremote", ref, false); err != nil {
 		t.Fatalf("PullWithRemote failed: %v", err)
 	}
 

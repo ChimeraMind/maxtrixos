@@ -198,12 +198,12 @@ func classifyEtcChange(relPath string, old, new_, user *filesystems.PathInfo) *E
 // ListEtcChanges performs a 3-way diff between the old pristine /usr/etc,
 // the new pristine /usr/etc, and the user's live /etc, and returns a list of
 // changes with their classification (add/update/remove/conflict/user-only).
-func (o *Ostree) ListEtcChanges(oldSHA, newSHA string) ([]EtcChange, error) {
-	oldEtcContent, err := o.ListContents(oldSHA, "/usr/etc")
+func (o *Ostree) ListEtcChanges(aCommit, bCommit string) ([]EtcChange, error) {
+	oldEtcContent, err := o.ListContents(aCommit, "/usr/etc")
 	if err != nil {
 		return nil, err
 	}
-	newEtcContent, err := o.ListContents(newSHA, "/usr/etc")
+	newEtcContent, err := o.ListContents(bCommit, "/usr/etc")
 	if err != nil {
 		return nil, err
 	}
