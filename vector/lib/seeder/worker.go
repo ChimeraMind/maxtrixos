@@ -225,31 +225,9 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 
 // --- Mount management ---
 
-// SetupChrootMounts sets up all bind mounts needed for a seeder chroot.
-// All mount points are tracked and can be cleaned up by calling Cleanup().
-func (s *Seeder) SetupChrootMounts(chrootDir string) error {
-	// 1. Common rootfs mounts (dev, sys, proc, shm, run/lock).
-	common, err := filesystems.NewCommonRootfsMounts(
-		filesystems.CommonRootfsMountsOptions{
-			MountPoint: chrootDir,
-			Mounting: func(mnt string) {
-				s.trackMount(mnt)
-				s.Print("Mounting: %s ...\n", mnt)
-			},
-			Mounted: func(mnt string) {
-				s.Print("Mounted: %s ...\n", mnt)
-			},
-			Stdout: s.stdout,
-			Stderr: s.stderr,
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("common mounts init: %w", err)
-	}
-	if err := common.Setup(); err != nil {
-		return fmt.Errorf("common mounts setup: %w", err)
-	}
-
+// mountPrivateGitRepo sets up a read-only bind mount for the private git
+// repo inside the chroot.
+func (s *Seeder) mountPrivateGitRepo(chrootDir string) error {
 	privatePath, err := s.PrivateGitRepoPath()
 	if err != nil {
 		return fmt.Errorf("error getting private repo path: %w", err)
@@ -276,11 +254,20 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) error {
 	if err := privateBind.Mount(); err != nil {
 		return fmt.Errorf("error mounting RO private repo: %w", err)
 	}
+	return nil
+}
 
-	distDir, err := s.ensureDir(s.DistfilesDir)
+// mountDistDir sets up a bind mount for the distfiles directory inside the chroot.
+func (s *Seeder) mountDistDir(chrootDir string) error {
+	distDir, err := s.DistfilesDir()
 	if err != nil {
 		return fmt.Errorf("error getting distfiles dir: %w", err)
 	}
+
+	if err := os.MkdirAll(distDir, 0755); err != nil {
+		return fmt.Errorf("failed to create %s: %w", distDir, err)
+	}
+
 	distMount, err := filesystems.BindMountDistdir(
 		filesystems.BindMountDistdirOptions{
 			DistfilesDir: distDir,
@@ -296,11 +283,20 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) error {
 	if err := distMount.Mount(); err != nil {
 		return fmt.Errorf("error mounting distfiles: %w", err)
 	}
+	return nil
+}
 
-	binDir, err := s.ensureDir(s.BinpkgsDir)
+// mountBinpkgsDir sets up a bind mount for the binpkgs directory inside the chroot.
+func (s *Seeder) mountBinpkgsDir(chrootDir string) error {
+	binDir, err := s.BinpkgsDir()
 	if err != nil {
 		return fmt.Errorf("error getting binpkgs dir: %w", err)
 	}
+
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		return fmt.Errorf("failed to create %s: %w", binDir, err)
+	}
+
 	binMount, err := filesystems.BindMountBinpkgs(
 		filesystems.BindMountBinpkgsOptions{
 			BinpkgsDir: binDir,
@@ -316,20 +312,47 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) error {
 	if err := binMount.Mount(); err != nil {
 		return fmt.Errorf("error mounting binpkgs: %w", err)
 	}
-
 	return nil
 }
 
-// ensureDir calls dirFn to get a path and creates it if needed.
-func (s *Seeder) ensureDir(dirFn func() (string, error)) (string, error) {
-	dir, err := dirFn()
+// SetupChrootMounts sets up all bind mounts needed for a seeder chroot.
+// All mount points are tracked and can be cleaned up by calling Cleanup().
+func (s *Seeder) SetupChrootMounts(chrootDir string) error {
+	// 1. Common rootfs mounts (dev, sys, proc, shm, run/lock).
+	common, err := filesystems.NewCommonRootfsMounts(
+		filesystems.CommonRootfsMountsOptions{
+			MountPoint: chrootDir,
+			Mounting: func(mnt string) {
+				s.trackMount(mnt)
+				s.Print("Mounting: %s ...\n", mnt)
+			},
+			Mounted: func(mnt string) {
+				s.Print("Mounted: %s ...\n", mnt)
+			},
+			Stdout: s.stdout,
+			Stderr: s.stderr,
+		},
+	)
 	if err != nil {
-		return "", fmt.Errorf("error getting directory: %w", err)
+		return fmt.Errorf("error creating common mounts init: %w", err)
 	}
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create %s: %w", dir, err)
+	if err := common.Setup(); err != nil {
+		return fmt.Errorf("error setting up common mounts setup: %w", err)
 	}
-	return dir, nil
+
+	if err := s.mountPrivateGitRepo(chrootDir); err != nil {
+		return fmt.Errorf("error mounting private git repo: %w", err)
+	}
+
+	if err := s.mountDistDir(chrootDir); err != nil {
+		return fmt.Errorf("error mounting distfiles: %w", err)
+	}
+
+	if err := s.mountBinpkgsDir(chrootDir); err != nil {
+		return fmt.Errorf("error mounting binpkgs: %w", err)
+	}
+
+	return nil
 }
 
 // --- Chroot DNS ---
@@ -354,6 +377,82 @@ func (s *Seeder) SetupChrootDNS(chrootDir string) error {
 
 // --- Chroot directory setup ---
 
+// setupDevDir sets up the dev toolkit into the chroot.
+func (s *Seeder) setupDevDir(chrootDevDir string) error {
+	localClone, err := s.UseLocalGitRepoInsideChroot()
+	if err != nil {
+		return err
+	}
+	cloneArgs, err := s.gitCloneArgs()
+	if err != nil {
+		return fmt.Errorf("error getting git clone args: %w", err)
+	}
+
+	if localClone {
+		devDir, err := s.DevDir()
+		if err != nil {
+			return fmt.Errorf("error getting dev dir: %w", err)
+		}
+		s.Print(
+			"Cloning %s (local) into %s ...\n",
+			devDir, chrootDevDir,
+		)
+		args := append([]string{"clone"}, cloneArgs...)
+		args = append(args, devDir, chrootDevDir)
+		if err := s.runner(&runner.Cmd{
+			Name:   "git",
+			Args:   args,
+			Stdout: s.stdout,
+			Stderr: s.stderr,
+		}); err != nil {
+			return fmt.Errorf("error cloning git repo (local): %w", err)
+		}
+	} else {
+		gitRepo, err := s.GitRepo()
+		if err != nil {
+			return fmt.Errorf("error getting git repo: %w", err)
+		}
+		s.Print(
+			"Cloning %s (remote) into %s ...\n",
+			gitRepo, chrootDevDir,
+		)
+		args := append([]string{"clone"}, cloneArgs...)
+		args = append(args, gitRepo, chrootDevDir)
+		if err := s.RetryableCmd(
+			6, "git", args...,
+		); err != nil {
+			return fmt.Errorf("error cloning git repo (remote): %w", err)
+		}
+	}
+
+	return nil
+}
+
+// cleanDevDirGitDir deletes the .git directory from the dev toolkit in the chroot
+// if it exists and the seeder is configured to do so.
+func (s *Seeder) cleanDevDirGitDir(chrootDevDir string) error {
+	// Maybe delete .git directory.
+	deleteDotGit, err := s.DeleteDotGitFromGitRepo()
+	if err != nil {
+		return fmt.Errorf("error checking if .git should be deleted: %w", err)
+	}
+	if !deleteDotGit {
+		return nil
+	}
+
+	dotGitDir := filepath.Join(chrootDevDir, ".git")
+	if !filesystems.DirectoryExists(dotGitDir) {
+		return nil
+	}
+
+	s.Print("Deleting %s ...\n", dotGitDir)
+	if err := os.RemoveAll(dotGitDir); err != nil {
+		return fmt.Errorf("error deleting %s: %w", dotGitDir, err)
+	}
+
+	return nil
+}
+
 // SetupChrootDirs creates the seeder phase directories inside the chroot
 // and clones the dev toolkit if it does not already exist.
 func (s *Seeder) SetupChrootDirs(chrootDir string) error {
@@ -375,64 +474,14 @@ func (s *Seeder) SetupChrootDirs(chrootDir string) error {
 	chrootDevDir := filepath.Join(chrootDir, defaultDevDir)
 
 	if !filesystems.DirectoryExists(chrootDevDir) {
-		localClone, err := s.UseLocalGitRepoInsideChroot()
-		if err != nil {
-			return err
-		}
-		cloneArgs, err := s.gitCloneArgs()
-		if err != nil {
-			return fmt.Errorf("error getting git clone args: %w", err)
-		}
-
-		if localClone {
-			devDir, err := s.DevDir()
-			if err != nil {
-				return fmt.Errorf("error getting dev dir: %w", err)
-			}
-			s.Print(
-				"Cloning %s (local) into %s ...\n",
-				devDir, chrootDevDir,
-			)
-			args := append([]string{"clone"}, cloneArgs...)
-			args = append(args, devDir, chrootDevDir)
-			if err := s.runner(&runner.Cmd{
-				Name:   "git",
-				Args:   args,
-				Stdout: s.stdout,
-				Stderr: s.stderr,
-			}); err != nil {
-				return fmt.Errorf("error cloning git repo (local): %w", err)
-			}
-		} else {
-			gitRepo, err := s.GitRepo()
-			if err != nil {
-				return fmt.Errorf("error getting git repo: %w", err)
-			}
-			s.Print(
-				"Cloning %s (remote) into %s ...\n",
-				gitRepo, chrootDevDir,
-			)
-			args := append([]string{"clone"}, cloneArgs...)
-			args = append(args, gitRepo, chrootDevDir)
-			if err := s.RetryableCmd(
-				6, "git", args...,
-			); err != nil {
-				return fmt.Errorf("error cloning git repo (remote): %w", err)
-			}
+		if err := s.setupDevDir(chrootDevDir); err != nil {
+			return fmt.Errorf("error setting up dev dir: %w", err)
 		}
 	}
 
 	// Maybe delete .git directory.
-	deleteDotGit, err := s.DeleteDotGitFromGitRepo()
-	if err != nil {
-		return fmt.Errorf("error checking if .git should be deleted: %w", err)
-	}
-	if deleteDotGit {
-		dotGitDir := filepath.Join(chrootDevDir, ".git")
-		if filesystems.DirectoryExists(dotGitDir) {
-			s.Print("Deleting %s ...\n", dotGitDir)
-			os.RemoveAll(dotGitDir)
-		}
+	if err := s.cleanDevDirGitDir(chrootDevDir); err != nil {
+		return fmt.Errorf("error cleaning dev dir .git: %w", err)
 	}
 
 	return nil
@@ -442,10 +491,7 @@ func (s *Seeder) SetupChrootDirs(chrootDir string) error {
 
 // ExecuteInChroot runs the seeder's chroot script inside the chroot
 // using unshare for namespace isolation.
-func (s *Seeder) ExecuteInChroot(
-	chrootDir string,
-	info SeederInfo,
-) error {
+func (s *Seeder) ExecuteInChroot(chrootDir string, info SeederInfo) error {
 	defaultDevDir, err := s.DefaultDevDir()
 	if err != nil {
 		return err
