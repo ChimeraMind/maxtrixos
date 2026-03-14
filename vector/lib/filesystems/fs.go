@@ -243,7 +243,135 @@ func DevicePartUUID(devPath string) (string, error) {
 	if devPath == "" {
 		return "", fmt.Errorf("missing argument devpath")
 	}
-	return resolveDeviceAttribute(devPath, "PARTUUID")
+	return resolveDeviceAttribute(devPath, devDiskByPartUUIDPath)
+}
+
+// MountpointToDevice returns the device path for a given mountpoint
+// by reading /proc/self/mountinfo.
+func MountpointToDevice(mnt string) (string, error) {
+	if mnt == "" {
+		return "", fmt.Errorf("missing mnt parameter")
+	}
+
+	entry, err := findMountByTarget(mnt)
+	if err != nil {
+		return "", fmt.Errorf("no device found for mountpoint %s", mnt)
+	}
+	if entry.Source == "" {
+		return "", fmt.Errorf("no device found for mountpoint %s", mnt)
+	}
+	return entry.Source, nil
+}
+
+// MountpointToUUID returns the UUID for a given mountpoint by reading
+// /proc/self/mountinfo and resolving the device UUID from /dev/disk/by-uuid/.
+func MountpointToUUID(mnt string) (string, error) {
+	if mnt == "" {
+		return "", fmt.Errorf("missing mnt parameter")
+	}
+
+	entry, err := findMountContainingPath(mnt)
+	if err != nil {
+		return "", fmt.Errorf("no UUID found for mountpoint %s", mnt)
+	}
+	uuid, err := resolveDeviceAttribute(entry.Source, devDiskByUUIDPath)
+	if err != nil {
+		return "", fmt.Errorf("no UUID found for mountpoint %s: %w", mnt, err)
+	}
+	return uuid, nil
+}
+
+// MountpointToFSType returns the filesystem type for a given mountpoint
+// by reading /proc/self/mountinfo.
+func MountpointToFSType(mnt string) (string, error) {
+	if mnt == "" {
+		return "", fmt.Errorf("missing mnt parameter")
+	}
+
+	entry, err := findMountContainingPath(mnt)
+	if err != nil {
+		return "", fmt.Errorf("no FSTYPE found for mountpoint %s", mnt)
+	}
+	if entry.FSType == "" {
+		return "", fmt.Errorf("no FSTYPE found for mountpoint %s", mnt)
+	}
+	return entry.FSType, nil
+}
+
+// CleanupMounts unmounts a list of mounts in reverse order.
+func CleanupMounts(mounts []string) {
+	DevicesSettle()
+	for i := len(mounts) - 1; i >= 0; i-- {
+		mnt := mounts[i]
+		mounted, _ := isMounted(mnt)
+		if !mounted {
+			continue
+		}
+		log.Printf("Unmounting %s ...", mnt)
+		if err := Unmount(mnt, 0); err != nil {
+			FlushBlockDeviceBuffers(mnt)
+			log.Printf("Unable to umount %s: %v", mnt, err)
+			if entry, mntErr := findMountByTarget(mnt); mntErr == nil {
+				log.Println(entry.String())
+			}
+			log.Printf("For safety, calling umount -l %s", mnt)
+			Unmount(mnt, unix.MNT_DETACH)
+			continue
+		}
+	}
+	DevicesSettle()
+}
+
+// CleanupCryptsetupDevices closes a list of cryptsetup devices.
+func CleanupCryptsetupDevices(devices []string) {
+	DevicesSettle()
+	for _, cd := range devices {
+		cdpath, err := GetLuksRootfsDevicePath(cd)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		if _, err := os.Stat(cdpath); os.IsNotExist(err) {
+			continue
+		}
+
+		log.Printf("Closing LUKS device: %s ...", cd)
+		FlushBlockDeviceBuffers(cdpath)
+		if err := execRun(nil, nil, nil, "cryptsetup", "close", cd); err != nil {
+			log.Printf("Unable to cryptsetup close %s", cdpath)
+			if entries, mntErr := findMountsBySource(cdpath); mntErr == nil {
+				log.Println(formatMountEntries(entries))
+			}
+			continue
+		}
+	}
+	DevicesSettle()
+}
+
+// CleanupLoopDevices detaches a list of loop devices.
+func CleanupLoopDevices(devices []string) {
+	DevicesSettle()
+	for _, ld := range devices {
+		if _, err := os.Stat(ld); os.IsNotExist(err) {
+			continue
+		}
+		l := NewLoopFromDevice(ld)
+		if l.BackingFile() == "" {
+			continue
+		}
+
+		log.Printf("Cleaning loop device %s ...", ld)
+
+		if err := l.Detach(); err != nil {
+			FlushBlockDeviceBuffers(ld)
+			log.Printf("Unable to close loop device %s", ld)
+			if entries, mntErr := findMountsBySource(ld); mntErr == nil {
+				log.Println(formatMountEntries(entries))
+			}
+			continue
+		}
+	}
+	DevicesSettle()
 }
 
 // PathExists returns true if the path exists (file, directory, or other).
@@ -359,11 +487,11 @@ func (m *CommonRootfsMounts) Setup() error {
 		}
 		m.mounting(dst)
 		m.add(dst)
-		if err := sysMount(d, dst, "", unix.MS_BIND, ""); err != nil {
+		if err := Mount(d, dst, "", unix.MS_BIND, ""); err != nil {
 			return fmt.Errorf("failed to bind mount %s: %w", d, err)
 		}
 		m.mounted(dst)
-		if err := sysMount("", dst, "", unix.MS_SLAVE, ""); err != nil {
+		if err := Mount("", dst, "", unix.MS_SLAVE, ""); err != nil {
 			return fmt.Errorf("failed to make slave %s: %w", dst, err)
 		}
 	}
@@ -375,7 +503,7 @@ func (m *CommonRootfsMounts) Setup() error {
 	const devShmFlags = unix.MS_NOSUID | unix.MS_NODEV
 	m.mounting(chrootDevShm)
 	m.add(chrootDevShm)
-	if err := sysMount("devshm", chrootDevShm, "tmpfs", devShmFlags, "mode=1777"); err != nil {
+	if err := Mount("devshm", chrootDevShm, "tmpfs", devShmFlags, "mode=1777"); err != nil {
 		return fmt.Errorf("failed to mount devshm: %w", err)
 	}
 	m.mounted(chrootDevShm)
@@ -386,7 +514,7 @@ func (m *CommonRootfsMounts) Setup() error {
 	}
 	m.mounting(chrootProc)
 	m.add(chrootProc)
-	if err := sysMount("proc", chrootProc, "proc", 0, ""); err != nil {
+	if err := Mount("proc", chrootProc, "proc", 0, ""); err != nil {
 		return fmt.Errorf("failed to mount proc: %w", err)
 	}
 	m.mounted(chrootProc)
@@ -398,7 +526,7 @@ func (m *CommonRootfsMounts) Setup() error {
 	m.mounting(runLock)
 	m.add(runLock)
 	const runLockFlags = unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC | unix.MS_RELATIME
-	if err := sysMount("none", runLock, "tmpfs", runLockFlags, "size=5120k"); err != nil {
+	if err := Mount("none", runLock, "tmpfs", runLockFlags, "size=5120k"); err != nil {
 		return fmt.Errorf("failed to mount run/lock: %w", err)
 	}
 	m.mounted(runLock)
@@ -436,10 +564,10 @@ func BindMount(src, dst string) error {
 	}
 
 	// log.Printf("Binding %s to %s", src, dst)
-	if err := sysMount(src, dst, "", unix.MS_BIND, ""); err != nil {
+	if err := Mount(src, dst, "", unix.MS_BIND, ""); err != nil {
 		return fmt.Errorf("mount bind failed: %w", err)
 	}
-	if err := sysMount("", dst, "", unix.MS_SLAVE, ""); err != nil {
+	if err := Mount("", dst, "", unix.MS_SLAVE, ""); err != nil {
 		return fmt.Errorf("mount make-slave failed: %w", err)
 	}
 	return nil
