@@ -460,3 +460,119 @@ func TestFinalizeFilesystems(t *testing.T) {
 		}
 	})
 }
+
+// --- MaybeEncryptRootfs Tests ---
+
+func TestMaybeEncryptRootfs(t *testing.T) {
+	t.Run("NotEncrypted", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		// Default: encrypted = false.
+		err := im.MaybeEncryptRootfs()
+		if err != nil {
+			t.Fatalf("MaybeEncryptRootfs() error: %v", err)
+		}
+	})
+
+	t.Run("EncryptedNameError", func(t *testing.T) {
+		fsenc := &filesystems.MockFsenc{
+			EncryptionEnabled_:     true,
+			EncryptedRootFsNameErr: errors.New("name error"),
+		}
+		opts := &NewImageOptions{} // non-nil so encrypted gets assigned
+		im, err := NewImage(baseImageConfig(), &ostree.MockOstree{}, fsenc, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		im.rootDevice = "/dev/sda3"
+
+		err = im.MaybeEncryptRootfs()
+		if err == nil {
+			t.Error("expected error from EncryptedRootFsName")
+		}
+	})
+}
+
+// --- EfiBootDir Tests ---
+
+func TestEfiBootDir(t *testing.T) {
+	t.Run("EmptyEfifsMount", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		_, err := im.EfiBootDir()
+		if err == nil {
+			t.Error("should error for empty efifsMount")
+		}
+	})
+
+	t.Run("ConfigError", func(t *testing.T) {
+		ec := &config.ErrConfig{Err: errors.New("cfg error")}
+		im, _ := NewImage(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		im.efifsMount = "/efi"
+		_, err := im.EfiBootDir()
+		if err == nil {
+			t.Error("should error from broken config")
+		}
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im.efifsMount = "/mnt/efi"
+		result, err := im.EfiBootDir()
+		if err != nil {
+			t.Fatalf("EfiBootDir() error: %v", err)
+		}
+		if result != "/mnt/efi/EFI/BOOT" {
+			t.Errorf("EfiBootDir() = %q, want /mnt/efi/EFI/BOOT", result)
+		}
+	})
+}
+
+// --- FormatRootfs Tests ---
+
+func TestFormatRootfsEmpty(t *testing.T) {
+	im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+	// rootDevice empty.
+	if err := im.FormatRootfs(); err == nil {
+		t.Error("should error for empty rootDevice")
+	}
+}
+
+// --- MountEfifs Additional Tests ---
+
+func TestMountEfifsRunnerError(t *testing.T) {
+	mockRunner := runner.NewMockRunnerFailOnCall(0, errors.New("mount error"))
+	im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
+	im.efiDevice = "/dev/loop0p1"
+
+	tmpDir := t.TempDir()
+	err := im.MountEfifs(filepath.Join(tmpDir, "efi"))
+	if err == nil {
+		t.Error("should propagate mount error")
+	}
+}
+
+// --- MountBootfs Additional Tests ---
+
+func TestMountBootfsRunnerError(t *testing.T) {
+	mockRunner := runner.NewMockRunnerFailOnCall(0, errors.New("mount error"))
+	im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
+	im.bootDevice = "/dev/loop0p2"
+
+	tmpDir := t.TempDir()
+	err := im.MountBootfs(filepath.Join(tmpDir, "boot"))
+	if err == nil {
+		t.Error("should propagate mount error")
+	}
+}
+
+// --- MountRootfs Additional Tests ---
+
+func TestMountRootfsRunnerError(t *testing.T) {
+	mockRunner := runner.NewMockRunnerFailOnCall(0, errors.New("mount error"))
+	im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
+	im.rootDevice = "/dev/loop0p3"
+
+	err := im.MountRootfs("/tmp/rootfs")
+	if err == nil {
+		t.Error("should propagate mount error")
+	}
+}
