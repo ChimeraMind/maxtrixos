@@ -101,7 +101,7 @@ func CleanupMounts(opts CleanupMountsOptions) {
 		fmt.Fprintf(opts.Stdout, "Unmounting %s ...\n", mnt)
 		if err := Unmount(mnt, 0); err != nil {
 			FlushBlockDeviceBuffers(mnt)
-			fmt.Fprintf(opts.Stderr, "Unable to umount %s: %v", mnt, err)
+			fmt.Fprintf(opts.Stderr, "Unable to umount %s: %v\n", mnt, err)
 			if entry, mntErr := findMountByTarget(mnt); mntErr == nil {
 				fmt.Fprintf(opts.Stderr, "%s\n", entry.String())
 			}
