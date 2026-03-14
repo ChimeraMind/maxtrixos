@@ -136,10 +136,11 @@ func getMountInfoFromSystem(mnt string) (*mountInfo, error) {
 type JailbreakCommand struct {
 	BaseCommand
 	UI
-	fs                    *flag.FlagSet
-	run                   *jailbreakRunner
-	prompt                *Prompter
-	yoloSkipFullBranchChk bool
+	fs                     *flag.FlagSet
+	run                    *jailbreakRunner
+	prompt                 *Prompter
+	yoloSkipFullBranchChk  bool
+	yoloSkipDestroyConfirm bool
 }
 
 // NewJailbreakCommand creates a new JailbreakCommand.
@@ -177,6 +178,8 @@ func (c *JailbreakCommand) parseArgs(args []string) error {
 	c.fs = flag.NewFlagSet("jailbreak", flag.ContinueOnError)
 	c.fs.BoolVar(&c.yoloSkipFullBranchChk, "yolo-skip-full-branch-check", false,
 		"skip the check that requires being on a -full branch")
+	c.fs.BoolVar(&c.yoloSkipDestroyConfirm, "yolo-skip-destroy-confirmation", false,
+		"skip the DESTROYALL confirmation prompt")
 	c.fs.Usage = func() {
 		fmt.Printf("Usage: vector %s\n", c.Name())
 		c.fs.PrintDefaults()
@@ -305,7 +308,12 @@ func (c *JailbreakCommand) sanityChecks(sysroot, bootRoot, efiRoot, fullSuffix s
 	if err := c.checkMountInfo(sysroot, bootRoot, efiRoot); err != nil {
 		return err
 	}
-	return c.confirmDestroy()
+	if !c.yoloSkipDestroyConfirm {
+		if err := c.confirmDestroy(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // checkSysrootExists verifies that the sysroot path exists.
