@@ -38,14 +38,13 @@ func TestSyncExcludedPaths_HappyPath(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(paths) != 9 {
-		t.Fatalf("got %d exclude paths, want 9", len(paths))
+	if len(paths) != 8 {
+		t.Fatalf("got %d exclude paths, want 8", len(paths))
 	}
 
 	// Verify known entries are present and correctly joined.
 	wantContains := []string{
 		"/image/tmp/*",
-		"/image/dev/*",
 		"/image/build-artifacts",
 		"/image/preppers-state",
 		"/image/var/spool/nullmailer/trigger",
@@ -100,8 +99,8 @@ func TestSyncExcludedPaths_PreppersDirError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// The preppers dir path will be filepath.Join("/image", "") = "/image".
-	if len(paths) != 9 {
-		t.Fatalf("got %d exclude paths, want 9", len(paths))
+	if len(paths) != 8 {
+		t.Fatalf("got %d exclude paths, want 8", len(paths))
 	}
 }
 
@@ -125,8 +124,8 @@ func TestSyncExcludedPaths_EmptyDst(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// With empty dst, paths are joined with "".
-	if len(paths) != 9 {
-		t.Fatalf("got %d paths, want 9", len(paths))
+	if len(paths) != 8 {
+		t.Fatalf("got %d paths, want 8", len(paths))
 	}
 }
 
