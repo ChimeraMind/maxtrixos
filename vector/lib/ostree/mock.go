@@ -100,7 +100,6 @@ func (m *MockOstree) GpgKeys() ([]string, error)                      { return n
 func (m *MockOstree) InitializeSigningGpg() error                     { return nil }
 func (m *MockOstree) InitializeRemoteSigningGpg(string, string) error { return nil }
 func (m *MockOstree) MaybeInitializeGpg() error                       { return nil }
-func (m *MockOstree) MaybeInitializeGpgForRepo(string, string) error  { return nil }
 func (m *MockOstree) MaybeInitializeRemote() error                    { return nil }
 func (m *MockOstree) Pull() error                                     { return nil }
 func (m *MockOstree) PullWithRemote(string) error                     { return nil }
@@ -116,10 +115,10 @@ func (m *MockOstree) ListContents(string, string) (*[]filesystems.PathInfo, erro
 	return nil, nil
 }
 func (m *MockOstree) ListEtcChanges(string, string) ([]EtcChange, error) { return nil, nil }
-func (m *MockOstree) DeployedRootfs() (string, error)              { return "", nil }
+func (m *MockOstree) DeployedRootfs() (string, error)                    { return "", nil }
 func (m *MockOstree) BootedRef() (string, error)                         { return "", nil }
 func (m *MockOstree) BootedHash() (string, error)                        { return "", nil }
-func (m *MockOstree) Deploy(string, []string) error              { return nil }
+func (m *MockOstree) Deploy(string, []string) error                      { return nil }
 func (m *MockOstree) ConfigDiff() (map[string][]string, error)           { return nil, nil }
 
 // Methods with configurable behavior for tests.
