@@ -274,7 +274,7 @@ Run the build script as root. It handles the entire pipeline.
 - **Resume**: `./dev/build.sh --resume`
 - **Force specific steps**: `--force-release`, `--force-images`, `--only-images`
 - **Enter a chroot**: `./vector/vector dev enter <name>-<date>`
-- **Clean artifacts**: `./vector/vector janitor && ./dev/clean_old_builds.sh`
+- **Clean artifacts**: `./vector/vector dev janitor`
 
 **Resource Requirements**: x86-64-v3 CPU, 32GB+ RAM, ~70GB Disk.
 
