@@ -51,6 +51,7 @@ type NewReleaserOptions struct {
 	ChrootDir string // source chroot directory
 	ImageDir  string // destination image directory
 	Ref       string // ostree ref (branch) to operate on
+	Verbose   bool   // show detailed output
 }
 
 // IRelease defines the interface for release operations.
@@ -92,7 +93,7 @@ type IRelease interface {
 
 	// Pre-release operations
 	CheckMatrixOS() error
-	SyncFilesystem(verbose bool) error
+	SyncFilesystem() error
 	PreCleanQAChecks() error
 	CleanRootfs() error
 	SetupHostname() error
@@ -109,11 +110,11 @@ type IRelease interface {
 	RemoveExtraDotDotFromUsrEtcPortage() error
 
 	// Core commit operation
-	Release(opts CommitOptions, verbose bool) error
+	Release(opts CommitOptions) error
 
 	// Detection
-	DetectLocalReleases(skip, only RefFilterFunc, verbose bool) ([]string, error)
-	DetectRemoteReleases(skip, only RefFilterFunc, verbose bool) ([]string, error)
+	DetectLocalReleases(skip, only RefFilterFunc) ([]string, error)
+	DetectRemoteReleases(skip, only RefFilterFunc) ([]string, error)
 
 	// Locking
 	ReleaseLockDir() (string, error)
@@ -135,6 +136,7 @@ type Releaser struct {
 	chrootDir string // source chroot directory
 	imageDir  string // destination image directory
 	ref       string // ostree ref (branch) to operate on
+	verbose   bool   // show detailed output
 
 	// QA validation instance.
 	qa *validation.QA
@@ -184,6 +186,7 @@ func NewReleaser(cfg config.IConfig, ot ostree.IOstree, opts *NewReleaserOptions
 		chrootDir: opts.ChrootDir,
 		imageDir:  opts.ImageDir,
 		ref:       opts.Ref,
+		verbose:   opts.Verbose,
 	}, nil
 }
 

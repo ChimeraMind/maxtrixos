@@ -70,7 +70,7 @@ func TestDetectLocalReleases_Success(t *testing.T) {
 	r := newTestReleaser()
 	r.ostree.(*ostree.MockOstree).LocalRefs_ = []string{"ref/a", "ref/b", "ref/c"}
 
-	got, err := r.DetectLocalReleases(nil, nil, false)
+	got, err := r.DetectLocalReleases(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestDetectLocalReleases_WithSkip(t *testing.T) {
 	r.ostree.(*ostree.MockOstree).LocalRefs_ = []string{"ref/a", "ref/b"}
 
 	skip := func(ref string) bool { return ref == "ref/a" }
-	got, err := r.DetectLocalReleases(skip, nil, false)
+	got, err := r.DetectLocalReleases(skip, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestDetectLocalReleases_Error(t *testing.T) {
 	r := newTestReleaser()
 	r.ostree.(*ostree.MockOstree).LocalRefsErr = errors.New("boom")
 
-	_, err := r.DetectLocalReleases(nil, nil, false)
+	_, err := r.DetectLocalReleases(nil, nil)
 	if err == nil || err.Error() != "boom" {
 		t.Fatalf("expected 'boom' error, got %v", err)
 	}
@@ -107,7 +107,7 @@ func TestDetectRemoteReleases_Success(t *testing.T) {
 	r := newTestReleaser()
 	r.ostree.(*ostree.MockOstree).Refs = []string{"remote/a", "remote/b"}
 
-	got, err := r.DetectRemoteReleases(nil, nil, false)
+	got, err := r.DetectRemoteReleases(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestDetectRemoteReleases_WithOnly(t *testing.T) {
 	r.ostree.(*ostree.MockOstree).Refs = []string{"remote/a", "remote/b"}
 
 	only := func(ref string) bool { return ref == "remote/b" }
-	got, err := r.DetectRemoteReleases(nil, only, false)
+	got, err := r.DetectRemoteReleases(nil, only)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestDetectRemoteReleases_Error(t *testing.T) {
 	r := newTestReleaser()
 	r.ostree.(*ostree.MockOstree).RefsErr = errors.New("network fail")
 
-	_, err := r.DetectRemoteReleases(nil, nil, false)
+	_, err := r.DetectRemoteReleases(nil, nil)
 	if err == nil || err.Error() != "network fail" {
 		t.Fatalf("expected 'network fail' error, got %v", err)
 	}

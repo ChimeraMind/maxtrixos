@@ -25,8 +25,6 @@ type MockReleaser struct {
 	HostnameErr                  error
 	HooksDir_                    string
 	HooksDirErr                  error
-	DevDir_                      string
-	DevDirErr                    error
 	UseCpReflink_                bool
 	UseCpReflinkErr              error
 	ReadOnlyVdb_                 string
@@ -68,16 +66,18 @@ type MockReleaser struct {
 	ReleaseErr                            error
 	SetImageDirErr                        error
 
+	// Detection
+	DetectLocalReleases_    []string
+	DetectLocalReleasesErr  error
+	DetectRemoteReleases_   []string
+	DetectRemoteReleasesErr error
+
 	// Locking
 	ReleaseLockDir_           string
 	ReleaseLockDirErr         error
 	ReleaseLockPath_          string
 	ReleaseLockPathErr        error
 	ExecuteWithReleaseLockErr error
-
-	// Build
-	BuildErr    error
-	BuildCalled bool
 
 	// Track calls
 	CheckMatrixOSCalled                      bool
@@ -144,7 +144,6 @@ func (m *MockReleaser) Ref() string       { return m.Ref_ }
 
 func (m *MockReleaser) Hostname() (string, error)    { return m.Hostname_, m.HostnameErr }
 func (m *MockReleaser) HooksDir() (string, error)    { return m.HooksDir_, m.HooksDirErr }
-func (m *MockReleaser) DevDir() (string, error)      { return m.DevDir_, m.DevDirErr }
 func (m *MockReleaser) UseCpReflink() (bool, error)  { return m.UseCpReflink_, m.UseCpReflinkErr }
 func (m *MockReleaser) ReadOnlyVdb() (string, error) { return m.ReadOnlyVdb_, m.ReadOnlyVdbErr }
 func (m *MockReleaser) LockDir() (string, error)     { return m.LockDir_, m.LockDirErr }
@@ -229,24 +228,26 @@ func (m *MockReleaser) RemoveExtraDotDotFromUsrEtcPortage() error {
 	return m.RemoveExtraDotDotFromUsrEtcPortageErr
 }
 
-func (m *MockReleaser) Build() error {
-	m.BuildCalled = true
-	return m.BuildErr
-}
-
 func (m *MockReleaser) Release(opts CommitOptions) error {
 	m.ReleaseCalled = true
 	m.ReleaseOpts = append(m.ReleaseOpts, opts)
 	return m.ReleaseErr
 }
 
+func (m *MockReleaser) DetectLocalReleases(skip, only RefFilterFunc) ([]string, error) {
+	return m.DetectLocalReleases_, m.DetectLocalReleasesErr
+}
+func (m *MockReleaser) DetectRemoteReleases(skip, only RefFilterFunc) ([]string, error) {
+	return m.DetectRemoteReleases_, m.DetectRemoteReleasesErr
+}
+
 func (m *MockReleaser) ReleaseLockDir() (string, error) {
 	return m.ReleaseLockDir_, m.ReleaseLockDirErr
 }
-func (m *MockReleaser) ReleaseLockPath() (string, error) {
+func (m *MockReleaser) ReleaseLockPath(name string) (string, error) {
 	return m.ReleaseLockPath_, m.ReleaseLockPathErr
 }
-func (m *MockReleaser) ExecuteWithReleaseLock(fn func() error) error {
+func (m *MockReleaser) ExecuteWithReleaseLock(name string, fn func() error) error {
 	if m.ExecuteWithReleaseLockErr != nil {
 		return m.ExecuteWithReleaseLockErr
 	}
