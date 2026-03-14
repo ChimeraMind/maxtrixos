@@ -966,6 +966,34 @@ func setupMockSysClassBlock(t *testing.T) string {
 	return tmpDir
 }
 
+// setupMockDevDiskByLabel creates a temp directory simulating /dev/disk/by-label/
+// and redirects devDiskByLabelPath to it. Returns the temp dir.
+func setupMockDevDiskByLabel(t *testing.T) string {
+	t.Helper()
+	tmpDir := filepath.Join(t.TempDir(), "by-label")
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	orig := devDiskByLabelPath
+	devDiskByLabelPath = tmpDir
+	t.Cleanup(func() { devDiskByLabelPath = orig })
+	return tmpDir
+}
+
+// setupMockDevDiskByPartType creates a temp directory simulating /dev/disk/by-parttypeuuid/
+// and redirects devDiskByPartTypePath to it. Returns the temp dir.
+func setupMockDevDiskByPartType(t *testing.T) string {
+	t.Helper()
+	tmpDir := filepath.Join(t.TempDir(), "by-parttypeuuid")
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	orig := devDiskByPartTypePath
+	devDiskByPartTypePath = tmpDir
+	t.Cleanup(func() { devDiskByPartTypePath = orig })
+	return tmpDir
+}
+
 // createSysfsPartition creates a fake sysfs partition directory inside the
 // parent device directory with the given partition number.
 func createSysfsPartition(t *testing.T, sysClassBlock, parentName, partName string, partNum int) {
@@ -1270,11 +1298,20 @@ func TestPartitionNumber(t *testing.T) {
 
 func TestPartitionLabel(t *testing.T) {
 	t.Run("HasLabel", func(t *testing.T) {
-		setupMockBlkid(t, map[string]string{
-			"/dev/sda1:LABEL": "MY_LABEL",
-		})
+		labelDir := setupMockDevDiskByLabel(t)
 
-		result, err := PartitionLabel("/dev/sda1")
+		// Create a device file to resolve against.
+		devFile := filepath.Join(t.TempDir(), "sda1")
+		if err := os.WriteFile(devFile, nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create a symlink: by-label/MY_LABEL -> devFile
+		if err := os.Symlink(devFile, filepath.Join(labelDir, "MY_LABEL")); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := PartitionLabel(devFile)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1284,10 +1321,15 @@ func TestPartitionLabel(t *testing.T) {
 	})
 
 	t.Run("NoLabel", func(t *testing.T) {
-		setupMockBlkidFail(t)
+		setupMockDevDiskByLabel(t)
 
-		// No label found is not an error for PartitionLabel.
-		result, err := PartitionLabel("/dev/sdb1")
+		devFile := filepath.Join(t.TempDir(), "sdb1")
+		if err := os.WriteFile(devFile, nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// No symlink created, so no label found.
+		result, err := PartitionLabel(devFile)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1306,12 +1348,19 @@ func TestPartitionLabel(t *testing.T) {
 
 func TestPartitionType(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		typeGUID := "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
-		setupMockBlkid(t, map[string]string{
-			"/dev/sda1:PARTTYPE": typeGUID,
-		})
+		partTypeDir := setupMockDevDiskByPartType(t)
 
-		result, err := PartitionType("/dev/sda1")
+		devFile := filepath.Join(t.TempDir(), "sda1")
+		if err := os.WriteFile(devFile, nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		typeGUID := "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
+		if err := os.Symlink(devFile, filepath.Join(partTypeDir, typeGUID)); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := PartitionType(devFile)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1322,9 +1371,14 @@ func TestPartitionType(t *testing.T) {
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		setupMockBlkidFail(t)
+		setupMockDevDiskByPartType(t)
 
-		_, err := PartitionType("/dev/sdb1")
+		devFile := filepath.Join(t.TempDir(), "sdb1")
+		if err := os.WriteFile(devFile, nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := PartitionType(devFile)
 		if err == nil {
 			t.Error("expected error when partition type not found")
 		}
