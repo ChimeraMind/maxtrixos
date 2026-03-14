@@ -868,6 +868,12 @@ func TestIniConfig_Clone_Empty(t *testing.T) {
 	if cloneConcrete.sp.fileName != "a.conf" || cloneConcrete.sp.dirPath != "/d" || cloneConcrete.sp.defaultRoot != "/r" {
 		t.Errorf("Clone searchPath mismatch: got %+v", cloneConcrete.sp)
 	}
+	if len(cloneConcrete.cfg) != 0 {
+		t.Errorf("Clone cfg should be empty, got %v", cloneConcrete.cfg)
+	}
+	if cloneConcrete.sp.fileName != "a.conf" || cloneConcrete.sp.dirPath != "/d" || cloneConcrete.sp.defaultRoot != "/r" {
+		t.Errorf("Clone searchPath mismatch: got %+v", cloneConcrete.sp)
+	}
 	if cloneConcrete.sp.confRoot != "/c" {
 		t.Errorf("Clone confRoot mismatch: expected /c, got %q", cloneConcrete.sp.confRoot)
 	}
