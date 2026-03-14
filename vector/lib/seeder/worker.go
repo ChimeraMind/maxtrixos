@@ -277,27 +277,6 @@ func (s *Seeder) SetupChrootMounts(chrootDir string) error {
 		return fmt.Errorf("error mounting RO private repo: %w", err)
 	}
 
-	if filesystems.DirectoryExists("/root/.ssh") {
-		sshDst := filepath.Join(chrootDir, "root", ".ssh")
-		sshBind, err := filesystems.NewBindMount(
-			filesystems.BindMountOptions{
-				Src:      "/root/.ssh",
-				Dst:      sshDst,
-				ReadOnly: true,
-				MkdirAll: true,
-				Stdout:   s.stdout,
-				Stderr:   s.stderr,
-			},
-		)
-		if err != nil {
-			return fmt.Errorf("error creating RO mount for .ssh: %w", err)
-		}
-		s.trackMount(sshBind.Dst())
-		if err := sshBind.Mount(); err != nil {
-			return fmt.Errorf("error mounting RO .ssh: %w", err)
-		}
-	}
-
 	distDir, err := s.ensureDir(s.DistfilesDir)
 	if err != nil {
 		return fmt.Errorf("error getting distfiles dir: %w", err)
