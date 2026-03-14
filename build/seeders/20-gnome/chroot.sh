@@ -95,7 +95,9 @@ gnome.tweak_resolved() {
 }
 
 main() {
+    cd /
 
+    trap chroots_lib.cleanup EXIT
     chroots_lib.maybe_mount_common_filesystems
 
     local phases=(
