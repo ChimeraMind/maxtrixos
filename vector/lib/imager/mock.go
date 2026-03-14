@@ -1,6 +1,11 @@
 package imager
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+)
 
 // MockImage implements IImage for testing.
 // Only the fields/methods relevant to each test need to be configured;
@@ -84,6 +89,34 @@ type MockImage struct {
 	// ExecuteWithImageLock support
 	ExecuteWithImageLockCalled bool
 	ExecuteWithImageLockErr    error
+
+	// I/O writers for Print methods
+	stdout io.Writer
+	stderr io.Writer
+}
+
+func (m *MockImage) SetStdout(w io.Writer) { m.stdout = w }
+func (m *MockImage) SetStderr(w io.Writer) { m.stderr = w }
+func (m *MockImage) Stdout() io.Writer {
+	if m.stdout == nil {
+		return os.Stdout
+	}
+	return m.stdout
+}
+func (m *MockImage) Stderr() io.Writer {
+	if m.stderr == nil {
+		return os.Stderr
+	}
+	return m.stderr
+}
+func (m *MockImage) Print(format string, a ...any) {
+	fmt.Fprintf(m.Stdout(), format, a...)
+}
+func (m *MockImage) PrintWarning(format string, a ...any) {
+	fmt.Fprintf(m.Stderr(), format, a...)
+}
+func (m *MockImage) PrintError(format string, a ...any) {
+	fmt.Fprintf(m.Stderr(), format, a...)
 }
 
 func (m *MockImage) SetEfiDevice(device string)      { m.EfiDevice_ = device }
