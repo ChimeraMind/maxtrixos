@@ -1313,7 +1313,7 @@ func TestInstallBootloader(t *testing.T) {
 		im.devicePath = "/dev/sda"
 		im.efifsMount = "/mnt/efi"
 		im.bootfsMount = "/mnt/boot"
-		_, err := im.InstallBootloader("/mnt/efi/EFI/BOOT")
+		_, err := im.InstallBootloader()
 		if err == nil {
 			t.Fatal("expected error for empty ostreeDeployRootfs")
 		}
@@ -1327,7 +1327,7 @@ func TestInstallBootloader(t *testing.T) {
 		im.devicePath = "/dev/sda"
 		im.SetRootfs("/rootfs")
 		im.bootfsMount = "/mnt/boot"
-		_, err := im.InstallBootloader("/mnt/efi/EFI/BOOT")
+		_, err := im.InstallBootloader()
 		if err == nil {
 			t.Fatal("expected error for empty efifsMount")
 		}
@@ -1341,7 +1341,7 @@ func TestInstallBootloader(t *testing.T) {
 		im.devicePath = "/dev/sda"
 		im.SetRootfs("/rootfs")
 		im.efifsMount = "/mnt/efi"
-		_, err := im.InstallBootloader("/mnt/efi/EFI/BOOT")
+		_, err := im.InstallBootloader()
 		if err == nil {
 			t.Fatal("expected error for empty bootfsMount")
 		}
@@ -1355,26 +1355,11 @@ func TestInstallBootloader(t *testing.T) {
 		im.SetRootfs("/rootfs")
 		im.efifsMount = "/mnt/efi"
 		im.bootfsMount = "/mnt/boot"
-		_, err := im.InstallBootloader("/mnt/efi/EFI/BOOT")
+		_, err := im.InstallBootloader()
 		if err == nil {
 			t.Fatal("expected error for empty devicePath")
 		}
 		if !strings.Contains(err.Error(), "devicePath") {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("EmptyEfibootDir", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
-		im.devicePath = "/dev/sda"
-		im.SetRootfs("/rootfs")
-		im.efifsMount = "/mnt/efi"
-		im.bootfsMount = "/mnt/boot"
-		_, err := im.InstallBootloader("")
-		if err == nil {
-			t.Fatal("expected error for empty efibootDir")
-		}
-		if !strings.Contains(err.Error(), "efibootDir") {
 			t.Errorf("unexpected error: %v", err)
 		}
 	})
@@ -1388,7 +1373,7 @@ func TestInstallBootloader(t *testing.T) {
 		im.SetRootfs("/rootfs")
 		im.efifsMount = "/mnt/efi"
 		im.bootfsMount = "/mnt/boot"
-		_, err := im.InstallBootloader("/efi/EFI/BOOT")
+		_, err := im.InstallBootloader()
 		if err == nil {
 			t.Fatal("expected error for missing EfiRoot config")
 		}
@@ -1401,7 +1386,7 @@ func TestInstallBootloader(t *testing.T) {
 		im2.SetRootfs("/rootfs")
 		im2.efifsMount = "/mnt/efi"
 		im2.bootfsMount = "/mnt/boot"
-		_, err = im2.InstallBootloader("/efi/EFI/BOOT")
+		_, err = im2.InstallBootloader()
 		if err == nil {
 			t.Fatal("expected error for missing BootRoot config")
 		}
@@ -1414,7 +1399,7 @@ func TestInstallBootloader(t *testing.T) {
 		im3.SetRootfs("/rootfs")
 		im3.efifsMount = "/mnt/efi"
 		im3.bootfsMount = "/mnt/boot"
-		_, err = im3.InstallBootloader("/efi/EFI/BOOT")
+		_, err = im3.InstallBootloader()
 		if err == nil {
 			t.Fatal("expected error for missing OsName config")
 		}
@@ -1427,7 +1412,7 @@ func TestInstallBootloader(t *testing.T) {
 		im4.SetRootfs("/rootfs")
 		im4.efifsMount = "/mnt/efi"
 		im4.bootfsMount = "/mnt/boot"
-		_, err = im4.InstallBootloader("/efi/EFI/BOOT")
+		_, err = im4.InstallBootloader()
 		if err == nil {
 			t.Fatal("expected error for missing EfiExecutable config")
 		}
@@ -1637,7 +1622,8 @@ func TestSetupBootloaderConfig(t *testing.T) {
 		im.SetRootfs("/rootfs")
 		im.rootfsMount = "/sysroot"
 		im.bootfsMount = "/boot"
-		err := im.SetupBootloaderConfig("", "/efiboot")
+		im.efifsMount = "/efi"
+		err := im.SetupBootloaderConfig("")
 		if err == nil {
 			t.Error("should error for empty ref")
 		}
@@ -1649,7 +1635,8 @@ func TestSetupBootloaderConfig(t *testing.T) {
 		im.SetRootfs("/rootfs")
 		im.rootfsMount = "/sysroot"
 		im.bootfsMount = "/boot"
-		err := im.SetupBootloaderConfig("ref", "/efiboot")
+		im.efifsMount = "/efi"
+		err := im.SetupBootloaderConfig("ref")
 		if err == nil {
 			t.Error("should propagate ostree error")
 		}
@@ -1659,28 +1646,31 @@ func TestSetupBootloaderConfig(t *testing.T) {
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 		im.rootfsMount = "/sysroot"
 		im.bootfsMount = "/boot"
-		if err := im.SetupBootloaderConfig("ref", "/efi"); err == nil {
+		im.efifsMount = "/efi"
+		if err := im.SetupBootloaderConfig("ref"); err == nil {
 			t.Error("should error for empty rootfs")
 		}
 		im.SetRootfs("/rootfs")
 		im.rootfsMount = ""
-		if err := im.SetupBootloaderConfig("ref", "/efi"); err == nil {
+		if err := im.SetupBootloaderConfig("ref"); err == nil {
 			t.Error("should error for empty rootfsMount")
 		}
 		im.rootfsMount = "/sys"
 		im.bootfsMount = ""
-		if err := im.SetupBootloaderConfig("ref", "/efi"); err == nil {
+		if err := im.SetupBootloaderConfig("ref"); err == nil {
 			t.Error("should error for empty bootfsMount")
 		}
 		im.bootfsMount = "/boot"
-		if err := im.SetupBootloaderConfig("ref", ""); err == nil {
-			t.Error("should error for empty efibootdir")
+		im.efifsMount = ""
+		if err := im.SetupBootloaderConfig("ref"); err == nil {
+			t.Error("should error for empty efifsMount")
 		}
-		if err := im.SetupBootloaderConfig("ref", "/efi"); err == nil {
+		im.efifsMount = "/efi"
+		if err := im.SetupBootloaderConfig("ref"); err == nil {
 			t.Error("should error for empty efiDevice")
 		}
 		im.efiDevice = "/dev/sda1"
-		if err := im.SetupBootloaderConfig("ref", "/efi"); err == nil {
+		if err := im.SetupBootloaderConfig("ref"); err == nil {
 			t.Error("should error for empty bootDevice")
 		}
 	})
@@ -1744,16 +1734,12 @@ func TestSetupVmtestConfig(t *testing.T) {
 func TestInstallSecurebootCerts(t *testing.T) {
 	t.Run("EmptyParams", func(t *testing.T) {
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
-		if err := im.InstallSecurebootCerts("/efiboot"); err == nil {
+		if err := im.InstallSecurebootCerts(); err == nil {
 			t.Error("should error for empty rootfs")
 		}
 		im.SetRootfs("/rootfs")
-		if err := im.InstallSecurebootCerts("/efiboot"); err == nil {
+		if err := im.InstallSecurebootCerts(); err == nil {
 			t.Error("should error for empty efifsMount")
-		}
-		im.efifsMount = "/efi"
-		if err := im.InstallSecurebootCerts(""); err == nil {
-			t.Error("should error for empty efibootdir")
 		}
 	})
 
@@ -1762,7 +1748,7 @@ func TestInstallSecurebootCerts(t *testing.T) {
 		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
 		im.SetRootfs("/rootfs")
 		im.efifsMount = "/efi"
-		err := im.InstallSecurebootCerts("/efiboot")
+		err := im.InstallSecurebootCerts()
 		if err == nil {
 			t.Error("should error from broken config")
 		}
@@ -1774,12 +1760,8 @@ func TestInstallSecurebootCerts(t *testing.T) {
 func TestInstallMemtest(t *testing.T) {
 	t.Run("EmptyParams", func(t *testing.T) {
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
-		if err := im.InstallMemtest("/efiboot"); err == nil {
+		if err := im.InstallMemtest(); err == nil {
 			t.Error("should error for empty rootfs")
-		}
-		im.SetRootfs("/rootfs")
-		if err := im.InstallMemtest(""); err == nil {
-			t.Error("should error for empty efibootdir")
 		}
 	})
 
@@ -1787,7 +1769,9 @@ func TestInstallMemtest(t *testing.T) {
 		tmpDir := t.TempDir()
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 		im.SetRootfs(tmpDir)
-		err := im.InstallMemtest(filepath.Join(tmpDir, "efiboot"))
+		im.efifsMount = filepath.Join(tmpDir, "efimount")
+		os.MkdirAll(filepath.Join(im.efifsMount, "EFI/BOOT"), 0755)
+		err := im.InstallMemtest()
 		if err != nil {
 			t.Fatalf("should not error when memtest not found: %v", err)
 		}
@@ -1798,12 +1782,14 @@ func TestInstallMemtest(t *testing.T) {
 		memtestDir := filepath.Join(tmpDir, "usr", "share", "memtest86+")
 		os.MkdirAll(memtestDir, 0755)
 		os.WriteFile(filepath.Join(memtestDir, "memtest.efi64"), []byte("EFI"), 0644)
-		efibootdir := filepath.Join(tmpDir, "efiboot")
+		efiMount := filepath.Join(tmpDir, "efimount")
+		efibootdir := filepath.Join(efiMount, "EFI/BOOT")
 		os.MkdirAll(efibootdir, 0755)
 
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 		im.SetRootfs(tmpDir)
-		err := im.InstallMemtest(efibootdir)
+		im.efifsMount = efiMount
+		err := im.InstallMemtest()
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
