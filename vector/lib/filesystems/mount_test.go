@@ -345,7 +345,7 @@ func TestNewCommonRootfsMounts_SkipIfMounted(t *testing.T) {
 		}
 
 		if len(skippingCalls) != 1 {
-			t.Errorf("Expected 1 skipping call, got %d", len(skippingCalls))
+			t.Errorf("Expected 1 skipping call, got %d: %v", len(skippingCalls), skippingCalls)
 		}
 		if skippingCalls[0] != preMountedDev {
 			t.Errorf("Expected to skip %s, but skipped %s", preMountedDev, skippingCalls[0])
@@ -355,6 +355,209 @@ func TestNewCommonRootfsMounts_SkipIfMounted(t *testing.T) {
 			if mnt == preMountedDev {
 				t.Errorf("Should not have tried to mount %s", preMountedDev)
 			}
+		}
+	})
+
+	t.Run("Skips dev/shm if already mounted", func(t *testing.T) {
+		setupMockExec(t)
+		setupMockSyscalls(t)
+
+		tmpDir := t.TempDir()
+		preMountedDevShm := filepath.Join(tmpDir, "dev", "shm")
+		if err := os.MkdirAll(preMountedDevShm, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: preMountedDevShm},
+		})
+
+		var mountingCalls, skippingCalls []string
+		mounter, err := NewCommonRootfsMounts(
+			CommonRootfsMountsOptions{
+				MountPoint:    tmpDir,
+				SkipIfMounted: true,
+				Mounting: func(tg string) {
+					mountingCalls = append(mountingCalls, tg)
+				},
+				Skipping: func(tg string) {
+					skippingCalls = append(skippingCalls, tg)
+				},
+			},
+		)
+		if err != nil {
+			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+		}
+		defer mounter.Cleanup()
+
+		if err := mounter.Setup(); err != nil {
+			t.Errorf("Setup failed: %v", err)
+		}
+
+		if len(skippingCalls) != 1 {
+			t.Errorf("Expected 1 skipping call for dev/shm, got %d: %v", len(skippingCalls), skippingCalls)
+		}
+		if len(skippingCalls) > 0 && skippingCalls[0] != preMountedDevShm {
+			t.Errorf("Expected to skip %s, but skipped %s", preMountedDevShm, skippingCalls[0])
+		}
+		for _, mnt := range mountingCalls {
+			if mnt == preMountedDevShm {
+				t.Errorf("Should not have tried to mount %s", preMountedDevShm)
+			}
+		}
+	})
+
+	t.Run("Skips proc if already mounted", func(t *testing.T) {
+		setupMockExec(t)
+		setupMockSyscalls(t)
+
+		tmpDir := t.TempDir()
+		preMountedProc := filepath.Join(tmpDir, "proc")
+		if err := os.MkdirAll(preMountedProc, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: preMountedProc},
+		})
+
+		var mountingCalls, skippingCalls []string
+		mounter, err := NewCommonRootfsMounts(
+			CommonRootfsMountsOptions{
+				MountPoint:    tmpDir,
+				MountProc:     true,
+				SkipIfMounted: true,
+				Mounting: func(tg string) {
+					mountingCalls = append(mountingCalls, tg)
+				},
+				Skipping: func(tg string) {
+					skippingCalls = append(skippingCalls, tg)
+				},
+			},
+		)
+		if err != nil {
+			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+		}
+		defer mounter.Cleanup()
+
+		if err := mounter.Setup(); err != nil {
+			t.Errorf("Setup failed: %v", err)
+		}
+
+		if len(skippingCalls) != 1 {
+			t.Errorf("Expected 1 skipping call for proc, got %d: %v", len(skippingCalls), skippingCalls)
+		}
+		if len(skippingCalls) > 0 && skippingCalls[0] != preMountedProc {
+			t.Errorf("Expected to skip %s, but skipped %s", preMountedProc, skippingCalls[0])
+		}
+		for _, mnt := range mountingCalls {
+			if mnt == preMountedProc {
+				t.Errorf("Should not have tried to mount %s", preMountedProc)
+			}
+		}
+	})
+
+	t.Run("Skips run/lock if already mounted", func(t *testing.T) {
+		setupMockExec(t)
+		setupMockSyscalls(t)
+
+		tmpDir := t.TempDir()
+		preMountedRunLock := filepath.Join(tmpDir, "run", "lock")
+		if err := os.MkdirAll(preMountedRunLock, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: preMountedRunLock},
+		})
+
+		var mountingCalls, skippingCalls []string
+		mounter, err := NewCommonRootfsMounts(
+			CommonRootfsMountsOptions{
+				MountPoint:    tmpDir,
+				SkipIfMounted: true,
+				Mounting: func(tg string) {
+					mountingCalls = append(mountingCalls, tg)
+				},
+				Skipping: func(tg string) {
+					skippingCalls = append(skippingCalls, tg)
+				},
+			},
+		)
+		if err != nil {
+			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+		}
+		defer mounter.Cleanup()
+
+		if err := mounter.Setup(); err != nil {
+			t.Errorf("Setup failed: %v", err)
+		}
+
+		if len(skippingCalls) != 1 {
+			t.Errorf("Expected 1 skipping call for run/lock, got %d: %v", len(skippingCalls), skippingCalls)
+		}
+		if len(skippingCalls) > 0 && skippingCalls[0] != preMountedRunLock {
+			t.Errorf("Expected to skip %s, but skipped %s", preMountedRunLock, skippingCalls[0])
+		}
+		for _, mnt := range mountingCalls {
+			if mnt == preMountedRunLock {
+				t.Errorf("Should not have tried to mount %s", preMountedRunLock)
+			}
+		}
+	})
+
+	t.Run("Skips all mounts if everything pre-mounted", func(t *testing.T) {
+		setupMockExec(t)
+		setupMockSyscalls(t)
+
+		tmpDir := t.TempDir()
+		allMounts := []string{
+			filepath.Join(tmpDir, "dev"),
+			filepath.Join(tmpDir, "dev", "pts"),
+			filepath.Join(tmpDir, "sys"),
+			filepath.Join(tmpDir, "dev", "shm"),
+			filepath.Join(tmpDir, "proc"),
+			filepath.Join(tmpDir, "run", "lock"),
+		}
+		var entries []*MountInfoEntry
+		for _, m := range allMounts {
+			if err := os.MkdirAll(m, 0755); err != nil {
+				t.Fatal(err)
+			}
+			entries = append(entries, &MountInfoEntry{Mountpoint: m})
+		}
+		setupMockMountInfo(t, entries)
+
+		var mountingCalls, skippingCalls []string
+		mounter, err := NewCommonRootfsMounts(
+			CommonRootfsMountsOptions{
+				MountPoint:    tmpDir,
+				MountProc:     true,
+				SkipIfMounted: true,
+				Mounting: func(tg string) {
+					mountingCalls = append(mountingCalls, tg)
+				},
+				Skipping: func(tg string) {
+					skippingCalls = append(skippingCalls, tg)
+				},
+			},
+		)
+		if err != nil {
+			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+		}
+		defer mounter.Cleanup()
+
+		if err := mounter.Setup(); err != nil {
+			t.Errorf("Setup failed: %v", err)
+		}
+
+		if len(mountingCalls) != 0 {
+			t.Errorf("Expected 0 mounting calls when all pre-mounted, got %d: %v",
+				len(mountingCalls), mountingCalls)
+		}
+		if len(skippingCalls) != 6 {
+			t.Errorf("Expected 6 skipping calls, got %d: %v",
+				len(skippingCalls), skippingCalls)
 		}
 	})
 

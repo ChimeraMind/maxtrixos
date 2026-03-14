@@ -294,6 +294,104 @@ func (m *CommonRootfsMounts) add(mnt string) {
 	m.mounts = append(m.mounts, mnt)
 }
 
+// maybeMountDevShm checks if /dev/shm is already mounted inside the
+// chroot.
+func (m *CommonRootfsMounts) maybeMountDevShm() error {
+	chrootDevShm := filepath.Join(m.mountPoint, "dev", "shm")
+	devShmMounted, err := isMounted(chrootDevShm)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to check if %s is mounted: %w",
+			chrootDevShm,
+			err,
+		)
+	}
+
+	if m.skipIfMounted && devShmMounted {
+		m.skipping(chrootDevShm)
+		return nil
+	}
+
+	if err := os.MkdirAll(chrootDevShm, 0755); err != nil {
+		return err
+	}
+
+	const devShmFlags = unix.MS_NOSUID | unix.MS_NODEV
+	m.mounting(chrootDevShm)
+	m.add(chrootDevShm)
+
+	err = Mount("devshm", chrootDevShm, "tmpfs", devShmFlags, "mode=1777")
+	if err != nil {
+		return fmt.Errorf("failed to mount devshm: %w", err)
+	}
+
+	m.mounted(chrootDevShm)
+	return nil
+}
+
+// maybeMountProc tries to mount /proc inside the chroot if required.
+func (m *CommonRootfsMounts) maybeMountProc() error {
+	if !m.mountProc {
+		return nil
+	}
+
+	chrootProc := filepath.Join(m.mountPoint, "proc")
+	procMounted, err := isMounted(chrootProc)
+	if err != nil {
+		return fmt.Errorf("failed to check if %s is mounted: %w",
+			chrootProc, err,
+		)
+	}
+
+	if m.skipIfMounted && procMounted {
+		m.skipping(chrootProc)
+		return nil
+	}
+
+	if err := os.MkdirAll(chrootProc, 0755); err != nil {
+		return err
+	}
+
+	m.mounting(chrootProc)
+	m.add(chrootProc)
+	if err := Mount("proc", chrootProc, "proc", 0, ""); err != nil {
+		return fmt.Errorf("failed to mount proc: %w", err)
+	}
+
+	m.mounted(chrootProc)
+	return nil
+}
+
+// maybeMountRunLock tries to mount a tmpfs on /run/lock inside the chroot.
+func (m *CommonRootfsMounts) maybeMountRunLock() error {
+	runLock := filepath.Join(m.mountPoint, "run", "lock")
+
+	runLockMounted, err := isMounted(runLock)
+	if err != nil {
+		return fmt.Errorf("failed to check if %s is mounted: %w",
+			runLock, err,
+		)
+	}
+
+	if m.skipIfMounted && runLockMounted {
+		m.skipping(runLock)
+		return nil
+	}
+
+	if err := os.MkdirAll(runLock, 0755); err != nil {
+		return err
+	}
+	m.mounting(runLock)
+	m.add(runLock)
+
+	const runLockFlags = unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC | unix.MS_RELATIME
+	if err := Mount("none", runLock, "tmpfs", runLockFlags, "size=5120k"); err != nil {
+		return fmt.Errorf("failed to mount run/lock: %w", err)
+	}
+	m.mounted(runLock)
+	return nil
+}
+
 // Setup sets up the common rootfs mounts.
 func (m *CommonRootfsMounts) Setup() error {
 	if _, err := os.Stat(m.mountPoint); os.IsNotExist(err) {
@@ -332,42 +430,16 @@ func (m *CommonRootfsMounts) Setup() error {
 		m.mounted(dst)
 	}
 
-	chrootDevShm := filepath.Join(m.mountPoint, "dev", "shm")
-	if err := os.MkdirAll(chrootDevShm, 0755); err != nil {
+	if err := m.maybeMountDevShm(); err != nil {
 		return err
 	}
-	const devShmFlags = unix.MS_NOSUID | unix.MS_NODEV
-	m.mounting(chrootDevShm)
-	m.add(chrootDevShm)
-	if err := Mount("devshm", chrootDevShm, "tmpfs", devShmFlags, "mode=1777"); err != nil {
-		return fmt.Errorf("failed to mount devshm: %w", err)
-	}
-	m.mounted(chrootDevShm)
-
-	if m.mountProc {
-		chrootProc := filepath.Join(m.mountPoint, "proc")
-		if err := os.MkdirAll(chrootProc, 0755); err != nil {
-			return err
-		}
-		m.mounting(chrootProc)
-		m.add(chrootProc)
-		if err := Mount("proc", chrootProc, "proc", 0, ""); err != nil {
-			return fmt.Errorf("failed to mount proc: %w", err)
-		}
-		m.mounted(chrootProc)
-	}
-
-	runLock := filepath.Join(m.mountPoint, "run", "lock")
-	if err := os.MkdirAll(runLock, 0755); err != nil {
+	if err := m.maybeMountProc(); err != nil {
 		return err
 	}
-	m.mounting(runLock)
-	m.add(runLock)
-	const runLockFlags = unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC | unix.MS_RELATIME
-	if err := Mount("none", runLock, "tmpfs", runLockFlags, "size=5120k"); err != nil {
-		return fmt.Errorf("failed to mount run/lock: %w", err)
+
+	if err := m.maybeMountRunLock(); err != nil {
+		return err
 	}
-	m.mounted(runLock)
 
 	return nil
 }
