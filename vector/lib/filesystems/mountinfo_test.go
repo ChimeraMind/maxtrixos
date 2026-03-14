@@ -416,7 +416,7 @@ func TestIsMounted(t *testing.T) {
 
 	t.Run("SymlinkResolved", func(t *testing.T) {
 		// The kernel records the resolved (real) path in mountinfo.
-		// isMounted must resolve symlinks before comparing so that
+		// IsMounted must resolve symlinks before comparing so that
 		// a query through a symlinked path still matches.
 		tmpDir, err := filepath.EvalSymlinks(t.TempDir())
 		if err != nil {
@@ -437,9 +437,9 @@ func TestIsMounted(t *testing.T) {
 		})
 
 		// query via the symlink path must still report mounted
-		mounted, err := isMounted(linkDir)
+		mounted, err := IsMounted(linkDir)
 		if err != nil {
-			t.Fatalf("isMounted through symlink failed: %v", err)
+			t.Fatalf("IsMounted through symlink failed: %v", err)
 		}
 		if !mounted {
 			t.Errorf("Expected mounted=true when querying via symlink %s (real %s)", linkDir, realDir)

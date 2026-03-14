@@ -97,7 +97,7 @@ func CleanupMounts(opts CleanupMountsOptions) {
 	DevicesSettle()
 	for i := len(mounts) - 1; i >= 0; i-- {
 		mnt := mounts[i]
-		mounted, err := isMounted(mnt)
+		mounted, err := IsMounted(mnt)
 		if err != nil {
 			fmt.Fprintf(stderr, "Unable to check if %s is mounted: %v\n", mnt, err)
 			continue
@@ -298,7 +298,7 @@ func (m *CommonRootfsMounts) add(mnt string) {
 // chroot.
 func (m *CommonRootfsMounts) maybeMountDevShm() error {
 	chrootDevShm := filepath.Join(m.mountPoint, "dev", "shm")
-	devShmMounted, err := isMounted(chrootDevShm)
+	devShmMounted, err := IsMounted(chrootDevShm)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to check if %s is mounted: %w",
@@ -336,7 +336,7 @@ func (m *CommonRootfsMounts) maybeMountProc() error {
 	}
 
 	chrootProc := filepath.Join(m.mountPoint, "proc")
-	procMounted, err := isMounted(chrootProc)
+	procMounted, err := IsMounted(chrootProc)
 	if err != nil {
 		return fmt.Errorf("failed to check if %s is mounted: %w",
 			chrootProc, err,
@@ -366,7 +366,7 @@ func (m *CommonRootfsMounts) maybeMountProc() error {
 func (m *CommonRootfsMounts) maybeMountRunLock() error {
 	runLock := filepath.Join(m.mountPoint, "run", "lock")
 
-	runLockMounted, err := isMounted(runLock)
+	runLockMounted, err := IsMounted(runLock)
 	if err != nil {
 		return fmt.Errorf("failed to check if %s is mounted: %w",
 			runLock, err,
@@ -409,7 +409,7 @@ func (m *CommonRootfsMounts) Setup() error {
 
 		// Skip if mounted feature.
 		if m.skipIfMounted {
-			mounted, err := isMounted(dst)
+			mounted, err := IsMounted(dst)
 			if err != nil {
 				return fmt.Errorf("failed to check if %s is mounted: %w", dst, err)
 			}

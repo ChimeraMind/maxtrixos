@@ -266,7 +266,7 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 
 // mountPrivateGitRepo sets up a read-only bind mount for the private git
 // repo inside the chroot.
-func (s *Seeder) mountPrivateGitRepo(chrootDir string) error {
+func (s *Seeder) mountPrivateGitRepo(opts *SetupChrootMountsOptions) error {
 	privatePath, err := s.PrivateGitRepoPath()
 	if err != nil {
 		return fmt.Errorf("error getting private repo path: %w", err)
@@ -284,11 +284,10 @@ func (s *Seeder) mountPrivateGitRepo(chrootDir string) error {
 		return nil
 	}
 
-	privateDst := filepath.Join(chrootDir, defaultPrivatePath)
 	privateBind, err := filesystems.NewBindMount(
 		filesystems.BindMountOptions{
 			Src:      privatePath,
-			Dst:      privateDst,
+			Dst:      filepath.Join(opts.ChrootDir, defaultPrivatePath),
 			ReadOnly: true,
 			MkdirAll: true,
 			Stdout:   s.stdout,
@@ -298,7 +297,19 @@ func (s *Seeder) mountPrivateGitRepo(chrootDir string) error {
 	if err != nil {
 		return fmt.Errorf("error creating RO mount for private repo: %w", err)
 	}
-	s.trackMount(privateBind.Dst())
+
+	dst := privateBind.Dst()
+	mounted, err := filesystems.IsMounted(dst)
+	if err != nil {
+		return fmt.Errorf("error checking if private repo mount exists: %w", err)
+	}
+	if opts.SkipIfMounted && mounted {
+		s.Print("Skipping (already mounted): %s ...\n", dst)
+		return nil
+	}
+
+	s.Print("Mounting: %s ...\n", dst)
+	s.trackMount(dst)
 	if err := privateBind.Mount(); err != nil {
 		return fmt.Errorf("error mounting RO private repo: %w", err)
 	}
@@ -306,7 +317,7 @@ func (s *Seeder) mountPrivateGitRepo(chrootDir string) error {
 }
 
 // mountDistDir sets up a bind mount for the distfiles directory inside the chroot.
-func (s *Seeder) mountDistDir(chrootDir string) error {
+func (s *Seeder) mountDistDir(opts *SetupChrootMountsOptions) error {
 	distDir, err := s.DistfilesDir()
 	if err != nil {
 		return fmt.Errorf("error getting distfiles dir: %w", err)
@@ -319,7 +330,7 @@ func (s *Seeder) mountDistDir(chrootDir string) error {
 	distMount, err := filesystems.BindMountDistdir(
 		filesystems.BindMountDistdirOptions{
 			DistfilesDir: distDir,
-			Rootfs:       chrootDir,
+			Rootfs:       opts.ChrootDir,
 			Stdout:       s.stdout,
 			Stderr:       s.stderr,
 		},
@@ -327,7 +338,20 @@ func (s *Seeder) mountDistDir(chrootDir string) error {
 	if err != nil {
 		return fmt.Errorf("error creating distfiles mount: %w", err)
 	}
-	s.trackMount(distMount.Dst())
+
+	dst := distMount.Dst()
+	mounted, err := filesystems.IsMounted(dst)
+	if err != nil {
+		return fmt.Errorf("error checking if distfiles mount exists: %w", err)
+	}
+
+	if opts.SkipIfMounted && mounted {
+		s.Print("Skipping (already mounted): %s ...\n", dst)
+		return nil
+	}
+
+	s.Print("Mounting: %s ...\n", dst)
+	s.trackMount(dst)
 	if err := distMount.Mount(); err != nil {
 		return fmt.Errorf("error mounting distfiles: %w", err)
 	}
@@ -335,7 +359,7 @@ func (s *Seeder) mountDistDir(chrootDir string) error {
 }
 
 // mountBinpkgsDir sets up a bind mount for the binpkgs directory inside the chroot.
-func (s *Seeder) mountBinpkgsDir(chrootDir string) error {
+func (s *Seeder) mountBinpkgsDir(opts *SetupChrootMountsOptions) error {
 	binDir, err := s.BinpkgsDir()
 	if err != nil {
 		return fmt.Errorf("error getting binpkgs dir: %w", err)
@@ -348,7 +372,7 @@ func (s *Seeder) mountBinpkgsDir(chrootDir string) error {
 	binMount, err := filesystems.BindMountBinpkgs(
 		filesystems.BindMountBinpkgsOptions{
 			BinpkgsDir: binDir,
-			Rootfs:     chrootDir,
+			Rootfs:     opts.ChrootDir,
 			Stdout:     s.stdout,
 			Stderr:     s.stderr,
 		},
@@ -356,7 +380,20 @@ func (s *Seeder) mountBinpkgsDir(chrootDir string) error {
 	if err != nil {
 		return fmt.Errorf("error creating binpkgs mount: %w", err)
 	}
-	s.trackMount(binMount.Dst())
+
+	dst := binMount.Dst()
+	mounted, err := filesystems.IsMounted(dst)
+	if err != nil {
+		return fmt.Errorf("error checking if binpkgs mount exists: %w", err)
+	}
+
+	if opts.SkipIfMounted && mounted {
+		s.Print("Skipping (already mounted): %s ...\n", dst)
+		return nil
+	}
+
+	s.Print("Mounting: %s ...\n", dst)
+	s.trackMount(dst)
 	if err := binMount.Mount(); err != nil {
 		return fmt.Errorf("error mounting binpkgs: %w", err)
 	}
@@ -396,15 +433,15 @@ func (s *Seeder) SetupChrootMounts(opts SetupChrootMountsOptions) error {
 		return fmt.Errorf("error setting up common mounts setup: %w", err)
 	}
 
-	if err := s.mountPrivateGitRepo(opts.ChrootDir); err != nil {
+	if err := s.mountPrivateGitRepo(&opts); err != nil {
 		return fmt.Errorf("error mounting private git repo: %w", err)
 	}
 
-	if err := s.mountDistDir(opts.ChrootDir); err != nil {
+	if err := s.mountDistDir(&opts); err != nil {
 		return fmt.Errorf("error mounting distfiles: %w", err)
 	}
 
-	if err := s.mountBinpkgsDir(opts.ChrootDir); err != nil {
+	if err := s.mountBinpkgsDir(&opts); err != nil {
 		return fmt.Errorf("error mounting binpkgs: %w", err)
 	}
 
