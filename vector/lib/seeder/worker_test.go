@@ -2432,6 +2432,257 @@ func TestSetupChrootMounts_SkipIfMountedFalse_MountsAll(t *testing.T) {
 	}
 }
 
+func TestSetupChrootMounts_Delegated_SkipsSystemMounts(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	cfg.Bools["Seeder.DelegatedChrootSystemMounts"] = true
+
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir: chrootDir,
+	}
+	if err := sd.SetupChrootMounts(opts); err != nil {
+		t.Fatalf("SetupChrootMounts: %v", err)
+	}
+
+	output := stdout.String()
+
+	// The delegation message must appear.
+	if !strings.Contains(output, "Delegating mounting of system filesystems inside chroot") {
+		t.Errorf("expected delegation message in output, got:\n%s", output)
+	}
+
+	// The common rootfs mounting message must NOT appear.
+	if strings.Contains(output, "Mounting common rootfs mounts") {
+		t.Errorf("did not expect common rootfs message with delegation, got:\n%s", output)
+	}
+
+	// System dirs (dev, dev/pts, sys, dev/shm, proc, run/lock) should NOT
+	// appear in tracked mounts; only private repo, distfiles, binpkgs.
+	systemSuffixes := []string{"/dev", "/dev/pts", "/sys", "/dev/shm", "/proc", "/run/lock"}
+	for _, mnt := range sd.trackedMounts {
+		for _, suffix := range systemSuffixes {
+			if strings.HasSuffix(mnt, suffix) {
+				t.Errorf("system mount %s should not be tracked when delegated", mnt)
+			}
+		}
+	}
+
+	// The three non-system mounts (private repo, distfiles, binpkgs) should be tracked.
+	if len(sd.trackedMounts) != 3 {
+		t.Errorf("expected 3 tracked mounts (private repo, distfiles, binpkgs), got %d: %v",
+			len(sd.trackedMounts), sd.trackedMounts)
+	}
+}
+
+func TestSetupChrootMounts_Delegated_StillMountsDistfiles(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	cfg.Bools["Seeder.DelegatedChrootSystemMounts"] = true
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir: chrootDir,
+	}
+	if err := sd.SetupChrootMounts(opts); err != nil {
+		t.Fatalf("SetupChrootMounts: %v", err)
+	}
+
+	// Ensure distfiles and binpkgs dirs exist inside the chroot.
+	for _, sub := range []string{"var/cache/distfiles", "var/cache/binpkgs"} {
+		p := filepath.Join(chrootDir, sub)
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			t.Errorf("expected %s to exist inside chroot", p)
+		}
+	}
+}
+
+func TestSetupChrootMounts_Delegated_StillMountsPrivateRepo(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	cfg.Bools["Seeder.DelegatedChrootSystemMounts"] = true
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir: chrootDir,
+	}
+	if err := sd.SetupChrootMounts(opts); err != nil {
+		t.Fatalf("SetupChrootMounts: %v", err)
+	}
+
+	// The private git repo mount destination must be tracked.
+	privateDst := filepath.Join(chrootDir, "matrixos", "private")
+	found := false
+	for _, mnt := range sd.trackedMounts {
+		if mnt == privateDst {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected private repo mount %s to be tracked, tracked: %v",
+			privateDst, sd.trackedMounts)
+	}
+}
+
+func TestSetupChrootMounts_NotDelegated_MountsSystemFilesystems(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp := t.TempDir()
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	cfg.Bools["Seeder.DelegatedChrootSystemMounts"] = false
+
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir: chrootDir,
+	}
+	if err := sd.SetupChrootMounts(opts); err != nil {
+		t.Fatalf("SetupChrootMounts: %v", err)
+	}
+
+	output := stdout.String()
+
+	// The common rootfs message must appear.
+	if !strings.Contains(output, "Mounting common rootfs mounts") {
+		t.Errorf("expected common rootfs message, got:\n%s", output)
+	}
+
+	// The delegation message must NOT appear.
+	if strings.Contains(output, "Delegating mounting of system filesystems inside chroot") {
+		t.Errorf("did not expect delegation message when not delegated, got:\n%s", output)
+	}
+
+	// System mounts must be tracked — total should be >= 8
+	// (6 system + 3 non-system).
+	if len(sd.trackedMounts) < 8 {
+		t.Errorf("expected at least 8 tracked mounts, got %d: %v",
+			len(sd.trackedMounts), sd.trackedMounts)
+	}
+}
+
+func TestSetupChrootMounts_DelegatedConfigError(t *testing.T) {
+	cfg := &config.ErrConfig{Err: fmt.Errorf("config broken")}
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir: "/tmp/fake-chroot",
+	}
+	err := sd.SetupChrootMounts(opts)
+	if err == nil {
+		t.Fatal("expected error when DelegatedChrootSystemMounts config fails")
+	}
+	if !strings.Contains(err.Error(), "delegated chroot system mounts") {
+		t.Errorf("expected error about delegated chroot system mounts, got: %v", err)
+	}
+}
+
+func TestSetupChrootMounts_Delegated_SkipIfMounted(t *testing.T) {
+	mockMountSyscalls(t)
+	tmp, _ := filepath.EvalSymlinks(t.TempDir())
+	chrootDir := filepath.Join(tmp, "chroot")
+	os.MkdirAll(chrootDir, 0755)
+
+	cfg := mountTestConfig(tmp)
+	cfg.Bools["Seeder.DelegatedChrootSystemMounts"] = true
+
+	// Pre-create the distfiles mount point and pretend it is already mounted.
+	distDst := filepath.Join(chrootDir, "var", "cache", "distfiles")
+	os.MkdirAll(distDst, 0755)
+	mockMountInfo(t, []*filesystems.MountInfoEntry{
+		{Mountpoint: distDst},
+	})
+
+	mr := runner.NewMockRunner()
+	var stdout bytes.Buffer
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
+	}
+
+	opts := SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: true,
+	}
+	if err := sd.SetupChrootMounts(opts); err != nil {
+		t.Fatalf("SetupChrootMounts: %v", err)
+	}
+
+	// The pre-mounted distfiles dir should have been skipped.
+	for _, mnt := range sd.trackedMounts {
+		if mnt == distDst {
+			t.Errorf("distfiles mount %s should not be tracked (was already mounted)", distDst)
+		}
+	}
+
+	// Delegation message should appear, common rootfs should not.
+	output := stdout.String()
+	if !strings.Contains(output, "Delegating mounting of system filesystems inside chroot") {
+		t.Errorf("expected delegation message, got:\n%s", output)
+	}
+	if strings.Contains(output, "Mounting common rootfs mounts") {
+		t.Errorf("did not expect common rootfs message with delegation, got:\n%s", output)
+	}
+}
+
 // --- ParseSeederParams integration test with real seeders ---
 
 func TestParseSeederParams_RealSeeders(t *testing.T) {

@@ -546,30 +546,43 @@ func (s *Seeder) SetupChrootMounts(opts SetupChrootMountsOptions) error {
 		return fmt.Errorf("missing ChrootDir parameter")
 	}
 
-	// 1. Common rootfs mounts (dev, sys, proc, shm, run/lock).
-	common, err := filesystems.NewCommonRootfsMounts(
-		filesystems.CommonRootfsMountsOptions{
-			MountPoint:    opts.ChrootDir,
-			SkipIfMounted: opts.SkipIfMounted,
-			Mounting: func(mnt string) {
-				s.Print("Mounting: %s ...\n", mnt)
-				s.trackMount(mnt)
-			},
-			Skipping: func(mnt string) {
-				s.Print("Skipping (already mounted): %s ...\n", mnt)
-			},
-			Mounted: func(mnt string) {
-				s.Print("Mounted: %s ...\n", mnt)
-			},
-			Stdout: s.stdout,
-			Stderr: s.stderr,
-		},
-	)
+	delegated, err := s.DelegatedChrootSystemMounts()
 	if err != nil {
-		return fmt.Errorf("error creating common mounts init: %w", err)
+		return fmt.Errorf(
+			"error checking if delegated chroot system mounts is enabled: %w",
+			err,
+		)
 	}
-	if err := common.Setup(); err != nil {
-		return fmt.Errorf("error setting up common mounts setup: %w", err)
+
+	if delegated {
+		s.Print("Delegating mounting of system filesystems inside chroot ...\n")
+	} else {
+		s.Print("Mounting common rootfs mounts (dev, sys, proc, shm, run/lock) ...\n")
+		// Common rootfs mounts (dev, sys, proc, shm, run/lock).
+		common, err := filesystems.NewCommonRootfsMounts(
+			filesystems.CommonRootfsMountsOptions{
+				MountPoint:    opts.ChrootDir,
+				SkipIfMounted: opts.SkipIfMounted,
+				Mounting: func(mnt string) {
+					s.Print("Mounting: %s ...\n", mnt)
+					s.trackMount(mnt)
+				},
+				Skipping: func(mnt string) {
+					s.Print("Skipping (already mounted): %s ...\n", mnt)
+				},
+				Mounted: func(mnt string) {
+					s.Print("Mounted: %s ...\n", mnt)
+				},
+				Stdout: s.stdout,
+				Stderr: s.stderr,
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("error creating common mounts init: %w", err)
+		}
+		if err := common.Setup(); err != nil {
+			return fmt.Errorf("error setting up common mounts setup: %w", err)
+		}
 	}
 
 	if err := s.mountPrivateGitRepo(&opts); err != nil {

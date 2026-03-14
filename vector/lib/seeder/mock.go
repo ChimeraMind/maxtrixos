@@ -29,6 +29,8 @@ type MockSeeder struct {
 	UseLocalGitRepoInsideChrootErr    error
 	DeleteDotGitFromGitRepo_          bool
 	DeleteDotGitFromGitRepoErr        error
+	DelegatedChrootSystemMounts_      bool
+	DelegatedChrootSystemMountsErr    error
 	GitCloneArgs_                     string
 	GitCloneArgsErr                   error
 	ChrootExecName_                   string
@@ -167,6 +169,10 @@ func (m *MockSeeder) UseLocalGitRepoInsideChroot() (bool, error) {
 
 func (m *MockSeeder) DeleteDotGitFromGitRepo() (bool, error) {
 	return m.DeleteDotGitFromGitRepo_, m.DeleteDotGitFromGitRepoErr
+}
+
+func (m *MockSeeder) DelegatedChrootSystemMounts() (bool, error) {
+	return m.DelegatedChrootSystemMounts_, m.DelegatedChrootSystemMountsErr
 }
 
 func (m *MockSeeder) GitCloneArgs() (string, error) {
