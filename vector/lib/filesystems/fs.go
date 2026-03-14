@@ -299,7 +299,13 @@ func checkFsCapabilitySupport(testDir string) (bool, error) {
 	tmpCopy := tmpBin.Name() + ".copy"
 	defer os.Remove(tmpCopy)
 
-	if err := CopyFilePreserveXattrs(tmpBin.Name(), tmpCopy); err != nil {
+	// Copy with cp -a (archive mode) to preserve xattrs, matching the
+	// bash version. This delegates capability preservation to coreutils
+	// which handles all xattr edge cases correctly.
+	if err := execRun(&runner.Cmd{
+		Name: "cp",
+		Args: []string{"-a", tmpBin.Name(), tmpCopy},
+	}); err != nil {
 		return false, err
 	}
 
@@ -312,6 +318,9 @@ func checkFsCapabilitySupport(testDir string) (bool, error) {
 	if err != nil {
 		return false, nil
 	}
+
+	return strings.Contains(string(out), "cap_net_raw"), nil
+}
 
 // CheckDirIsRoot checks if a directory is the root of the filesystem and exits if it is.
 func CheckDirIsRoot(chrootDir string) error {

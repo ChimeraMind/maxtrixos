@@ -561,6 +561,30 @@ func TestCheckFsCapabilitySupport(t *testing.T) {
 	})
 }
 
+func TestCheckFsCapabilitySupportIntegration(t *testing.T) {
+	// Integration test: exercises real setcap/getcap/cp -a binaries.
+	// Requires root (CAP_SETFCAP) and setcap/getcap in PATH.
+	if os.Getuid() != 0 {
+		t.Skip("skipping: requires root")
+	}
+	if _, err := exec.LookPath("setcap"); err != nil {
+		t.Skip("skipping: setcap not found in PATH")
+	}
+	if _, err := exec.LookPath("getcap"); err != nil {
+		t.Skip("skipping: getcap not found in PATH")
+	}
+
+	tmpDir := t.TempDir()
+	supported, err := checkFsCapabilitySupport(tmpDir)
+	if err != nil {
+		t.Fatalf("checkFsCapabilitySupport failed: %v", err)
+	}
+	// On a normal ext4/btrfs/xfs tmpdir as root, capabilities should work.
+	if !supported {
+		t.Log("WARNING: filesystem does not support capabilities (may be expected on some FS types)")
+	}
+}
+
 func TestDevicesSettle(t *testing.T) {
 	setupMockExec(t)
 	// Simple execution test to ensure it runs without error

@@ -154,7 +154,9 @@ func CopyFilePreserveXattrs(src, dst string) error {
 		if err != nil {
 			continue
 		}
-		sysLsetxattr(dst, name, val, 0)
+		if err := sysLsetxattr(dst, name, val, 0); err != nil {
+			return fmt.Errorf("failed to set xattr %q on %s: %w", name, dst, err)
+		}
 	}
 	return nil
 }
