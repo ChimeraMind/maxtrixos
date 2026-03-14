@@ -40,72 +40,6 @@ preppers_lib.check_active_mounts() {
     fi
 }
 
-preppers_lib.check_dirs_same_filesystem() {
-    local src="${1}"
-    local dst="${2}"
-    if [ -z "${src}" ] || [ -z "${dst}" ]; then
-        echo "preppers_lib.check_dirs_same_filesystem missing parameter." >&2
-        return 1
-    fi
-
-    local dev1=
-    local dev2=
-    dev1=$(stat -c '%d' "${src}")
-    dev2=$(stat -c '%d' "${dst}")
-    [[ "${dev1}" == "${dev2}" ]]
-}
-
-preppers_lib.check_fs_capability_support() {
-    local test_dir="${1}"
-    if [ -z "${test_dir}" ]; then
-        echo "preppers_lib.check_fs_capability_support missing parameter." >&2
-        return 1
-    fi
-
-    local tmp_bin="${test_dir}/.cap_test.$$.bin"
-    local tmp_copy="${test_dir}/.cap_test.$$.copy"
-    local ret=0
-
-    # Ensure we start clean.
-    touch "${tmp_bin}"
-
-    # Try to set the capability.
-    if ! setcap 'cap_net_raw+ep' "${tmp_bin}" 2>/dev/null; then
-        echo "WARNING: System/FS does not allow setting capabilities." >&2
-        rm -f "${tmp_bin}"
-        return 1
-    fi
-
-    # Copy with archive flags.
-    cp -a "${tmp_bin}" "${tmp_copy}" 2>/dev/null
-
-    # Flexible check for the capability string.
-    if ! getcap "${tmp_copy}" | grep -q "cap_net_raw[=+]ep"; then
-        ret=1
-    fi
-
-    rm -f "${tmp_bin}" "${tmp_copy}"
-    return "${ret}"
-}
-
-preppers_lib.cp_reflink_copy_allowed() {
-    local src="${1}"
-    local dst="${2}"
-    local use_cp_flag="${3}"
-    if [ -z "${src}" ] || [ -z "${dst}" ] || [ -z "${use_cp_flag}" ]; then
-        echo "preppers_lib.cp_reflink_copy_allowed missing parameters." >&2
-        return 1
-    fi
-
-    if [ -z "${use_cp_flag}" ] || [ "${src}" = "/" ]; then
-        return 1
-    fi
-
-    preppers_lib.check_dirs_same_filesystem "${src}" "${dst}"
-    preppers_lib.check_fs_capability_support "${src}"
-    preppers_lib.check_fs_capability_support "${dst}"
-}
-
 # Verify that hardlinks are preserved between source and destination.
 # Returns 0 if hardlinks are intact, 1 if they were duplicated/broken.
 preppers_lib.check_hardlink_preservation() {
@@ -464,22 +398,6 @@ preppers_lib.create_build_metadata_file() {
     cat "${build_metadata}"
 }
 
-preppers_lib._rsync_copy() {
-    local src="${1}"
-    local dst="${2}"
-    echo "Spawning rsync from ${src} to ${dst} ..."
-    rsync \
-        --archive \
-        --verbose \
-        --progress \
-        --partial \
-        -HAX \
-        --numeric-ids \
-        --delete-during \
-        --one-file-system \
-        "${src%/}/" "${dst%/}/"
-}
-
 preppers_lib._cp_reflink_copy() {
     local src="${1}"
     local dst="${2}"
@@ -509,17 +427,9 @@ preppers_lib._rsync_from_bedrock() {
     mkdir -p "${chroot_dir}"
 
     # Active mounts check already done by sanity_check_chroot_dir.
-
-    local use_cp="${USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC}"
-
-    if preppers_lib.cp_reflink_copy_allowed "${latest_bedrock}" "${chroot_dir}" "${use_cp}"; then
-        echo "Using experimental cp --reflink=auto copy mode ..."
-        preppers_lib._cp_reflink_copy "${latest_bedrock}" "${chroot_dir}"
-    else
-        preppers_lib._rsync_copy "${latest_bedrock}" "${chroot_dir}"
-    fi
+    echo "Using cp --reflink=auto copy mode ..."
+    preppers_lib._cp_reflink_copy "${latest_bedrock}" "${chroot_dir}"
     preppers_lib.check_hardlink_preservation "${latest_bedrock}" "${chroot_dir}"
-
     preppers_lib.create_build_metadata_file "${chroot_dir}" "${latest_bedrock}"
 }
 
