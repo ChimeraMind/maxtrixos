@@ -262,13 +262,23 @@ func TestCommitIntegration(t *testing.T) {
 
 	branch := "test/integration/commit"
 
-	// --- Test package-level Commit ---
-	err := Commit(CommitOptions{
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.RepoDir": {repoDir},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: branch})
+	if err != nil {
+		t.Fatalf("NewOstree: %v", err)
+	}
+
+	// --- First commit ---
+	err = o.Commit(CommitOptions{
 		RepoDir:  repoDir,
 		Branch:   branch,
 		Subject:  "integration test commit",
 		ImageDir: imageDir,
-	}, false)
+	})
 	if err != nil {
 		t.Fatalf("Commit: %v", err)
 	}
@@ -299,31 +309,21 @@ func TestCommitIntegration(t *testing.T) {
 		t.Fatalf("LastCommit: %v", err)
 	}
 
-	err = Commit(CommitOptions{
+	err = o.Commit(CommitOptions{
 		RepoDir:  repoDir,
 		Branch:   branch,
 		Subject:  "second commit",
 		Parent:   parentRev,
 		ImageDir: imageDir,
-	}, false)
+	})
 	if err != nil {
 		t.Fatalf("second Commit: %v", err)
 	}
 
-	// --- Test instance Commit with body file ---
+	// --- Test Commit with body file ---
 	bodyFile := filepath.Join(t.TempDir(), "body.txt")
 	if err := os.WriteFile(bodyFile, []byte("detailed body\nwith lines\n"), 0644); err != nil {
 		t.Fatal(err)
-	}
-
-	cfg := &config.MockConfig{
-		Items: map[string][]string{
-			"Ostree.RepoDir": {repoDir},
-		},
-	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: branch})
-	if err != nil {
-		t.Fatalf("NewOstree: %v", err)
 	}
 
 	err = o.Commit(CommitOptions{
@@ -357,13 +357,23 @@ func TestCommitIntegration_Consume(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := Commit(CommitOptions{
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.RepoDir": {repoDir},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	if err != nil {
+		t.Fatalf("NewOstree: %v", err)
+	}
+
+	err = o.Commit(CommitOptions{
 		RepoDir:  repoDir,
 		Branch:   "test/consume",
 		Subject:  "consume commit",
 		Consume:  true,
 		ImageDir: imageDir,
-	}, false)
+	})
 	if err != nil {
 		t.Fatalf("Commit with consume: %v", err)
 	}
@@ -390,14 +400,24 @@ func TestCommitIntegration_InlineBody(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.RepoDir": {repoDir},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	if err != nil {
+		t.Fatalf("NewOstree: %v", err)
+	}
+
 	branch := "test/inlinebody"
-	err := Commit(CommitOptions{
+	err = o.Commit(CommitOptions{
 		RepoDir:  repoDir,
 		Branch:   branch,
 		Subject:  "inline body test",
 		Body:     "the body content\nline2\n",
 		ImageDir: imageDir,
-	}, false)
+	})
 	if err != nil {
 		t.Fatalf("Commit with Body: %v", err)
 	}
