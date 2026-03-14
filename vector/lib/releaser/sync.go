@@ -1,6 +1,7 @@
 package releaser
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,7 +24,6 @@ func (r *Releaser) syncExcludedPaths(dst string) ([]string, error) {
 
 	return []string{
 		filepath.Join(dst, "/tmp/*"),
-		// There can be some device nodes that we do not want to copy over.
 		filepath.Join(dst, seedersArtifactsDir),
 		filepath.Join(dst, preppersArtifactsDir),
 		filepath.Join(dst, "/var/spool/nullmailer/trigger"),
@@ -70,7 +70,7 @@ func (r *Releaser) cpReflinkCopy(src, dst string) error {
 }
 
 // rsyncCopy copies src to dst using rsync.
-func (r *Releaser) rsyncCopy(src, dst string) error {
+func (r *Releaser) rsyncCopy(src, dst string, verbose bool) error {
 	excludes, err := r.syncExcludedPaths(dst)
 	if err != nil {
 		return err
@@ -80,18 +80,17 @@ func (r *Releaser) rsyncCopy(src, dst string) error {
 		Src:      src,
 		Dst:      dst,
 		Excludes: excludes,
-		Verbose:  r.verbose,
+		Verbose:  verbose,
 		Stdout:   r.stdout,
 		Stderr:   r.stderr,
 	})
 }
 
-func (r *Releaser) SyncFilesystem() error {
-	if err := checkChrootDir(r.chrootDir); err != nil {
-		return err
-	}
-	if r.imageDir == "" {
-		return fmt.Errorf("imageDir is empty")
+// SyncFilesystem synchronises the chroot directory into the image directory
+// using either cp --reflink=auto or rsync.
+func (r *Releaser) SyncFilesystem(verbose bool) error {
+	if r.chrootDir == "" || r.imageDir == "" {
+		return errors.New("chrootDir and imageDir are required")
 	}
 	if r.chrootDir == r.imageDir {
 		return fmt.Errorf("chrootDir and imageDir are the same: %s", r.imageDir)
@@ -124,14 +123,10 @@ func (r *Releaser) SyncFilesystem() error {
 		}
 	} else {
 		r.Print("Using rsync copy mode ...\n")
-		if err := r.rsyncCopy(r.chrootDir, r.imageDir); err != nil {
+		if err := r.rsyncCopy(r.chrootDir, r.imageDir, verbose); err != nil {
 			return err
 		}
 	}
 
-	opts := filesystems.CheckHardlinkPreservationOptions{
-		Stdout: r.stdout,
-		Stderr: r.stderr,
-	}
-	return filesystems.CheckHardlinkPreservation(r.chrootDir, r.imageDir, opts)
+	return filesystems.CheckHardlinkPreservation(r.chrootDir, r.imageDir)
 }
