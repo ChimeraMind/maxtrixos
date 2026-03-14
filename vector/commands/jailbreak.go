@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -793,9 +795,56 @@ func (c *JailbreakCommand) cleanConfigSetupSecurebootKeys(efiRoot string) error 
 	return nil
 }
 
-func (c *JailbreakCommand) cleanPackages(sysroot string) error {
-	fmt.Fprintf(c.run.stdout, "%s%sCleaning packages ...%s\n",
-		c.cBold, c.iconPackage, c.cReset)
+func (c *JailbreakCommand) syncPortage(sysroot string) error {
+	fmt.Fprintln(c.run.stdout, "Let me prep the Portage tree for ya... Downloading Portage ...")
+
+	// emerge-webrsync (best effort).
+	webrsyncCmd := c.run.execCommand("emerge-webrsync")
+	webrsyncCmd.SetStdout(c.run.stdout)
+	webrsyncCmd.SetStderr(c.run.stderr)
+	webrsyncCmd.Run() // best effort
+
+	// Clone overlay repositories that use git.
+	reposConfPath := filepath.Join(sysroot, "etc", "portage", "repos.conf", "eselect-repo.conf")
+	reposData, err := c.run.readFile(reposConfPath)
+	if err != nil {
+		fmt.Fprintf(c.run.stderr, "WARNING: cannot read repos config: %v\n", err)
+		return nil
+	}
+
+	ini, err := config.ParseIni(bytes.NewReader(reposData))
+	if err != nil {
+		fmt.Fprintf(c.run.stderr, "WARNING: cannot parse repos config: %v\n", err)
+		return nil
+	}
+
+	for section, items := range ini {
+		if section == "" {
+			continue
+		}
+		if items["sync-type"] != "git" {
+			fmt.Fprintf(c.run.stderr, "Repository %s does not use git. Not supported...\n", section)
+			continue
+		}
+		repoDir := items["location"]
+		gitURL := items["sync-uri"]
+		if repoDir == "" || gitURL == "" {
+			continue
+		}
+
+		fmt.Fprintf(c.run.stdout, "Cloning %s into %s for %s ...\n", gitURL, repoDir, section)
+		gitCmd := c.run.execCommand("git", "clone", "--depth", "1", gitURL,
+			filepath.Join(sysroot, repoDir))
+		gitCmd.SetStdout(c.run.stdout)
+		gitCmd.SetStderr(c.run.stderr)
+		gitCmd.Run() // best effort
+	}
+
+	return nil
+}
+
+func (c *JailbreakCommand) cleanPackages() error {
+	fmt.Fprintln(c.run.stdout, "Cleaning live/ostree packages ...")
 
 	defaultUsername, _ := c.cfg.GetItem("matrixOS.DefaultUsername")
 
