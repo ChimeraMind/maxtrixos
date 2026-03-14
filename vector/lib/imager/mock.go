@@ -8,6 +8,7 @@ type MockImage struct {
 	BootDevice_ string
 	RootDevice_ string
 	DevicePath_ string
+	Rootfs_     string
 
 	MountDir_            string
 	MountDirErr          error
@@ -78,6 +79,7 @@ func (m *MockImage) SetEfiDevice(device string)  { m.EfiDevice_ = device }
 func (m *MockImage) SetBootDevice(device string) { m.BootDevice_ = device }
 func (m *MockImage) SetRootDevice(device string) { m.RootDevice_ = device }
 func (m *MockImage) SetDevicePath(devicePath string) { m.DevicePath_ = devicePath }
+func (m *MockImage) SetRootfs(rootfs string)           { m.Rootfs_ = rootfs }
 
 func (m *MockImage) ImagesOutDir() (string, error) { return m.ImagesOutDir_, m.ImagesOutDirErr }
 func (m *MockImage) MountDir() (string, error)     { return m.MountDir_, m.MountDirErr }
@@ -109,7 +111,7 @@ func (m *MockImage) LockDir() (string, error)                      { return "", 
 func (m *MockImage) LockWaitSeconds() (string, error)              { return "", nil }
 func (m *MockImage) BuildMetadataFile() (string, error)            { return "", nil }
 
-func (m *MockImage) ReleaseVersion(rootfs string) (string, error) {
+func (m *MockImage) ReleaseVersion() (string, error) {
 	return m.ReleaseVersion_, m.ReleaseVersionErr
 }
 func (m *MockImage) ImagePath(ref string) (string, error) {
@@ -164,12 +166,12 @@ func (m *MockImage) MountRootfs(mountRootfs string) error {
 	m.MountRootfsCalled = true
 	return nil
 }
-func (m *MockImage) GetKernelPath(ostreeDeployRootfs string) (string, error) { return "", nil }
-func (m *MockImage) SetupPasswords(ostreeDeployRootfs string) error {
+func (m *MockImage) GetKernelPath() (string, error) { return "", nil }
+func (m *MockImage) SetupPasswords() error {
 	m.SetupPasswordsCalled = true
 	return nil
 }
-func (m *MockImage) SetupBootloaderConfig(ref, ostreeDeployRootfs, sysroot, bootdir, efibootdir, efiUUID, bootUUID string) error {
+func (m *MockImage) SetupBootloaderConfig(ref, sysroot, bootdir, efibootdir, efiUUID, bootUUID string) error {
 	m.SetupBootloaderCfgCalled = true
 	return nil
 }
@@ -177,25 +179,25 @@ func (m *MockImage) SetupVmtestConfig(bootdir string) error {
 	m.SetupVmtestConfigCalled = true
 	return nil
 }
-func (m *MockImage) InstallSecurebootCerts(ostreeDeployRootfs, mountEfifs, efibootdir string) error {
+func (m *MockImage) InstallSecurebootCerts(mountEfifs, efibootdir string) error {
 	m.InstallSecurebootCalled = true
 	return nil
 }
-func (m *MockImage) InstallMemtest(ostreeDeployRootfs, efibootdir string) error {
+func (m *MockImage) InstallMemtest(efibootdir string) error {
 	m.InstallMemtestCalled = true
 	return nil
 }
 func (m *MockImage) GenerateKernelBootArgs(ref, physicalRootDevice string, encryptionEnabled bool) ([]string, error) {
 	return []string{"arg1=val1"}, nil
 }
-func (m *MockImage) PackageList(rootfs string) ([]string, error) {
+func (m *MockImage) PackageList() ([]string, error) {
 	return m.PackageList_, m.PackageListErr
 }
-func (m *MockImage) SetupHooks(ostreeDeployRootfs, ref string) error {
+func (m *MockImage) SetupHooks(ref string) error {
 	m.SetupHooksCalled = true
 	return nil
 }
-func (m *MockImage) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, efibootdir string) ([]string, error) {
+func (m *MockImage) InstallBootloader(mountEfifs, mountBootfs, efibootdir string) ([]string, error) {
 	m.InstallBootloaderCalled = true
 	return m.InstallBootloaderResult, m.InstallBootloaderErr
 }
