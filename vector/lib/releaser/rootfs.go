@@ -80,14 +80,31 @@ func (r *Releaser) CleanRootfs() error {
 		"/var/lib/sbctl/keys",
 	}
 
+	rdOpts := filesystems.RemoveDirOptions{
+		Stdout: r.stdout,
+		Stderr: r.stderr,
+	}
 	for _, d := range removeDirs {
-		_ = filesystems.RemoveDir(filepath.Join(imageDir, d))
+		_ = filesystems.RemoveDir(filepath.Join(imageDir, d), rdOpts)
+	}
+
+	edOpts := filesystems.EmptyDirOptions{
+		Stdout: r.stdout,
+		Stderr: r.stderr,
 	}
 	for _, d := range emptyDirs {
-		_ = filesystems.EmptyDir(filepath.Join(imageDir, d))
+		_ = filesystems.EmptyDir(filepath.Join(imageDir, d), edOpts)
+	}
+
+	rfgOpts := filesystems.RemoveFileWithGlobOptions{
+		Stdout: r.stdout,
+		Stderr: r.stderr,
 	}
 	for _, p := range removeFiles {
-		_ = filesystems.RemoveFileWithGlob(filepath.Join(imageDir, p))
+		_ = filesystems.RemoveFileWithGlob(
+			filepath.Join(imageDir, p),
+			rfgOpts,
+		)
 	}
 
 	// Prepare Portage directory.
@@ -148,10 +165,18 @@ func (r *Releaser) PostCleanShrink() error {
 	}
 
 	for _, d := range removeDirs {
-		_ = filesystems.RemoveDir(filepath.Join(imageDir, d))
+		opts := filesystems.RemoveDirOptions{
+			Stdout: r.stdout,
+			Stderr: r.stderr,
+		}
+		_ = filesystems.RemoveDir(filepath.Join(imageDir, d), opts)
 	}
 	for _, d := range emptyDirs {
-		_ = filesystems.EmptyDir(filepath.Join(imageDir, d))
+		opts := filesystems.EmptyDirOptions{
+			Stdout: r.stdout,
+			Stderr: r.stderr,
+		}
+		_ = filesystems.EmptyDir(filepath.Join(imageDir, d), opts)
 	}
 
 	r.Print("Removing all {.a,.la} files\n")
