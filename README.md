@@ -187,7 +187,7 @@ matrixOS uses OSTree for atomic updates. All system commands require `sudo`.
 A quick reference of all user-facing `vector` commands:
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `vector upgrade` | Pull and deploy the latest OS update. |
 | `vector flash` | Install matrixOS to a block device. |
 | `vector setupOS` | First-boot wizard (passwords, LUKS, SSH keys). |
@@ -284,7 +284,7 @@ Run the build script as root. It handles the entire pipeline.
 The `vector` CLI also provides direct access to individual build stages:
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `vector build seeds` | Run the seeding stage. |
 | `vector build release` | Run a single release. |
 | `vector build releases` | Run all releases. |
