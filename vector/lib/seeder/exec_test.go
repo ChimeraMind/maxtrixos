@@ -80,6 +80,7 @@ func newPrivateRepoTestSeeder(t *testing.T) (*Seeder, *runner.MockRunner) {
 	mr := runner.NewMockRunner()
 	s := newTestSeeder()
 	s.runner = mr.Run
+	s.dirRunner = mr.DirRun
 	s.cfg.(*config.MockConfig).Items["matrixOS.PrivateGitRepoPath"] = []string{filepath.Join(t.TempDir(), "private")}
 	s.cfg.(*config.MockConfig).Items["matrixOS.PrivateExampleGitRepo"] = []string{"https://example.com/private.git"}
 	s.cfg.(*config.MockConfig).Items["Seeder.GitCloneArgs"] = []string{"--depth 1"}
@@ -315,7 +316,7 @@ func TestRunMakeInDir_ExecutesMakeScript(t *testing.T) {
 	}
 
 	s := newTestSeeder()
-	s.runner = runner.Run // use the real implementation
+	s.dirRunner = runner.DirRun // use the real implementation
 
 	err := s.runMakeInDir(dir)
 	if err != nil {

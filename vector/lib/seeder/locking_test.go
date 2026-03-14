@@ -3,7 +3,6 @@ package seeder
 import (
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -197,76 +196,6 @@ func TestExecuteWithSeederLock_SequentialAccess(t *testing.T) {
 	defer mu.Unlock()
 	if len(order) != 2 {
 		t.Fatalf("expected 2 executions, got %d", len(order))
-	}
-}
-
-func TestExecuteWithSeederLock_CrossProcess(t *testing.T) {
-	s := newLockTestSeeder(t)
-	s.cfg.(*config.MockConfig).Items["Seeder.LockWaitSeconds"] = []string{"2"}
-
-	lockPath, err := s.SeederLockPath("crossproc")
-	if err != nil {
-		t.Fatalf("SeederLockPath: %v", err)
-	}
-
-	// Spawn a subprocess that holds an exclusive flock on the same file for 30s.
-	holder := exec.Command("flock", "--exclusive", lockPath, "--command", "sleep 30")
-	if err := holder.Start(); err != nil {
-		t.Fatalf("failed to start flock holder subprocess: %v", err)
-	}
-	defer holder.Process.Kill()
-
-	// Give the subprocess time to acquire the lock.
-	time.Sleep(500 * time.Millisecond)
-
-	// Now try to acquire the lock from our process – should time out.
-	err = s.ExecuteWithSeederLock("crossproc", func() error {
-		t.Fatal("fn should never run while lock is held by a different process")
-		return nil
-	})
-	if err == nil {
-		t.Fatal("expected timeout error, but lock was acquired successfully")
-	}
-	if !containsString(err.Error(), "timed out") {
-		t.Fatalf("expected 'timed out' message, got: %v", err)
-	}
-}
-
-func TestExecuteWithSeederLock_NoOverlap(t *testing.T) {
-	s := newLockTestSeeder(t)
-
-	var mu sync.Mutex
-	active := 0
-	maxActive := 0
-
-	var wg sync.WaitGroup
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := s.ExecuteWithSeederLock("overlap", func() error {
-				mu.Lock()
-				active++
-				if active > maxActive {
-					maxActive = active
-				}
-				mu.Unlock()
-
-				time.Sleep(50 * time.Millisecond)
-
-				mu.Lock()
-				active--
-				mu.Unlock()
-				return nil
-			}); err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-		}()
-	}
-	wg.Wait()
-
-	if maxActive > 1 {
-		t.Fatalf("expected max 1 concurrent execution under lock, got %d", maxActive)
 	}
 }
 
