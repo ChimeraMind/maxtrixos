@@ -306,7 +306,7 @@ main() {
         exit 1
     fi
 
-    local locks_dir="${MATRIXOS_LOCKS_DIR}/${build_id}-builder"
+    local locks_dir="${MATRIXOS_DEV_DIR}/locks/${build_id}-builder"
     mkdir -p "${locks_dir}"
     local lock_file="${locks_dir}/${build_id}-builder.lock"
 
@@ -317,7 +317,7 @@ main() {
         exit 1
     fi
 
-    local log_dir="${MATRIXOS_LOGS_DIR}/${build_id}-builder"
+    local log_dir="${MATRIXOS_DEV_DIR}/logs/${build_id}-builder"
     mkdir -p "${log_dir}"
     LOGFILE="${log_dir}/build-$(date +%Y%m%d-%H%M%S).log"
 
@@ -399,6 +399,8 @@ main() {
 
         local imager_args=(
             --local-ostree
+            --productionize
+            --create-qcow2
         )
         local execute_imager=
         if _skip_images_flag; then
@@ -426,6 +428,7 @@ main() {
 
         if _run_janitor_flag; then
             echo "Running janitor clean ups ..."
+            "${MATRIXOS_DEV_DIR}"/dev/clean_old_builds.sh
             "${VECTOR_EXEC}" dev janitor
         fi
 
