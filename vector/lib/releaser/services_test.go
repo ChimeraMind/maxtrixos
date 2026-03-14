@@ -12,6 +12,7 @@ import (
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
+	"matrixos/vector/lib/runner"
 	"matrixos/vector/lib/validation"
 )
 
@@ -179,6 +180,7 @@ func TestSetupHostname_HappyPath(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: imageDir,
@@ -208,6 +210,7 @@ func TestSetupHostname_HostnameConfigError(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -224,6 +227,7 @@ func TestSetupHostname_ErrConfigPropagates(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -247,6 +251,7 @@ func TestSetupHostname_WriteFailsNoEtcDir(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: imageDir,
@@ -271,6 +276,7 @@ func TestSetupHostname_OverwritesExistingFile(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: imageDir,
@@ -295,6 +301,7 @@ func TestSetupServices_HooksDirError(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "origin/matrixos"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -318,6 +325,7 @@ func TestSetupServices_NoServicesFile_SkipsGracefully(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -356,6 +364,7 @@ func TestSetupServices_FallbackToServicesSubdir(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -399,6 +408,7 @@ func TestSetupServices_ParseError(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -432,6 +442,7 @@ func TestSetupServices_MountSetupFailure(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -450,6 +461,7 @@ func TestSetupServices_ErrConfigPropagates(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "ref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -471,6 +483,7 @@ func TestReleaseHook_HooksDirError(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "ref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -495,6 +508,7 @@ func TestReleaseHook_NoHookFile_SkipsGracefully(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -534,6 +548,7 @@ func TestReleaseHook_ExecutesHookScript(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: imageDir,
@@ -579,6 +594,7 @@ func TestReleaseHook_HookScriptFails(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -611,6 +627,7 @@ func TestReleaseHook_HookScriptStdout(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &stdout,
 		stderr:   &stderr,
 		imageDir: t.TempDir(),
@@ -634,6 +651,7 @@ func TestReleaseHook_ErrConfigPropagates(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "ref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -666,6 +684,7 @@ func TestReleaseHook_NonExecutableFile(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: t.TempDir(),
@@ -712,6 +731,7 @@ func TestSetupHostname_WithQA(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		qa:       qa,
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},

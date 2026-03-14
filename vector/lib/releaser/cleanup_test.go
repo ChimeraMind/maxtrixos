@@ -15,22 +15,22 @@ import (
 // It bypasses NewReleaser to avoid validation side-effects.
 func newTestReleaser() *Releaser {
 	return &Releaser{
-		cfg:    &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
-		ostree: &ostree.MockOstree{},
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		cfg:          &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+		ostree:       &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 }
 
-// mockMountSyscalls replaces filesystems.Mount/Unmount and ExecChrootRun
-// with no-op fakes so tests never perform real bind mounts or chroot
-// execution. Originals are restored via t.Cleanup.
+// mockMountSyscalls replaces filesystems.Mount/Unmount
+// with no-op fakes so tests never perform real bind mounts.
+// Originals are restored via t.Cleanup.
 func mockMountSyscalls(t *testing.T) {
 	t.Helper()
 
 	origMount := filesystems.Mount
 	origUnmount := filesystems.Unmount
-	origChrootRun := filesystems.ExecChrootRun
 
 	filesystems.Mount = func(source, target, fstype string, flags uintptr, data string) error {
 		return nil
@@ -38,16 +38,10 @@ func mockMountSyscalls(t *testing.T) {
 	filesystems.Unmount = func(target string, flags int) error {
 		return nil
 	}
-	filesystems.ExecChrootRun = runner.ChrootRunFunc(
-		func(c *runner.ChrootCmd) error {
-			return nil
-		},
-	)
 
 	t.Cleanup(func() {
 		filesystems.Mount = origMount
 		filesystems.Unmount = origUnmount
-		filesystems.ExecChrootRun = origChrootRun
 	})
 }
 

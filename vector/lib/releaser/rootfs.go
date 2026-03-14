@@ -150,7 +150,7 @@ func (r *Releaser) PostCleanShrink() error {
 		return fmt.Errorf("failed to set up chroot mounts: %w", err)
 	}
 
-	err = filesystems.ExecChrootRun(&runner.ChrootCmd{
+	err = r.chrootRunner(&runner.ChrootCmd{
 		Cmd: runner.Cmd{
 			Name: "emerge",
 			Args: []string{
