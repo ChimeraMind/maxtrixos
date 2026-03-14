@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/runner"
@@ -287,8 +288,13 @@ func (r *Releaser) ReleaseHook() error {
 
 	r.Print("Running release hook %s ...\n", hookPath)
 	cmd := exec.Command(hookPath)
+
+	env := os.Environ()
+	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
+	env = config.FilterEnvKey(env, "REF")
+
 	cmd.Env = append(
-		os.Environ(),
+		env,
 		"CHROOT_DIR="+r.imageDir,
 		"MATRIXOS_DEV_DIR="+devDir,
 	)

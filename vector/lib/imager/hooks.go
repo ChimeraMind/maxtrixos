@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 )
 
@@ -164,7 +165,12 @@ func (im *Image) SetupHooks() error {
 	cmd := exec.Command(hookExec)
 	cmd.Stdout = im.stdout
 	cmd.Stderr = im.stderr
-	cmd.Env = append(os.Environ(),
+
+	env := os.Environ()
+	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
+	env = config.FilterEnvKey(env, "ROOTFS")
+	env = config.FilterEnvKey(env, "REF")
+	cmd.Env = append(env,
 		"MATRIXOS_DEV_DIR="+devDir,
 		"ROOTFS="+im.rootfs,
 		"REF="+ref,
@@ -240,7 +246,14 @@ func (im *Image) TestImage() error {
 		cmd := exec.Command(ts)
 		cmd.Stdout = im.stdout
 		cmd.Stderr = im.stderr
-		cmd.Env = append(os.Environ(),
+
+		env := os.Environ()
+		env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
+		env = config.FilterEnvKey(env, "MATRIXOS_LOGS_DIR")
+		env = config.FilterEnvKey(env, "IMAGE_PATH")
+		env = config.FilterEnvKey(env, "REF")
+
+		cmd.Env = append(env,
 			"MATRIXOS_DEV_DIR="+devDir,
 			"MATRIXOS_LOGS_DIR="+logsDir,
 			"IMAGE_PATH="+testImagePath,
