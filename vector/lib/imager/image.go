@@ -1046,7 +1046,8 @@ func (im *Image) SetupBootloaderConfig(ref, ostreeDeployRootfs, sysroot, bootdir
 		if err := os.MkdirAll(dstThemesDir, 0755); err != nil {
 			return fmt.Errorf("failed to create themes dir: %w", err)
 		}
-		if err := im.runner(nil, os.Stdout, os.Stderr, "cp", "-v", "-rp", themesDir, dstThemesDir+"/"); err != nil {
+		dstThemeDir := filepath.Join(dstThemesDir, filepath.Base(themesDir))
+		if err := filesystems.CopyDirPreserve(themesDir, dstThemeDir); err != nil {
 			return fmt.Errorf("failed to copy themes: %w", err)
 		}
 	}
@@ -1060,12 +1061,15 @@ func (im *Image) SetupBootloaderConfig(ref, ostreeDeployRootfs, sysroot, bootdir
 	if err != nil {
 		return err
 	}
+
 	envDir := filepath.Join(ostreeDeployRootfs, "etc", "environment.d")
 	if err := os.MkdirAll(envDir, 0755); err != nil {
 		return fmt.Errorf("failed to create environment.d dir: %w", err)
 	}
+
 	grubCfgEnv := fmt.Sprintf("GRUB_CFG=%s/%s/grub.cfg\n", efiRoot, relEfiBootPath)
-	if err := os.WriteFile(filepath.Join(envDir, "99-matrixos-imager-grub.conf"), []byte(grubCfgEnv), 0644); err != nil {
+	grubCfgEnvPath := filepath.Join(envDir, "99-matrixos-imager-grub.conf")
+	if err := os.WriteFile(grubCfgEnvPath, []byte(grubCfgEnv), 0644); err != nil {
 		return fmt.Errorf("failed to write grub env config: %w", err)
 	}
 

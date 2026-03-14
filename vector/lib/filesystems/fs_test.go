@@ -1703,3 +1703,314 @@ func TestPartitionType(t *testing.T) {
 		}
 	})
 }
+
+func TestCopyDirPreserve(t *testing.T) {
+	t.Run("BasicTree", func(t *testing.T) {
+		src := t.TempDir()
+		dst := filepath.Join(t.TempDir(), "dst")
+
+		// Create a small tree:
+		//   src/
+		//     file1.txt
+		//     sub/
+		//       file2.txt
+		if err := os.WriteFile(filepath.Join(src, "file1.txt"), []byte("content1"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		subDir := filepath.Join(src, "sub")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(subDir, "file2.txt"), []byte("content2"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyDirPreserve(src, dst); err != nil {
+			t.Fatalf("CopyDirPreserve failed: %v", err)
+		}
+
+		// Verify file1
+		data, err := os.ReadFile(filepath.Join(dst, "file1.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != "content1" {
+			t.Errorf("file1: got %q, want %q", data, "content1")
+		}
+
+		// Verify sub/file2
+		data, err = os.ReadFile(filepath.Join(dst, "sub", "file2.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != "content2" {
+			t.Errorf("file2: got %q, want %q", data, "content2")
+		}
+
+		// Verify file2 permissions
+		info, err := os.Stat(filepath.Join(dst, "sub", "file2.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0600 {
+			t.Errorf("file2 perms: got %04o, want 0600", info.Mode().Perm())
+		}
+	})
+
+	t.Run("PreservesSymlinks", func(t *testing.T) {
+		src := t.TempDir()
+		dst := filepath.Join(t.TempDir(), "dst")
+
+		targetFile := filepath.Join(src, "target.txt")
+		if err := os.WriteFile(targetFile, []byte("target"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("target.txt", filepath.Join(src, "link.txt")); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyDirPreserve(src, dst); err != nil {
+			t.Fatalf("CopyDirPreserve failed: %v", err)
+		}
+
+		linkPath := filepath.Join(dst, "link.txt")
+		linkInfo, err := os.Lstat(linkPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if linkInfo.Mode()&os.ModeSymlink == 0 {
+			t.Error("expected symlink, got regular file")
+		}
+
+		linkTarget, err := os.Readlink(linkPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if linkTarget != "target.txt" {
+			t.Errorf("symlink target: got %q, want %q", linkTarget, "target.txt")
+		}
+	})
+
+	t.Run("PreservesDirPermissions", func(t *testing.T) {
+		src := t.TempDir()
+		dst := filepath.Join(t.TempDir(), "dst")
+
+		subDir := filepath.Join(src, "restricted")
+		if err := os.MkdirAll(subDir, 0750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(subDir, "f.txt"), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyDirPreserve(src, dst); err != nil {
+			t.Fatalf("CopyDirPreserve failed: %v", err)
+		}
+
+		info, err := os.Stat(filepath.Join(dst, "restricted"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0750 {
+			t.Errorf("dir perms: got %04o, want 0750", info.Mode().Perm())
+		}
+	})
+
+	t.Run("EmptyDir", func(t *testing.T) {
+		src := t.TempDir()
+		dst := filepath.Join(t.TempDir(), "dst")
+
+		if err := CopyDirPreserve(src, dst); err != nil {
+			t.Fatalf("CopyDirPreserve failed: %v", err)
+		}
+
+		info, err := os.Stat(dst)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.IsDir() {
+			t.Error("expected dst to be a directory")
+		}
+	})
+
+	t.Run("NestedEmpty", func(t *testing.T) {
+		src := t.TempDir()
+		dst := filepath.Join(t.TempDir(), "dst")
+
+		if err := os.MkdirAll(filepath.Join(src, "a", "b", "c"), 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyDirPreserve(src, dst); err != nil {
+			t.Fatalf("CopyDirPreserve failed: %v", err)
+		}
+
+		info, err := os.Stat(filepath.Join(dst, "a", "b", "c"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.IsDir() {
+			t.Error("expected nested dir to exist")
+		}
+	})
+
+	t.Run("PreservesXattrs", func(t *testing.T) {
+		src := t.TempDir()
+		dst := filepath.Join(t.TempDir(), "dst")
+
+		srcFile := filepath.Join(src, "xfile.txt")
+		if err := os.WriteFile(srcFile, []byte("xattr data"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		attrName := "user.test_copy_dir"
+		attrVal := []byte("dir_test_value")
+		if err := unix.Lsetxattr(srcFile, attrName, attrVal, 0); err != nil {
+			t.Skipf("filesystem does not support user xattrs: %v", err)
+		}
+
+		if err := CopyDirPreserve(src, dst); err != nil {
+			t.Fatalf("CopyDirPreserve failed: %v", err)
+		}
+
+		dstFile := filepath.Join(dst, "xfile.txt")
+		sz, err := unix.Lgetxattr(dstFile, attrName, nil)
+		if err != nil {
+			t.Fatalf("xattr not found on dst: %v", err)
+		}
+		buf := make([]byte, sz)
+		if _, err := unix.Lgetxattr(dstFile, attrName, buf); err != nil {
+			t.Fatalf("failed to read xattr: %v", err)
+		}
+		if string(buf) != string(attrVal) {
+			t.Errorf("xattr value: got %q, want %q", buf, attrVal)
+		}
+	})
+
+	t.Run("PreservesStickyBit", func(t *testing.T) {
+		src := t.TempDir()
+		dst := filepath.Join(t.TempDir(), "dst")
+
+		stickyDir := filepath.Join(src, "sticky")
+		if err := os.MkdirAll(stickyDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		// Set the sticky bit.
+		if err := os.Chmod(stickyDir, 0755|os.ModeSticky); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(stickyDir, "f.txt"), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyDirPreserve(src, dst); err != nil {
+			t.Fatalf("CopyDirPreserve failed: %v", err)
+		}
+
+		info, err := os.Stat(filepath.Join(dst, "sticky"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode()&os.ModeSticky == 0 {
+			t.Errorf("sticky bit not preserved: got mode %v", info.Mode())
+		}
+		if info.Mode().Perm() != 0755 {
+			t.Errorf("perms changed: got %04o, want 0755", info.Mode().Perm())
+		}
+	})
+
+	t.Run("PreservesSetgidBit", func(t *testing.T) {
+		src := t.TempDir()
+		dst := filepath.Join(t.TempDir(), "dst")
+
+		setgidDir := filepath.Join(src, "setgid")
+		if err := os.MkdirAll(setgidDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(setgidDir, 0755|os.ModeSetgid); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyDirPreserve(src, dst); err != nil {
+			t.Fatalf("CopyDirPreserve failed: %v", err)
+		}
+
+		info, err := os.Stat(filepath.Join(dst, "setgid"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode()&os.ModeSetgid == 0 {
+			t.Errorf("setgid bit not preserved: got mode %v", info.Mode())
+		}
+	})
+
+	t.Run("PreservesDirXattrs", func(t *testing.T) {
+		src := t.TempDir()
+		dst := filepath.Join(t.TempDir(), "dst")
+
+		subDir := filepath.Join(src, "xattrdir")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		attrName := "user.dir_test"
+		attrVal := []byte("dir_xattr_value")
+		if err := unix.Lsetxattr(subDir, attrName, attrVal, 0); err != nil {
+			t.Skipf("filesystem does not support user xattrs on dirs: %v", err)
+		}
+
+		// Also put a file with xattrs inside.
+		fileInDir := filepath.Join(subDir, "inner.txt")
+		if err := os.WriteFile(fileInDir, []byte("inner"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		fileAttr := "user.file_in_dir"
+		fileAttrVal := []byte("file_val")
+		if err := unix.Lsetxattr(fileInDir, fileAttr, fileAttrVal, 0); err != nil {
+			t.Skipf("filesystem does not support user xattrs: %v", err)
+		}
+
+		if err := CopyDirPreserve(src, dst); err != nil {
+			t.Fatalf("CopyDirPreserve failed: %v", err)
+		}
+
+		// Verify file xattrs were preserved.
+		dstFile := filepath.Join(dst, "xattrdir", "inner.txt")
+		sz, err := unix.Lgetxattr(dstFile, fileAttr, nil)
+		if err != nil {
+			t.Fatalf("file xattr not found on dst: %v", err)
+		}
+		buf := make([]byte, sz)
+		if _, err := unix.Lgetxattr(dstFile, fileAttr, buf); err != nil {
+			t.Fatalf("failed to read file xattr: %v", err)
+		}
+		if string(buf) != string(fileAttrVal) {
+			t.Errorf("file xattr: got %q, want %q", buf, fileAttrVal)
+		}
+	})
+
+	t.Run("SrcNotExist", func(t *testing.T) {
+		dst := filepath.Join(t.TempDir(), "dst")
+		err := CopyDirPreserve("/nonexistent/dir", dst)
+		if err == nil {
+			t.Error("expected error for nonexistent source")
+		}
+	})
+
+	t.Run("SrcIsFile", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		src := filepath.Join(tmpDir, "notadir.txt")
+		dst := filepath.Join(tmpDir, "dst")
+		if err := os.WriteFile(src, []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		err := CopyDirPreserve(src, dst)
+		if err == nil {
+			t.Error("expected error when source is a file")
+		}
+		if !strings.Contains(err.Error(), "not a directory") {
+			t.Errorf("unexpected error message: %v", err)
+		}
+	})
+}
