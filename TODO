@@ -1,8 +1,10 @@
 # Overall TODO
 
 - [in progress] Rewrite codebase to Golang.
-    - Test imager/ lib or port imager at this point.
     - Consider if possible to implement unshare in code.
+      - Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
+        now that we have separate mount namespaces via unshare.
+        -> no chance of leaking mounts when SIGKILL is sent.
 - Add vector command for:
   $ ostree admin pin 1
   $ ostree admin status
