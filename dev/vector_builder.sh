@@ -38,7 +38,7 @@ ARG_FORCE_IMAGES=
 ARG_SKIP_IMAGES=
 ARG_ON_BUILD_SERVER=
 ARG_RESUME_SEEDERS=
-ARG_BUILD_NAME="matrixOS weekly"
+ARG_BUILD_NAME="matrixOS weekly builder"
 ARG_BUILD_ID="weekly"
 ARG_SEEDER_ARGS=()
 ARG_RELEASER_ARGS=()
@@ -59,9 +59,9 @@ finish() {
 
     local subject=
     if [ "${exit_code}" -eq "0" ]; then
-        subject="[${build_name}] SUCCESSFUL execution at $(date +%Y%m%d)"
+        subject="[${ARG_BUILD_NAME}] SUCCESSFUL execution at $(date +%Y%m%d)"
     else
-        subject="[${build_name}] FAILED execution at $(date +%Y%m%d)"
+        subject="[${ARG_BUILD_NAME}] FAILED execution at $(date +%Y%m%d)"
     fi
 
     local mail_dest=
@@ -281,10 +281,6 @@ _build_id_flag() {
     echo "${ARG_BUILD_ID}"
 }
 
-_build_name_flag() {
-    echo "${ARG_BUILD_NAME}"
-}
-
 
 main() {
     trap finish EXIT
@@ -306,7 +302,7 @@ main() {
         exit 1
     fi
 
-    local locks_dir="${MATRIXOS_DEV_DIR}/locks/${build_id}-builder"
+    local locks_dir="${MATRIXOS_LOCKS_DIR}/${build_id}-builder"
     mkdir -p "${locks_dir}"
     local lock_file="${locks_dir}/${build_id}-builder.lock"
 
@@ -317,7 +313,7 @@ main() {
         exit 1
     fi
 
-    local log_dir="${MATRIXOS_DEV_DIR}/logs/${build_id}-builder"
+    local log_dir="${MATRIXOS_LOGS_DIR}/${build_id}-builder"
     mkdir -p "${log_dir}"
     LOGFILE="${log_dir}/build-$(date +%Y%m%d-%H%M%S).log"
 
