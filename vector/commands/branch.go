@@ -66,22 +66,14 @@ func (c *BranchCommand) parseArgs(args []string) error {
 	return nil
 }
 
-func (c *BranchCommand) printDeployment(dep *ostree.Deployment) error {
-	if dep.Booted {
-		fmt.Println("Booted deployment:")
-	} else {
-		fmt.Println("Available deployment:")
-	}
-	fmt.Printf("  Name: %s\n", dep.Stateroot)
-	fmt.Printf("  Index: %d\n", dep.Index)
-	fmt.Printf("  Branch/Refspec: %s\n", dep.Refspec)
-	fmt.Printf("  Checksum: %s\n", dep.Checksum)
-	fmt.Printf("  Serial: %d\n", dep.Serial)
-	fmt.Printf("  Pending: %t\n", dep.Pending)
-	fmt.Printf("  Staged: %t\n", dep.Staged)
-	fmt.Printf("  Rollback: %t\n", dep.Rollback)
-	return nil
-}
+// Run runs the command
+func (c *BranchCommand) Run() error {
+	switch c.sub {
+	case "show":
+		deployments, err := c.ot.ListDeployments()
+		if err != nil {
+			return fmt.Errorf("failed to list deployments: %w", err)
+		}
 
 func (c *BranchCommand) show() error {
 	deployments, err := c.ot.ListDeployments()
@@ -89,8 +81,16 @@ func (c *BranchCommand) show() error {
 		return fmt.Errorf("failed to list deployments: %w", err)
 	}
 
-	if len(deployments) == 0 {
-		fmt.Println("No deployments found.")
+		return fmt.Errorf("could not find booted deployment")
+
+	case "list":
+		refs, err := c.ot.RemoteRefs()
+		if err != nil {
+			return fmt.Errorf("failed to list remote refs: %w", err)
+		}
+		for _, ref := range refs {
+			fmt.Println(ref)
+		}
 		return nil
 	}
 
@@ -101,10 +101,9 @@ func (c *BranchCommand) show() error {
 			booted = &dep
 			break
 		}
-	}
-	if booted == nil {
-		return fmt.Errorf("no booted deployment found")
-	}
+		ref := c.args[0]
+		c.ot.SetVerbose(false) // ostree's own verbose flag, separate from ours.
+		return c.ot.Switch(ref)
 
 	if err := c.printDeployment(booted); err != nil {
 		return err

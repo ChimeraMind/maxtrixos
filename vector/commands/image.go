@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/imager"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/validation"
 )
 
@@ -161,6 +161,7 @@ func (c *ImageCommand) runImage() error {
 	// Pass the styled writers to ostree for consistent output styling.
 	c.ot.SetStdout(stdoutWriter)
 	c.ot.SetStderr(stderrWriter)
+	c.ot.SetVerbose(false) // ostree's own verbose flag, separate from ours.
 
 	fsenc, err := filesystems.NewFsenc(
 		c.cfg,
@@ -250,7 +251,6 @@ func (c *ImageCommand) runImage() error {
 		stdoutWriter.Flush()
 		stderrWriter.Flush()
 	})
-	buildOpts.Verbose = c.verbose
 	return c.im.Build(buildOpts)
 }
 
@@ -308,7 +308,7 @@ func (c *ImageCommand) validateDevicePaths() (*imager.BuildOptions, error) {
 
 // initializeLocalOstree sets up the ostree environment for local deployment (no pull).
 func (c *ImageCommand) initializeLocalOstree() error {
-	refs, err := c.ot.LocalRefs(c.verbose)
+	refs, err := c.ot.LocalRefs()
 	if err != nil {
 		return fmt.Errorf("failed to list local refs: %w", err)
 	}
@@ -317,10 +317,10 @@ func (c *ImageCommand) initializeLocalOstree() error {
 		c.im.Print("  %s\n", r)
 	}
 
-	if err := c.ot.MaybeInitializeRemote(c.verbose); err != nil {
+	if err := c.ot.MaybeInitializeRemote(); err != nil {
 		return fmt.Errorf("failed to initialize remote: %w", err)
 	}
-	if err := c.ot.MaybeInitializeGpg(c.verbose); err != nil {
+	if err := c.ot.MaybeInitializeGpg(); err != nil {
 		return fmt.Errorf("failed to initialize GPG: %w", err)
 	}
 	return nil
@@ -328,14 +328,14 @@ func (c *ImageCommand) initializeLocalOstree() error {
 
 // initializeRemoteOstree sets up the ostree remote and pulls the specified ref.
 func (c *ImageCommand) initializeRemoteOstree(ref string) error {
-	if err := c.ot.MaybeInitializeRemote(c.verbose); err != nil {
+	if err := c.ot.MaybeInitializeRemote(); err != nil {
 		return fmt.Errorf("failed to initialize remote: %w", err)
 	}
-	if err := c.ot.MaybeInitializeGpg(c.verbose); err != nil {
+	if err := c.ot.MaybeInitializeGpg(); err != nil {
 		return fmt.Errorf("failed to initialize GPG: %w", err)
 	}
 
-	refs, err := c.ot.RemoteRefs(c.verbose)
+	refs, err := c.ot.RemoteRefs()
 	if err != nil {
 		return fmt.Errorf("failed to list remote refs: %w", err)
 	}
@@ -351,7 +351,7 @@ func (c *ImageCommand) initializeRemoteOstree(ref string) error {
 
 	c.im.Print("\n%s%sPulling ostree ref %s:%s ...%s\n",
 		c.cBold, c.iconDownload, remote, ref, c.cReset)
-	if err := c.ot.Pull(remote+":"+ref, c.verbose); err != nil {
+	if err := c.ot.Pull(remote + ":" + ref); err != nil {
 		return fmt.Errorf("ostree pull failed: %w", err)
 	}
 	return nil

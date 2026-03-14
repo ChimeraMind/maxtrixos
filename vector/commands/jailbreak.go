@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/ostree"
 )
 
 // mountInfo holds the UUID and filesystem type for a mountpoint.
@@ -315,8 +315,7 @@ func (c *JailbreakCommand) checkSysrootExists(sysroot string) error {
 	return nil
 }
 
-// checkOnFullBranch verifies that the booted deployment is on a -full branch.
-func (c *JailbreakCommand) checkOnFullBranch(fullSuffix string) error {
+	// Check we're on a -full branch.
 	deployments, err := c.ot.ListDeployments()
 	if err != nil {
 		return fmt.Errorf("failed to list deployments: %w", err)
@@ -325,6 +324,22 @@ func (c *JailbreakCommand) checkOnFullBranch(fullSuffix string) error {
 		if dep.Booted && strings.Contains(dep.Refspec, fullSuffix) {
 			return nil
 		}
+	}
+	if !onFull {
+		fmt.Fprintf(c.run.stderr,
+			"You have not switched to a -%s ostree branch. Please read the instructions above.\n",
+			fullSuffix)
+		// Show available full branches.
+		fmt.Fprintln(c.run.stderr, "Showing available full ostree branches:")
+		refs, err := c.ot.RemoteRefs()
+		if err == nil {
+			for _, ref := range refs {
+				if strings.HasSuffix(ref, "-"+fullSuffix) {
+					fmt.Fprintln(c.run.stderr, ref)
+				}
+			}
+		}
+		return fmt.Errorf("not on a -%s ostree branch", fullSuffix)
 	}
 
 	fmt.Fprintf(c.run.stderr,

@@ -76,6 +76,7 @@ func (m *MockOstree) GpgHomeDir() (string, error)                { return "", ni
 func (m *MockOstree) GpgKeyID() (string, error)                  { return "", nil }
 func (m *MockOstree) GpgArgs() ([]string, error)                 { return nil, nil }
 func (m *MockOstree) SetGpg(_ bool) error                        { return nil }
+func (m *MockOstree) SetVerbose(_ bool)                          {}
 func (m *MockOstree) SetupEtc(string) error                      { return nil }
 func (m *MockOstree) PrepareFilesystemHierarchy(string) error    { return nil }
 func (m *MockOstree) ValidateFilesystemHierarchy(string) error   { return nil }
@@ -88,34 +89,35 @@ func (m *MockOstree) BootCommit(string) (string, error) {
 	}
 	return "abc123commit", nil
 }
-func (m *MockOstree) InitRepo(bool) error                                   { return nil }
-func (m *MockOstree) ListRemotes(bool) ([]string, error)                    { return nil, nil }
-func (m *MockOstree) ImportGpgKey(string) error                             { return nil }
-func (m *MockOstree) GpgSignFile(string) error                              { return nil }
-func (m *MockOstree) GpgKeys() ([]string, error)                            { return nil, nil }
-func (m *MockOstree) InitializeSigningGpg(bool) error                       { return nil }
-func (m *MockOstree) InitializeRemoteSigningGpg(string, string, bool) error { return nil }
-func (m *MockOstree) MaybeInitializeGpg(bool) error                         { return nil }
-func (m *MockOstree) MaybeInitializeGpgForRepo(string, string, bool) error  { return nil }
-func (m *MockOstree) MaybeInitializeRemote(bool) error                      { return nil }
-func (m *MockOstree) Pull(string, bool) error                               { return nil }
-func (m *MockOstree) PullWithRemote(string, string, bool) error             { return nil }
-func (m *MockOstree) Prune(string, bool) error                              { return nil }
-func (m *MockOstree) GenerateStaticDelta(string, bool) error                { return nil }
-func (m *MockOstree) UpdateSummary(bool) error                              { return nil }
-func (m *MockOstree) AddRemote(bool) error                                  { return nil }
-func (m *MockOstree) AddRemoteToRootfs(string, bool) error                  { return nil }
-func (m *MockOstree) LocalRefs(_ bool) ([]string, error) {
+func (m *MockOstree) InitRepo() error                                 { return nil }
+func (m *MockOstree) ListRemotes() ([]string, error)                  { return nil, nil }
+func (m *MockOstree) ImportGpgKey(string) error                       { return nil }
+func (m *MockOstree) GpgSignFile(string) error                        { return nil }
+func (m *MockOstree) GpgKeys() ([]string, error)                      { return nil, nil }
+func (m *MockOstree) InitializeSigningGpg() error                     { return nil }
+func (m *MockOstree) InitializeRemoteSigningGpg(string, string) error { return nil }
+func (m *MockOstree) MaybeInitializeGpg() error                       { return nil }
+func (m *MockOstree) MaybeInitializeGpgForRepo(string, string) error  { return nil }
+func (m *MockOstree) MaybeInitializeRemote() error                    { return nil }
+func (m *MockOstree) Pull(string) error                               { return nil }
+func (m *MockOstree) PullWithRemote(string, string) error             { return nil }
+func (m *MockOstree) Prune(string) error                              { return nil }
+func (m *MockOstree) GenerateStaticDelta(string) error                { return nil }
+func (m *MockOstree) UpdateSummary() error                            { return nil }
+func (m *MockOstree) AddRemote() error                                { return nil }
+func (m *MockOstree) AddRemoteToRootfs(string) error                  { return nil }
+func (m *MockOstree) LocalRefs() ([]string, error) {
 	return m.LocalRefs_, m.LocalRefsErr
 }
-func (m *MockOstree) ListContents(string, string, bool) (*[]filesystems.PathInfo, error) {
+func (m *MockOstree) ListContents(string, string) (*[]filesystems.PathInfo, error) {
 	return nil, nil
 }
 func (m *MockOstree) ListEtcChanges(string, string) ([]EtcChange, error) { return nil, nil }
-func (m *MockOstree) DeployedRootfs(string, bool) (string, error)        { return "", nil }
-func (m *MockOstree) BootedRef(bool) (string, error)                     { return "", nil }
-func (m *MockOstree) BootedHash(bool) (string, error)                    { return "", nil }
-func (m *MockOstree) Deploy(string, string, []string, bool) error        { return nil }
+func (m *MockOstree) DeployedRootfs(string) (string, error)              { return "", nil }
+func (m *MockOstree) BootedRef() (string, error)                         { return "", nil }
+func (m *MockOstree) BootedHash() (string, error)                        { return "", nil }
+func (m *MockOstree) Deploy(string, string, []string) error              { return nil }
+func (m *MockOstree) ConfigDiff() (map[string][]string, error)           { return nil, nil }
 
 // Methods with configurable behavior for tests.
 func (m *MockOstree) Root() (string, error) {
@@ -125,29 +127,29 @@ func (m *MockOstree) Root() (string, error) {
 	return m.Root_, m.RootErr
 }
 
-func (m *MockOstree) ListDeployments(_ bool) ([]Deployment, error) {
+func (m *MockOstree) ListDeployments() ([]Deployment, error) {
 	return m.Deployments, m.DeploymentsErr
 }
 
-func (m *MockOstree) RemoteRefs(_ bool) ([]string, error) {
+func (m *MockOstree) RemoteRefs() ([]string, error) {
 	return m.Refs, m.RefsErr
 }
 
-func (m *MockOstree) Switch(ref string, _ bool) error {
+func (m *MockOstree) Switch(ref string) error {
 	m.SwitchRef = ref
 	return m.SwitchErr
 }
 
-func (m *MockOstree) LastCommit(ref string, _ bool) (string, error) {
+func (m *MockOstree) LastCommit(ref string) (string, error) {
 	return m.LastCommit_, m.LastCommitErr
 }
 
-func (m *MockOstree) Upgrade(args []string, _ bool) error {
+func (m *MockOstree) Upgrade(args []string) error {
 	m.UpgradeArgs = args
 	return m.UpgradeErr
 }
 
-func (m *MockOstree) ListPackages(commit string, _ bool) ([]string, error) {
+func (m *MockOstree) ListPackages(commit string) ([]string, error) {
 	if m.PackagesByCommit != nil {
 		if pkgs, ok := m.PackagesByCommit[commit]; ok {
 			return pkgs, m.PackagesErr

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode"
 
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/ostree"
 )
 
 var (
@@ -97,8 +97,7 @@ func (c *UpgradeCommand) Run() error {
 		return fmt.Errorf("failed to fetch updates: %w", err)
 	}
 
-	c.ot.SetRef(ref)
-	newCommit, err := c.ot.LastCommit()
+	newCommit, err := c.ot.LastCommit(ref)
 	if err != nil {
 		return fmt.Errorf("failed to get new commit: %w", err)
 	}

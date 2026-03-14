@@ -20,7 +20,7 @@ func (o *Ostree) SetGpg(enabled bool) error {
 	if enabled {
 		val = "true"
 	}
-	return o.ostreeRun(false, "--repo="+repoDir, "config", "set", "core.gpg-verify", val)
+	return o.ostreeRun("--repo="+repoDir, "config", "set", "core.gpg-verify", val)
 }
 
 // GpgPublicKeyPath returns the user defined private/ placed
