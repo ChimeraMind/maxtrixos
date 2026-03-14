@@ -482,10 +482,12 @@ func TestReleaseHook_HooksDirError(t *testing.T) {
 }
 
 func TestReleaseHook_NoHookFile_SkipsGracefully(t *testing.T) {
-	hooksDir := t.TempDir()
+	devDir := t.TempDir()
+	hooksDir := filepath.Join(devDir, "release", "hooks")
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
 			"Releaser.HooksDir": {hooksDir},
+			"matrixOS.Root":     {devDir},
 		},
 		Bools: map[string]bool{},
 	}
@@ -509,7 +511,11 @@ func TestReleaseHook_NoHookFile_SkipsGracefully(t *testing.T) {
 }
 
 func TestReleaseHook_ExecutesHookScript(t *testing.T) {
-	hooksDir := t.TempDir()
+	devDir := t.TempDir()
+	hooksDir := filepath.Join(devDir, "release", "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("failed to create hooks dir: %v", err)
+	}
 	imageDir := t.TempDir()
 	hookFile := filepath.Join(hooksDir, "myref.sh")
 	markerFile := filepath.Join(t.TempDir(), "marker")
@@ -521,6 +527,7 @@ func TestReleaseHook_ExecutesHookScript(t *testing.T) {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
 			"Releaser.HooksDir": {hooksDir},
+			"matrixOS.Root":     {devDir},
 		},
 		Bools: map[string]bool{},
 	}
@@ -554,13 +561,18 @@ func TestReleaseHook_ExecutesHookScript(t *testing.T) {
 }
 
 func TestReleaseHook_HookScriptFails(t *testing.T) {
-	hooksDir := t.TempDir()
+	devDir := t.TempDir()
+	hooksDir := filepath.Join(devDir, "release", "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("failed to create hooks dir: %v", err)
+	}
 	hookFile := filepath.Join(hooksDir, "myref.sh")
 	os.WriteFile(hookFile, []byte("#!/bin/sh\nexit 1\n"), 0o755)
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
 			"Releaser.HooksDir": {hooksDir},
+			"matrixOS.Root":     {devDir},
 		},
 		Bools: map[string]bool{},
 	}
@@ -580,13 +592,18 @@ func TestReleaseHook_HookScriptFails(t *testing.T) {
 }
 
 func TestReleaseHook_HookScriptStdout(t *testing.T) {
-	hooksDir := t.TempDir()
+	devDir := t.TempDir()
+	hooksDir := filepath.Join(devDir, "release", "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("failed to create hooks dir: %v", err)
+	}
 	hookFile := filepath.Join(hooksDir, "myref.sh")
 	os.WriteFile(hookFile, []byte("#!/bin/sh\necho hello\n"), 0o755)
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
 			"Releaser.HooksDir": {hooksDir},
+			"matrixOS.Root":     {devDir},
 		},
 		Bools: map[string]bool{},
 	}
@@ -630,7 +647,11 @@ func TestReleaseHook_ErrConfigPropagates(t *testing.T) {
 }
 
 func TestReleaseHook_NonExecutableFile(t *testing.T) {
-	hooksDir := t.TempDir()
+	devDir := t.TempDir()
+	hooksDir := filepath.Join(devDir, "release", "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("failed to create hooks dir: %v", err)
+	}
 	hookFile := filepath.Join(hooksDir, "myref.sh")
 	// Write script without execute permission.
 	os.WriteFile(hookFile, []byte("#!/bin/sh\necho hi\n"), 0o644)
@@ -638,6 +659,7 @@ func TestReleaseHook_NonExecutableFile(t *testing.T) {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
 			"Releaser.HooksDir": {hooksDir},
+			"matrixOS.Root":     {devDir},
 		},
 		Bools: map[string]bool{},
 	}
