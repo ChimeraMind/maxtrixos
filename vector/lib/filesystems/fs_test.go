@@ -548,12 +548,22 @@ func TestSetupCommonRootfsMounts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mounts, err := SetupCommonRootfsMounts(tmpDir)
+	var mountingCalls, mountedCalls []string
+	mounter, err := NewCommonRootfsMounts(tmpDir,
+		func(tg string) { mountingCalls = append(mountingCalls, tg) },
+		func(tg string) { mountedCalls = append(mountedCalls, tg) },
+	)
 	if err != nil {
-		t.Errorf("SetupCommonRootfsMounts failed: %v", err)
+		t.Fatalf("NewCommonRootfsMounts failed: %v", err)
 	}
-	if len(mounts) != 6 {
-		t.Errorf("Expected 6 mounts, got %d", len(mounts))
+	if err := mounter.Setup(); err != nil {
+		t.Errorf("Setup failed: %v", err)
+	}
+	if len(mountingCalls) != 6 {
+		t.Errorf("Expected 6 mounting calls, got %d", len(mountingCalls))
+	}
+	if len(mountedCalls) != 6 {
+		t.Errorf("Expected 6 mounted calls, got %d", len(mountedCalls))
 	}
 }
 
@@ -564,7 +574,7 @@ func TestBindMount(t *testing.T) {
 	src := t.TempDir()
 	dst := t.TempDir()
 
-	if _, err := BindMount(src, dst); err != nil {
+	if err := BindMount(src, dst); err != nil {
 		t.Errorf("BindMount failed: %v", err)
 	}
 }
@@ -922,6 +932,231 @@ func TestFlushBlockDeviceBuffers(t *testing.T) {
 		if err := FlushBlockDeviceBuffers(""); err == nil {
 			t.Error("Expected error for missing devPath, got nil")
 		}
+	})
+}
+
+func TestCommonRootfsMountsCleanup(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	t.Run("Success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		// Mock that the mounts exist
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: filepath.Join(tmpDir, "dev")},
+			{Mountpoint: filepath.Join(tmpDir, "dev", "pts")},
+			{Mountpoint: filepath.Join(tmpDir, "sys")},
+			{Mountpoint: filepath.Join(tmpDir, "dev", "shm")},
+			{Mountpoint: filepath.Join(tmpDir, "proc")},
+			{Mountpoint: filepath.Join(tmpDir, "run", "lock")},
+		})
+		noop := func(string) {}
+		mounter, err := NewCommonRootfsMounts(tmpDir, noop, noop)
+		if err != nil {
+			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+		}
+		if err := mounter.Setup(); err != nil {
+			t.Fatalf("Setup failed: %v", err)
+		}
+		if err := mounter.Cleanup(); err != nil {
+			t.Errorf("Cleanup failed: %v", err)
+		}
+	})
+
+	t.Run("MissingMnt", func(t *testing.T) {
+		noop := func(string) {}
+		_, err := NewCommonRootfsMounts("", noop, noop)
+		if err == nil {
+			t.Error("Expected error for missing mnt, got nil")
+		}
+	})
+
+	t.Run("NonExistentMnt", func(t *testing.T) {
+		noop := func(string) {}
+		mounter, err := NewCommonRootfsMounts("/non/existent/path", noop, noop)
+		if err != nil {
+			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+		}
+		if err := mounter.Setup(); err == nil {
+			t.Error("Expected error for non-existent mnt, got nil")
+		}
+	})
+}
+
+func TestBindUmount(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	t.Run("Success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: tmpDir},
+		})
+		if err := BindUmount(tmpDir); err != nil {
+			t.Errorf("BindUmount failed: %v", err)
+		}
+	})
+
+	t.Run("MissingMnt", func(t *testing.T) {
+		if err := BindUmount(""); err == nil {
+			t.Error("Expected error for missing mnt, got nil")
+		}
+	})
+
+	t.Run("NonExistentMnt", func(t *testing.T) {
+		if err := BindUmount("/non/existent/path"); err == nil {
+			t.Error("Expected error for non-existent mnt, got nil")
+		}
+	})
+}
+
+func TestBindMountDistdir(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	t.Run("Success", func(t *testing.T) {
+		distfilesDir := t.TempDir()
+		rootfs := t.TempDir()
+		if _, err := BindMountDistdir(distfilesDir, rootfs); err != nil {
+			t.Errorf("BindMountDistdir failed: %v", err)
+		}
+	})
+}
+
+func TestBindUmountDistdir(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	t.Run("Success", func(t *testing.T) {
+		rootfs := t.TempDir()
+		distfilesDir := filepath.Join(rootfs, "var", "cache", "distfiles")
+		if err := os.MkdirAll(distfilesDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: distfilesDir},
+		})
+
+		if err := BindUmountDistdir(rootfs); err != nil {
+			t.Errorf("BindUmountDistdir failed: %v", err)
+		}
+	})
+}
+
+func TestBindMountBinpkgs(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	t.Run("Success", func(t *testing.T) {
+		binpkgsDir := t.TempDir()
+		rootfs := t.TempDir()
+		if _, err := BindMountBinpkgs(binpkgsDir, rootfs); err != nil {
+			t.Errorf("BindMountBinpkgs failed: %v", err)
+		}
+	})
+}
+
+func TestBindUmountBinpkgs(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	t.Run("Success", func(t *testing.T) {
+		rootfs := t.TempDir()
+		binpkgsDir := filepath.Join(rootfs, "var", "cache", "binpkgs")
+		if err := os.MkdirAll(binpkgsDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: binpkgsDir},
+		})
+
+		if err := BindUmountBinpkgs(rootfs); err != nil {
+			t.Errorf("BindUmountBinpkgs failed: %v", err)
+		}
+	})
+}
+
+func TestCleanupCryptsetupDevices(t *testing.T) {
+	setupMockExec(t)
+
+	t.Run("Success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		originalDevMapperPrefix := devMapperPrefix
+		t.Cleanup(func() { devMapperPrefix = originalDevMapperPrefix })
+		devMapperPrefix = tmpDir
+
+		devPath := filepath.Join(tmpDir, "mycrypt")
+		if _, err := os.Create(devPath); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(devPath)
+		CleanupCryptsetupDevices([]string{"mycrypt"})
+	})
+
+	t.Run("CloseFail", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{})
+		os.Setenv("MOCK_CRYPTSETUP_FAIL", "1")
+		defer os.Unsetenv("MOCK_CRYPTSETUP_FAIL")
+		tmpDir := t.TempDir()
+
+		originalDevMapperPrefix := devMapperPrefix
+		t.Cleanup(func() { devMapperPrefix = originalDevMapperPrefix })
+		devMapperPrefix = tmpDir
+
+		devPath := filepath.Join(tmpDir, "mycrypt")
+		if _, err := os.Create(devPath); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(devPath)
+
+		// Should not panic or error out, just log
+		CleanupCryptsetupDevices([]string{"mycrypt"})
+	})
+}
+
+func TestCpReflinkCopyAllowed(t *testing.T) {
+	setupMockExec(t)
+
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	t.Run("Allowed", func(t *testing.T) {
+		// Mock capability support
+		originalCheckFsCapabilitySupport := CheckFsCapabilitySupport
+		CheckFsCapabilitySupport = func(testDir string) (bool, error) {
+			return true, nil
+		}
+		t.Cleanup(func() { CheckFsCapabilitySupport = originalCheckFsCapabilitySupport })
+
+		allowed, err := CpReflinkCopyAllowed(src, dst, true)
+		if err != nil {
+			t.Fatalf("CpReflinkCopyAllowed failed: %v", err)
+		}
+		if !allowed {
+			t.Error("Expected reflink copy to be allowed")
+		}
+	})
+
+	t.Run("NotAllowedWithoutFlag", func(t *testing.T) {
+		allowed, err := CpReflinkCopyAllowed(src, dst, false)
+		if err != nil {
+			t.Fatalf("CpReflinkCopyAllowed failed: %v", err)
+		}
+		if allowed {
+			t.Error("Expected reflink copy to be not allowed without useCpFlag")
+		}
+	})
+
+	t.Run("NotAllowedOnRoot", func(t *testing.T) {
+		allowed, err := CpReflinkCopyAllowed("/", dst, true)
+		if err != nil {
+			t.Fatalf("CpReflinkCopyAllowed failed: %v", err)
+		}
+		if allowed {
+			t.Error("Expected reflink copy to be not allowed on root")
+		}
+
 	})
 }
 

@@ -270,6 +270,266 @@ func DirectoryExists(path string) bool {
 	return info.IsDir()
 }
 
+// ListSubmounts returns a list of submounts for a given mountpoint
+// by reading /proc/self/mountinfo and filtering by prefix.
+func ListSubmounts(mnt string) ([]string, error) {
+	if mnt == "" {
+		return nil, fmt.Errorf("missing argument")
+	}
+	entries, err := listMountsByPrefix(mnt)
+	if err != nil {
+		return nil, err
+	}
+
+	var submounts []string
+	for _, e := range entries {
+		submounts = append(submounts, e.Mountpoint)
+	}
+	return submounts, nil
+}
+
+// CheckDirNotFsRoot checks if a directory is the root of the filesystem.
+func CheckDirNotFsRoot(mnt string) error {
+	if mnt == "" {
+		return fmt.Errorf("missing mnt parameter")
+	}
+
+	rootStat, err := os.Stat("/")
+	if err != nil {
+		return err
+	}
+	mntStat, err := os.Stat(mnt)
+	if err != nil {
+		return err
+	}
+
+	if os.SameFile(rootStat, mntStat) {
+		return fmt.Errorf("CRITICAL ERROR: %s IS MAPPED TO HOST ROOT. ABORTING", mnt)
+	}
+	return nil
+}
+
+// CommonRootfsMounts represents the common rootfs mounts that are typically
+// set up for a container or chroot environment, such as /dev, /proc, and /run/lock.
+type CommonRootfsMounts struct {
+	mountPoint  string
+	mounting    func(string)
+	mounted     func(string)
+	mounts      []string
+	slaveMounts []string
+}
+
+// NewCommonRootfsMounts creates a new CommonRootfsMounts for the given mount point.
+func NewCommonRootfsMounts(mnt string, mounting func(string), mounted func(string)) (*CommonRootfsMounts, error) {
+	if mnt == "" {
+		return nil, fmt.Errorf("missing mnt parameter")
+	}
+
+	return &CommonRootfsMounts{
+		mountPoint: mnt,
+		mounting:   mounting,
+		mounted:    mounted,
+		slaveMounts: []string{
+			"/dev",
+			"/dev/pts",
+			"/sys",
+		},
+	}, nil
+}
+
+// add adds a mount to the list of mounts to be cleaned up later.
+func (m *CommonRootfsMounts) add(mnt string) {
+	log.Printf("Mounting: %s\n", mnt)
+	m.mounts = append(m.mounts, mnt)
+}
+
+// Setup sets up the common rootfs mounts.
+func (m *CommonRootfsMounts) Setup() error {
+	if _, err := os.Stat(m.mountPoint); os.IsNotExist(err) {
+		return fmt.Errorf("%s does not exist", m.mountPoint)
+	}
+	if err := CheckDirNotFsRoot(m.mountPoint); err != nil {
+		return err
+	}
+
+	for _, d := range m.slaveMounts {
+		dst := filepath.Join(m.mountPoint, d)
+		if err := os.MkdirAll(dst, 0755); err != nil {
+			return err
+		}
+		m.mounting(dst)
+		m.add(dst)
+		if err := sysMount(d, dst, "", unix.MS_BIND, ""); err != nil {
+			return fmt.Errorf("failed to bind mount %s: %w", d, err)
+		}
+		m.mounted(dst)
+		if err := sysMount("", dst, "", unix.MS_SLAVE, ""); err != nil {
+			return fmt.Errorf("failed to make slave %s: %w", dst, err)
+		}
+	}
+
+	chrootDevShm := filepath.Join(m.mountPoint, "dev", "shm")
+	if err := os.MkdirAll(chrootDevShm, 0755); err != nil {
+		return err
+	}
+	const devShmFlags = unix.MS_NOSUID | unix.MS_NODEV
+	m.mounting(chrootDevShm)
+	m.add(chrootDevShm)
+	if err := sysMount("devshm", chrootDevShm, "tmpfs", devShmFlags, "mode=1777"); err != nil {
+		return fmt.Errorf("failed to mount devshm: %w", err)
+	}
+	m.mounted(chrootDevShm)
+
+	chrootProc := filepath.Join(m.mountPoint, "proc")
+	if err := os.MkdirAll(chrootProc, 0755); err != nil {
+		return err
+	}
+	m.mounting(chrootProc)
+	m.add(chrootProc)
+	if err := sysMount("proc", chrootProc, "proc", 0, ""); err != nil {
+		return fmt.Errorf("failed to mount proc: %w", err)
+	}
+	m.mounted(chrootProc)
+
+	runLock := filepath.Join(m.mountPoint, "run", "lock")
+	if err := os.MkdirAll(runLock, 0755); err != nil {
+		return err
+	}
+	m.mounting(runLock)
+	m.add(runLock)
+	const runLockFlags = unix.MS_NOSUID | unix.MS_NODEV | unix.MS_NOEXEC | unix.MS_RELATIME
+	if err := sysMount("none", runLock, "tmpfs", runLockFlags, "size=5120k"); err != nil {
+		return fmt.Errorf("failed to mount run/lock: %w", err)
+	}
+	m.mounted(runLock)
+
+	return nil
+}
+
+// Cleanup unmounts all the mounts that were set up by Setup.
+func (m *CommonRootfsMounts) Cleanup() error {
+	CleanupMounts(m.mounts)
+	return nil
+}
+
+// BindMount binds a source directory to a destination directory.
+func BindMount(src, dst string) error {
+	if src == "" {
+		return fmt.Errorf("missing src parameter")
+	}
+	if dst == "" {
+		return fmt.Errorf("missing dst parameter")
+	}
+
+	if _, err := os.Stat(src); os.IsNotExist(err) {
+		return fmt.Errorf("%s does not exist", src)
+	}
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		return fmt.Errorf("%s does not exist", dst)
+	}
+
+	if err := CheckDirNotFsRoot(src); err != nil {
+		return err
+	}
+	if err := CheckDirNotFsRoot(dst); err != nil {
+		return err
+	}
+
+	// log.Printf("Binding %s to %s", src, dst)
+	if err := sysMount(src, dst, "", unix.MS_BIND, ""); err != nil {
+		return fmt.Errorf("mount bind failed: %w", err)
+	}
+	if err := sysMount("", dst, "", unix.MS_SLAVE, ""); err != nil {
+		return fmt.Errorf("mount make-slave failed: %w", err)
+	}
+	return nil
+}
+
+// BindUmount unmounts a bind mount.
+func BindUmount(mnt string) error {
+	if mnt == "" {
+		return fmt.Errorf("missing mnt parameter")
+	}
+	if _, err := os.Stat(mnt); os.IsNotExist(err) {
+		return fmt.Errorf("%s does not exist", mnt)
+	}
+	if err := CheckDirNotFsRoot(mnt); err != nil {
+		return err
+	}
+	CleanupMounts([]string{mnt})
+	return nil
+}
+
+// BindMountDistdir binds the distfiles directory.
+func BindMountDistdir(distfilesDir, rootfs string) (string, error) {
+	if distfilesDir == "" {
+		return "", fmt.Errorf("missing parameter distfilesDir")
+	}
+	if rootfs == "" {
+		return "", fmt.Errorf("missing rootfs parameter")
+	}
+
+	if _, err := os.Stat(distfilesDir); os.IsNotExist(err) {
+		return "", fmt.Errorf("%s does not exist", distfilesDir)
+	}
+	if _, err := os.Stat(rootfs); os.IsNotExist(err) {
+		return "", fmt.Errorf("%s does not exist", rootfs)
+	}
+
+	dstDir := filepath.Join(rootfs, "var", "cache", "distfiles")
+	if err := os.MkdirAll(dstDir, 0755); err != nil {
+		return "", err
+	}
+	return dstDir, BindMount(distfilesDir, dstDir)
+}
+
+// BindUmountDistdir unmounts the distfiles directory.
+func BindUmountDistdir(rootfs string) error {
+	if rootfs == "" {
+		return fmt.Errorf("missing rootfs parameter")
+	}
+	if _, err := os.Stat(rootfs); os.IsNotExist(err) {
+		return fmt.Errorf("%s does not exist", rootfs)
+	}
+	dstDir := filepath.Join(rootfs, "var", "cache", "distfiles")
+	return BindUmount(dstDir)
+}
+
+// BindMountBinpkgs binds the binpkgs directory.
+func BindMountBinpkgs(binpkgsDir, rootfs string) (string, error) {
+	if binpkgsDir == "" {
+		return "", fmt.Errorf("missing parameter binpkgsDir")
+	}
+	if rootfs == "" {
+		return "", fmt.Errorf("missing rootfs parameter")
+	}
+
+	if _, err := os.Stat(binpkgsDir); os.IsNotExist(err) {
+		return "", fmt.Errorf("%s does not exist", binpkgsDir)
+	}
+	if _, err := os.Stat(rootfs); os.IsNotExist(err) {
+		return "", fmt.Errorf("%s does not exist", rootfs)
+	}
+
+	dstDir := filepath.Join(rootfs, "var", "cache", "binpkgs")
+	if err := os.MkdirAll(dstDir, 0755); err != nil {
+		return "", err
+	}
+	return dstDir, BindMount(binpkgsDir, dstDir)
+}
+
+// BindUmountBinpkgs unmounts the binpkgs directory.
+func BindUmountBinpkgs(rootfs string) error {
+	if rootfs == "" {
+		return fmt.Errorf("missing rootfs parameter")
+	}
+	if _, err := os.Stat(rootfs); os.IsNotExist(err) {
+		return fmt.Errorf("%s does not exist", rootfs)
+	}
+	dstDir := filepath.Join(rootfs, "var", "cache", "binpkgs")
+	return BindUmount(dstDir)
+}
+
 // CheckFsCapabilitySupport checks if the filesystem has capability support.
 var CheckFsCapabilitySupport = checkFsCapabilitySupport
 
