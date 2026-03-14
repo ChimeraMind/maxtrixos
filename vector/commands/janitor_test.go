@@ -38,12 +38,8 @@ func setupJanitorTest(t *testing.T) (cleanup func(), imgOld, imgNew, dlFile, log
 	imgOld = filepath.Join(imagesDir, "matrixos-20230101.img.xz")
 	imgNew = filepath.Join(imagesDir, "matrixos-20230102.img.xz")
 	dlFile = filepath.Join(downloadsDir, "some-download.tar.gz")
-	seedersDir := filepath.Join(tmpDir, "build", "seeders")
+	seedersDir := filepath.Join(tmpDir, "seeders")
 	if err := os.MkdirAll(seedersDir, 0755); err != nil {
-		t.Fatalf("failed to create seeders dir: %v", err)
-	}
-	chrootSeedersDir := filepath.Join(tmpDir, "seeders")
-	if err := os.MkdirAll(chrootSeedersDir, 0755); err != nil {
 		t.Fatalf("failed to create seeders dir: %v", err)
 	}
 	logFile = filepath.Join(logsWeeklyDir, "build.log")
