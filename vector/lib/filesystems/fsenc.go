@@ -68,12 +68,11 @@ func (f *Fsenc) add(mapperName string) {
 // Cleanup cleans up the previously opened (or in opening) device mappers.
 func (f *Fsenc) Cleanup() {
 	f.openMappersMu.Lock()
-	openMappers := make([]string, len(f.openMappers))
-	copy(openMappers, f.openMappers)
+	mappers := slices.Clone(f.openMappers)
 	f.openMappers = nil
 	f.openMappersMu.Unlock()
 
-	CleanupCryptsetupDevices(openMappers)
+	CleanupCryptsetupDevices(mappers)
 }
 
 // EncryptionEnabled returns whether rootfs encryption is enabled.
