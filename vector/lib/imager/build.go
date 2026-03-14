@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"matrixos/vector/lib/cds"
 	"matrixos/vector/lib/filesystems"
-	"matrixos/vector/lib/ostree"
 )
 
 const (
@@ -22,6 +22,7 @@ type BuildOptions struct {
 	BootDevice  string
 	RootDevice  string
 	WholeDevice string
+	Verbose     bool
 }
 
 // Build implements the core image setup logic.
@@ -42,7 +43,7 @@ func (im *Image) Build(opts *BuildOptions) error {
 		return err
 	}
 
-	if err := im.deployOstree(mountRootfs, rootDeviceUUID); err != nil {
+	if err := im.deployOstree(mountRootfs, rootDeviceUUID, opts.Verbose); err != nil {
 		return err
 	}
 
@@ -65,16 +66,7 @@ func (im *Image) prepareRootfs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !filesystems.DirectoryExists(mountDir) {
-		im.Print("Creating mount dir: %s ...\n", mountDir)
-		if err := os.MkdirAll(mountDir, 0755); err != nil {
-			return "", fmt.Errorf("failed to create mount dir: %w", err)
-		}
-	}
-
-	suffix := refToSuffix(im.Ref())
-	prefix := fmt.Sprintf("rootfs-%s", suffix)
-	mountRootfs, err := filesystems.CreateTempDir(mountDir, prefix)
+	mountRootfs, err := filesystems.CreateTempDir(mountDir, "rootfs")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp rootfs dir: %w", err)
 	}
@@ -291,7 +283,7 @@ func (im *Image) formatAndMountFilesystems(mountRootfs string) (string, error) {
 
 // deployOstree generates kernel boot arguments, deploys the ostree ref
 // into the mounted rootfs, and verifies the deployed environment.
-func (im *Image) deployOstree(mountRootfs, rootDeviceUUID string) error {
+func (im *Image) deployOstree(mountRootfs, rootDeviceUUID string, verbose bool) error {
 	kernelBootArgs, err := im.GenerateKernelBootArgs()
 	if err != nil {
 		return fmt.Errorf("failed to generate kernel boot args: %w", err)
@@ -306,19 +298,19 @@ func (im *Image) deployOstree(mountRootfs, rootDeviceUUID string) error {
 
 	im.Print("\nDeploying ostree into %s ...\n", mountRootfs)
 
-	if err := im.ostree.AddRemote(); err != nil {
+	if err := im.ostree.AddRemote(verbose); err != nil {
 		return fmt.Errorf("failed to add ostree remote: %w", err)
 	}
 
-	if err := im.ostree.Deploy(mountRootfs, bootArgs); err != nil {
+	if err := im.ostree.Deploy(im.Ref(), mountRootfs, bootArgs, verbose); err != nil {
 		return fmt.Errorf("ostree deploy failed: %w", err)
 	}
 
-	if err := im.ostree.AddRemoteToRootfs(mountRootfs); err != nil {
+	if err := im.ostree.AddRemoteToRootfs(mountRootfs, verbose); err != nil {
 		return fmt.Errorf("failed to add remote to rootfs: %w", err)
 	}
 
-	rootfs, err := im.ostree.DeployedRootfs()
+	rootfs, err := im.ostree.DeployedRootfs(im.Ref(), verbose)
 	if err != nil {
 		return fmt.Errorf("failed to get deployed rootfs: %w", err)
 	}
@@ -347,15 +339,9 @@ func (im *Image) installSystemComponents() error {
 	if err := im.InstallBootloader(); err != nil {
 		return fmt.Errorf("failed to install bootloader: %w", err)
 	}
-
-	// Set up VM test config only if creating an image file, not flashing to a device.
-	switch im.ImageMode() {
-	case ModeCreateImageFile:
-		if err := im.SetupVmtestConfig(); err != nil {
-			return fmt.Errorf("failed to setup vmtest config: %w", err)
-		}
+	if err := im.SetupVmtestConfig(); err != nil {
+		return fmt.Errorf("failed to setup vmtest config: %w", err)
 	}
-
 	if err := im.InstallSecurebootCerts(); err != nil {
 		return fmt.Errorf("failed to install secureboot certs: %w", err)
 	}
@@ -396,13 +382,13 @@ func (im *Image) finalizeBuild(releaseVersion string, pkgList []string) error {
 
 	switch im.ImageMode() {
 	case ModeFlashToDevice:
-		im.Print("On device install complete!\n")
+		im.Print("\nOn device install complete!\n")
 		return nil
 	case ModeCreateImageFile:
 		if err := im.postImageCreation(releaseVersion, pkgList); err != nil {
 			return fmt.Errorf("post image creation failed: %w", err)
 		}
-		im.Print("Image creation complete!\n")
+		im.Print("\nImage creation complete!\n")
 		return nil
 	default:
 		return fmt.Errorf("unknown image mode: %v", im.ImageMode())
@@ -526,15 +512,8 @@ func (im *Image) productionizeImage(releaseVersion string, pkgList []string) ([]
 				"failed to determine if compression is enabled: %w", err)
 		}
 		compressedImageCreated = true
-
-		cmpPath, err := im.CompressedImagePath()
-		if err != nil {
-			return artifacts, err
-		}
-		artifacts = append(artifacts, cmpPath)
-	} else {
-		artifacts = append(artifacts, im.ImagePath())
 	}
+	artifacts = append(artifacts, im.ImagePath())
 
 	if productionize {
 		sha256Paths, err := im.buildSha256sums(compressedImageCreated, qcow2Created)
@@ -577,7 +556,8 @@ func (im *Image) maybeGenerateGpgSignatures(compressedImageCreated, qcow2Created
 	}
 
 	im.Print("%s exists, creating GPG signatures ...\n", gpgKeyPath)
-	if err := im.ostree.InitializeSigningGpg(); err != nil {
+	verbose := false // GPG signing doesn't need verbose from build opts
+	if err := im.ostree.InitializeSigningGpg(verbose); err != nil {
 		return artifacts, fmt.Errorf("failed to initialize signing GPG: %w", err)
 	}
 
@@ -589,12 +569,12 @@ func (im *Image) maybeGenerateGpgSignatures(compressedImageCreated, qcow2Created
 		if err := im.ostree.GpgSignFile(cmpPath); err != nil {
 			return artifacts, fmt.Errorf("failed to GPG sign image: %w", err)
 		}
-		artifacts = append(artifacts, ostree.GpgSignedFilePath(cmpPath))
+		artifacts = append(artifacts, cds.GpgSignedFilePath(cmpPath))
 	} else {
 		if err := im.ostree.GpgSignFile(im.ImagePath()); err != nil {
 			return artifacts, fmt.Errorf("failed to GPG sign image: %w", err)
 		}
-		artifacts = append(artifacts, ostree.GpgSignedFilePath(im.ImagePath()))
+		artifacts = append(artifacts, cds.GpgSignedFilePath(im.ImagePath()))
 	}
 
 	if qcow2Created {
@@ -607,7 +587,7 @@ func (im *Image) maybeGenerateGpgSignatures(compressedImageCreated, qcow2Created
 		if err := im.ostree.GpgSignFile(qcow2ImagePath); err != nil {
 			return artifacts, fmt.Errorf("failed to GPG sign QCOW2: %w", err)
 		}
-		artifacts = append(artifacts, ostree.GpgSignedFilePath(qcow2ImagePath))
+		artifacts = append(artifacts, cds.GpgSignedFilePath(qcow2ImagePath))
 	}
 
 	// Store the GPG pubkey for later mirroring to CDNs.
