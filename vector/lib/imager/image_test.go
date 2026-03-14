@@ -1637,7 +1637,7 @@ func TestSetupBootloaderConfig(t *testing.T) {
 		im.SetRootfs("/rootfs")
 		im.rootfsMount = "/sysroot"
 		im.bootfsMount = "/boot"
-		err := im.SetupBootloaderConfig("", "/efiboot", "uuid1", "uuid2")
+		err := im.SetupBootloaderConfig("", "/efiboot")
 		if err == nil {
 			t.Error("should error for empty ref")
 		}
@@ -1649,7 +1649,7 @@ func TestSetupBootloaderConfig(t *testing.T) {
 		im.SetRootfs("/rootfs")
 		im.rootfsMount = "/sysroot"
 		im.bootfsMount = "/boot"
-		err := im.SetupBootloaderConfig("ref", "/efiboot", "uuid1", "uuid2")
+		err := im.SetupBootloaderConfig("ref", "/efiboot")
 		if err == nil {
 			t.Error("should propagate ostree error")
 		}
@@ -1659,28 +1659,29 @@ func TestSetupBootloaderConfig(t *testing.T) {
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 		im.rootfsMount = "/sysroot"
 		im.bootfsMount = "/boot"
-		if err := im.SetupBootloaderConfig("ref", "/efi", "u1", "u2"); err == nil {
+		if err := im.SetupBootloaderConfig("ref", "/efi"); err == nil {
 			t.Error("should error for empty rootfs")
 		}
 		im.SetRootfs("/rootfs")
 		im.rootfsMount = ""
-		if err := im.SetupBootloaderConfig("ref", "/efi", "u1", "u2"); err == nil {
+		if err := im.SetupBootloaderConfig("ref", "/efi"); err == nil {
 			t.Error("should error for empty rootfsMount")
 		}
 		im.rootfsMount = "/sys"
 		im.bootfsMount = ""
-		if err := im.SetupBootloaderConfig("ref", "/efi", "u1", "u2"); err == nil {
+		if err := im.SetupBootloaderConfig("ref", "/efi"); err == nil {
 			t.Error("should error for empty bootfsMount")
 		}
 		im.bootfsMount = "/boot"
-		if err := im.SetupBootloaderConfig("ref", "", "u1", "u2"); err == nil {
+		if err := im.SetupBootloaderConfig("ref", ""); err == nil {
 			t.Error("should error for empty efibootdir")
 		}
-		if err := im.SetupBootloaderConfig("ref", "/efi", "", "u2"); err == nil {
-			t.Error("should error for empty efiUUID")
+		if err := im.SetupBootloaderConfig("ref", "/efi"); err == nil {
+			t.Error("should error for empty efiDevice")
 		}
-		if err := im.SetupBootloaderConfig("ref", "/efi", "u1", ""); err == nil {
-			t.Error("should error for empty bootUUID")
+		im.efiDevice = "/dev/sda1"
+		if err := im.SetupBootloaderConfig("ref", "/efi"); err == nil {
+			t.Error("should error for empty bootDevice")
 		}
 	})
 }
