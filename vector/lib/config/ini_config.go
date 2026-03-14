@@ -87,6 +87,12 @@ func findMarkerDir() (string, error) {
 	return "", fmt.Errorf("market path not found in any parent directories of %s", cwd)
 }
 
+// SystemSearchPathEnabled controls whether the fallback system-level
+// search path (/etc/matrixos/conf) is included when resolving config
+// files.  Tests can set this to false to avoid picking up host
+// configuration.
+var SystemSearchPathEnabled = true
+
 func searchPaths(cfgName string) []searchPath {
 	// Navigate CWD up until we find a .matrixos file.
 	var sps []searchPath
@@ -102,16 +108,18 @@ func searchPaths(cfgName string) []searchPath {
 		})
 	}
 
-	// add this as last resort option at the moment.
-	sps = append(sps, searchPath{
-		// Setup for when vector runs from an installed location,
-		// with config in /etc/matrixos/conf.
-		fileName:      cfgName,
-		dirPath:       "/etc/matrixos/conf",
-		confRoot:      "/etc/matrixos",
-		artifactsRoot: "/var/cache/matrixos",
-		defaultRoot:   "/usr/lib/matrixos",
-	})
+	if SystemSearchPathEnabled {
+		// add this as last resort option at the moment.
+		sps = append(sps, searchPath{
+			// Setup for when vector runs from an installed location,
+			// with config in /etc/matrixos/conf.
+			fileName:      cfgName,
+			dirPath:       "/etc/matrixos/conf",
+			confRoot:      "/etc/matrixos",
+			artifactsRoot: "/var/cache/matrixos",
+			defaultRoot:   "/usr/lib/matrixos",
+		})
+	}
 
 	return sps
 }
