@@ -163,19 +163,22 @@ func (c *EnterCommand) resolveNames(names []string) ([]string, error) {
 	}
 
 	// Collect all unique SEEDER_CHROOTS_DIR values.
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	var chrootsDirs []string
 	for _, info := range seeders {
 		paramsPath := filepath.Join(info.Dir, paramsName)
 		if !filesystems.FileExists(paramsPath) {
 			continue
 		}
-		params, err := c.sd.ParseSeederParams(paramsPath)
+		params, err := c.sd.ParseSeederParams(info.Name, paramsPath)
 		if err != nil {
 			// Skip seeders whose params cannot be parsed.
 			continue
 		}
-		if params.ChrootsDir != "" && !seen[params.ChrootsDir] {
+		if params.ChrootsDir == "" {
+			continue
+		}
+		if !seen[params.ChrootsDir] {
 			seen[params.ChrootsDir] = true
 			chrootsDirs = append(chrootsDirs, params.ChrootsDir)
 		}
