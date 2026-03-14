@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"matrixos/vector/lib/config"
 )
 
 // newTestVMDriver creates a VMDriver wired to in-process pipes,
@@ -154,7 +156,7 @@ func TestVMCommandRunMissingImage(t *testing.T) {
 	c := NewVMCommand().(*VMCommand)
 	_ = c.fs.Parse([]string{})
 	// Manually set a cfg so we don't fail on initBaseConfig.
-	c.cfg = &testConfig{items: map[string]string{}}
+	c.cfg = &config.MockConfig{}
 
 	err := c.Run()
 	if err == nil {
@@ -168,7 +170,7 @@ func TestVMCommandRunMissingImage(t *testing.T) {
 func TestVMCommandRunNonAmd64Image(t *testing.T) {
 	c := NewVMCommand().(*VMCommand)
 	_ = c.fs.Parse([]string{"-image", "/tmp/matrixos-arm64.img"})
-	c.cfg = &testConfig{items: map[string]string{}}
+	c.cfg = &config.MockConfig{}
 
 	err := c.Run()
 	if err == nil {

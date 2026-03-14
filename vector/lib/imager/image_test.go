@@ -7,7 +7,6 @@ import (
 
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/runner"
 )
 
@@ -46,7 +45,7 @@ func baseImageConfig() *config.MockConfig {
 }
 
 func newTestImage(cfg *config.MockConfig, ostree *cds.MockOstree) *Image {
-	im, _ := NewImage(cfg, ostree, nil)
+	im, _ := NewImage(cfg, ostree, filesystems.DefaultMockFsenc(), nil)
 	return im
 }
 
@@ -66,7 +65,7 @@ func TestImageImplementsIImage(t *testing.T) {
 
 func TestNewImage(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		im, err := NewImage(baseImageConfig(), &cds.MockOstree{}, nil)
+		im, err := NewImage(baseImageConfig(), &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		if err != nil {
 			t.Fatalf("NewImage() error: %v", err)
 		}
@@ -76,18 +75,26 @@ func TestNewImage(t *testing.T) {
 	})
 
 	t.Run("NilConfig", func(t *testing.T) {
-		_, err := NewImage(nil, &cds.MockOstree{}, nil)
+		_, err := NewImage(nil, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		if err == nil {
 			t.Fatal("expected error for nil config")
 		}
 	})
 
 	t.Run("NilOstree", func(t *testing.T) {
-		_, err := NewImage(baseImageConfig(), nil, nil)
+		_, err := NewImage(baseImageConfig(), nil, filesystems.DefaultMockFsenc(), nil)
 		if err == nil {
 			t.Fatal("expected error for nil ostree")
 		}
 	})
+
+	t.Run("NilFsenc", func(t *testing.T) {
+		_, err := NewImage(baseImageConfig(), &cds.MockOstree{}, nil, nil)
+		if err == nil {
+			t.Fatal("expected error for nil fsenc")
+		}
+	})
+}
 
 // --- Config Accessor Tests ---
 
@@ -165,7 +172,7 @@ func TestConfigAccessorsEmptyValue(t *testing.T) {
 
 func TestConfigAccessorsConfigError(t *testing.T) {
 	ec := &config.ErrConfig{Err: errors.New("cfg error")}
-	im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+	im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 	im.runner = runner.NewMockRunner().Run
 
 	accessors := []struct {
@@ -311,7 +318,7 @@ func TestSetImageMode(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		_, err := im.BuildMetadataFile()
 		if err == nil {
 			t.Error("should error from broken config")
@@ -380,7 +387,7 @@ func TestImagePath(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		im.ref = "someref"
 		_, err := im.ImagePath()
 		if err == nil {
@@ -471,7 +478,7 @@ func TestImagePathWithCompressorExtension(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		_, err := im.ImagePathWithCompressorExtension("/tmp/x.img")
 		if err == nil {
 			t.Error("should error when config fails")
@@ -659,7 +666,7 @@ func TestCompressImage(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		err := im.CompressImage("/tmp/test.img")
 		if err == nil {
 			t.Error("should error when config fails")
@@ -771,7 +778,7 @@ func TestPartitionDevices(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		runner := runner.NewMockRunner()
 		im.runner = runner.Run
 		im.devicePath = "/dev/loop0"
@@ -1072,7 +1079,7 @@ func TestReleaseVersion(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		im.SetRootfs("/tmp/rootfs")
 		_, err := im.ReleaseVersion()
 		if err == nil {
@@ -1176,7 +1183,7 @@ func TestNewImageWithOptions(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		_, err := im.ImageLockDir()
 		if err == nil {
 			t.Error("expected error from EncryptionEnabled")
@@ -1467,7 +1474,7 @@ func TestPackageList(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		im.SetRootfs("/tmp/rootfs")
 		_, err := im.PackageList()
 		if err == nil {
@@ -1754,7 +1761,7 @@ func TestInstallSecurebootCerts(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		im.SetRootfs("/rootfs")
 		im.efifsMount = "/efi"
 		err := im.InstallSecurebootCerts()
@@ -1883,7 +1890,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		im.ref = "test/ref"
 		err := im.ExecuteWithImageLock(func() error { return nil })
 		if err == nil {

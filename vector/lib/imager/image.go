@@ -93,6 +93,7 @@ type IImage interface {
 	MountEfifs(mountEfifs string) error
 	FormatBootfs() error
 	MountBootfs(mountBootfs string) error
+	MaybeEncryptRootfs() error
 	FormatRootfs() error
 	RootfsKernelArgs() []string
 	MountRootfs(mountRootfs string) error
@@ -102,7 +103,7 @@ type IImage interface {
 	SetupVmtestConfig() error
 	InstallSecurebootCerts() error
 	InstallMemtest() error
-	GenerateKernelBootArgs(physicalRootDevice string, encryptionEnabled bool) ([]string, error)
+	GenerateKernelBootArgs() ([]string, error)
 	PackageList() ([]string, error)
 	SetupHooks() error
 	InstallBootloader() error
@@ -121,15 +122,18 @@ type IImage interface {
 
 // Image provides image creation and manipulation operations.
 type Image struct {
-	cfg        config.IConfig
-	ostree     cds.IOstree
-	runner     runner.Func
-	efiDevice  string
-	bootDevice string
-	rootDevice string
-	devicePath string
-	rootfs     string
-	ref        string
+	cfg            config.IConfig
+	ostree         cds.IOstree
+	fsenc          filesystems.IFsenc
+	runner         runner.Func
+	efiDevice      string
+	bootDevice     string
+	rootDevice     string
+	realRootDevice string // if encrypted, devicePath is replaced.
+	devicePath     string
+	rootfs         string
+	ref            string
+	encrypted      bool
 
 	// Mount points, set by Mount* methods on success.
 	efifsMount  string
@@ -169,18 +173,25 @@ func (im *Image) Cleanup() {
 }
 
 // NewImage creates a new Image instance.
-func NewImage(cfg config.IConfig, ostree cds.IOstree, opts *NewImageOptions) (*Image, error) {
+func NewImage(cfg config.IConfig, ot cds.IOstree, fsenc filesystems.IFsenc, opts *NewImageOptions) (*Image, error) {
 	if cfg == nil {
 		return nil, errors.New("missing config parameter")
 	}
 	if ot == nil {
 		return nil, errors.New("missing ostree parameter")
 	}
+	if fsenc == nil {
+		return nil, errors.New("missing fsenc parameter")
+	}
+	encrypted, err := fsenc.EncryptionEnabled()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if encryption is enabled: %w", err)
+	}
+
 	im := &Image{
 		cfg:    cfg,
 		ostree: ot,
 		fsenc:  fsenc,
-		qa:     qa,
 		runner: runner.Run,
 	}
 	if opts != nil {
@@ -189,6 +200,7 @@ func NewImage(cfg config.IConfig, ostree cds.IOstree, opts *NewImageOptions) (*I
 		im.rootDevice = opts.RootDevice
 		im.devicePath = opts.DevicePath
 		im.ref = opts.Ref
+		im.encrypted = encrypted
 	}
 	return im, nil
 }
@@ -853,6 +865,33 @@ func (im *Image) MountBootfs(mountBootfs string) error {
 	return nil
 }
 
+// MaybeEncryptRootfs encrypts the root partition with LUKS if encryption is
+// enabled in the configuration.
+func (im *Image) MaybeEncryptRootfs() error {
+	if !im.encrypted {
+		return nil
+	}
+
+	// Get the current root device.
+	rootDevice := im.RootDevice()
+	im.realRootDevice = rootDevice
+
+	encRootfsName, err := im.fsenc.EncryptedRootFsName()
+	if err != nil {
+		return err
+	}
+	luksDevice, err := filesystems.GetLuksRootfsDevicePath(encRootfsName)
+	if err != nil {
+		return err
+	}
+	if err := im.fsenc.LuksEncrypt(im.rootDevice, luksDevice); err != nil {
+		return fmt.Errorf("LUKS encryption failed: %w", err)
+	}
+	im.SetRootDevice(luksDevice)
+	fmt.Printf("New encrypted rootfs partition: %s\n", luksDevice)
+	return nil
+}
+
 // FormatRootfs creates a btrfs filesystem on the root partition.
 func (im *Image) FormatRootfs() error {
 	if im.rootDevice == "" {
@@ -1361,7 +1400,7 @@ func (im *Image) InstallBootloader() error {
 }
 
 // GenerateKernelBootArgs generates the kernel boot arguments for the image.
-func (im *Image) GenerateKernelBootArgs(physicalRootDevice string, encryptionEnabled bool) ([]string, error) {
+func (im *Image) GenerateKernelBootArgs() ([]string, error) {
 	ref, err := im.cleanAndStripRef()
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean ref: %w", err)
@@ -1372,21 +1411,27 @@ func (im *Image) GenerateKernelBootArgs(physicalRootDevice string, encryptionEna
 	if im.bootDevice == "" {
 		return nil, errors.New("missing bootDevice, not set in NewImageOptions")
 	}
-	if physicalRootDevice == "" {
-		return nil, errors.New("missing physicalRootDevice parameter")
-	}
 	if im.rootDevice == "" {
 		return nil, errors.New("missing rootDevice, not set in NewImageOptions")
+	}
+
+	// if we are encrypting, use the realRootDevice
+	rootDevice := im.rootDevice
+	if im.encrypted {
+		if im.realRootDevice == "" {
+			return nil, errors.New("missing realRootDevice for encrypted image")
+		}
+		rootDevice = im.realRootDevice
 	}
 
 	bootArgs := im.RootfsKernelArgs()
 
 	// Root device UUID for LUKS.
-	rootDeviceUUID, err := filesystems.DeviceUUID(physicalRootDevice)
+	rootDeviceUUID, err := filesystems.DeviceUUID(rootDevice)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get device UUID for %s: %w", physicalRootDevice, err)
+		return nil, fmt.Errorf("unable to get device UUID for %s: %w", rootDevice, err)
 	}
-	if encryptionEnabled {
+	if im.encrypted {
 		bootArgs = append(bootArgs, fmt.Sprintf("rd.luks.uuid=%s", rootDeviceUUID))
 	}
 

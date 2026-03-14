@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,13 +28,9 @@ type IFsenc interface {
 	// OsName returns the OS name as defined in the config.
 	OsName() (string, error)
 
-	// LuksEncrypt encrypts the given block device with LUKS and opens it as
-	// desiredLuksDevice (the full /dev/mapper/<name> path).
+	// Operations
 	LuksEncrypt(devicePath, desiredLuksDevice string) error
-	// ValidateLuksVariables checks that all required LUKS-related configuration
-	// variables are set when encryption is enabled.
 	ValidateLuksVariables() error
-	// Cleanup cleans up the previously opened (or in opening) device mappers.
 	Cleanup()
 }
 
@@ -64,18 +61,22 @@ func NewFsenc(cfg config.IConfig, opening, opened func(string)) (*Fsenc, error) 
 func (f *Fsenc) add(mapperName string) {
 	f.openMappersMu.Lock()
 	defer f.openMappersMu.Unlock()
+	log.Printf("Adding opened device-mapper name to tracking: %s", mapperName)
 	f.openMappers = append(f.openMappers, mapperName)
 }
 
+// Cleanup cleans up the previously opened (or in opening) device mappers.
 func (f *Fsenc) Cleanup() {
 	f.openMappersMu.Lock()
-	mappers := slices.Clone(f.openMappers)
+	openMappers := make([]string, len(f.openMappers))
+	copy(openMappers, f.openMappers)
 	f.openMappers = nil
 	f.openMappersMu.Unlock()
 
-	CleanupCryptsetupDevices(mappers)
+	CleanupCryptsetupDevices(openMappers)
 }
 
+// EncryptionEnabled returns whether rootfs encryption is enabled.
 func (f *Fsenc) EncryptionEnabled() (bool, error) {
 	return f.cfg.GetBool("Imager.Encryption")
 }
@@ -110,6 +111,12 @@ func (f *Fsenc) OsName() (string, error) {
 	return name, nil
 }
 
+// LuksEncrypt formats a device with LUKS encryption and opens it.
+//
+// devicePath is the block device to encrypt (e.g. a partition on a loop device).
+// desiredLuksDevice is the full /dev/mapper/<name> path expected after opening.
+// deviceMappers is a pointer to the caller's slice that tracks opened device-mapper
+// names for cleanup; the LUKS name is appended on success.
 func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string) error {
 	if devicePath == "" {
 		return errors.New("missing devicePath parameter")
@@ -169,19 +176,15 @@ func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string) error {
 	// Track the opened device-mapper name for cleanup.
 	f.add(luksName)
 	f.opening(luksName)
-	err = f.runner(&runner.Cmd{
-		Name: "cryptsetup",
-		Args: []string{
-			"open",
-			"--allow-discards",
-			"--key-file=" + keyFileArg,
-			devicePath,
-			luksName,
-		},
-		Stdin:  stdin,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
-	})
+	err = f.runner(
+		stdin, os.Stdout, os.Stderr,
+		"cryptsetup",
+		"open",
+		"--allow-discards",
+		"--key-file="+keyFileArg,
+		devicePath,
+		luksName,
+	)
 	if err != nil {
 		return fmt.Errorf("cryptsetup open failed on %s: %w", devicePath, err)
 	}
@@ -197,6 +200,9 @@ func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string) error {
 	return nil
 }
 
+// ValidateLuksVariables checks that all required LUKS-related configuration
+// variables are set when encryption is enabled. This mirrors
+// imager_env.validate_luks_variables() from imagerenv.include.sh.
 func (f *Fsenc) ValidateLuksVariables() error {
 	enabled, err := f.EncryptionEnabled()
 	if err != nil {

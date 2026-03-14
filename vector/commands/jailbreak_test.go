@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"matrixos/vector/lib/cds"
 	"matrixos/vector/lib/config"
-	"matrixos/vector/lib/ostree"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,7 +28,7 @@ func (m *mockCmdRunner) SetStderr(_ io.Writer)   {}
 // newTestJailbreakCommand creates a JailbreakCommand with injected mocks,
 // bypassing initConfig/initOstree.
 func newTestJailbreakCommand(
-	ot ostree.IOstree,
+	ot cds.IOstree,
 	cfg *config.MockConfig,
 	runner *jailbreakRunner,
 ) (*JailbreakCommand, error) {
