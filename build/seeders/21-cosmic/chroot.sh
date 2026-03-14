@@ -100,7 +100,7 @@ main() {
     cd /
 
     trap chroots_lib.cleanup EXIT
-    chroots_lib.maybe_mount_common_filesystems
+    chroots_lib.setup
 
     local phases=(
         cosmic.buildenv_bootstrap

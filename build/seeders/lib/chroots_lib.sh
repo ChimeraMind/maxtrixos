@@ -6,6 +6,36 @@ set -eu
 # Used by maybe_mount_common_filesystems.
 MOUNTS=()
 
+# When running as PID 1 in a PID namespace (via unshare --pid --fork),
+# orphaned child processes (e.g. grandchildren of emerge) get re-parented
+# to us. We must reap them to prevent zombie accumulation.
+# Bash internally calls waitpid(-1, WNOHANG) when processing SIGCHLD,
+# which reaps all zombies including re-parented orphans. Installing a
+# SIGCHLD trap ensures bash processes the signal promptly rather than
+# deferring it until the next command boundary.
+_ZOMBIE_REAPER_INSTALLED=0
+
+chroots_lib._reap_zombies() {
+    # wait with no args returns immediately if there are no bash-managed
+    # background jobs, but the act of entering the trap handler already
+    # triggered bash's internal waitpid(-1, WNOHANG) loop which reaps
+    # all zombie children including re-parented orphans.
+    wait 2>/dev/null || true
+}
+
+chroots_lib.setup_zombie_reaper() {
+    if [ "${_ZOMBIE_REAPER_INSTALLED}" = "1" ]; then
+        return
+    fi
+    if [ "$$" = "1" ]; then
+        echo "PID 1 detected, installing SIGCHLD zombie reaper." >&2
+        trap chroots_lib._reap_zombies CHLD
+        _ZOMBIE_REAPER_INSTALLED=1
+    else
+        echo "Not PID 1 (PID=$$), skipping zombie reaper installation." >&2
+    fi
+}
+
 
 _get_phase_path() {
     echo "${SEEDERS_PHASES_STATE_DIR}/${1}.done"
@@ -115,6 +145,8 @@ chroots_lib.validate_matrixos_private() {
 }
 
 chroots_lib.cleanup() {
+    # Final reap of any remaining zombies before exit.
+    wait 2>/dev/null || true
     chroots_lib.maybe_umount_common_filesystems
 }
 
@@ -169,6 +201,11 @@ chroots_lib.maybe_mount_common_filesystems() {
     cat /proc/self/mountinfo >&2
     echo "PID 1 is:" >&2
     readlink /proc/1/exe >&2
+}
+
+chroots_lib.setup() {
+    chroots_lib.setup_zombie_reaper
+    chroots_lib.maybe_mount_common_filesystems
 }
 
 chroots_lib.maybe_umount_common_filesystems() {

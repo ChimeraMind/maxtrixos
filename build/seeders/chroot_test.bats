@@ -196,3 +196,23 @@ _load_chroot_script() {
     run chroots_lib.is_phase_done "bedrock.build_kernel"
     [ "$status" -ne 0 ]
 }
+
+# ===========================================================================
+# All chroot.sh scripts call chroots_lib.setup
+# ===========================================================================
+
+@test "bedrock chroot: main calls chroots_lib.setup" {
+    grep -q 'chroots_lib\.setup' "${BATS_TEST_DIRNAME}/00-bedrock/chroot.sh"
+}
+
+@test "server chroot: main calls chroots_lib.setup" {
+    grep -q 'chroots_lib\.setup' "${BATS_TEST_DIRNAME}/10-server/chroot.sh"
+}
+
+@test "gnome chroot: main calls chroots_lib.setup" {
+    grep -q 'chroots_lib\.setup' "${BATS_TEST_DIRNAME}/20-gnome/chroot.sh"
+}
+
+@test "cosmic chroot: main calls chroots_lib.setup" {
+    grep -q 'chroots_lib\.setup' "${BATS_TEST_DIRNAME}/21-cosmic/chroot.sh"
+}
