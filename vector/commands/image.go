@@ -217,29 +217,32 @@ func (c *ImageCommand) runImage() error {
 	c.im.SetRef(ref)
 	c.ot.SetRef(ref)
 
-	if err := c.initGpg(); err != nil {
-		return err
-	}
+	// Setup image (the main work) under an exclusive image lock.
+	return c.im.ExecuteWithImageLock(func() error {
+		c.PushCleanup(c.im.Cleanup)
+		c.PushCleanup(c.fsenc.Cleanup)
+		c.PushCleanup(func() {
+			stdoutWriter.Flush()
+			stderrWriter.Flush()
+		})
 
-	// Initialize ostree.
-	if c.localOstree {
-		if err := c.showLocalRefs(); err != nil {
+		if err := c.initGpg(); err != nil {
 			return err
 		}
-	} else {
-		if err := c.initializeRemoteOstree(); err != nil {
-			return err
-		}
-	}
 
-	// Setup image (the main work).
-	c.PushCleanup(c.im.Cleanup)
-	c.PushCleanup(c.fsenc.Cleanup)
-	c.PushCleanup(func() {
-		stdoutWriter.Flush()
-		stderrWriter.Flush()
+		// Initialize ostree.
+		if c.localOstree {
+			if err := c.showLocalRefs(); err != nil {
+				return err
+			}
+		} else {
+			if err := c.initializeRemoteOstree(); err != nil {
+				return err
+			}
+		}
+
+		return c.im.Build(buildOpts)
 	})
-	return c.im.Build(buildOpts)
 }
 
 // validateDevicePaths validates the device path flags and returns resolved values.
