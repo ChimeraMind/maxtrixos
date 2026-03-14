@@ -292,7 +292,7 @@ func (c *SeedsCommand) seederWorker(sd *seeder.Seeder, info seeder.SeederInfo) e
 		)
 	}
 
-	flagFile, err := sd.SeederDoneFlagFilePrefix()
+	flagFile, err := sd.SeederDoneFlagFile(info.Name, chrootDir)
 	if err != nil {
 		return err
 	}
