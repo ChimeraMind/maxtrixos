@@ -1274,7 +1274,6 @@ func (im *Image) InstallSecurebootCerts() error {
 	// Copy the shim binaries.
 	shimDir := filepath.Join(im.rootfs, "usr", "share", "shim")
 	fmt.Fprintf(os.Stdout, "Copying shim for Secureboot from %s to %s ...\n", shimDir, efibootDir)
-	// XXX
 	return im.runner(nil, os.Stdout, os.Stderr, "cp", "-v", shimDir+"/.", efibootDir+"/")
 }
 
