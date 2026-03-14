@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"matrixos/vector/lib/filesystems"
-	"matrixos/vector/lib/runner"
 )
 
+// CreateImage creates a sparse image file at imagePath with the given size.
 func (im *Image) CreateImage(imageSize string) (retErr error) {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
@@ -56,32 +56,25 @@ func (im *Image) CreateImage(imageSize string) (retErr error) {
 	return nil
 }
 
+// ClearPartitionTable clears the partition table on a device using sgdisk.
 func (im *Image) ClearPartitionTable() error {
 	if im.devicePath == "" {
 		return errors.New("missing devicePath, not set in NewImageOptions")
 	}
 
 	im.Print("Clearing partition table on %s ...\n", im.devicePath)
-	if err := im.runner(&runner.Cmd{
-		Name:   "sgdisk",
-		Args:   []string{"-g", "-o", im.devicePath},
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	}); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, "sgdisk", "-g", "-o", im.devicePath); err != nil {
 		return fmt.Errorf("sgdisk -g -o failed on %s: %w", im.devicePath, err)
 	}
-	return im.runner(&runner.Cmd{
-		Name:   "sgdisk",
-		Args:   []string{"-Z", im.devicePath},
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	})
+	return im.runner(nil, im.stdout, im.stderr, "sgdisk", "-Z", im.devicePath)
 }
 
+// DatedFsLabel returns a filesystem label based on the current date (YYYYMMDD).
 func (im *Image) DatedFsLabel() string {
 	return time.Now().Format("20060102")
 }
 
+// PartitionDevices creates the EFI, boot, and root partitions on a device.
 func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	if efiSize == "" {
 		return errors.New("missing efiSize parameter")
@@ -121,12 +114,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 		"-t", fmt.Sprintf("1:%s", espPartType),
 		im.devicePath,
 	}
-	if err := im.runner(&runner.Cmd{
-		Name:   epArgs[0],
-		Args:   epArgs[1:],
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	}); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, epArgs[0], epArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk EFI partition failed: %w", err)
 	}
 
@@ -137,12 +125,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 		"-t", fmt.Sprintf("2:%s", bootPartType),
 		im.devicePath,
 	}
-	if err := im.runner(&runner.Cmd{
-		Name:   bpArgs[0],
-		Args:   bpArgs[1:],
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	}); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, bpArgs[0], bpArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk boot partition failed: %w", err)
 	}
 
@@ -153,12 +136,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 		"-t", fmt.Sprintf("3:%s", rootPartType),
 		im.devicePath,
 	}
-	if err := im.runner(&runner.Cmd{
-		Name:   rpArgs[0],
-		Args:   rpArgs[1:],
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	}); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, rpArgs[0], rpArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk root partition failed: %w", err)
 	}
 
@@ -166,12 +144,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	agArgs := []string{
 		"sgdisk", "-A", "3:set:59", im.devicePath,
 	}
-	if err := im.runner(&runner.Cmd{
-		Name:   agArgs[0],
-		Args:   agArgs[1:],
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	}); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, agArgs[0], agArgs[1:]...); err != nil {
 		return fmt.Errorf("sgdisk set auto-grow flag failed: %w", err)
 	}
 
@@ -179,12 +152,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	args := []string{
 		"partprobe", "-s", im.devicePath,
 	}
-	if err := im.runner(&runner.Cmd{
-		Name:   args[0],
-		Args:   args[1:],
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	}); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...); err != nil {
 		return fmt.Errorf("partprobe failed: %w", err)
 	}
 
@@ -192,6 +160,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	return nil
 }
 
+// FormatEfifs creates a FAT32 filesystem on the EFI partition.
 func (im *Image) FormatEfifs() error {
 	if im.efiDevice == "" {
 		return errors.New("missing efiDevice, not set in NewImageOptions")
@@ -205,14 +174,10 @@ func (im *Image) FormatEfifs() error {
 		"-n", label,
 		im.efiDevice,
 	}
-	return im.runner(&runner.Cmd{
-		Name:   args[0],
-		Args:   args[1:],
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	})
+	return im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...)
 }
 
+// MountEfifs mounts the EFI partition.
 func (im *Image) MountEfifs(mountEfifs string) error {
 	if im.efiDevice == "" {
 		return errors.New("missing efiDevice, not set in NewImageOptions")
@@ -230,18 +195,15 @@ func (im *Image) MountEfifs(mountEfifs string) error {
 
 	im.Print("Mounting %s to %s\n", im.efiDevice, mountEfifs)
 	im.trackMount(mountEfifs)
-	if err := im.runner(&runner.Cmd{
-		Name:   "mount",
-		Args:   []string{"-t", "vfat", im.efiDevice, mountEfifs},
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	}); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, "mount", "-t", "vfat", im.efiDevice, mountEfifs); err != nil {
 		return err
 	}
 	im.efifsMount = mountEfifs
 	return nil
 }
 
+// EfiBootDir returns the full path to the EFI boot directory on the mounted
+// EFI filesystem.
 func (im *Image) EfiBootDir() (string, error) {
 	if im.efifsMount == "" {
 		return "", errors.New("EFI filesystem not mounted")
@@ -254,6 +216,7 @@ func (im *Image) EfiBootDir() (string, error) {
 	return efibootDir, nil
 }
 
+// FormatBootfs creates a btrfs filesystem on the boot partition.
 func (im *Image) FormatBootfs() error {
 	if im.bootDevice == "" {
 		return errors.New("missing bootDevice, not set in NewImageOptions")
@@ -267,14 +230,10 @@ func (im *Image) FormatBootfs() error {
 		"-L", label,
 		im.bootDevice,
 	}
-	return im.runner(&runner.Cmd{
-		Name:   args[0],
-		Args:   args[1:],
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	})
+	return im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...)
 }
 
+// MountBootfs mounts the boot partition.
 func (im *Image) MountBootfs(mountBootfs string) error {
 	if im.bootDevice == "" {
 		return errors.New("missing bootDevice, not set in NewImageOptions")
@@ -292,18 +251,15 @@ func (im *Image) MountBootfs(mountBootfs string) error {
 
 	im.Print("Mounting %s to %s\n", im.bootDevice, mountBootfs)
 	im.trackMount(mountBootfs)
-	if err := im.runner(&runner.Cmd{
-		Name:   "mount",
-		Args:   []string{im.bootDevice, mountBootfs},
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	}); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, "mount", im.bootDevice, mountBootfs); err != nil {
 		return err
 	}
 	im.bootfsMount = mountBootfs
 	return nil
 }
 
+// MaybeEncryptRootfs encrypts the root partition with LUKS if encryption is
+// enabled in the configuration.
 func (im *Image) MaybeEncryptRootfs() error {
 	if !im.encrypted {
 		return nil
@@ -329,6 +285,7 @@ func (im *Image) MaybeEncryptRootfs() error {
 	return nil
 }
 
+// FormatRootfs creates a btrfs filesystem on the root partition.
 func (im *Image) FormatRootfs() error {
 	if im.rootDevice == "" {
 		return errors.New("missing rootDevice, not set in NewImageOptions")
@@ -342,18 +299,15 @@ func (im *Image) FormatRootfs() error {
 		"-L", label,
 		im.rootDevice,
 	}
-	return im.runner(&runner.Cmd{
-		Name:   args[0],
-		Args:   args[1:],
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	})
+	return im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...)
 }
 
+// RootfsKernelArgs returns the default kernel arguments for the root filesystem.
 func (im *Image) RootfsKernelArgs() []string {
 	return []string{"rootflags=discard=async"}
 }
 
+// MountRootfs mounts the root partition with btrfs compression options.
 func (im *Image) MountRootfs(mountRootfs string) error {
 	if im.rootDevice == "" {
 		return errors.New("missing rootDevice, not set in NewImageOptions")
@@ -380,12 +334,7 @@ func (im *Image) MountRootfs(mountRootfs string) error {
 		im.rootDevice,
 		mountRootfs,
 	}
-	if err := im.runner(&runner.Cmd{
-		Name:   args[0],
-		Args:   args[1:],
-		Stdout: im.stdout,
-		Stderr: im.stderr,
-	}); err != nil {
+	if err := im.runner(nil, im.stdout, im.stderr, args[0], args[1:]...); err != nil {
 		return err
 	}
 	im.rootfsMount = mountRootfs
@@ -393,6 +342,8 @@ func (im *Image) MountRootfs(mountRootfs string) error {
 	return nil
 }
 
+// FinalizeFilesystems runs fstrim on the root and boot filesystems to improve
+// compression ratios for sparse image files.
 func (im *Image) FinalizeFilesystems() error {
 	if im.rootfsMount == "" {
 		return errors.New("missing rootfsMount, call MountRootfs first")

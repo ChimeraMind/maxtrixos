@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"matrixos/vector/lib/filesystems"
-	"matrixos/vector/lib/runner"
 )
 
+// SetupBootloaderConfig sets up the GRUB bootloader configuration.
 func (im *Image) SetupBootloaderConfig() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -157,6 +157,7 @@ func (im *Image) SetupBootloaderConfig() error {
 	return nil
 }
 
+// SetupVmtestConfig creates a VM test grub config based on the ostree boot config.
 func (im *Image) SetupVmtestConfig() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
@@ -209,6 +210,7 @@ func (im *Image) SetupVmtestConfig() error {
 	return nil
 }
 
+// InstallSecurebootCerts installs SecureBoot certificates on the EFI partition.
 func (im *Image) InstallSecurebootCerts() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -247,18 +249,9 @@ func (im *Image) InstallSecurebootCerts() error {
 		}
 
 		im.Print("Generating SecureBoot MOK ...\n")
-		cmd := &runner.Cmd{
-			Name: "openssl",
-			Args: []string{
-				"x509",
-				"-in", sbCert,
-				"-outform", "DER",
-				"-out", filepath.Join(im.efifsMount, certDerFileName),
-			},
-			Stdout: im.stdout,
-			Stderr: im.stderr,
-		}
-		if err := im.runner(cmd); err != nil {
+		if err := im.runner(nil, im.stdout, im.stderr,
+			"openssl", "x509", "-in", sbCert,
+			"-outform", "DER", "-out", filepath.Join(im.efifsMount, certDerFileName)); err != nil {
 			return fmt.Errorf("openssl DER conversion failed: %w", err)
 		}
 	} else {
@@ -274,17 +267,9 @@ func (im *Image) InstallSecurebootCerts() error {
 		}
 
 		im.Print("Generating SecureBoot KEK DER for convenience ...\n")
-		if err := im.runner(&runner.Cmd{
-			Name: "openssl",
-			Args: []string{
-				"x509",
-				"-in", sbKek,
-				"-outform", "DER",
-				"-out", filepath.Join(im.efifsMount, kekDerFileName),
-			},
-			Stdout: im.stdout,
-			Stderr: im.stderr,
-		}); err != nil {
+		if err := im.runner(nil, im.stdout, im.stderr,
+			"openssl", "x509", "-in", sbKek,
+			"-outform", "DER", "-out", filepath.Join(im.efifsMount, kekDerFileName)); err != nil {
 			return fmt.Errorf("openssl KEK DER conversion failed: %w", err)
 		}
 	} else {
@@ -297,6 +282,7 @@ func (im *Image) InstallSecurebootCerts() error {
 	return filesystems.CopyDirPreserve(shimDir, efibootDir)
 }
 
+// InstallMemtest installs the memtest86+ EFI binary to the EFI boot directory.
 func (im *Image) InstallMemtest() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -314,6 +300,11 @@ func (im *Image) InstallMemtest() error {
 	return filesystems.CopyFile(memtestBin, filepath.Join(efibootDir, "memtest86plus.efi"))
 }
 
+// InstallBootloader installs the GRUB bootloader into the image by running
+// grub-install inside a chroot of the deployed rootfs, then replaces the
+// unsigned GRUBX64.EFI with the signed version.
+// It returns the list of extra mounts created during the process so the caller
+// can track them for cleanup.
 func (im *Image) InstallBootloader() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -357,18 +348,8 @@ func (im *Image) InstallBootloader() error {
 		return fmt.Errorf("failed to create %s: %w", efiChrootMount, err)
 	}
 	im.trackMount(efiChrootMount)
-	efiBind, err := filesystems.NewBindMount(
-		filesystems.BindMountOptions{
-			Src:    im.efifsMount,
-			Dst:    efiChrootMount,
-			Stdout: im.stdout,
-			Stderr: im.stderr,
-		},
-	)
+	err = filesystems.BindMount(im.efifsMount, efiChrootMount)
 	if err != nil {
-		return fmt.Errorf("failed to bind mount EFI: %w", err)
-	}
-	if err := efiBind.Mount(); err != nil {
 		return fmt.Errorf("failed to bind mount EFI: %w", err)
 	}
 
@@ -378,35 +359,18 @@ func (im *Image) InstallBootloader() error {
 		return fmt.Errorf("failed to create %s: %w", bootChrootMount, err)
 	}
 	im.trackMount(bootChrootMount)
-	bootBind, err := filesystems.NewBindMount(
-		filesystems.BindMountOptions{
-			Src:    im.bootfsMount,
-			Dst:    bootChrootMount,
-			Stdout: im.stdout,
-			Stderr: im.stderr,
-		},
-	)
+	err = filesystems.BindMount(im.bootfsMount, bootChrootMount)
 	if err != nil {
-		return fmt.Errorf("failed to bind mount boot: %w", err)
-	}
-	if err := bootBind.Mount(); err != nil {
 		return fmt.Errorf("failed to bind mount boot: %w", err)
 	}
 
 	// Setup common rootfs mounts (dev, proc, etc.) without proc for bootloader.
 	mounter, err := filesystems.NewCommonRootfsMounts(
-		filesystems.CommonRootfsMountsOptions{
-			MountPoint: im.rootfs,
-			Mounting: func(tg string) {
-				im.Print("Mounting: %s ...\n", tg)
-				im.trackMount(tg)
-			},
-			Mounted: func(tg string) {
-				im.Print("Mounted: %s\n", tg)
-			},
-			Stdout: im.stdout,
-			Stderr: im.stderr,
+		im.rootfs,
+		func(tg string) {
+			im.trackMount(tg)
 		},
+		func(tg string) {},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create common rootfs mounter: %w", err)
@@ -416,29 +380,23 @@ func (im *Image) InstallBootloader() error {
 	}
 
 	// Run grub-install inside the chroot.
-	err = filesystems.ExecChrootRun(&runner.ChrootCmd{
-		Cmd: runner.Cmd{
-			Name: "/usr/bin/grub-install",
-			Args: []string{
-				"--target=x86_64-efi",
-				"--directory=/usr/lib/grub/x86_64-efi",
-				"--efi-directory=" + efiRoot,
-				"--boot-directory=" + bootRoot,
-				"--themes=" + osName + "-theme",
-				"--removable",
-				"--modules=ext2 btrfs gzio part_gpt fat part_msdos all_video",
-				im.devicePath,
-			},
-			Stdin:  os.Stdin,
-			Stdout: im.stdout,
-			Stderr: im.stdout,
-		},
-		ChrootDir: im.rootfs,
-	})
+	err = filesystems.ExecChrootRun(
+		os.Stdin, im.stdout, im.stdout,
+		im.rootfs,
+		"/usr/bin/grub-install",
+		"--target=x86_64-efi",
+		"--directory=/usr/lib/grub/x86_64-efi",
+		"--efi-directory="+efiRoot,
+		"--boot-directory="+bootRoot,
+		"--themes="+osName+"-theme",
+		"--removable",
+		"--modules=ext2 btrfs gzio part_gpt fat part_msdos all_video",
+		im.devicePath,
+	)
 
 	// Clean up chroot mounts regardless of grub-install result.
-	bootBind.Unmount()
-	efiBind.Unmount()
+	filesystems.BindUmount(bootChrootMount)
+	filesystems.BindUmount(efiChrootMount)
 	mounter.Cleanup()
 
 	if err != nil {
@@ -465,6 +423,7 @@ func (im *Image) InstallBootloader() error {
 	return nil
 }
 
+// GenerateKernelBootArgs generates the kernel boot arguments for the image.
 func (im *Image) GenerateKernelBootArgs() ([]string, error) {
 	ref, err := im.cleanAndStripRef()
 	if err != nil {

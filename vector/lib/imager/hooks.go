@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 )
 
+// GetKernelPath returns the kernel version directory name from the deployed rootfs.
 func (im *Image) GetKernelPath() (string, error) {
 	if im.rootfs == "" {
 		return "", errors.New("rootfs not set, call SetRootfs first")
@@ -40,6 +40,7 @@ func (im *Image) GetKernelPath() (string, error) {
 	return dirs[0], nil
 }
 
+// SetupPasswords sets default passwords for the matrix and root users.
 func (im *Image) SetupPasswords() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -83,6 +84,7 @@ func (im *Image) SetupPasswords() error {
 	return os.WriteFile(shadowFile, []byte(strings.Join(lines, "\n")+"\n"), 0640)
 }
 
+// ExtractPackageList returns the list of packages installed in a rootfs.
 func (im *Image) ExtractPackageList() ([]string, error) {
 	if im.rootfs == "" {
 		return nil, errors.New("rootfs not set, call SetRootfs first")
@@ -118,9 +120,15 @@ func (im *Image) ExtractPackageList() ([]string, error) {
 			pkgList = append(pkgList, filepath.Join(cat.Name(), pkg.Name()))
 		}
 	}
+
+	im.Print("Generated package list:\n")
+	for _, pkg := range pkgList {
+		im.Print(">> %s\n", pkg)
+	}
 	return pkgList, nil
 }
 
+// SetupHooks runs image-specific hook scripts.
 func (im *Image) SetupHooks() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
@@ -136,26 +144,16 @@ func (im *Image) SetupHooks() error {
 		return err
 	}
 
-	hooksSrcDir, err := im.HooksDir()
-	if err != nil {
-		return err
-	}
-
+	hooksSrcDir := filepath.Join(devDir, "image", "hooks")
 	if !filesystems.DirectoryExists(hooksSrcDir) {
-		im.PrintError(
-			"hooks source dir %s does not exist. Create an empty directory at least.\n",
-			hooksSrcDir,
-		)
-		return fmt.Errorf("hooks source directory does not exist: %s", hooksSrcDir)
+		im.PrintError("hooks source dir %s does not exist\n", hooksSrcDir)
+		return nil
 	}
 
 	hookExec := filepath.Join(hooksSrcDir, ref+".sh")
 	if !filesystems.FileExists(hookExec) {
-		im.PrintError(
-			"hook script %s does not exist. Create an empty executable file at least.\n",
-			hookExec,
-		)
-		return fmt.Errorf("hook script does not exist: %s", hookExec)
+		im.PrintError("hook script %s does not exist\n", hookExec)
+		return nil
 	}
 
 	info, err := os.Stat(hookExec)
@@ -169,12 +167,7 @@ func (im *Image) SetupHooks() error {
 	cmd := exec.Command(hookExec)
 	cmd.Stdout = im.stdout
 	cmd.Stderr = im.stderr
-
-	env := os.Environ()
-	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
-	env = config.FilterEnvKey(env, "ROOTFS")
-	env = config.FilterEnvKey(env, "REF")
-	cmd.Env = append(env,
+	cmd.Env = append(os.Environ(),
 		"MATRIXOS_DEV_DIR="+devDir,
 		"ROOTFS="+im.rootfs,
 		"REF="+ref,
@@ -182,6 +175,7 @@ func (im *Image) SetupHooks() error {
 	return cmd.Run()
 }
 
+// TestImage copies an image to a temp directory and runs test scripts against it.
 func (im *Image) TestImage() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
@@ -225,11 +219,6 @@ func (im *Image) TestImage() error {
 	if err != nil {
 		return err
 	}
-	if !filesystems.DirectoryExists(logsDir) {
-		if err := os.MkdirAll(logsDir, 0755); err != nil {
-			return fmt.Errorf("failed to create logs dir: %w", err)
-		}
-	}
 
 	entries, err := os.ReadDir(testDir)
 	if err != nil {
@@ -250,14 +239,7 @@ func (im *Image) TestImage() error {
 		cmd := exec.Command(ts)
 		cmd.Stdout = im.stdout
 		cmd.Stderr = im.stderr
-
-		env := os.Environ()
-		env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
-		env = config.FilterEnvKey(env, "MATRIXOS_LOGS_DIR")
-		env = config.FilterEnvKey(env, "IMAGE_PATH")
-		env = config.FilterEnvKey(env, "REF")
-
-		cmd.Env = append(env,
+		cmd.Env = append(os.Environ(),
 			"MATRIXOS_DEV_DIR="+devDir,
 			"MATRIXOS_LOGS_DIR="+logsDir,
 			"IMAGE_PATH="+testImagePath,
