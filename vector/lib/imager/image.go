@@ -51,134 +51,14 @@ type IImage interface {
 	// Stderr returns the current warning/error output writer.
 	Stderr() io.Writer
 
-	// Print writes a formatted informational message to stdout.
-	Print(format string, args ...any)
-	// PrintWarning writes a formatted warning message to stderr.
-	PrintWarning(format string, args ...any)
-	// PrintError writes a formatted error/diagnostic message to stderr.
-	PrintError(format string, args ...any)
-
-	// SetEfiDevice sets the EFI device path.
-	SetEfiDevice(device string)
-	// EfiDevice returns the EFI device path.
-	EfiDevice() string
-	// SetBootDevice sets the boot device path.
-	SetBootDevice(device string)
-	// BootDevice returns the boot device path.
-	BootDevice() string
-	// SetRootDevice sets the root device path.
-	SetRootDevice(device string)
-	// RootDevice returns the root device path.
-	RootDevice() string
-	// SetDevicePath sets the block device path (whole device or loop device).
-	SetDevicePath(devicePath string)
-	// DevicePath returns the block device path (whole device or loop device).
-	DevicePath() string
-	// SetImagePath sets the image file path (for ModeCreateImageFile).
-	SetImagePath(imagePath string)
-	// ImagePath returns the currently stored image file path.
-	ImagePath() string
-	// BuildImagePath returns the image file path for the stored ostree ref.
-	BuildImagePath() (string, error)
-	// SetImageMode sets the image creation mode
-	// (e.g. flash to device or create image file).
-	SetImageMode(mode ImageMode) error
-	// ImageMode returns the current image creation mode.
-	ImageMode() ImageMode
-
-	// SetRootfs sets the deployed ostree rootfs path.
-	SetRootfs(rootfs string)
-	// Rootfs returns the deployed ostree rootfs path.
-	Rootfs() string
-	// SetRef sets the ostree ref.
-	SetRef(ref string)
-	// Ref returns the ostree ref.
-	Ref() string
-
-	// EfifsMount returns the EFI filesystem mount point (set by MountEfifs on success).
-	EfifsMount() string
-	// EfiBootDir returns the full path to the EFI boot directory on the mounted EFI filesystem.
-	EfiBootDir() (string, error)
-	// BootfsMount returns the boot filesystem mount point (set by MountBootfs on success).
-	BootfsMount() string
-	// RootfsMount returns the root filesystem mount point (set by MountRootfs on success).
-	RootfsMount() string
-
-	// ImagesDir returns the directory where generated images are stored.
-	ImagesDir() (string, error)
-	// MountDir returns the directory where image partitions are mounted.
-	MountDir() (string, error)
-	// ImageSize returns the configured image size (e.g. "32G").
-	ImageSize() (string, error)
-	// EfiPartitionSize returns the configured EFI partition size (e.g. "200M").
-	EfiPartitionSize() (string, error)
-	// BootPartitionSize returns the configured boot partition size (e.g. "1G").
-	BootPartitionSize() (string, error)
-	// Compressor returns the configured compressor command string (e.g. "xz -f -0 -T0").
-	Compressor() (string, error)
-	// EspPartitionType returns the ESP partition type GUID.
-	EspPartitionType() (string, error)
-	// BootPartitionType returns the boot partition type GUID.
-	BootPartitionType() (string, error)
-	// RootPartitionType returns the root partition type GUID.
-	RootPartitionType() (string, error)
-	// OsName returns the OS name.
-	OsName() (string, error)
-	// BootRoot returns the boot filesystem mount point (e.g. "/boot").
-	BootRoot() (string, error)
-	// EfiRoot returns the EFI filesystem mount point (e.g. "/efi").
-	EfiRoot() (string, error)
-	// RelativeEfiBootPath returns the path relative to EfiRoot where the
-	// standard ESP boot directory is (e.g. "efi/BOOT").
-	RelativeEfiBootPath() (string, error)
-	// EfiExecutable returns the EFI executable name (e.g. "BOOTX64.EFI").
-	EfiExecutable() (string, error)
-	// EfiCertificateFileName returns the SecureBoot PEM certificate file name.
-	EfiCertificateFileName() (string, error)
-	// EfiCertificateFileNameDer returns the SecureBoot DER certificate file name.
-	EfiCertificateFileNameDer() (string, error)
-	// EfiCertificateFileNameKek returns the SecureBoot KEK PEM certificate file name.
-	EfiCertificateFileNameKek() (string, error)
-	// EfiCertificateFileNameKekDer returns the SecureBoot KEK DER certificate file name.
-	EfiCertificateFileNameKekDer() (string, error)
-	// ReadOnlyVdb returns the read-only VDB path (e.g. "/usr/var-db-pkg").
-	ReadOnlyVdb() (string, error)
-	// DevDir returns the matrixOS dev directory (Root).
-	DevDir() (string, error)
-	// HooksDir returns the directory where image generation hooks are placed.
-	HooksDir() (string, error)
-	// LockDir returns the configured image lock directory.
-	LockDir() (string, error)
-	// LockWaitSeconds returns the configured lock wait timeout in seconds.
-	LockWaitSeconds() (string, error)
-	// BuildMetadataFile returns the build metadata file path.
-	BuildMetadataFile() (string, error)
-	// CreateQcow2 returns whether a QCOW2 image should be created
-	// in addition to the raw .img file.
-	CreateQcow2() (bool, error)
-	// Productionize returns whether productionization steps should be
-	// executed after image creation.
-	Productionize() (bool, error)
-	// ImageTests returns whether integration tests should be run
-	// after image creation.
-	ImageTests() (bool, error)
-
-	// Build implements the core image setup logic. It partitions, formats,
-	// mounts, deploys ostree, installs the bootloader, and performs
-	// post-processing (productionization, compression, signing).
-	Build(opts *BuildOptions) error
-	// ExtractReleaseVersion extracts or generates a release version string
-	// for an image. It attempts to read a build metadata file from the rootfs
-	// for the version; if unavailable, falls back to the current date (YYYYMMDD).
-	ExtractReleaseVersion() (string, error)
-	// BuildImagePathWithReleaseVersion returns the image file path with an
-	// embedded release version.
-	BuildImagePathWithReleaseVersion(releaseVersion string) (string, error)
-	// CreateImage creates a sparse image file at imagePath with the given size.
-	CreateImage(imageSize string) error
-	// ClearPartitionTable clears the partition table on a device using sgdisk.
-	ClearPartitionTable() error
-	// DatedFsLabel returns a filesystem label based on the current date (YYYYMMDD).
+	// Operations
+	ReleaseVersion(rootfs string) (string, error)
+	ImagePath(ref string) (string, error)
+	ImagePathWithReleaseVersion(ref, releaseVersion string) (string, error)
+	CreateImage(imagePath, imageSize string) error
+	ImagePathWithCompressorExtension(imagePath string) (string, error)
+	CompressImage(imagePath string) error
+	ClearPartitionTable(devicePath string) error
 	DatedFsLabel() string
 	// PartitionDevices creates the EFI, boot, and root partitions on a device.
 	PartitionDevices(efiSize, bootSize, imageSize string) error
@@ -585,6 +465,39 @@ func (im *Image) BuildMetadataFile() (string, error) {
 
 // --- Helpers ---
 
+// parseHumanSize converts a human-readable size string (e.g. "32G", "200M", "1T")
+// to bytes. Supports K, M, G, T suffixes (case-insensitive). Without a suffix,
+// the value is treated as bytes.
+func parseHumanSize(s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, errors.New("empty size string")
+	}
+
+	multiplier := int64(1)
+	suffix := s[len(s)-1]
+	switch suffix {
+	case 'k', 'K':
+		multiplier = 1024
+		s = s[:len(s)-1]
+	case 'm', 'M':
+		multiplier = 1024 * 1024
+		s = s[:len(s)-1]
+	case 'g', 'G':
+		multiplier = 1024 * 1024 * 1024
+		s = s[:len(s)-1]
+	case 't', 'T':
+		multiplier = 1024 * 1024 * 1024 * 1024
+		s = s[:len(s)-1]
+	}
+
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid size %q: %w", s, err)
+	}
+	return n * multiplier, nil
+}
+
 // imagePath builds the full image file path from a suffix.
 func (im *Image) imagePath(suffix string) (string, error) {
 	outDir, err := im.ImagesOutDir()
@@ -719,38 +632,70 @@ func (im *Image) CreateImage(imagePath, imageSize string) (retErr error) {
 		return err
 	}
 
+	sizeBytes, err := parseHumanSize(imageSize)
+	if err != nil {
+		return fmt.Errorf("failed to parse image size %q: %w", imageSize, err)
+	}
+
 	fmt.Fprintf(os.Stdout, "Creating block device image file: %s\n", imagePath)
-	return im.runner(nil, os.Stdout, os.Stderr, "truncate", "-s", imageSize, imagePath)
+	f, err := os.Create(imagePath)
+	if err != nil {
+		return fmt.Errorf("failed to create image file %s: %w", imagePath, err)
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil && retErr == nil {
+			retErr = cerr
+		}
+	}()
+
+	if err := f.Truncate(sizeBytes); err != nil {
+		return fmt.Errorf("failed to truncate image file %s to %d bytes: %w", imagePath, sizeBytes, err)
+	}
+	return nil
 }
 
 // ImagePathWithCompressorExtension appends the compressor's file extension to the image path.
 // The extension is derived from the first word of the compressor command string.
-func (im *Image) ImagePathWithCompressorExtension(imagePath, compressor string) (string, error) {
+func (im *Image) ImagePathWithCompressorExtension(imagePath string) (string, error) {
 	if imagePath == "" {
 		return "", errors.New("missing imagePath parameter")
+	}
+	compressor, err := im.Compressor()
+	if err != nil {
+		return "", fmt.Errorf("failed to get compressor: %w", err)
 	}
 	if compressor == "" {
 		return "", errors.New("missing compressor parameter")
 	}
 	parts := strings.Fields(compressor)
+	if len(parts) == 0 {
+		return "", errors.New("invalid compressor parameters: empty command")
+	}
 	return imagePath + "." + parts[0], nil
 }
 
 // CompressImage compresses an image file using the configured compressor.
-func (im *Image) CompressImage(imagePath, compressor string) error {
+func (im *Image) CompressImage(imagePath string) error {
 	if imagePath == "" {
 		return errors.New("missing imagePath parameter")
+	}
+	compressor, err := im.Compressor()
+	if err != nil {
+		return fmt.Errorf("failed to get compressor: %w", err)
 	}
 	if compressor == "" {
 		return errors.New("missing compressor parameter")
 	}
 
-	imagePathWithExt, err := im.ImagePathWithCompressorExtension(imagePath, compressor)
+	imagePathWithExt, err := im.ImagePathWithCompressorExtension(imagePath)
 	if err != nil {
 		return err
 	}
 
 	parts := strings.Fields(compressor)
+	if len(parts) == 0 {
+		return errors.New("invalid compressor parameters: empty command")
+	}
 	args := append(parts[1:], imagePath)
 	if err := im.runner(nil, os.Stdout, os.Stderr, parts[0], args...); err != nil {
 		return fmt.Errorf("compression failed: %w", err)
@@ -761,18 +706,6 @@ func (im *Image) CompressImage(imagePath, compressor string) error {
 	}
 	return nil
 }
-
-func (im *Image) ImageMode() ImageMode { return im.mode }
-
-func (im *Image) Rootfs() string { return im.rootfs }
-
-func (im *Image) Ref() string { return im.ref }
-
-func (im *Image) SetRef(ref string) { im.ref = ref }
-
-func (im *Image) EfifsMount() string { return im.efifsMount }
-
-func (im *Image) BootfsMount() string { return im.bootfsMount }
 
 // ClearPartitionTable clears the partition table on a device using sgdisk.
 func (im *Image) ClearPartitionTable(devicePath string) error {
@@ -785,19 +718,6 @@ func (im *Image) ClearPartitionTable(devicePath string) error {
 		return fmt.Errorf("sgdisk -g -o failed on %s: %w", devicePath, err)
 	}
 	return im.runner(nil, os.Stdout, os.Stderr, "sgdisk", "-Z", devicePath)
-}
-
-// GetPartitionType returns the partition type GUID (uppercased) for a device.
-func (im *Image) GetPartitionType(devicePath string) (string, error) {
-	if devicePath == "" {
-		return "", errors.New("missing devicePath parameter")
-	}
-	cmd := exec.Command("lsblk", "-no", "PARTTYPE", devicePath)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("lsblk failed for %s: %w", devicePath, err)
-	}
-	return strings.ToUpper(strings.TrimSpace(string(out))), nil
 }
 
 // DatedFsLabel returns a filesystem label based on the current date (YYYYMMDD).

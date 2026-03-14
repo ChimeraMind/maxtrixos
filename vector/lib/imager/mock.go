@@ -37,10 +37,6 @@ type MockImage struct {
 	ReleaseVersionErr            error
 	PackageList_                 []string
 	PackageListErr               error
-	BlockDeviceForPartPath_      string
-	BlockDeviceForPartPathErr    error
-	BlockDeviceNthPartPaths      map[int]string
-	BlockDeviceNthPartPathErr    error
 	InstallBootloaderResult      []string
 	InstallBootloaderErr         error
 
@@ -116,32 +112,19 @@ func (m *MockImage) CreateImage(imagePath, imageSize string) error {
 	m.CreateImageCalled = true
 	return nil
 }
-func (m *MockImage) ImagePathWithCompressorExtension(imagePath, compressor string) (string, error) {
+func (m *MockImage) ImagePathWithCompressorExtension(imagePath string) (string, error) {
 	return m.ImagePathWithCompExt_, m.ImagePathWithCompExtErr
 }
-func (m *MockImage) CompressImage(imagePath, compressor string) error {
+func (m *MockImage) CompressImage(imagePath string) error {
 	m.CompressImageCalled = true
 	return nil
 }
-func (m *MockImage) BlockDeviceNthPartitionPath(blockDevice string, nth int) (string, error) {
-	if m.BlockDeviceNthPartPaths != nil {
-		if p, ok := m.BlockDeviceNthPartPaths[nth]; ok {
-			return p, m.BlockDeviceNthPartPathErr
-		}
-	}
-	return "", m.BlockDeviceNthPartPathErr
-}
-func (m *MockImage) BlockDeviceForPartitionPath(partitionPath string) (string, error) {
-	return m.BlockDeviceForPartPath_, m.BlockDeviceForPartPathErr
-}
-func (m *MockImage) PartitionNumber(partitionPath string) (string, error) { return "1", nil }
-func (m *MockImage) PartitionLabel(partitionPath string) (string, error)  { return "EFI", nil }
+
 func (m *MockImage) ClearPartitionTable(devicePath string) error {
 	m.ClearPartitionTableCalled = true
 	return nil
 }
-func (m *MockImage) GetPartitionType(devicePath string) (string, error) { return "gpt", nil }
-func (m *MockImage) DatedFsLabel() string                               { return "IMG-20250101" }
+func (m *MockImage) DatedFsLabel() string { return "IMG-20250101" }
 func (m *MockImage) PartitionDevices(efiSize, bootSize, imageSize, devicePath string) error {
 	m.PartitionDevicesCalled = true
 	return nil
