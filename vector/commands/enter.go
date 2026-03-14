@@ -19,7 +19,8 @@ type EnterCommand struct {
 	fs *flag.FlagSet
 
 	// Library instances
-	det seeder.ISeederDetector
+	det      seeder.ISeederDetector
+	detected []seeder.SeederInfo
 
 	// Replaceable for testing
 	chrootRunner runner.ChrootRunFunc
@@ -55,6 +56,12 @@ func (c *EnterCommand) Init(args []string) error {
 		return fmt.Errorf("failed to initialize seeder detector: %w", err)
 	}
 	c.det = det
+
+	detected, err := c.det.Detect(nil, nil)
+	if err != nil {
+		return fmt.Errorf("seeder detection failed: %w", err)
+	}
+	c.detected = detected
 
 	return nil
 }
@@ -159,15 +166,10 @@ func (c *EnterCommand) resolveNames(names []string) ([]string, error) {
 		return nil, fmt.Errorf("failed to get params executable name: %w", err)
 	}
 
-	seeders, err := c.det.Detect(nil, nil)
-	if err != nil {
-		return nil, fmt.Errorf("seeder detection failed: %w", err)
-	}
-
 	// Collect all unique SEEDER_CHROOTS_DIR values.
 	seen := make(map[string]bool)
 	var chrootsDirs []string
-	for _, info := range seeders {
+	for _, info := range c.detected {
 		paramsPath := filepath.Join(info.Dir, paramsName)
 		if !filesystems.FileExists(paramsPath) {
 			continue
@@ -231,14 +233,9 @@ func (c *EnterCommand) enterChrootWithLock(sd seeder.ISeeder, chrootDir string) 
 		return fmt.Errorf("failed to get params executable name: %w", err)
 	}
 
-	seeders, err := c.det.Detect(nil, nil)
-	if err != nil {
-		return fmt.Errorf("seeder detection failed: %w", err)
-	}
-
 	// Find the corresponding seeder chroot dir matching it with chrootDir.
 	var seeder *seeder.SeederInfo
-	for _, info := range seeders {
+	for _, info := range c.detected {
 		paramsPath := filepath.Join(info.Dir, paramsName)
 		if !filesystems.FileExists(paramsPath) {
 			continue
