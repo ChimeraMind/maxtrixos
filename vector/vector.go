@@ -30,6 +30,7 @@ Usage:
   readwrite   - temporarily (until next upgrade) turn OS into a (mutable) read-write system.
   jailbreak   - permanently turns this system into a regular mutable Gentoo.
   dev 	      - development toolkit command, orchestrates development workflow and tools.
+    check           checks that the host has all the required binaries/data to run the build workflow.
     janitor         cleans up development toolkit artifacts, such as old images and downloads.
     vm              runs generated image tests using QEMU.
   build       - build toolkit command, orchestrates building OS artifacts.
