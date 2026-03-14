@@ -723,7 +723,8 @@ func TestPartitionDevices(t *testing.T) {
 		runner := runner.NewMockRunner()
 		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
 
-		err := im.PartitionDevices("200M", "1G", "32G", "/dev/loop0")
+		im.devicePath = "/dev/loop0"
+		err := im.PartitionDevices("200M", "1G", "32G")
 		if err != nil {
 			t.Fatalf("SetImageMode() error: %v", err)
 		}
@@ -736,16 +737,18 @@ func TestPartitionDevices(t *testing.T) {
 		runner := runner.NewMockRunner()
 		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
 
-		if err := im.PartitionDevices("", "1G", "32G", "/dev/x"); err == nil {
+		im.devicePath = "/dev/x"
+		if err := im.PartitionDevices("", "1G", "32G"); err == nil {
 			t.Error("should error for empty efiSize")
 		}
-		if err := im.PartitionDevices("200M", "", "32G", "/dev/x"); err == nil {
+		if err := im.PartitionDevices("200M", "", "32G"); err == nil {
 			t.Error("should error for empty bootSize")
 		}
-		if err := im.PartitionDevices("200M", "1G", "", "/dev/x"); err == nil {
+		if err := im.PartitionDevices("200M", "1G", ""); err == nil {
 			t.Error("should error for empty imageSize")
 		}
-		if err := im.PartitionDevices("200M", "1G", "32G", ""); err == nil {
+		im.devicePath = ""
+		if err := im.PartitionDevices("200M", "1G", "32G"); err == nil {
 			t.Error("should error for empty devicePath")
 		}
 	})
@@ -753,8 +756,9 @@ func TestPartitionDevices(t *testing.T) {
 	t.Run("SgdiskFails", func(t *testing.T) {
 		runner := runner.NewMockRunnerFailOnCall(0, errors.New("sgdisk failed"))
 		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+		im.devicePath = "/dev/loop0"
 
-		err := im.PartitionDevices("200M", "1G", "32G", "/dev/loop0")
+		err := im.PartitionDevices("200M", "1G", "32G")
 		if err == nil {
 			t.Error("should propagate sgdisk error")
 		}
@@ -765,8 +769,9 @@ func TestPartitionDevices(t *testing.T) {
 		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
 		runner := runner.NewMockRunner()
 		im.runner = runner.Run
+		im.devicePath = "/dev/loop0"
 
-		err := im.PartitionDevices("200M", "1G", "32G", "/dev/loop0")
+		err := im.PartitionDevices("200M", "1G", "32G")
 		if err == nil {
 			t.Error("should error from broken config")
 		}

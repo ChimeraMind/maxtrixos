@@ -79,7 +79,7 @@ type IImage interface {
 	CompressImage(imagePath string) error
 	ClearPartitionTable() error
 	DatedFsLabel() string
-	PartitionDevices(efiSize, bootSize, imageSize, devicePath string) error
+	PartitionDevices(efiSize, bootSize, imageSize string) error
 	FormatEfifs() error
 	MountEfifs(mountEfifs string) error
 	FormatBootfs() error
@@ -632,7 +632,7 @@ func (im *Image) DatedFsLabel() string {
 }
 
 // PartitionDevices creates the EFI, boot, and root partitions on a device.
-func (im *Image) PartitionDevices(efiSize, bootSize, imageSize, devicePath string) error {
+func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	if efiSize == "" {
 		return errors.New("missing efiSize parameter")
 	}
@@ -642,8 +642,8 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize, devicePath strin
 	if imageSize == "" {
 		return errors.New("missing imageSize parameter")
 	}
-	if devicePath == "" {
-		return errors.New("missing devicePath parameter")
+	if im.devicePath == "" {
+		return errors.New("missing devicePath, not set in NewImageOptions")
 	}
 
 	espPartType, err := im.EspPartitionType()
@@ -659,7 +659,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize, devicePath strin
 		return err
 	}
 
-	fmt.Fprintf(os.Stdout, "Partitioning %s:\n", devicePath)
+	fmt.Fprintf(os.Stdout, "Partitioning %s:\n", im.devicePath)
 	fmt.Fprintf(os.Stdout, " --> p1 (EFI: %s)\n", efiSize)
 	fmt.Fprintf(os.Stdout, " --> p2 (BOOT: %s)\n", bootSize)
 	fmt.Fprintf(os.Stdout, " --> p3 (ROOT: Remainder of %s, plus autogrow)\n\n", imageSize)
@@ -668,7 +668,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize, devicePath strin
 	if err := im.runner(nil, os.Stdout, os.Stderr, "sgdisk",
 		"-n", fmt.Sprintf("1:0:+%s", efiSize),
 		"-t", fmt.Sprintf("1:%s", espPartType),
-		devicePath); err != nil {
+		im.devicePath); err != nil {
 		return fmt.Errorf("sgdisk EFI partition failed: %w", err)
 	}
 
@@ -676,7 +676,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize, devicePath strin
 	if err := im.runner(nil, os.Stdout, os.Stderr, "sgdisk",
 		"-n", fmt.Sprintf("2:0:+%s", bootSize),
 		"-t", fmt.Sprintf("2:%s", bootPartType),
-		devicePath); err != nil {
+		im.devicePath); err != nil {
 		return fmt.Errorf("sgdisk boot partition failed: %w", err)
 	}
 
@@ -684,19 +684,19 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize, devicePath strin
 	if err := im.runner(nil, os.Stdout, os.Stderr, "sgdisk",
 		"-n", "3:0:-10M",
 		"-t", fmt.Sprintf("3:%s", rootPartType),
-		devicePath); err != nil {
+		im.devicePath); err != nil {
 		return fmt.Errorf("sgdisk root partition failed: %w", err)
 	}
 
 	// Set the auto-grow flag (bit 59) on partition 3.
 	if err := im.runner(nil, os.Stdout, os.Stderr, "sgdisk",
 		"-A", "3:set:59",
-		devicePath); err != nil {
+		im.devicePath); err != nil {
 		return fmt.Errorf("sgdisk set auto-grow flag failed: %w", err)
 	}
 
 	fmt.Fprintln(os.Stdout, "Refreshing partition table ...")
-	if err := im.runner(nil, os.Stdout, os.Stderr, "partprobe", "-s", devicePath); err != nil {
+	if err := im.runner(nil, os.Stdout, os.Stderr, "partprobe", "-s", im.devicePath); err != nil {
 		return fmt.Errorf("partprobe failed: %w", err)
 	}
 
