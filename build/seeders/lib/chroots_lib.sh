@@ -149,9 +149,21 @@ chroots_lib._maybe_mount_dev() {
     fi
 }
 
+chroots_lib._maybe_mount_run_lock() {
+    if ! mountpoint -q /run/lock; then
+        echo "Mounting tmpfs on /run/lock inside chroot since it was not mounted by the host..." >&2
+        mkdir -p /run/lock
+        MOUNTS+=( "/run/lock" )
+        mount -t tmpfs run /run/lock -o rw,nosuid,nodev,noexec,relatime,size=5M
+    else
+        echo "/run/lock is already mounted on the host, skipping mounting it inside chroot." >&2
+    fi
+}
+
 chroots_lib.maybe_mount_common_filesystems() {
     chroots_lib._maybe_mount_sys
     chroots_lib._maybe_mount_dev
+    chroots_lib._maybe_mount_run_lock
 }
 
 chroots_lib.maybe_umount_common_filesystems() {
