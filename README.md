@@ -200,6 +200,9 @@ A quick reference of all user-facing `vector` commands:
 | `vector branch remote` | List remote branches available. |
 | `vector branch local` | List local branches. |
 | `vector branch switch [ref]` | Switch to a different OS branch. |
+| `vector kargs add <karg>...` | Add kernel arguments to all boot entries. |
+| `vector kargs rm <karg>...` | Remove kernel arguments from all boot entries. |
+| `vector cfg get <key>...` | Print config values as `key=value` lines (script-friendly). |
 
 ### Upgrades
 
@@ -294,6 +297,7 @@ The `vector` CLI also provides direct access to individual build stages:
 | `vector dev janitor` | Clean up build artifacts. |
 | `vector dev check` | Verify host has required tools/data. |
 | `vector dev vm` | Test a generated image with QEMU. |
+| `vector cfg get <key>...` | Print config values as `key=value` lines (script-friendly). |
 
 For a full list of flags on any command, run `vector <command> --help`.
 

@@ -37,6 +37,8 @@ Usage:
     janitor         cleans up development toolkit artifacts, such as old images and downloads.
     vm              runs generated image tests using QEMU.
   flash       - install (flash) the running matrixOS system to a block device or partitions.
+  cfg         - shell-script-friendly config access (plain stdout, errors to stderr).
+    get <key>...    print config values as key=value lines.
   build       - build toolkit command, orchestrates building OS artifacts.
     seeds           builds chroot filesystems using the configured seeders.
     release         generates a single OS release (ostree commit).
@@ -63,6 +65,7 @@ func main() {
 		commands.NewSetupOSCommand(),
 		commands.NewJailbreakCommand(),
 		commands.NewDevCommand(),
+		commands.NewCfgCommand(),
 		commands.NewBuildCommand(),
 	}
 
