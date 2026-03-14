@@ -156,6 +156,13 @@ func (c *SeedsCommand) runSeeds() error {
 	}
 	writerSetup(sd)
 
+	// Ensure private repo is initialized.
+	if err := sd.MaybeInitializePrivateRepo(); err != nil {
+		return fmt.Errorf(
+			"private repo initialization failed: %w", err,
+		)
+	}
+
 	// Verify seeder environment.
 	if err := c.qa.VerifySeederEnvironmentSetup("/"); err != nil {
 		return fmt.Errorf(
@@ -168,13 +175,6 @@ func (c *SeedsCommand) runSeeds() error {
 	// Import Gentoo GPG keys.
 	if err := sd.ImportGentooGpgKeys(); err != nil {
 		return fmt.Errorf("GPG key import failed: %w", err)
-	}
-
-	// Ensure private repo is initialized.
-	if err := sd.MaybeInitializePrivateRepo(); err != nil {
-		return fmt.Errorf(
-			"private repo initialization failed: %w", err,
-		)
 	}
 
 	// Detect seeders.
