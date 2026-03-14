@@ -1,6 +1,8 @@
 package imager
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -386,9 +388,17 @@ func NewImage(cfg config.IConfig, ot ostree.IOstree, fsenc filesystems.IFsenc, o
 	return im, nil
 }
 
-func (im *Image) SetEfiDevice(device string) { im.efiDevice = device }
-
-func (im *Image) EfiDevice() string { return im.efiDevice }
+// ImagesOutDir returns the directory where generated images are stored.
+func (im *Image) ImagesOutDir() (string, error) {
+	v, err := im.cfg.GetItem("Imager.ImagesDir")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Imager.ImagesDir")
+	}
+	return v, nil
+}
 
 func (im *Image) SetBootDevice(device string) { im.bootDevice = device }
 
@@ -408,21 +418,347 @@ func (im *Image) SetImagePath(imagePath string) { im.imagePath = imagePath }
 
 func (im *Image) ImagePath() string { return im.imagePath }
 
-func (im *Image) SetImageMode(mode ImageMode) error {
-	switch mode {
-	case ModeFlashToDevice:
-		if im.devicePath == "" {
-			return errors.New("devicePath must be set for ModeFlashToDevice")
+// BootRoot returns the boot filesystem mount point (e.g. "/boot").
+func (im *Image) BootRoot() (string, error) {
+	v, err := im.cfg.GetItem("Imager.BootRoot")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Imager.BootRoot")
+	}
+	return v, nil
+}
+
+// EfiRoot returns the EFI filesystem mount point (e.g. "/efi").
+func (im *Image) EfiRoot() (string, error) {
+	v, err := im.cfg.GetItem("Imager.EfiRoot")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Imager.EfiRoot")
+	}
+	return v, nil
+}
+
+// RelativeEfiBootPath returns the path relative to EfiRoot where the standard ESP
+// boot directory is (e.g. "efi/BOOT").
+func (im *Image) RelativeEfiBootPath() (string, error) {
+	v, err := im.cfg.GetItem("Imager.RelativeEfiBootPath")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Imager.RelativeEfiBootPath")
+	}
+	return v, nil
+}
+
+// EfiExecutable returns the EFI executable name (e.g. "BOOTX64.EFI").
+func (im *Image) EfiExecutable() (string, error) {
+	v, err := im.cfg.GetItem("Imager.EfiExecutable")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Imager.EfiExecutable")
+	}
+	return v, nil
+}
+
+// EfiCertificateFileName returns the SecureBoot PEM certificate file name.
+func (im *Image) EfiCertificateFileName() (string, error) {
+	v, err := im.cfg.GetItem("Imager.EfiCertificateFileName")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Imager.EfiCertificateFileName")
+	}
+	return v, nil
+}
+
+// EfiCertificateFileNameDer returns the SecureBoot DER certificate file name.
+func (im *Image) EfiCertificateFileNameDer() (string, error) {
+	v, err := im.cfg.GetItem("Imager.EfiCertificateFileNameDer")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Imager.EfiCertificateFileNameDer")
+	}
+	return v, nil
+}
+
+// EfiCertificateFileNameKek returns the SecureBoot KEK PEM certificate file name.
+func (im *Image) EfiCertificateFileNameKek() (string, error) {
+	v, err := im.cfg.GetItem("Imager.EfiCertificateFileNameKek")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Imager.EfiCertificateFileNameKek")
+	}
+	return v, nil
+}
+
+// EfiCertificateFileNameKekDer returns the SecureBoot KEK DER certificate file name.
+func (im *Image) EfiCertificateFileNameKekDer() (string, error) {
+	v, err := im.cfg.GetItem("Imager.EfiCertificateFileNameKekDer")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Imager.EfiCertificateFileNameKekDer")
+	}
+	return v, nil
+}
+
+// ReadOnlyVdb returns the read-only VDB path (e.g. "/usr/var-db-pkg").
+func (im *Image) ReadOnlyVdb() (string, error) {
+	v, err := im.cfg.GetItem("Releaser.ReadOnlyVdb")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Releaser.ReadOnlyVdb")
+	}
+	return v, nil
+}
+
+// DevDir returns the matrixOS dev directory (Root).
+func (im *Image) DevDir() (string, error) {
+	v, err := im.cfg.GetItem("matrixOS.Root")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid matrixOS.Root")
+	}
+	return v, nil
+}
+
+// LockDir returns the configured image lock directory.
+func (im *Image) LockDir() (string, error) {
+	v, err := im.cfg.GetItem("Imager.LocksDir")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Imager.LocksDir")
+	}
+	return v, nil
+}
+
+// LockWaitSeconds returns the configured lock wait timeout in seconds.
+func (im *Image) LockWaitSeconds() (string, error) {
+	v, err := im.cfg.GetItem("Imager.LockWaitSeconds")
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return "", errors.New("invalid Imager.LockWaitSeconds")
+	}
+	return v, nil
+}
+
+// BuildMetadataFile returns the build metadata file path (combining
+// ChrootMetadataDir and ChrootMetadataDirBuildFileName).
+func (im *Image) BuildMetadataFile() (string, error) {
+	metadataDir, err := im.cfg.GetItem("Seeder.ChrootMetadataDir")
+	if err != nil {
+		return "", err
+	}
+	if metadataDir == "" {
+		return "", errors.New("invalid Seeder.ChrootMetadataDir")
+	}
+	buildFileName, err := im.cfg.GetItem("Seeder.ChrootMetadataDirBuildFileName")
+	if err != nil {
+		return "", err
+	}
+	if buildFileName == "" {
+		return "", errors.New("invalid Seeder.ChrootMetadataDirBuildFileName")
+	}
+	return filepath.Join(metadataDir, buildFileName), nil
+}
+
+// --- Helpers ---
+
+// imagePath builds the full image file path from a suffix.
+func (im *Image) imagePath(suffix string) (string, error) {
+	outDir, err := im.ImagesOutDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(outDir, suffix), nil
+}
+
+// cleanAndStripRef cleans a remote prefix and removes the -full suffix from a ref.
+func (im *Image) cleanAndStripRef(ref string) (string, error) {
+	ref = cds.CleanRemoteFromRef(ref)
+	stripped, err := im.ostree.RemoveFullFromBranch(ref)
+	if err != nil {
+		return "", err
+	}
+	if stripped == "" {
+		return "", errors.New("invalid ref parameter after cleaning")
+	}
+	return stripped, nil
+}
+
+// refToSuffix converts slashes in a ref to underscores for use in file names.
+func refToSuffix(ref string) string {
+	return strings.ReplaceAll(ref, "/", "_")
+}
+
+// --- Operations ---
+
+func extractSeedName(data []byte) (string, error) {
+	// Extract version from SEED_NAME= line.
+	var releaseVersion string
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "SEED_NAME=") {
+			continue
 		}
-	case ModeCreateImageFile:
-		if im.imagePath == "" {
-			return errors.New("imagePath must be set for ModeCreateImageFile")
+
+		seedName := strings.TrimPrefix(line, "SEED_NAME=")
+		// Version is the part after the last '-'.
+		if idx := strings.LastIndex(seedName, "-"); idx >= 0 {
+			releaseVersion = seedName[idx+1:]
+			fmt.Fprintf(os.Stderr, "Extracted release version: %s\n", releaseVersion)
+		} else {
+			fmt.Fprintf(os.Stderr, "WARNING: SEED_NAME= value has no '-' separator\n")
 		}
-	default:
-		return errors.New("invalid image mode")
+		break
+
+	}
+	if scanner.Err() != nil {
+		return releaseVersion, fmt.Errorf("failed to scan build metadata file: %w", scanner.Err())
+	}
+	return releaseVersion, nil
+}
+
+// ReleaseVersion extracts or generates a release version string for an image.
+// It attempts to read a build metadata file from the rootfs for the version;
+// if unavailable, falls back to the current date (YYYYMMDD).
+func (im *Image) ReleaseVersion(rootfs string) (string, error) {
+	if rootfs == "" {
+		return "", errors.New("missing rootfs parameter")
 	}
 
-	im.mode = mode
+	releaseVersion := time.Now().Format("20060102")
+
+	metadataRelPath, err := im.BuildMetadataFile()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine build metadata file path: %w", err)
+	}
+	metadataFile := filepath.Join(rootfs, metadataRelPath)
+
+	if filesystems.FileExists(metadataFile) {
+		fmt.Fprintf(os.Stderr, "Build metadata:\n")
+		data, err := os.ReadFile(metadataFile)
+		if err != nil {
+			return "", fmt.Errorf("failed to read build metadata file %s: %w", metadataFile, err)
+		}
+		fmt.Fprint(os.Stderr, string(data))
+
+		releaseVersion, err = extractSeedName(data)
+		if err != nil {
+			return "", fmt.Errorf("failed to extract release version from build metadata: %w", err)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "WARNING! Build metadata file not found: %s\n", metadataFile)
+	}
+
+	return releaseVersion, nil
+}
+
+// ImagePath returns the image file path for a given ostree ref.
+func (im *Image) ImagePath(ref string) (string, error) {
+	if ref == "" {
+		return "", errors.New("missing ref parameter")
+	}
+	ref = cds.CleanRemoteFromRef(ref)
+	suffix := refToSuffix(ref) + ".img"
+	return im.imagePath(suffix)
+}
+
+// ImagePathWithReleaseVersion returns the image file path with an embedded release version.
+func (im *Image) ImagePathWithReleaseVersion(ref, releaseVersion string) (string, error) {
+	if ref == "" {
+		return "", errors.New("missing ref parameter")
+	}
+	if releaseVersion == "" {
+		return "", errors.New("missing releaseVersion parameter")
+	}
+	ref = cds.CleanRemoteFromRef(ref)
+	suffix := refToSuffix(ref) + "-" + releaseVersion + ".img"
+	return im.imagePath(suffix)
+}
+
+// CreateImage creates a sparse image file at imagePath with the given size.
+func (im *Image) CreateImage(imagePath, imageSize string) (retErr error) {
+	if imagePath == "" {
+		return errors.New("missing imagePath parameter")
+	}
+	if imageSize == "" {
+		return errors.New("missing imageSize parameter")
+	}
+
+	imagesDir := filepath.Dir(imagePath)
+	fmt.Fprintf(os.Stdout, "Creating images directory: %s (if it does not exist)\n", imagesDir)
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		return fmt.Errorf("failed to create images directory %s: %w", imagesDir, err)
+	}
+
+	// Don't skip removing or sgdisk gets confused due to truncate.
+	if err := im.RemoveImageFile(imagePath); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(os.Stdout, "Creating block device image file: %s\n", imagePath)
+	return im.runner(nil, os.Stdout, os.Stderr, "truncate", "-s", imageSize, imagePath)
+}
+
+// ImagePathWithCompressorExtension appends the compressor's file extension to the image path.
+// The extension is derived from the first word of the compressor command string.
+func (im *Image) ImagePathWithCompressorExtension(imagePath, compressor string) (string, error) {
+	if imagePath == "" {
+		return "", errors.New("missing imagePath parameter")
+	}
+	if compressor == "" {
+		return "", errors.New("missing compressor parameter")
+	}
+	parts := strings.Fields(compressor)
+	return imagePath + "." + parts[0], nil
+}
+
+// CompressImage compresses an image file using the configured compressor.
+func (im *Image) CompressImage(imagePath, compressor string) error {
+	if imagePath == "" {
+		return errors.New("missing imagePath parameter")
+	}
+	if compressor == "" {
+		return errors.New("missing compressor parameter")
+	}
+
+	imagePathWithExt, err := im.ImagePathWithCompressorExtension(imagePath, compressor)
+	if err != nil {
+		return err
+	}
+
+	parts := strings.Fields(compressor)
+	args := append(parts[1:], imagePath)
+	if err := im.runner(nil, os.Stdout, os.Stderr, parts[0], args...); err != nil {
+		return fmt.Errorf("compression failed: %w", err)
+	}
+
+	if !filesystems.FileExists(imagePathWithExt) {
+		return fmt.Errorf("compressed image was not created at the expected path: %s", imagePathWithExt)
+	}
 	return nil
 }
 
@@ -538,7 +874,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize, devicePath strin
 		return fmt.Errorf("partprobe failed: %w", err)
 	}
 
-	fslib.DevicesSettle()
+	filesystems.DevicesSettle()
 	return nil
 }
 
@@ -562,7 +898,7 @@ func (im *Image) MountEfifs(efiDevice, mountEfifs string) error {
 		return errors.New("missing mountEfifs parameter")
 	}
 
-	if !fslib.DirectoryExists(mountEfifs) {
+	if !filesystems.DirectoryExists(mountEfifs) {
 		fmt.Fprintf(os.Stdout, "Creating %s ...\n", mountEfifs)
 		if err := os.MkdirAll(mountEfifs, 0755); err != nil {
 			return fmt.Errorf("failed to create mount point %s: %w", mountEfifs, err)
@@ -593,7 +929,7 @@ func (im *Image) MountBootfs(bootDevice, mountBootfs string) error {
 		return errors.New("missing mountBootfs parameter")
 	}
 
-	if !fslib.DirectoryExists(mountBootfs) {
+	if !filesystems.DirectoryExists(mountBootfs) {
 		fmt.Fprintf(os.Stdout, "Creating %s ...\n", mountBootfs)
 		if err := os.MkdirAll(mountBootfs, 0755); err != nil {
 			return fmt.Errorf("failed to create mount point %s: %w", mountBootfs, err)
@@ -627,6 +963,13 @@ func (im *Image) MountRootfs(rootDevice, mountRootfs string) error {
 	}
 	if mountRootfs == "" {
 		return errors.New("missing mountRootfs parameter")
+	}
+
+	if !filesystems.DirectoryExists(mountRootfs) {
+		fmt.Fprintf(os.Stdout, "Creating %s ...\n", mountRootfs)
+		if err := os.MkdirAll(mountRootfs, 0755); err != nil {
+			return fmt.Errorf("failed to create mount point %s: %w", mountRootfs, err)
+		}
 	}
 
 	compression := "zstd:6"
@@ -756,7 +1099,7 @@ func (im *Image) SetupBootloaderConfig(ref, ostreeDeployRootfs, sysroot, bootdir
 	}
 	srcGrubCfg = resolved
 
-	if !fslib.FileExists(srcGrubCfg) {
+	if !filesystems.FileExists(srcGrubCfg) {
 		return fmt.Errorf("grub config %s does not exist", srcGrubCfg)
 	}
 	fmt.Fprintf(os.Stdout, "Using grub config from %s\n", srcGrubCfg)
@@ -778,7 +1121,7 @@ func (im *Image) SetupBootloaderConfig(ref, ostreeDeployRootfs, sysroot, bootdir
 		return err
 	}
 	themesDir := filepath.Join(ostreeDeployRootfs, "usr", "share", "grub", "themes", osName+"-theme")
-	if fslib.DirectoryExists(themesDir) {
+	if filesystems.DirectoryExists(themesDir) {
 		fmt.Fprintf(os.Stdout, "Copying GRUB themes from %s ...\n", themesDir)
 		dstThemesDir := filepath.Join(bootdir, "grub", "themes")
 		if err := os.MkdirAll(dstThemesDir, 0755); err != nil {
@@ -836,7 +1179,7 @@ func (im *Image) SetupVmtestConfig(bootdir string) error {
 	fmt.Fprintf(os.Stdout, "Setting up vmtest grub config based on the ostree boot config in %s ...\n", bootdir)
 
 	ostreeBootCfg := filepath.Join(bootdir, "loader", "entries", "ostree-1.conf")
-	if !fslib.FileExists(ostreeBootCfg) {
+	if !filesystems.FileExists(ostreeBootCfg) {
 		return fmt.Errorf("%s does not exist, cannot set up vmtest config", ostreeBootCfg)
 	}
 
@@ -908,7 +1251,7 @@ func (im *Image) InstallSecurebootCerts(ostreeDeployRootfs, mountEfifs, efibootd
 
 	// SecureBoot certificate (db).
 	sbCert := filepath.Join(ostreeDeployRootfs, "etc", "portage", "secureboot.pem")
-	if fslib.FileExists(sbCert) {
+	if filesystems.FileExists(sbCert) {
 		fmt.Fprintln(os.Stdout, "Copying SecureBoot cert to EFI partition ...")
 		if err := copyFile(sbCert, filepath.Join(mountEfifs, certFileName)); err != nil {
 			return fmt.Errorf("failed to copy SecureBoot cert: %w", err)
@@ -926,7 +1269,7 @@ func (im *Image) InstallSecurebootCerts(ostreeDeployRootfs, mountEfifs, efibootd
 
 	// SecureBoot KEK certificate.
 	sbKek := filepath.Join(ostreeDeployRootfs, "etc", "portage", "secureboot-kek.pem")
-	if fslib.FileExists(sbKek) {
+	if filesystems.FileExists(sbKek) {
 		fmt.Fprintln(os.Stdout, "Copying SecureBoot KEK cert to EFI partition ...")
 		if err := copyFile(sbKek, filepath.Join(mountEfifs, kekFileName)); err != nil {
 			return fmt.Errorf("failed to copy SecureBoot KEK cert: %w", err)
@@ -958,7 +1301,7 @@ func (im *Image) InstallMemtest(ostreeDeployRootfs, efibootdir string) error {
 	}
 
 	memtestBin := filepath.Join(ostreeDeployRootfs, "usr", "share", "memtest86+", "memtest.efi64")
-	if !fslib.PathExists(memtestBin) {
+	if !filesystems.PathExists(memtestBin) {
 		fmt.Fprintf(os.Stderr, "WARNING: %s not available, please install memtest86+\n", memtestBin)
 		return nil
 	}
@@ -1013,7 +1356,7 @@ func (im *Image) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, 
 	if err := os.MkdirAll(efiChrootMount, 0755); err != nil {
 		return extraMounts, fmt.Errorf("failed to create %s: %w", efiChrootMount, err)
 	}
-	mnt, err := fslib.BindMount(mountEfifs, efiChrootMount)
+	mnt, err := filesystems.BindMount(mountEfifs, efiChrootMount)
 	if err != nil {
 		return extraMounts, fmt.Errorf("failed to bind mount EFI: %w", err)
 	}
@@ -1024,21 +1367,21 @@ func (im *Image) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, 
 	if err := os.MkdirAll(bootChrootMount, 0755); err != nil {
 		return extraMounts, fmt.Errorf("failed to create %s: %w", bootChrootMount, err)
 	}
-	mnt, err = fslib.BindMount(mountBootfs, bootChrootMount)
+	mnt, err = filesystems.BindMount(mountBootfs, bootChrootMount)
 	if err != nil {
 		return extraMounts, fmt.Errorf("failed to bind mount boot: %w", err)
 	}
 	extraMounts = append(extraMounts, mnt)
 
 	// Setup common rootfs mounts (dev, proc, etc.) without proc for bootloader.
-	chrootMounts, err := fslib.SetupCommonRootfsMounts(ostreeDeployRootfs)
+	chrootMounts, err := filesystems.SetupCommonRootfsMounts(ostreeDeployRootfs)
 	if err != nil {
 		return extraMounts, fmt.Errorf("failed to setup common rootfs mounts: %w", err)
 	}
 	extraMounts = append(extraMounts, chrootMounts...)
 
 	// Run grub-install inside the chroot.
-	err = fslib.ChrootRun(ostreeDeployRootfs, "/usr/bin/grub-install",
+	err = filesystems.ChrootRun(ostreeDeployRootfs, "/usr/bin/grub-install",
 		"--target=x86_64-efi",
 		"--directory=/usr/lib/grub/x86_64-efi",
 		"--efi-directory="+efiRoot,
@@ -1050,9 +1393,9 @@ func (im *Image) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, 
 	)
 
 	// Clean up chroot mounts regardless of grub-install result.
-	fslib.BindUmount(bootChrootMount)
-	fslib.BindUmount(efiChrootMount)
-	fslib.UnsetupCommonRootfsMounts(ostreeDeployRootfs)
+	filesystems.BindUmount(bootChrootMount)
+	filesystems.BindUmount(efiChrootMount)
+	filesystems.UnsetupCommonRootfsMounts(ostreeDeployRootfs)
 
 	if err != nil {
 		return nil, fmt.Errorf("grub-install failed: %w", err)
@@ -1060,7 +1403,7 @@ func (im *Image) InstallBootloader(ostreeDeployRootfs, mountEfifs, mountBootfs, 
 
 	// Verify BOOTX64.EFI was created.
 	bootx64efi := filepath.Join(efibootdir, efiExe)
-	if !fslib.PathExists(bootx64efi) {
+	if !filesystems.PathExists(bootx64efi) {
 		return nil, fmt.Errorf("%s does not exist after grub-install", bootx64efi)
 	}
 
@@ -1100,7 +1443,7 @@ func (im *Image) GenerateKernelBootArgs(ref, efiDevice, bootDevice, physicalRoot
 	bootArgs := im.RootfsKernelArgs()
 
 	// Root device UUID for LUKS.
-	rootDeviceUUID, err := fslib.DeviceUUID(physicalRootDevice)
+	rootDeviceUUID, err := filesystems.DeviceUUID(physicalRootDevice)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get device UUID for %s: %w", physicalRootDevice, err)
 	}
@@ -1113,7 +1456,7 @@ func (im *Image) GenerateKernelBootArgs(ref, efiDevice, bootDevice, physicalRoot
 	if err != nil {
 		return nil, err
 	}
-	efiPartUUID, err := fslib.DevicePartUUID(efiDevice)
+	efiPartUUID, err := filesystems.DevicePartUUID(efiDevice)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get PARTUUID of EFI partition: %w", err)
 	}
@@ -1124,7 +1467,7 @@ func (im *Image) GenerateKernelBootArgs(ref, efiDevice, bootDevice, physicalRoot
 	if err != nil {
 		return nil, err
 	}
-	bootPartUUID, err := fslib.DevicePartUUID(bootDevice)
+	bootPartUUID, err := filesystems.DevicePartUUID(bootDevice)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get PARTUUID of boot partition: %w", err)
 	}
@@ -1136,7 +1479,7 @@ func (im *Image) GenerateKernelBootArgs(ref, efiDevice, bootDevice, physicalRoot
 		return nil, err
 	}
 	cmdlineFile := filepath.Join(devDir, "image", "boot", ref, "cmdline.conf")
-	if fslib.FileExists(cmdlineFile) {
+	if filesystems.FileExists(cmdlineFile) {
 		fmt.Fprintf(os.Stdout, "Reading additional kernel cmdline params from %s ...\n", cmdlineFile)
 		data, err := os.ReadFile(cmdlineFile)
 		if err != nil {
@@ -1169,7 +1512,7 @@ func (im *Image) PackageList(rootfs string) ([]string, error) {
 	}
 
 	vdb := filepath.Join(strings.TrimRight(rootfs, "/"), roVdb)
-	if !fslib.DirectoryExists(vdb) {
+	if !filesystems.DirectoryExists(vdb) {
 		fmt.Fprintf(os.Stderr, "%s does not exist. cannot generate pkglist\n", vdb)
 		return nil, nil
 	}
@@ -1220,13 +1563,13 @@ func (im *Image) SetupHooks(ostreeDeployRootfs, ref string) error {
 	}
 
 	hooksSrcDir := filepath.Join(devDir, "image", "hooks")
-	if !fslib.DirectoryExists(hooksSrcDir) {
+	if !filesystems.DirectoryExists(hooksSrcDir) {
 		fmt.Fprintf(os.Stderr, "hooks source dir %s does not exist\n", hooksSrcDir)
 		return nil
 	}
 
 	hookExec := filepath.Join(hooksSrcDir, ref+".sh")
-	if !fslib.FileExists(hookExec) {
+	if !filesystems.FileExists(hookExec) {
 		fmt.Fprintf(os.Stderr, "hook script %s does not exist\n", hookExec)
 		return nil
 	}
@@ -1270,7 +1613,7 @@ func (im *Image) TestImage(imagePath, ref string) error {
 	}
 
 	testDir := filepath.Join(devDir, "image", "tests", ref)
-	if !fslib.DirectoryExists(testDir) {
+	if !filesystems.DirectoryExists(testDir) {
 		fmt.Fprintf(os.Stderr, "test dir %s does not exist, skipping test\n", testDir)
 		return nil
 	}
@@ -1280,7 +1623,7 @@ func (im *Image) TestImage(imagePath, ref string) error {
 		return err
 	}
 
-	imageTempDir, err := fslib.CreateTempDir(mountDir, refToSuffix(ref))
+	imageTempDir, err := filesystems.CreateTempDir(mountDir, refToSuffix(ref))
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir for testing: %w", err)
 	}

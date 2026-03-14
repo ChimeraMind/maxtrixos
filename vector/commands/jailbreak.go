@@ -8,8 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
-	"matrixos/vector/lib/ostree"
 )
 
 // mountInfo holds the UUID and filesystem type for a mountpoint.
