@@ -697,13 +697,13 @@ func (im *Image) ExtractReleaseVersion() (string, error) {
 	metadataFile := filepath.Join(im.rootfs, metadataRelPath)
 
 	if filesystems.FileExists(metadataFile) {
-		im.PrintError("Build metadata:\n")
+		im.Print("Build metadata:\n")
 		data, err := os.ReadFile(metadataFile)
 		if err != nil {
 			return "", fmt.Errorf(
 				"failed to read build metadata file %s: %w", metadataFile, err)
 		}
-		im.PrintError("%s", string(data))
+		im.Print("%s", string(data))
 
 		releaseVersion, err = im.extractSeedName(data)
 		if err != nil {
@@ -1951,12 +1951,10 @@ func (im *Image) ShowImageTestInfo(artifacts []string) error {
 		}
 	}
 
-	im.Print("\n")
 	im.Print("How to test:\n")
-	im.Print("$ vector dev vm -image IMAGE_PATH -memory 8G -interactive\n")
-	im.Print("\n")
+	im.Print("    # vector dev vm -image %s -memory 8G -interactive\n", im.imagePath)
 	im.Print("To move to a USB stick:\n")
-	im.Print("    dd if=IMAGE_PATH of=/dev/sdX bs=4M conv=sparse,sync status=progress\n")
+	im.Print("    xz -dc %s | dd of=/dev/sdX bs=4M conv=sparse,sync status=progress\n", im.imagePath)
 	return nil
 }
 

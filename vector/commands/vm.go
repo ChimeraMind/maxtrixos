@@ -135,24 +135,18 @@ func (vm *VMDriver) Wait() error {
 type VMCommand struct {
 	BaseCommand
 	UI
-	fs            *flag.FlagSet
-	imagePath     string
-	memory        string
-	gpuMemory     string
-	port          string
-	waitBoot      time.Duration
-	waitTests     time.Duration
-	maxRunTime    time.Duration
-	display       string
-	venusAccel    bool
-	graphical     bool
-	gpuAccel      bool
-	audio         bool
-	interactive   bool
-	audioDev      string
-	cpus          string
-	extraDisk     bool
-	extraDiskSize string
+	fs          *flag.FlagSet
+	imagePath   string
+	memory      string
+	port        string
+	waitBoot    time.Duration
+	waitTests   time.Duration
+	maxRunTime  time.Duration
+	nographic   bool
+	noAudio     bool
+	interactive bool
+	audioDev    string
+	cpus        string
 
 	// Styled I/O writers
 	stdout *styledWriter

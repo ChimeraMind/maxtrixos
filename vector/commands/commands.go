@@ -192,7 +192,7 @@ func (ui *UI) NewStdoutWriter(name string) *styledWriter {
 // NewStderrWriter creates a styled writer for os.Stderr using the UI
 // theme.  See NewStdoutWriter for details.
 func (ui *UI) NewStderrWriter(name string) *styledWriter {
-	prefix := fmt.Sprintf("%s%s%s[%s]%s", ui.cBold, ui.cRed, ui.iconWarn, name, ui.cReset)
+	prefix := fmt.Sprintf("%s%s%s[%s]%s", ui.cBold, ui.cRed, ui.iconError, name, ui.cReset)
 	return newStyledWriter(os.Stderr, prefix, ui.cYellow, ui.cReset, ui.isTTY)
 }
 
@@ -319,11 +319,3 @@ func (ui *UI) StartUI() {
 
 var execCommand = exec.Command
 var getEuid = os.Geteuid
-
-func getSysrootFlag(sysroot string) string {
-	return fmt.Sprintf("--sysroot=%s", sysroot)
-}
-
-func getRepoFlag(sysroot string) string {
-	return fmt.Sprintf("--repo=%s/ostree/repo", sysroot)
-}
