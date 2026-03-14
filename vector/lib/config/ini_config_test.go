@@ -41,6 +41,7 @@ SecureBootKekPublicKey=sb-keys/KEK.pem
 DefaultSecureBootPrivateKey=sb-keys/db.key
 DefaultSecureBootPublicKey=sb-keys/db.pem
 LocksDir=locks/seeder
+SeedersDir=build/seeders
 ChrootSeedersDir=build/seeders
 
 [Releaser]
