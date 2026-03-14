@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"matrixos/vector/lib/filesystems"
-	"matrixos/vector/lib/runner"
 )
 
 const (
@@ -14,11 +13,14 @@ const (
 	imagerPortageSecureBootKek = "etc/portage/secureboot-kek.pem"
 )
 
+// CleanRootfs cleans the image directory rootfs for release.
 func (r *Releaser) CleanRootfs() error {
-	if err := checkImageDir(r.imageDir); err != nil {
-		return err
+	imageDir := r.imageDir
+
+	if imageDir == "" {
+		return fmt.Errorf("imageDir is not set")
 	}
-	if err := filesystems.CheckDirIsRoot(r.imageDir); err != nil {
+	if err := filesystems.CheckDirIsRoot(imageDir); err != nil {
 		return err
 	}
 
@@ -27,7 +29,7 @@ func (r *Releaser) CleanRootfs() error {
 	if err != nil {
 		return err
 	}
-	certDst := filepath.Join(r.imageDir, imagerPortageSecureBootPem)
+	certDst := filepath.Join(imageDir, imagerPortageSecureBootPem)
 	if err := filesystems.CopyFile(certSrc, certDst); err != nil {
 		return fmt.Errorf("failed to copy secureboot cert: %w", err)
 	}
@@ -36,7 +38,7 @@ func (r *Releaser) CleanRootfs() error {
 	if err != nil {
 		return err
 	}
-	kekDst := filepath.Join(r.imageDir, imagerPortageSecureBootKek)
+	kekDst := filepath.Join(imageDir, imagerPortageSecureBootKek)
 	if err := filesystems.CopyFile(kekSrc, kekDst); err != nil {
 		return fmt.Errorf("failed to copy secureboot KEK cert: %w", err)
 	}
@@ -71,8 +73,6 @@ func (r *Releaser) CleanRootfs() error {
 
 	removeFiles := []string{
 		"/etc/resolv.conf",
-		"/etc/ssl/apache2/server.key",
-		"/etc/ssl/apache2/server.pem",
 		"/etc/portage/secureboot.x509",
 		"/root/.bash_history",
 		"/root/.lesshst",
@@ -81,44 +81,30 @@ func (r *Releaser) CleanRootfs() error {
 		"/var/lib/sbctl/keys",
 	}
 
-	rdOpts := filesystems.RemoveDirOptions{
-		Stdout: r.stdout,
-		Stderr: r.stderr,
-	}
 	for _, d := range removeDirs {
-		_ = filesystems.RemoveDir(filepath.Join(r.imageDir, d), rdOpts)
-	}
-
-	edOpts := filesystems.EmptyDirOptions{
-		Stdout: r.stdout,
-		Stderr: r.stderr,
+		_ = filesystems.RemoveDir(filepath.Join(imageDir, d))
 	}
 	for _, d := range emptyDirs {
-		_ = filesystems.EmptyDir(filepath.Join(r.imageDir, d), edOpts)
-	}
-
-	rfgOpts := filesystems.RemoveFileWithGlobOptions{
-		Stdout: r.stdout,
-		Stderr: r.stderr,
+		_ = filesystems.EmptyDir(filepath.Join(imageDir, d))
 	}
 	for _, p := range removeFiles {
-		_ = filesystems.RemoveFileWithGlob(
-			filepath.Join(r.imageDir, p),
-			rfgOpts,
-		)
+		_ = filesystems.RemoveFileWithGlob(filepath.Join(imageDir, p))
 	}
 
 	// Prepare Portage directory.
-	os.MkdirAll(filepath.Join(r.imageDir, "var/db/repos/gentoo"), 0755)
+	os.MkdirAll(filepath.Join(imageDir, "var/db/repos/gentoo"), 0755)
 
 	return nil
 }
 
+// PostCleanShrink removes unnecessary development artifacts to save space.
 func (r *Releaser) PostCleanShrink() error {
-	if err := checkImageDir(r.imageDir); err != nil {
-		return err
+	imageDir := r.imageDir
+
+	if imageDir == "" {
+		return fmt.Errorf("imageDir is not set")
 	}
-	if err := filesystems.CheckDirIsRoot(r.imageDir); err != nil {
+	if err := filesystems.CheckDirIsRoot(imageDir); err != nil {
 		return err
 	}
 
@@ -127,7 +113,7 @@ func (r *Releaser) PostCleanShrink() error {
 	// Set up chroot mounts for emerge.
 	mounts, err := filesystems.NewCommonRootfsMounts(
 		filesystems.CommonRootfsMountsOptions{
-			MountPoint: r.imageDir,
+			MountPoint: imageDir,
 			Mounting: func(mnt string) {
 				r.Print("Mounting: %s ...\n", mnt)
 				r.trackMount(mnt)
@@ -135,32 +121,23 @@ func (r *Releaser) PostCleanShrink() error {
 			Mounted: func(mnt string) {
 				r.Print("Mounted: %s\n", mnt)
 			},
-			Stdout: r.stdout,
-			Stderr: r.stderr,
 		},
 	)
 	if err != nil {
 		return err
 	}
-	defer mounts.Cleanup()
-
 	if err := mounts.Setup(); err != nil {
+		mounts.Cleanup() // clean up any partially-created bind mounts
 		return fmt.Errorf("failed to set up chroot mounts: %w", err)
 	}
+	defer mounts.Cleanup()
 
-	err = r.chrootRunner(&runner.ChrootCmd{
-		Cmd: runner.Cmd{
-			Name: "emerge",
-			Args: []string{
-				"--depclean",
-				"--with-bdeps=n",
-				"--complete-graph",
-			},
-			Stdout: r.stdout,
-			Stderr: r.stderr,
-		},
-		ChrootDir: r.imageDir,
-	})
+	err = filesystems.ChrootRun(imageDir,
+		"emerge",
+		"--depclean",
+		"--with-bdeps=n",
+		"--complete-graph",
+	)
 	if err != nil {
 		return fmt.Errorf("emerge --depclean failed: %w", err)
 	}
@@ -173,18 +150,10 @@ func (r *Releaser) PostCleanShrink() error {
 	}
 
 	for _, d := range removeDirs {
-		opts := filesystems.RemoveDirOptions{
-			Stdout: r.stdout,
-			Stderr: r.stderr,
-		}
-		_ = filesystems.RemoveDir(filepath.Join(r.imageDir, d), opts)
+		_ = filesystems.RemoveDir(filepath.Join(imageDir, d))
 	}
 	for _, d := range emptyDirs {
-		opts := filesystems.EmptyDirOptions{
-			Stdout: r.stdout,
-			Stderr: r.stderr,
-		}
-		_ = filesystems.EmptyDir(filepath.Join(r.imageDir, d), opts)
+		_ = filesystems.EmptyDir(filepath.Join(imageDir, d))
 	}
 
 	r.Print("Removing all {.a,.la} files\n")
@@ -202,7 +171,7 @@ func (r *Releaser) PostCleanShrink() error {
 		return nil
 	}
 
-	_ = filepath.WalkDir(filepath.Join(r.imageDir, "usr"), walker)
+	_ = filepath.WalkDir(filepath.Join(imageDir, "usr"), walker)
 
 	r.Print("Shrink completed.\n")
 	return nil
