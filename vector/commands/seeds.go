@@ -6,10 +6,17 @@ import (
 	"os"
 	"path/filepath"
 
+	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/seeder"
 	"matrixos/vector/lib/validation"
 )
+
+// newSeeder is the factory used to create an ISeeder.
+// Tests replace it with a function that returns a mock.
+var newSeeder = func(cfg config.IConfig, opts *seeder.NewSeederOptions) (seeder.ISeeder, error) {
+	return seeder.NewSeeder(cfg, opts)
+}
 
 // SeedsCommand orchestrates the seeder workflow — detecting,
 // preparing, and building chroot filesystems using the configured
@@ -154,17 +161,13 @@ func (c *SeedsCommand) updateStdWriters(sd seeder.ISeeder, name string) (*styled
 	return stdoutWriter, stderrWriter
 }
 
-func (c *SeedsCommand) newSeeder() (*seeder.Seeder, error) {
-	return seeder.NewSeeder(
-		c.cfg,
-		&seeder.NewSeederOptions{Verbose: c.verbose},
-	)
-}
-
 // runSeeds implements the seeder workflow, mirroring the bash seeder
 // script's main() function.
 func (c *SeedsCommand) runSeeds() error {
-	sd, err := c.newSeeder()
+	sd, err := newSeeder(
+		c.cfg,
+		&seeder.NewSeederOptions{Verbose: c.verbose},
+	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize seeder: %w", err)
 	}
@@ -246,7 +249,7 @@ func (c *SeedsCommand) runSeeds() error {
 // seederWorker processes a single seeder: parse params, resolve chroot
 // dir, run prepper, set up mounts/DNS/dirs, execute chroot script,
 // mark done, and record results.
-func (c *SeedsCommand) seederWorker(sd *seeder.Seeder, info seeder.SeederInfo) error {
+func (c *SeedsCommand) seederWorker(sd seeder.ISeeder, info seeder.SeederInfo) error {
 	sd.Print(
 		"[%s] Accepted seeder for execution\n", info.Name,
 	)
