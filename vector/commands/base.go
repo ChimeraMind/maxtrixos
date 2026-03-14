@@ -200,10 +200,7 @@ func (c *BaseCommand) initOstree() error {
 	if c.cfg == nil {
 		return fmt.Errorf("config not initialized")
 	}
-	opts := ostree.NewOstreeOptions{
-		Config: c.cfg,
-	}
-	ot, err := ostree.NewOstree(opts)
+	ot, err := cds.NewOstree(cds.NewOstreeOptions{Config: c.cfg})
 	if err != nil {
 		return fmt.Errorf("failed to initialize ostree: %w", err)
 	}
