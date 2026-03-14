@@ -21,7 +21,6 @@ func newTestSeedsCommand(sd *seeder.MockSeeder, det *seeder.MockSeederDetector,
 	cfg *config.MockConfig, args []string,
 ) (*SeedsCommand, error) {
 	cmd := NewSeedsCommand()
-	cmd.sd = sd
 	cmd.det = det
 	cmd.cfg = cfg
 
