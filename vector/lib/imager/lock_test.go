@@ -53,8 +53,7 @@ func TestImageLockPath(t *testing.T) {
 		lockDir := filepath.Join(tmpDir, "locks")
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
-		mock := &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"}
-		im := newTestImage(cfg, mock)
+		im := newTestImage(cfg, &ostree.MockOstree{})
 		im.ref = "matrixos/amd64/gnome"
 
 		result, err := im.ImageLockPath()
@@ -85,7 +84,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg.Items["Imager.LockWaitSeconds"] = []string{"5"}
-		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "test/ref"})
+		im := newTestImage(cfg, &ostree.MockOstree{})
 		im.ref = "test/ref"
 
 		called := false
@@ -107,7 +106,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg.Items["Imager.LockWaitSeconds"] = []string{"5"}
-		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "test/ref"})
+		im := newTestImage(cfg, &ostree.MockOstree{})
 		im.ref = "test/ref"
 
 		fnErr := errors.New("fn failed")
@@ -136,7 +135,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg.Items["Imager.LockWaitSeconds"] = []string{"notanumber"}
-		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "test/ref"})
+		im := newTestImage(cfg, &ostree.MockOstree{})
 		im.ref = "test/ref"
 
 		err := im.ExecuteWithImageLock(func() error { return nil })
@@ -164,7 +163,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg.Items["Imager.LockWaitSeconds"] = []string{"5"}
-		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "exclusive/ref"})
+		im := newTestImage(cfg, &ostree.MockOstree{})
 		im.ref = "exclusive/ref"
 
 		// Acquire the lock in the callback and verify a second goroutine blocks.
@@ -186,7 +185,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg2 := baseImageConfig()
 		cfg2.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg2.Items["Imager.LockWaitSeconds"] = []string{"1"}
-		im2 := newTestImage(cfg2, &ostree.MockOstree{Ref_: "exclusive/ref"})
+		im2 := newTestImage(cfg2, &ostree.MockOstree{})
 		im2.ref = "exclusive/ref"
 
 		err := im2.ExecuteWithImageLock(func() error {
@@ -211,7 +210,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg.Items["Imager.LockWaitSeconds"] = []string{"5"}
-		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "release/ref"})
+		im := newTestImage(cfg, &ostree.MockOstree{})
 		im.ref = "release/ref"
 
 		// First call acquires and releases the lock.
