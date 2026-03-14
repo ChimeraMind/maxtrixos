@@ -23,38 +23,30 @@ func TestCommitOptions_Validate(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "missing RepoDir",
-			opts:    CommitOptions{Branch: "b", ImageDir: tmpDir},
-			wantErr: "missing RepoDir",
-		},
-		{
-			name:    "missing Branch",
-			opts:    CommitOptions{RepoDir: tmpDir, ImageDir: tmpDir},
-			wantErr: "missing Branch",
-		},
-		{
 			name:    "missing ImageDir",
-			opts:    CommitOptions{RepoDir: tmpDir, Branch: "b"},
+			opts:    CommitOptions{},
 			wantErr: "missing ImageDir",
 		},
 		{
-			name:    "non-existent RepoDir",
-			opts:    CommitOptions{RepoDir: "/no/such/dir", Branch: "b", ImageDir: tmpDir},
-			wantErr: "repo directory",
-		},
-		{
-			name:    "non-existent ImageDir",
-			opts:    CommitOptions{RepoDir: tmpDir, Branch: "b", ImageDir: "/no/such/dir"},
+			name: "non-existent ImageDir",
+			opts: CommitOptions{
+				ImageDir: "/no/such/dir",
+			},
 			wantErr: "image directory",
 		},
 		{
-			name:    "non-existent BodyFile",
-			opts:    CommitOptions{RepoDir: tmpDir, Branch: "b", ImageDir: tmpDir, BodyFile: "/no/such/file"},
+			name: "non-existent BodyFile",
+			opts: CommitOptions{
+				ImageDir: tmpDir,
+				BodyFile: "/no/such/file",
+			},
 			wantErr: "body file",
 		},
 		{
 			name: "valid minimal",
-			opts: CommitOptions{RepoDir: tmpDir, Branch: "b", ImageDir: tmpDir},
+			opts: CommitOptions{
+				ImageDir: tmpDir,
+			},
 		},
 	}
 
@@ -77,10 +69,18 @@ func TestCommitOptions_Validate(t *testing.T) {
 	}
 }
 
-func TestCommitOptions_Args(t *testing.T) {
-	opts := CommitOptions{
-		RepoDir:  "/repo",
-		Branch:   "test/branch",
+func TestCommitArgs(t *testing.T) {
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.RepoDir": {"/repo"},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "test/branch"})
+	if err != nil {
+		t.Fatalf("NewOstree: %v", err)
+	}
+
+	opts := &CommitOptions{
 		Subject:  "my subject",
 		BodyFile: "/tmp/body",
 		Parent:   "abc123",
@@ -89,7 +89,10 @@ func TestCommitOptions_Args(t *testing.T) {
 		ImageDir: "/image",
 	}
 
-	args := opts.args(false)
+	args, err := o.commitArgs(opts)
+	if err != nil {
+		t.Fatalf("commitArgs: %v", err)
+	}
 	got := strings.Join(args, " ")
 	expected := "commit --consume --repo=/repo --parent=abc123 --branch=test/branch --gpg-sign=KEY --gpg-homedir=/home --subject=my subject --body-file=/tmp/body /image"
 	if got != expected {
@@ -97,19 +100,34 @@ func TestCommitOptions_Args(t *testing.T) {
 	}
 
 	// With verbose
-	args = opts.args(true)
+	o.SetVerbose(true)
+	args, err = o.commitArgs(opts)
+	if err != nil {
+		t.Fatalf("commitArgs verbose: %v", err)
+	}
 	if args[1] != "--verbose" {
 		t.Errorf("expected --verbose as second arg, got %q", args[1])
 	}
 }
 
-func TestCommitOptions_ArgsMinimal(t *testing.T) {
-	opts := CommitOptions{
-		RepoDir:  "/repo",
-		Branch:   "b",
+func TestCommitArgsMinimal(t *testing.T) {
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.RepoDir": {"/repo"},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "b"})
+	if err != nil {
+		t.Fatalf("NewOstree: %v", err)
+	}
+
+	opts := &CommitOptions{
 		ImageDir: "/img",
 	}
-	args := opts.args(false)
+	args, err := o.commitArgs(opts)
+	if err != nil {
+		t.Fatalf("commitArgs: %v", err)
+	}
 	got := strings.Join(args, " ")
 	expected := "commit --repo=/repo --branch=b /img"
 	if got != expected {
@@ -143,8 +161,6 @@ func TestOstreeCommit_MockedRunner(t *testing.T) {
 	}
 
 	opts := CommitOptions{
-		RepoDir:  repoDir,
-		Branch:   "test/branch",
 		Subject:  "test subject",
 		Consume:  false,
 		ImageDir: imageDir,
@@ -160,7 +176,7 @@ func TestOstreeCommit_MockedRunner(t *testing.T) {
 		"ostree",
 		"commit",
 		"--repo=" + repoDir,
-		"--branch=test/branch",
+		"--branch=test/ref",
 		"--gpg-sign=ABC",
 		"--subject=test subject",
 		imageDir,
@@ -181,7 +197,7 @@ func TestCommitBody_MockedRunner(t *testing.T) {
 			"Ostree.RepoDir": {repoDir},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "b"})
 	if err != nil {
 		t.Fatalf("NewOstree: %v", err)
 	}
@@ -192,8 +208,6 @@ func TestCommitBody_MockedRunner(t *testing.T) {
 	}
 
 	opts := CommitOptions{
-		RepoDir:  repoDir,
-		Branch:   "b",
 		Body:     "hello body",
 		ImageDir: imageDir,
 	}
@@ -218,7 +232,7 @@ func TestCommitEmptyBody_MockedRunner(t *testing.T) {
 			"Ostree.RepoDir": {repoDir},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "b"})
 	if err != nil {
 		t.Fatalf("NewOstree: %v", err)
 	}
@@ -229,8 +243,6 @@ func TestCommitEmptyBody_MockedRunner(t *testing.T) {
 	}
 
 	opts := CommitOptions{
-		RepoDir:  repoDir,
-		Branch:   "b",
 		ImageDir: imageDir,
 	}
 
@@ -241,6 +253,52 @@ func TestCommitEmptyBody_MockedRunner(t *testing.T) {
 	cmdStr := strings.Join(captured, " ")
 	if strings.Contains(cmdStr, "--body-file") {
 		t.Errorf("empty body should not produce --body-file: %s", cmdStr)
+	}
+}
+
+func TestCommitArgs_EmptyRef(t *testing.T) {
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.RepoDir": {"/repo"},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: ""})
+	if err != nil {
+		t.Fatalf("NewOstree: %v", err)
+	}
+	_, err = o.commitArgs(&CommitOptions{ImageDir: "/img"})
+	if err == nil || !strings.Contains(err.Error(), "ref is not set") {
+		t.Fatalf("expected 'ref is not set' error, got %v", err)
+	}
+}
+
+func TestCommitArgs_RepoDirError(t *testing.T) {
+	cfg := &config.MockConfig{
+		Items: map[string][]string{},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "test/ref"})
+	if err != nil {
+		t.Fatalf("NewOstree: %v", err)
+	}
+	_, err = o.commitArgs(&CommitOptions{ImageDir: "/img"})
+	if err == nil || !strings.Contains(err.Error(), "repo dir") {
+		t.Fatalf("expected repo dir error, got %v", err)
+	}
+}
+
+func TestCommit_RefNotSet(t *testing.T) {
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.RepoDir": {"/repo"},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	if err != nil {
+		t.Fatalf("NewOstree: %v", err)
+	}
+	err = o.Commit(CommitOptions{ImageDir: t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "ref is not set") {
+		t.Fatalf("expected 'ref is not set' error, got %v", err)
 	}
 }
 
@@ -277,8 +335,6 @@ func TestCommitIntegration(t *testing.T) {
 
 	// --- First commit ---
 	err = o.Commit(CommitOptions{
-		RepoDir:  repoDir,
-		Branch:   branch,
 		Subject:  "integration test commit",
 		ImageDir: imageDir,
 	})
@@ -313,8 +369,6 @@ func TestCommitIntegration(t *testing.T) {
 	}
 
 	err = o.Commit(CommitOptions{
-		RepoDir:  repoDir,
-		Branch:   branch,
 		Subject:  "second commit",
 		Parent:   parentRev,
 		ImageDir: imageDir,
@@ -330,8 +384,6 @@ func TestCommitIntegration(t *testing.T) {
 	}
 
 	err = o.Commit(CommitOptions{
-		RepoDir:  repoDir,
-		Branch:   branch,
 		Subject:  "instance commit",
 		BodyFile: bodyFile,
 		ImageDir: imageDir,
@@ -365,14 +417,12 @@ func TestCommitIntegration_Consume(t *testing.T) {
 			"Ostree.RepoDir": {repoDir},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "test/consume"})
 	if err != nil {
 		t.Fatalf("NewOstree: %v", err)
 	}
 
 	err = o.Commit(CommitOptions{
-		RepoDir:  repoDir,
-		Branch:   "test/consume",
 		Subject:  "consume commit",
 		Consume:  true,
 		ImageDir: imageDir,
@@ -397,6 +447,7 @@ func TestCommitIntegration_Consume(t *testing.T) {
 
 func TestCommitIntegration_InlineBody(t *testing.T) {
 	repoDir := setupTestRepo(t)
+	branch := "test/inlinebody"
 
 	imageDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(imageDir, "f"), []byte("data"), 0644); err != nil {
@@ -408,15 +459,12 @@ func TestCommitIntegration_InlineBody(t *testing.T) {
 			"Ostree.RepoDir": {repoDir},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: branch})
 	if err != nil {
 		t.Fatalf("NewOstree: %v", err)
 	}
 
-	branch := "test/inlinebody"
 	err = o.Commit(CommitOptions{
-		RepoDir:  repoDir,
-		Branch:   branch,
 		Subject:  "inline body test",
 		Body:     "the body content\nline2\n",
 		ImageDir: imageDir,

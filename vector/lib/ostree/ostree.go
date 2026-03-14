@@ -16,14 +16,18 @@ import (
 // IOstree defines the interface for ostree operations.
 // It mirrors all public methods of Ostree for testability.
 type IOstree interface {
+
+	// CloneForRef creates a new IOstree instance with the same configuration but a different ref.
+	CloneForRef(ref string) (IOstree, error)
+
 	// SetStdout sets the stdout writer for the Ostree instance.
 	SetStdout(io.Writer)
 	// SetStderr sets the stderr writer for the Ostree instance.
 	SetStderr(io.Writer)
 	// Print prints to stdout with the given format and arguments.
-	Print(format string, a ...interface{})
+	Print(format string, a ...any)
 	// PrintError prints to stderr with the given format and arguments.
-	PrintError(format string, a ...interface{})
+	PrintError(format string, a ...any)
 
 	// Ref returns the ref for the Ostree instance.
 	Ref() string
@@ -251,6 +255,16 @@ func NewOstree(opts NewOstreeOptions) (*Ostree, error) {
 	}, nil
 }
 
+func (o *Ostree) CloneForRef(ref string) (IOstree, error) {
+	return NewOstree(NewOstreeOptions{
+		Config:  o.cfg,
+		Stdout:  o.stdout,
+		Stderr:  o.stderr,
+		Verbose: o.verbose,
+		Ref:     ref,
+	})
+}
+
 func (o *Ostree) SetStdout(w io.Writer) {
 	o.stdout = w
 }
@@ -259,11 +273,11 @@ func (o *Ostree) SetStderr(w io.Writer) {
 	o.stderr = w
 }
 
-func (o *Ostree) Print(format string, a ...interface{}) {
+func (o *Ostree) Print(format string, a ...any) {
 	fmt.Fprintf(o.stdout, format, a...)
 }
 
-func (o *Ostree) PrintError(format string, a ...interface{}) {
+func (o *Ostree) PrintError(format string, a ...any) {
 	fmt.Fprintf(o.stderr, format, a...)
 }
 

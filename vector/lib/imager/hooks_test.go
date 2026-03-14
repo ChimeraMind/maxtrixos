@@ -148,7 +148,7 @@ func TestSetupHooks(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := baseImageConfig()
 		cfg.Items["matrixOS.Root"] = []string{tmpDir}
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"})
 		im.SetRootfs("/tmp/rootfs")
 		im.ref = "matrixos/amd64/gnome"
 		// Should return nil when hooks dir doesn't exist.
@@ -163,7 +163,7 @@ func TestSetupHooks(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["matrixOS.Root"] = []string{tmpDir}
 		os.MkdirAll(filepath.Join(tmpDir, "image", "hooks"), 0755)
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"})
 		im.SetRootfs("/tmp/rootfs")
 		im.ref = "matrixos/amd64/gnome"
 
@@ -207,7 +207,7 @@ func TestTestImageMethod(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["matrixOS.Root"] = []string{tmpDir}
 		runner := runner.NewMockRunner()
-		im := newTestImageWithRunner(cfg, &ostree.MockOstree{}, runner)
+		im := newTestImageWithRunner(cfg, &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"}, runner)
 		im.ref = "matrixos/amd64/gnome"
 		im.imagePath = "/tmp/test.img"
 		im.mode = ModeCreateImageFile

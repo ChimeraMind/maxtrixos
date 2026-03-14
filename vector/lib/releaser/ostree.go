@@ -129,35 +129,14 @@ func (r *Releaser) Release(opts CommitOptions) error {
 	if err := checkImageDir(r.imageDir); err != nil {
 		return err
 	}
-	imageDir := r.imageDir
-	repoDir, err := r.ostree.RepoDir()
-	if err != nil {
-		return err
-	}
 	if opts.Branch == "" {
 		return errors.New("missing branch in CommitOptions")
 	}
 
 	// Verify /etc does not exist (it should have been moved to /usr/etc).
-	etcDir := filepath.Join(imageDir, "etc")
+	etcDir := filepath.Join(r.imageDir, "etc")
 	if filesystems.PathExists(etcDir) {
-		return fmt.Errorf("%s/etc exists; this is illegal and breaks clients", imageDir)
-	}
-
-	// Resolve parent commit if a parent branch is specified.
-	var parentRev string
-	if opts.ParentBranch != "" {
-		r.ostree.SetRef(opts.ParentBranch)
-		rev, err := r.ostree.LastCommit()
-		if err != nil {
-			return fmt.Errorf("unable to run ostree rev-parse for parent branch: %w", err)
-		}
-		r.Print(
-			"Setting ostree branch parent of %s to be %s ...\n",
-			opts.Branch,
-			opts.ParentBranch,
-		)
-		parentRev = rev
+		return fmt.Errorf("%s/etc exists; this is illegal and breaks clients", r.imageDir)
 	}
 
 	// Read build metadata.
@@ -166,7 +145,7 @@ func (r *Releaser) Release(opts CommitOptions) error {
 		return err
 	}
 	metadata := "not available"
-	metadataPath := filepath.Join(imageDir, metadataFile, "build")
+	metadataPath := filepath.Join(r.imageDir, metadataFile, "build")
 	if filesystems.FileExists(metadataPath) {
 		r.Print("Reading metadata file %s for release commit subject ...\n", metadataPath)
 		data, err := os.ReadFile(metadataPath)
@@ -202,8 +181,13 @@ func (r *Releaser) Release(opts CommitOptions) error {
 	)
 
 	// Normalise timestamps before commit.
-	r.Print("Normalizing files at %s before ostree commit to have same timestamp ...\n", imageDir)
-	if err := filesystems.NormalizeTimestamps(imageDir, time.Unix(1, 0)); err != nil {
+	r.Print(
+		"Normalizing files at %s before ostree commit to have same timestamp ...\n",
+		r.imageDir,
+	)
+
+	timeZero := time.Unix(1, 0)
+	if err := filesystems.NormalizeTimestamps(r.imageDir, timeZero); err != nil {
 		return err
 	}
 
@@ -213,14 +197,12 @@ func (r *Releaser) Release(opts CommitOptions) error {
 		return err
 	}
 	commitOpts := ostree.CommitOptions{
-		RepoDir:  repoDir,
-		Branch:   opts.Branch,
 		Subject:  subject,
 		Body:     body,
-		Parent:   parentRev,
+		Parent:   opts.ParentRev,
 		GpgArgs:  gpgArgs,
 		Consume:  opts.Consume,
-		ImageDir: imageDir,
+		ImageDir: r.imageDir,
 	}
 	if err := r.ostree.Commit(commitOpts); err != nil {
 		return fmt.Errorf("ostree commit failed: %w", err)

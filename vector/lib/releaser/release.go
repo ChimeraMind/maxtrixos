@@ -39,6 +39,7 @@ func ValidateReleaseStage(stage string) (ReleaseStage, error) {
 type CommitOptions struct {
 	Branch       string // ostree branch to commit to
 	ParentBranch string // parent branch (empty for root branches)
+	ParentRev    string // parent commit hash (from rev-parse).
 	Consume      bool   // --consume flag for ostree commit
 }
 
@@ -243,6 +244,18 @@ func (r *Releaser) Build() error {
 		return fmt.Errorf("failed to compute full branch name: %w", err)
 	}
 
+	setRefs := func(ref string) {
+		r.SetRef(ref)
+		r.ostree.SetRef(ref)
+		r.Print("Switched to ref: %s\n", ref)
+	}
+
+	r.Print("Switching to full branch %s for release build\n", fullBranch)
+	originalRef := r.ref
+	setRefs(fullBranch)
+	// If we fail, reset the values to their original state.
+	defer setRefs(originalRef)
+
 	// Verify releaser environment.
 	if err := r.qa.VerifyReleaserEnvironmentSetup("/"); err != nil {
 		return fmt.Errorf("environment verification failed: %w", err)
@@ -314,9 +327,32 @@ func (r *Releaser) Build() error {
 	if err := r.UnlinkEtc(); err != nil {
 		return fmt.Errorf("unlink /etc (second commit) failed: %w", err)
 	}
+
+	// Resolve parent commit for fullBranch that we just committed via Release().
+	if fullBranch != r.ostree.Ref() {
+		return fmt.Errorf(
+			"unexpected ostree ref after full commit: got %s, want %s",
+			r.ostree.Ref(),
+			fullBranch,
+		)
+	}
+	parentRev, err := r.ostree.LastCommit()
+	if err != nil {
+		return fmt.Errorf("unable to run ostree rev-parse for parent branch: %w", err)
+	}
+
+	r.Print(
+		"Parent commit (last commit of: %s) for second commit: %s\n",
+		fullBranch, parentRev,
+	)
+
+	r.Print("Switching back to normal branch %s for second commit\n", originalRef)
+	setRefs(originalRef)
+
 	if err := r.Release(CommitOptions{
 		Branch:       r.ref,
 		ParentBranch: fullBranch,
+		ParentRev:    parentRev,
 		Consume:      true,
 	}); err != nil {
 		return fmt.Errorf("branch release failed: %w", err)
