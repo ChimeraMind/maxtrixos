@@ -6,9 +6,9 @@
 # Option (A):
 # - add the matrixos overlay available at https://github.com/lxnay/matrixos-overlay
 # - install virtual/matrixos-devel
-# - clone this git repository into a directory of your choice
+# - clone this git repository into /matrixos
 # Option (B):
-# - download a matrixOS Server image
+# - download a matrixOS Bedrock image or stage4 files (whichever will be available)
 # - unpack the image file into a directory (you don't need boot or efi partitions)
 # Option (B) advantages:
 # - you get all you need (please make sure to change the passwords)
@@ -24,9 +24,11 @@ set -eu
 if [ -z "${MATRIXOS_DEV_DIR:-}" ]; then
     MATRIXOS_DEV_DIR="$(realpath $(dirname "${0}")/../)"
 fi
+source "${MATRIXOS_DEV_DIR}/headers/env.include.sh"
 export MATRIXOS_DEV_DIR
 
-VECTOR_EXEC="${MATRIXOS_DEV_DIR}/vector/vector"
+source "${MATRIXOS_DEV_DIR}/lib/ostree_lib.sh"
+
 LOGFILE=
 BUILT_SEEDERS_FILE=
 BUILT_RELEASES_FILE=
@@ -289,6 +291,7 @@ _build_name_flag() {
 main() {
     trap finish EXIT
 
+    ostree_lib.setup_environment
     cd "${MATRIXOS_DEV_DIR}"
     parse_args "${@}"
 
@@ -306,7 +309,7 @@ main() {
         exit 1
     fi
 
-    local locks_dir="${MATRIXOS_DEV_DIR}/locks/${build_id}-builder"
+    local locks_dir="${MATRIXOS_LOCKS_DIR}/${build_id}-builder"
     mkdir -p "${locks_dir}"
     local lock_file="${locks_dir}/${build_id}-builder.lock"
 
@@ -317,7 +320,7 @@ main() {
         exit 1
     fi
 
-    local log_dir="${MATRIXOS_DEV_DIR}/logs/${build_id}-builder"
+    local log_dir="${MATRIXOS_LOGS_DIR}/${build_id}-builder"
     mkdir -p "${log_dir}"
     LOGFILE="${log_dir}/build-$(date +%Y%m%d-%H%M%S).log"
 
@@ -342,7 +345,7 @@ main() {
                 )
             fi
             echo "Building new seeds ..."
-            "${VECTOR_EXEC}" build seeds "${seeder_args[@]}"
+            "${MATRIXOS_DEV_DIR}/build/seeder" "${seeder_args[@]}"
 
             local releaser_args=(
                 --verbose
@@ -372,7 +375,7 @@ main() {
             fi
 
             echo "Releasing newly built seeds ..."
-            "${VECTOR_EXEC}" build releases "${releaser_args[@]}" \
+            "${MATRIXOS_DEV_DIR}/release/release.seeds" "${releaser_args[@]}" \
                 --built-releases-file="${BUILT_RELEASES_FILE}"
 
             echo "Creating images for the new releases ..."
@@ -423,12 +426,12 @@ main() {
         fi
 
         if [ -n "${execute_imager}" ]; then
-            "${VECTOR_EXEC}" build images "${imager_args[@]}"
+            "${MATRIXOS_DEV_DIR}/image/image.releases" "${imager_args[@]}"
         fi
 
         if _run_janitor_flag; then
             echo "Running janitor clean ups ..."
-            "${VECTOR_EXEC}" dev janitor
+            "${MATRIXOS_DEV_DIR}"/vector/vector dev janitor
             "${MATRIXOS_DEV_DIR}"/dev/clean_old_builds.sh
         fi
 
