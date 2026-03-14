@@ -136,42 +136,6 @@ func TestConfigAccessors_PropagatesGetItemError(t *testing.T) {
 	}
 }
 
-func TestUseCpReflink_ReturnsConfiguredBool(t *testing.T) {
-	r := newTestReleaser()
-	r.cfg.(*config.MockConfig).Bools["Releaser.UseCpReflinkModeInsteadOfRsync"] = true
-
-	got, err := r.UseCpReflink()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !got {
-		t.Error("expected true, got false")
-	}
-}
-
-func TestUseCpReflink_DefaultFalse(t *testing.T) {
-	r := newTestReleaser()
-
-	got, err := r.UseCpReflink()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got {
-		t.Error("expected false, got true")
-	}
-}
-
-func TestUseCpReflink_PropagatesError(t *testing.T) {
-	wantErr := errors.New("bool broken")
-	r := newTestReleaser()
-	r.cfg = &config.ErrConfig{Err: wantErr}
-
-	_, err := r.UseCpReflink()
-	if !errors.Is(err, wantErr) {
-		t.Errorf("got error %v, want %v", err, wantErr)
-	}
-}
-
 func TestGenerateStaticDeltas_ReturnsConfiguredBool(t *testing.T) {
 	r := newTestReleaser()
 	r.cfg.(*config.MockConfig).Bools["Releaser.GenerateStaticDeltas"] = true

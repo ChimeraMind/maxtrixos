@@ -26,10 +26,6 @@ func (r *Releaser) DevDir() (string, error) {
 	return r.configItem("matrixOS.Root")
 }
 
-func (r *Releaser) UseCpReflink() (bool, error) {
-	return r.cfg.GetBool("Releaser.UseCpReflinkModeInsteadOfRsync")
-}
-
 func (r *Releaser) ReadOnlyVdb() (string, error) {
 	return r.configItem("Releaser.ReadOnlyVdb")
 }

@@ -94,8 +94,6 @@ type IRelease interface {
 	HooksDir() (string, error)
 	// DevDir returns the matrixOS dev directory (Root).
 	DevDir() (string, error)
-	// UseCpReflink returns whether cp --reflink=auto should be used instead of rsync.
-	UseCpReflink() (bool, error)
 	// ReadOnlyVdb returns the path used for the read-only Portage vardb.
 	ReadOnlyVdb() (string, error)
 	// LockDir returns the directory where releaser file locks are stored.
