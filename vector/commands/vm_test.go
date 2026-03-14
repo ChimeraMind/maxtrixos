@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"matrixos/vector/lib/config"
 )
 
 // newTestVMDriver creates a VMDriver wired to in-process pipes,
@@ -55,7 +53,7 @@ func TestVMCommandName(t *testing.T) {
 func TestVMCommandInitDefaults(t *testing.T) {
 	// Init requires config which we can't load in unit tests,
 	// so test flag parsing directly on the flagset.
-	c := NewVMCommand()
+	c := NewVMCommand().(*VMCommand)
 	// Parse with no flags – should use defaults.
 	if err := c.fs.Parse([]string{}); err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
@@ -73,26 +71,14 @@ func TestVMCommandInitDefaults(t *testing.T) {
 	if c.cpus != "4" {
 		t.Errorf("default cpus should be %q, got %q", "4", c.cpus)
 	}
-	if !c.graphical {
-		t.Error("default graphical should be true")
+	if c.nographic {
+		t.Error("default nographic should be false")
 	}
-	if !c.gpuAccel {
-		t.Error("default gpuAccel should be true")
-	}
-	if !c.audio {
-		t.Error("default audio should be true")
+	if c.noAudio {
+		t.Error("default noAudio should be false")
 	}
 	if c.interactive {
 		t.Error("default interactive should be false")
-	}
-	if c.venusAccel {
-		t.Error("default venusAccel should be false")
-	}
-	if c.display != "sdl" {
-		t.Errorf("default display should be %q, got %q", "sdl", c.display)
-	}
-	if c.gpuMemory != "512M" {
-		t.Errorf("default gpuMemory should be %q, got %q", "512M", c.gpuMemory)
 	}
 	if c.waitBoot != 120*time.Second {
 		t.Errorf("default waitBoot should be %v, got %v", 120*time.Second, c.waitBoot)
@@ -106,34 +92,22 @@ func TestVMCommandInitDefaults(t *testing.T) {
 	if c.audioDev != "pipewire" {
 		t.Errorf("default audioDev should be %q, got %q", "pipewire", c.audioDev)
 	}
-	if c.extraDisk {
-		t.Error("default extraDisk should be false")
-	}
-	if c.extraDiskSize != "64G" {
-		t.Errorf("default extraDiskSize should be %q, got %q", "64G", c.extraDiskSize)
-	}
 }
 
 func TestVMCommandFlagOverrides(t *testing.T) {
-	c := NewVMCommand()
+	c := NewVMCommand().(*VMCommand)
 	err := c.fs.Parse([]string{
 		"-image", "/tmp/test.qcow2",
 		"-memory", "8G",
 		"-port", "3333",
 		"-cpus", "8",
-		"-graphical=false",
-		"-gpuaccel=false",
-		"-audio=false",
+		"-nographic",
+		"-noaudio",
 		"-interactive",
-		"-venus",
 		"-wait_boot", "60s",
 		"-wait_tests", "90s",
 		"-max_run_time", "600s",
 		"-audio_dev", "alsa",
-		"-display", "gtk",
-		"-gpu_memory", "1G",
-		"-extra_disk",
-		"-extra_disk_size", "128G",
 	})
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
@@ -151,26 +125,14 @@ func TestVMCommandFlagOverrides(t *testing.T) {
 	if c.cpus != "8" {
 		t.Errorf("cpus: got %q, want %q", c.cpus, "8")
 	}
-	if c.graphical {
-		t.Error("graphical should be false")
+	if !c.nographic {
+		t.Error("nographic should be true")
 	}
-	if c.gpuAccel {
-		t.Error("gpuAccel should be false")
-	}
-	if c.audio {
-		t.Error("audio should be false")
+	if !c.noAudio {
+		t.Error("noAudio should be true")
 	}
 	if !c.interactive {
 		t.Error("interactive should be true")
-	}
-	if !c.venusAccel {
-		t.Error("venusAccel should be true")
-	}
-	if c.display != "gtk" {
-		t.Errorf("display: got %q, want %q", c.display, "gtk")
-	}
-	if c.gpuMemory != "1G" {
-		t.Errorf("gpuMemory: got %q, want %q", c.gpuMemory, "1G")
 	}
 	if c.waitBoot != 60*time.Second {
 		t.Errorf("waitBoot: got %v, want %v", c.waitBoot, 60*time.Second)
@@ -184,21 +146,15 @@ func TestVMCommandFlagOverrides(t *testing.T) {
 	if c.audioDev != "alsa" {
 		t.Errorf("audioDev: got %q, want %q", c.audioDev, "alsa")
 	}
-	if !c.extraDisk {
-		t.Error("extraDisk should be true")
-	}
-	if c.extraDiskSize != "128G" {
-		t.Errorf("extraDiskSize: got %q, want %q", c.extraDiskSize, "128G")
-	}
 }
 
 // --- Run validation ---
 
 func TestVMCommandRunMissingImage(t *testing.T) {
-	c := NewVMCommand()
+	c := NewVMCommand().(*VMCommand)
 	_ = c.fs.Parse([]string{})
 	// Manually set a cfg so we don't fail on initBaseConfig.
-	c.cfg = &config.MockConfig{}
+	c.cfg = &testConfig{items: map[string]string{}}
 
 	err := c.Run()
 	if err == nil {
@@ -210,9 +166,9 @@ func TestVMCommandRunMissingImage(t *testing.T) {
 }
 
 func TestVMCommandRunNonAmd64Image(t *testing.T) {
-	c := NewVMCommand()
+	c := NewVMCommand().(*VMCommand)
 	_ = c.fs.Parse([]string{"-image", "/tmp/matrixos-arm64.img"})
-	c.cfg = &config.MockConfig{}
+	c.cfg = &testConfig{items: map[string]string{}}
 
 	err := c.Run()
 	if err == nil {
@@ -467,110 +423,6 @@ func TestSendAndExpect(t *testing.T) {
 	}
 	if err := vm.Expect("#", 2*time.Second); err != nil {
 		t.Fatalf("Expect prompt failed: %v", err)
-	}
-}
-
-// --- gpuAccel flag ---
-
-func TestVMCommandGpuAccelDefault(t *testing.T) {
-	c := NewVMCommand()
-	if err := c.fs.Parse([]string{}); err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-	if !c.gpuAccel {
-		t.Error("gpuAccel should default to true")
-	}
-}
-
-func TestVMCommandGpuAccelDisabled(t *testing.T) {
-	c := NewVMCommand()
-	if err := c.fs.Parse([]string{"-gpuaccel=false"}); err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-	if c.gpuAccel {
-		t.Error("gpuAccel should be false after -gpuaccel=false")
-	}
-}
-
-func TestVMCommandGpuAccelDisabledWithNonGraphical(t *testing.T) {
-	// Both flags can coexist; gpuAccel is irrelevant when graphical is off,
-	// but parsing should still succeed.
-	c := NewVMCommand()
-	if err := c.fs.Parse([]string{"-gpuaccel=false", "-graphical=false"}); err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-	if c.gpuAccel {
-		t.Error("gpuAccel should be false")
-	}
-	if c.graphical {
-		t.Error("graphical should be false")
-	}
-}
-
-func TestVMCommandGpuAccelExplicitTrue(t *testing.T) {
-	c := NewVMCommand()
-	if err := c.fs.Parse([]string{"-gpuaccel=true"}); err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-	if !c.gpuAccel {
-		t.Error("gpuAccel should be true when explicitly set to true")
-	}
-}
-
-// --- extra_disk flags ---
-
-func TestVMCommandExtraDiskDefault(t *testing.T) {
-	c := NewVMCommand()
-	if err := c.fs.Parse([]string{}); err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-	if c.extraDisk {
-		t.Error("extraDisk should default to false")
-	}
-	if c.extraDiskSize != "64G" {
-		t.Errorf("extraDiskSize should default to %q, got %q", "64G", c.extraDiskSize)
-	}
-}
-
-func TestVMCommandExtraDiskEnabled(t *testing.T) {
-	c := NewVMCommand()
-	if err := c.fs.Parse([]string{"-extra_disk"}); err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-	if !c.extraDisk {
-		t.Error("extraDisk should be true after -extra_disk")
-	}
-	// Size should still be the default.
-	if c.extraDiskSize != "64G" {
-		t.Errorf("extraDiskSize should be %q, got %q", "64G", c.extraDiskSize)
-	}
-}
-
-func TestVMCommandExtraDiskSizeOverride(t *testing.T) {
-	c := NewVMCommand()
-	if err := c.fs.Parse([]string{"-extra_disk", "-extra_disk_size", "256G"}); err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-	if !c.extraDisk {
-		t.Error("extraDisk should be true")
-	}
-	if c.extraDiskSize != "256G" {
-		t.Errorf("extraDiskSize: got %q, want %q", c.extraDiskSize, "256G")
-	}
-}
-
-func TestVMCommandExtraDiskSizeWithoutExtraDisk(t *testing.T) {
-	// Setting the size without enabling extra_disk should parse fine;
-	// the size is simply ignored at runtime.
-	c := NewVMCommand()
-	if err := c.fs.Parse([]string{"-extra_disk_size", "100G"}); err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-	if c.extraDisk {
-		t.Error("extraDisk should be false")
-	}
-	if c.extraDiskSize != "100G" {
-		t.Errorf("extraDiskSize: got %q, want %q", c.extraDiskSize, "100G")
 	}
 }
 
