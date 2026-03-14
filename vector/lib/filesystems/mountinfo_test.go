@@ -416,12 +416,9 @@ func TestIsMounted(t *testing.T) {
 
 	t.Run("SymlinkResolved", func(t *testing.T) {
 		// The kernel records the resolved (real) path in mountinfo.
-		// IsMounted must resolve symlinks before comparing so that
+		// isMounted must resolve symlinks before comparing so that
 		// a query through a symlinked path still matches.
-		tmpDir, err := filepath.EvalSymlinks(t.TempDir())
-		if err != nil {
-			t.Fatal(err)
-		}
+		tmpDir := t.TempDir()
 		realDir := filepath.Join(tmpDir, "real")
 		if err := os.MkdirAll(realDir, 0755); err != nil {
 			t.Fatal(err)
@@ -437,9 +434,9 @@ func TestIsMounted(t *testing.T) {
 		})
 
 		// query via the symlink path must still report mounted
-		mounted, err := IsMounted(linkDir)
+		mounted, err := isMounted(linkDir)
 		if err != nil {
-			t.Fatalf("IsMounted through symlink failed: %v", err)
+			t.Fatalf("isMounted through symlink failed: %v", err)
 		}
 		if !mounted {
 			t.Errorf("Expected mounted=true when querying via symlink %s (real %s)", linkDir, realDir)
@@ -449,10 +446,7 @@ func TestIsMounted(t *testing.T) {
 
 func TestResolvePath(t *testing.T) {
 	t.Run("Symlink", func(t *testing.T) {
-		tmpDir, err := filepath.EvalSymlinks(t.TempDir())
-		if err != nil {
-			t.Fatal(err)
-		}
+		tmpDir := t.TempDir()
 		realDir := filepath.Join(tmpDir, "real")
 		if err := os.MkdirAll(realDir, 0755); err != nil {
 			t.Fatal(err)
@@ -469,10 +463,7 @@ func TestResolvePath(t *testing.T) {
 	})
 
 	t.Run("NoSymlink", func(t *testing.T) {
-		tmpDir, err := filepath.EvalSymlinks(t.TempDir())
-		if err != nil {
-			t.Fatal(err)
-		}
+		tmpDir := t.TempDir()
 		got := resolvePath(tmpDir)
 		if got != tmpDir {
 			t.Errorf("resolvePath(%q) = %q, want %q", tmpDir, got, tmpDir)
@@ -490,10 +481,7 @@ func TestResolvePath(t *testing.T) {
 }
 
 func TestFindMountByTargetSymlink(t *testing.T) {
-	tmpDir, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	tmpDir := t.TempDir()
 	realDir := filepath.Join(tmpDir, "real")
 	if err := os.MkdirAll(realDir, 0755); err != nil {
 		t.Fatal(err)
@@ -517,10 +505,7 @@ func TestFindMountByTargetSymlink(t *testing.T) {
 }
 
 func TestFindMountContainingPathSymlink(t *testing.T) {
-	tmpDir, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	tmpDir := t.TempDir()
 	realDir := filepath.Join(tmpDir, "real")
 	if err := os.MkdirAll(filepath.Join(realDir, "sub"), 0755); err != nil {
 		t.Fatal(err)
@@ -545,10 +530,7 @@ func TestFindMountContainingPathSymlink(t *testing.T) {
 }
 
 func TestListMountsByPrefixSymlink(t *testing.T) {
-	tmpDir, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	tmpDir := t.TempDir()
 	realDir := filepath.Join(tmpDir, "real")
 	if err := os.MkdirAll(realDir, 0755); err != nil {
 		t.Fatal(err)
