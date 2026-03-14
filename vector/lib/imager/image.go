@@ -29,6 +29,7 @@ type NewImageOptions struct {
 	BootDevice string
 	RootDevice string
 	DevicePath string
+	Ref        string
 }
 
 // IImage defines the interface for image operations.
@@ -45,6 +46,7 @@ type IImage interface {
 	DevicePath() string
 	SetRootfs(rootfs string)
 	Rootfs() string
+	Ref() string
 
 	// Mount point accessors (set after successful Mount* calls)
 	EfifsMount() string
@@ -79,8 +81,8 @@ type IImage interface {
 
 	// Operations
 	ReleaseVersion() (string, error)
-	ImagePath(ref string) (string, error)
-	ImagePathWithReleaseVersion(ref, releaseVersion string) (string, error)
+	ImagePath() (string, error)
+	ImagePathWithReleaseVersion(releaseVersion string) (string, error)
 	CreateImage(imagePath, imageSize string) error
 	ImagePathWithCompressorExtension(imagePath string) (string, error)
 	CompressImage(imagePath string) error
@@ -96,16 +98,16 @@ type IImage interface {
 	MountRootfs(mountRootfs string) error
 	GetKernelPath() (string, error)
 	SetupPasswords() error
-	SetupBootloaderConfig(ref string) error
+	SetupBootloaderConfig() error
 	SetupVmtestConfig() error
 	InstallSecurebootCerts() error
 	InstallMemtest() error
-	GenerateKernelBootArgs(ref, physicalRootDevice string, encryptionEnabled bool) ([]string, error)
+	GenerateKernelBootArgs(physicalRootDevice string, encryptionEnabled bool) ([]string, error)
 	PackageList() ([]string, error)
-	SetupHooks(ref string) error
-	InstallBootloader() ([]string, error)
+	SetupHooks() error
+	InstallBootloader() error
 	Cleanup()
-	TestImage(imagePath, ref string) error
+	TestImage(imagePath string) error
 	FinalizeFilesystems() error
 	Qcow2ImagePath(imagePath string) (string, error)
 	CreateQcow2Image(imagePath string) error
@@ -113,8 +115,8 @@ type IImage interface {
 	ShowTestInfo(artifacts []string)
 	RemoveImageFile(imagePath string) error
 	ImageLockDir() (string, error)
-	ImageLockPath(ref string) (string, error)
-	ExecuteWithImageLock(ref string, fn func() error) error
+	ImageLockPath() (string, error)
+	ExecuteWithImageLock(fn func() error) error
 }
 
 // Image provides image creation and manipulation operations.
@@ -127,6 +129,7 @@ type Image struct {
 	rootDevice string
 	devicePath string
 	rootfs     string
+	ref        string
 
 	// Mount points, set by Mount* methods on success.
 	efifsMount  string
@@ -185,6 +188,7 @@ func NewImage(cfg config.IConfig, ostree cds.IOstree, opts *NewImageOptions) (*I
 		im.bootDevice = opts.BootDevice
 		im.rootDevice = opts.RootDevice
 		im.devicePath = opts.DevicePath
+		im.ref = opts.Ref
 	}
 	return im, nil
 }
@@ -218,6 +222,9 @@ func (im *Image) SetRootfs(rootfs string) { im.rootfs = rootfs }
 
 // Rootfs returns the deployed ostree rootfs path.
 func (im *Image) Rootfs() string { return im.rootfs }
+
+// Ref returns the ostree ref.
+func (im *Image) Ref() string { return im.ref }
 
 // EfifsMount returns the EFI filesystem mount point (set by MountEfifs on success).
 func (im *Image) EfifsMount() string { return im.efifsMount }
@@ -467,9 +474,12 @@ func (im *Image) imagePath(suffix string) (string, error) {
 	return filepath.Join(outDir, suffix), nil
 }
 
-// cleanAndStripRef cleans a remote prefix and removes the -full suffix from a ref.
-func (im *Image) cleanAndStripRef(ref string) (string, error) {
-	ref = cds.CleanRemoteFromRef(ref)
+// cleanAndStripRef cleans a remote prefix and removes the -full suffix from the stored ref.
+func (im *Image) cleanAndStripRef() (string, error) {
+	if im.ref == "" {
+		return "", errors.New("missing ref, set Ref in NewImageOptions")
+	}
+	ref := cds.CleanRemoteFromRef(im.ref)
 	stripped, err := im.ostree.RemoveFullFromBranch(ref)
 	if err != nil {
 		return "", err
@@ -549,25 +559,25 @@ func (im *Image) ReleaseVersion() (string, error) {
 	return releaseVersion, nil
 }
 
-// ImagePath returns the image file path for a given ostree ref.
-func (im *Image) ImagePath(ref string) (string, error) {
-	if ref == "" {
-		return "", errors.New("missing ref parameter")
+// ImagePath returns the image file path for the stored ostree ref.
+func (im *Image) ImagePath() (string, error) {
+	if im.ref == "" {
+		return "", errors.New("missing ref, set Ref in NewImageOptions")
 	}
-	ref = cds.CleanRemoteFromRef(ref)
+	ref := cds.CleanRemoteFromRef(im.ref)
 	suffix := refToSuffix(ref) + ".img"
 	return im.imagePath(suffix)
 }
 
 // ImagePathWithReleaseVersion returns the image file path with an embedded release version.
-func (im *Image) ImagePathWithReleaseVersion(ref, releaseVersion string) (string, error) {
-	if ref == "" {
-		return "", errors.New("missing ref parameter")
+func (im *Image) ImagePathWithReleaseVersion(releaseVersion string) (string, error) {
+	if im.ref == "" {
+		return "", errors.New("missing ref, set Ref in NewImageOptions")
 	}
 	if releaseVersion == "" {
 		return "", errors.New("missing releaseVersion parameter")
 	}
-	ref = cds.CleanRemoteFromRef(ref)
+	ref := cds.CleanRemoteFromRef(im.ref)
 	suffix := refToSuffix(ref) + "-" + releaseVersion + ".img"
 	return im.imagePath(suffix)
 }
@@ -956,14 +966,11 @@ func (im *Image) SetupPasswords() error {
 }
 
 // SetupBootloaderConfig sets up the GRUB bootloader configuration.
-func (im *Image) SetupBootloaderConfig(ref string) error {
+func (im *Image) SetupBootloaderConfig() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
-	if ref == "" {
-		return errors.New("missing ref parameter")
-	}
-	ref, err := im.cleanAndStripRef(ref)
+	ref, err := im.cleanAndStripRef()
 	if err != nil {
 		return fmt.Errorf("failed to clean ref: %w", err)
 	}
@@ -1238,76 +1245,79 @@ func (im *Image) InstallMemtest() error {
 // unsigned GRUBX64.EFI with the signed version.
 // It returns the list of extra mounts created during the process so the caller
 // can track them for cleanup.
-func (im *Image) InstallBootloader() ([]string, error) {
+func (im *Image) InstallBootloader() error {
 	if im.rootfs == "" {
-		return nil, errors.New("rootfs not set, call SetRootfs first")
+		return errors.New("rootfs not set, call SetRootfs first")
 	}
 	if im.efifsMount == "" {
-		return nil, errors.New("missing efifsMount, call MountEfifs first")
+		return errors.New("missing efifsMount, call MountEfifs first")
 	}
 	if im.bootfsMount == "" {
-		return nil, errors.New("missing bootfsMount, call MountBootfs first")
+		return errors.New("missing bootfsMount, call MountBootfs first")
 	}
 	if im.devicePath == "" {
-		return nil, errors.New("missing devicePath, not set in NewImageOptions")
+		return errors.New("missing devicePath, not set in NewImageOptions")
 	}
 	efibootDir, err := im.EfiBootDir()
 	if err != nil {
-		return nil, fmt.Errorf("failed to determine EFI boot directory: %w", err)
+		return fmt.Errorf("failed to determine EFI boot directory: %w", err)
 	}
 
 	fmt.Fprintln(os.Stdout, "Installing bootloader ...")
 
 	efiRoot, err := im.EfiRoot()
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to determine EFI root: %w", err)
 	}
 	bootRoot, err := im.BootRoot()
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to determine boot root: %w", err)
 	}
 	osName, err := im.OsName()
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to determine OS name: %w", err)
 	}
 	efiExe, err := im.EfiExecutable()
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to determine EFI executable: %w", err)
 	}
-
-	var extraMounts []string
 
 	// Bind mount EFI into the chroot.
 	efiChrootMount := filepath.Join(im.rootfs, efiRoot)
 	if err := os.MkdirAll(efiChrootMount, 0755); err != nil {
-		return extraMounts, fmt.Errorf("failed to create %s: %w", efiChrootMount, err)
+		return fmt.Errorf("failed to create %s: %w", efiChrootMount, err)
 	}
-	mnt, err := filesystems.BindMount(im.efifsMount, efiChrootMount)
+	im.trackMount(efiChrootMount)
+	err = filesystems.BindMount(im.efifsMount, efiChrootMount)
 	if err != nil {
-		return extraMounts, fmt.Errorf("failed to bind mount EFI: %w", err)
+		return fmt.Errorf("failed to bind mount EFI: %w", err)
 	}
-	extraMounts = append(extraMounts, mnt)
-	im.trackMount(mnt)
 
 	// Bind mount boot into the chroot.
 	bootChrootMount := filepath.Join(im.rootfs, bootRoot)
 	if err := os.MkdirAll(bootChrootMount, 0755); err != nil {
-		return extraMounts, fmt.Errorf("failed to create %s: %w", bootChrootMount, err)
+		return fmt.Errorf("failed to create %s: %w", bootChrootMount, err)
 	}
-	mnt, err = filesystems.BindMount(im.bootfsMount, bootChrootMount)
+	im.trackMount(bootChrootMount)
+	err = filesystems.BindMount(im.bootfsMount, bootChrootMount)
 	if err != nil {
-		return extraMounts, fmt.Errorf("failed to bind mount boot: %w", err)
+		return fmt.Errorf("failed to bind mount boot: %w", err)
 	}
-	extraMounts = append(extraMounts, mnt)
-	im.trackMount(mnt)
 
 	// Setup common rootfs mounts (dev, proc, etc.) without proc for bootloader.
-	chrootMounts, err := filesystems.SetupCommonRootfsMounts(im.rootfs)
+	mounter, err := filesystems.NewCommonRootfsMounts(
+		im.rootfs,
+		func(tg string) {
+			im.trackMount(tg)
+		},
+		func(tg string) {},
+	)
 	if err != nil {
-		return extraMounts, fmt.Errorf("failed to setup common rootfs mounts: %w", err)
+		return fmt.Errorf("failed to create common rootfs mounter: %w", err)
 	}
-	extraMounts = append(extraMounts, chrootMounts...)
-	im.trackMounts(chrootMounts)
+	if err := mounter.Setup(); err != nil {
+		return fmt.Errorf("failed to setup common rootfs mounts: %w", err)
+	}
 
 	// Run grub-install inside the chroot.
 	err = filesystems.ChrootRun(im.rootfs, "/usr/bin/grub-install",
@@ -1324,16 +1334,16 @@ func (im *Image) InstallBootloader() ([]string, error) {
 	// Clean up chroot mounts regardless of grub-install result.
 	filesystems.BindUmount(bootChrootMount)
 	filesystems.BindUmount(efiChrootMount)
-	filesystems.UnsetupCommonRootfsMounts(im.rootfs)
+	mounter.Cleanup()
 
 	if err != nil {
-		return nil, fmt.Errorf("grub-install failed: %w", err)
+		return fmt.Errorf("grub-install failed: %w", err)
 	}
 
 	// Verify BOOTX64.EFI was created.
 	bootx64efi := filepath.Join(efibootDir, efiExe)
 	if !filesystems.PathExists(bootx64efi) {
-		return nil, fmt.Errorf("%s does not exist after grub-install", bootx64efi)
+		return fmt.Errorf("%s does not exist after grub-install", bootx64efi)
 	}
 
 	// Replace unsigned GRUBX64.EFI with the signed one.
@@ -1344,15 +1354,15 @@ func (im *Image) InstallBootloader() ([]string, error) {
 	signedGrubx64efi := filepath.Join(im.rootfs, "usr", "lib", "grub", "grub-x86_64.efi.signed")
 	fmt.Fprintf(os.Stdout, "Moving %s to %s\n", signedGrubx64efi, grubx64efi)
 	if err := os.Rename(signedGrubx64efi, grubx64efi); err != nil {
-		return nil, fmt.Errorf("failed to move signed grub binary: %w", err)
+		return fmt.Errorf("failed to move signed grub binary: %w", err)
 	}
 
-	return nil, nil
+	return nil
 }
 
 // GenerateKernelBootArgs generates the kernel boot arguments for the image.
-func (im *Image) GenerateKernelBootArgs(ref, physicalRootDevice string, encryptionEnabled bool) ([]string, error) {
-	ref, err := im.cleanAndStripRef(ref)
+func (im *Image) GenerateKernelBootArgs(physicalRootDevice string, encryptionEnabled bool) ([]string, error) {
+	ref, err := im.cleanAndStripRef()
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean ref: %w", err)
 	}
@@ -1473,15 +1483,12 @@ func (im *Image) PackageList() ([]string, error) {
 }
 
 // SetupHooks runs image-specific hook scripts.
-func (im *Image) SetupHooks(ref string) error {
+func (im *Image) SetupHooks() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
-	if ref == "" {
-		return errors.New("missing ref parameter")
-	}
 
-	ref, err := im.cleanAndStripRef(ref)
+	ref, err := im.cleanAndStripRef()
 	if err != nil {
 		return fmt.Errorf("failed to clean ref: %w", err)
 	}
@@ -1523,15 +1530,12 @@ func (im *Image) SetupHooks(ref string) error {
 }
 
 // TestImage copies an image to a temp directory and runs test scripts against it.
-func (im *Image) TestImage(imagePath, ref string) error {
+func (im *Image) TestImage(imagePath string) error {
 	if imagePath == "" {
 		return errors.New("missing imagePath parameter")
 	}
-	if ref == "" {
-		return errors.New("missing ref parameter")
-	}
 
-	ref, err := im.cleanAndStripRef(ref)
+	ref, err := im.cleanAndStripRef()
 	if err != nil {
 		return fmt.Errorf("failed to clean ref: %w", err)
 	}
@@ -1720,17 +1724,17 @@ func (im *Image) ImageLockDir() (string, error) {
 	return lockDir, nil
 }
 
-// ImageLockPath returns the lock file path for a given ref.
-func (im *Image) ImageLockPath(ref string) (string, error) {
-	if ref == "" {
-		return "", errors.New("missing ref parameter")
+// ImageLockPath returns the lock file path for the stored ref.
+func (im *Image) ImageLockPath() (string, error) {
+	if im.ref == "" {
+		return "", errors.New("missing ref, set Ref in NewImageOptions")
 	}
 
 	lockDir, err := im.ImageLockDir()
 	if err != nil {
 		return "", err
 	}
-	lockFile := filepath.Join(lockDir, ref+".lock")
+	lockFile := filepath.Join(lockDir, im.ref+".lock")
 
 	lockFileDir := filepath.Dir(lockFile)
 	if err := os.MkdirAll(lockFileDir, 0755); err != nil {
@@ -1744,12 +1748,12 @@ func (im *Image) ImageLockPath(ref string) (string, error) {
 // If the lock cannot be acquired within the configured timeout, an error is returned.
 // If fn panics or the process crashes, the OS closes the file descriptor and
 // releases the lock automatically.
-func (im *Image) ExecuteWithImageLock(ref string, fn func() error) error {
-	lockPath, err := im.ImageLockPath(ref)
+func (im *Image) ExecuteWithImageLock(fn func() error) error {
+	lockPath, err := im.ImageLockPath()
 	if err != nil {
 		return fmt.Errorf("failed to get image lock path: %w", err)
 	}
-	fmt.Fprintf(os.Stdout, "Acquiring branch %s lock via %s ...\n", ref, lockPath)
+	fmt.Fprintf(os.Stdout, "Acquiring branch %s lock via %s ...\n", im.ref, lockPath)
 
 	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -1781,7 +1785,7 @@ func (im *Image) ExecuteWithImageLock(ref string, fn func() error) error {
 		return fmt.Errorf("timed out waiting for imager lock %s", lockPath)
 	}
 
-	fmt.Fprintf(os.Stdout, "Lock for imager %s, %s acquired!\n", ref, lockPath)
+	fmt.Fprintf(os.Stdout, "Lock for imager %s, %s acquired!\n", im.ref, lockPath)
 
 	// Execute the function under the lock.
 	// The lock is released when lockFile is closed (deferred above).

@@ -11,6 +11,7 @@ type MockImage struct {
 	RootDevice_ string
 	DevicePath_ string
 	Rootfs_     string
+	Ref_        string
 
 	// Mount points stored by Mock Mount* methods
 	EfifsMount_  string
@@ -93,6 +94,7 @@ func (m *MockImage) SetDevicePath(devicePath string) { m.DevicePath_ = devicePat
 func (m *MockImage) DevicePath() string              { return m.DevicePath_ }
 func (m *MockImage) SetRootfs(rootfs string)         { m.Rootfs_ = rootfs }
 func (m *MockImage) Rootfs() string                  { return m.Rootfs_ }
+func (m *MockImage) Ref() string                     { return m.Ref_ }
 
 func (m *MockImage) EfifsMount() string { return m.EfifsMount_ }
 func (m *MockImage) EfiBootDir() (string, error) {
@@ -140,10 +142,10 @@ func (m *MockImage) BuildMetadataFile() (string, error)            { return "", 
 func (m *MockImage) ReleaseVersion() (string, error) {
 	return m.ReleaseVersion_, m.ReleaseVersionErr
 }
-func (m *MockImage) ImagePath(ref string) (string, error) {
+func (m *MockImage) ImagePath() (string, error) {
 	return m.ImagePath_, m.ImagePathErr
 }
-func (m *MockImage) ImagePathWithReleaseVersion(ref, releaseVersion string) (string, error) {
+func (m *MockImage) ImagePathWithReleaseVersion(releaseVersion string) (string, error) {
 	return m.ImagePathWithReleaseVersion_, m.ImagePathWithReleaseVerErr
 }
 func (m *MockImage) CreateImage(imagePath, imageSize string) error {
@@ -200,7 +202,7 @@ func (m *MockImage) SetupPasswords() error {
 	m.SetupPasswordsCalled = true
 	return nil
 }
-func (m *MockImage) SetupBootloaderConfig(ref string) error {
+func (m *MockImage) SetupBootloaderConfig() error {
 	m.SetupBootloaderCfgCalled = true
 	return nil
 }
@@ -216,24 +218,24 @@ func (m *MockImage) InstallMemtest() error {
 	m.InstallMemtestCalled = true
 	return nil
 }
-func (m *MockImage) GenerateKernelBootArgs(ref, physicalRootDevice string, encryptionEnabled bool) ([]string, error) {
+func (m *MockImage) GenerateKernelBootArgs(physicalRootDevice string, encryptionEnabled bool) ([]string, error) {
 	return []string{"arg1=val1"}, nil
 }
 func (m *MockImage) PackageList() ([]string, error) {
 	return m.PackageList_, m.PackageListErr
 }
-func (m *MockImage) SetupHooks(ref string) error {
+func (m *MockImage) SetupHooks() error {
 	m.SetupHooksCalled = true
 	return nil
 }
-func (m *MockImage) InstallBootloader() ([]string, error) {
+func (m *MockImage) InstallBootloader() error {
 	m.InstallBootloaderCalled = true
-	return m.InstallBootloaderResult, m.InstallBootloaderErr
+	return m.InstallBootloaderErr
 }
 func (m *MockImage) Cleanup() {
 	m.CleanupCalled = true
 }
-func (m *MockImage) TestImage(imagePath, ref string) error {
+func (m *MockImage) TestImage(imagePath string) error {
 	m.TestImageCalled = true
 	return nil
 }
@@ -255,12 +257,12 @@ func (m *MockImage) ShowFinalFilesystemInfo() error {
 func (m *MockImage) ShowTestInfo(artifacts []string) {
 	m.ShowTestInfoCalled = true
 }
-func (m *MockImage) RemoveImageFile(imagePath string) error   { return nil }
-func (m *MockImage) ImageLockDir() (string, error)            { return "", nil }
-func (m *MockImage) ImageLockPath(ref string) (string, error) { return "", nil }
+func (m *MockImage) RemoveImageFile(imagePath string) error { return nil }
+func (m *MockImage) ImageLockDir() (string, error)          { return "", nil }
+func (m *MockImage) ImageLockPath() (string, error)         { return "", nil }
 
 // ExecuteWithImageLock either calls fn directly or returns the configured error.
-func (m *MockImage) ExecuteWithImageLock(ref string, fn func() error) error {
+func (m *MockImage) ExecuteWithImageLock(fn func() error) error {
 	m.ExecuteWithImageLockCalled = true
 	if m.ExecuteWithImageLockErr != nil {
 		return m.ExecuteWithImageLockErr
