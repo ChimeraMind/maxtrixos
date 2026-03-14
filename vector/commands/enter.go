@@ -12,7 +12,6 @@ import (
 )
 
 // EnterCommand enters a seeded chroot interactively.
-// It is the Go port of dev/enter.seed.
 type EnterCommand struct {
 	BaseCommand
 	SignalGuard
@@ -95,7 +94,7 @@ func (c *EnterCommand) Run() error {
 	return c.RunWithGuard(c.run)
 }
 
-// run implements the enter workflow, mirroring enter.seed's main().
+// run implements the enter workflow.
 func (c *EnterCommand) run() error {
 	// Classify targets into absolute dirs and bare names.
 	var chrootDirs []string

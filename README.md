@@ -273,24 +273,8 @@ Run the build script as root. It handles the entire pipeline.
 
 - **Resume**: `./dev/build.sh --resume`
 - **Force specific steps**: `--force-release`, `--force-images`, `--only-images`
-
-### Vector Build Commands
-
-The `vector` CLI also provides direct access to individual build stages:
-
-| Command | Description |
-|---------|-------------|
-| `vector build seeds` | Run the seeding stage. |
-| `vector build release` | Run a single release. |
-| `vector build releases` | Run all releases. |
-| `vector build image` | Build a single image. |
-| `vector build images` | Build all images. |
-| `vector dev enter <name>` | Enter a build chroot. |
-| `vector dev janitor` | Clean up build artifacts. |
-| `vector dev check` | Verify host has required tools/data. |
-| `vector dev vm` | Test a generated image with QEMU. |
-
-For a full list of flags on any command, run `vector <command> --help`.
+- **Enter a chroot**: `./vector/vector dev enter <name>-<date>`
+- **Clean artifacts**: `./vector/vector janitor && ./dev/clean_old_builds.sh`
 
 **Resource Requirements**: x86-64-v3 CPU, 32GB+ RAM, ~70GB Disk.
 
