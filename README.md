@@ -206,10 +206,8 @@ A quick reference of all user-facing `vector` commands:
 Update to the latest image:
 
 ```shell
-sudo vector upgrade
+vector upgrade
 ```
-
-Useful flags: `--pretend` (preview without applying), `-y` (skip prompts), `--update-bootloader` (update bootloader binaries), `--force` (upgrade even if up to date).
 
 ### Rollbacks
 
@@ -227,20 +225,17 @@ sudo vector branch unpin 1       # unpin deployment 1.
 List available branches and switch between them (e.g., from `gnome` to `cosmic`):
 
 ```shell
-sudo vector branch remote   # list remote branches available.
-sudo vector branch local    # list local branches.
-sudo vector branch switch   # interactively switch to a new branch.
+vector branch switch
 reboot
 ```
 
 ### Mutability & Jailbreaking
 
-- **Temporary Mutability**: `sudo vector readwrite` (resets on upgrade). So that you can run `emerge` as much as you like (important: switch to a `*-full` OSTree branch before doing this).
-- **Permanent Jailbreak**: matrixOS is immutable by default. However, if you want full control to modify system files, compile custom kernels, or use Portage directly, you can "jailbreak" the system. This converts your immutable OSTree installation into a standard, mutable Gentoo Linux installation.
-  - **Warning:** This is a **one-way process**. Once you jailbreak, you cannot go back to automatic OSTree updates. You are responsible for maintaining the system yourself.
-  - List available branches: `sudo vector branch remote`
-  - Switch to the `-full` branch: `sudo vector branch switch <branch>-full`
-  - Run the jailbreak script: `sudo vector jailbreak`
+- **Temporary Mutability**: `vector readwrite` (resets on upgrade). So that you can run `emerge` as much as you like (important: switch to a `*-full` OSTree branch before doing this).
+- **Permanent Jailbreak**: Convert to a standard Gentoo system.
+  - List available branches: `vector branch list`
+  - Switch to the `-full` branch: `vector branch switch <branch>-full`
+  - Run the jailbreak script: `vector jailbreak`
 
 ## 🛠️ Build Your Own Distro
 
@@ -260,7 +255,7 @@ You can build custom versions of matrixOS using the provided `dev/build.sh` scri
 ### Configuration Rules
 
 The base configuration is centralized in `conf/matrixos.conf`. Vector client-side tooling
-also reads from `conf/client.conf` (e.g. the upgrade command).
+also read from `conf/client.conf` (e.g. the upgrade command).
 
 - **Project Info**: OS name, architecture, git repositories.
 - **Paths**: Directories for logs, downloads, and output artifacts.
