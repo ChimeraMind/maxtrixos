@@ -2,13 +2,13 @@ package ostree
 
 import (
 	"fmt"
+	"io"
 	"matrixos/vector/lib/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"matrixos/vector/lib/runner"
 )
 
 func TestDeploy(t *testing.T) {
@@ -29,13 +29,12 @@ func TestDeploy(t *testing.T) {
 			"matrixOS.OsName": {"matrixos"},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: ref})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
-		args, name, stdout := cmd.Args, cmd.Name, cmd.Stdout
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		cmdArgs := append([]string{name}, args...)
 		commands = append(commands, cmdArgs)
 
@@ -53,7 +52,7 @@ func TestDeploy(t *testing.T) {
 	}
 
 	// Call Deploy
-	err = o.Deploy(gotSysroot, bootArgs)
+	err = o.Deploy(ref, gotSysroot, bootArgs)
 	if err != nil {
 		t.Fatalf("Deploy failed: %v", err)
 	}
@@ -149,7 +148,7 @@ func TestDeployIntegration(t *testing.T) {
 			"matrixOS.OsName": {"matrixos"},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: branch})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
@@ -161,13 +160,13 @@ func TestDeployIntegration(t *testing.T) {
 
 	// Perform Deployment
 	// This will pull from repoDir into sysroot/ostree/repo and then deploy
-	if err := o.Deploy(gotSysroot, []string{"karg1=val1"}); err != nil {
+	if err := o.Deploy(branch, gotSysroot, []string{"karg1=val1"}); err != nil {
 		t.Fatalf("Deploy failed: %v", err)
 	}
 
 	// Verify that the deployment directory was created
 	// We can verify the booted ref or just check if the deployment directory exists
-	if _, err := o.DeployedRootfs(); err != nil {
+	if _, err := o.DeployedRootfs(branch); err != nil {
 		t.Errorf("DeployedRootfs failed or deployment not found: %v", err)
 	}
 }
@@ -183,8 +182,7 @@ func TestBootedStatus(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
-		stdout := cmd.Stdout
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		// Mock ostree admin status --json
 		jsonOutput := `{
 			"deployments": [
@@ -224,8 +222,7 @@ func TestBootedStatus(t *testing.T) {
 func TestDeployedRootfsWithSysroot(t *testing.T) {
 	origRunCommand := runCommand
 	defer func() { runCommand = origRunCommand }()
-	runCommand = func(cmd *runner.Cmd) error {
-		stdout := cmd.Stdout
+	runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		fmt.Fprintln(stdout, "hash123")
 		return nil
 	}
@@ -295,8 +292,7 @@ func TestDeploy_Errors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runCommand = func(cmd *runner.Cmd) error {
-				args, stdout := cmd.Args, cmd.Stdout
+			runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 				cmdStr := strings.Join(args, " ")
 				if strings.Contains(cmdStr, tt.failAtCmd) {
 					return fmt.Errorf("simulated error")
@@ -316,7 +312,7 @@ func TestDeploy_Errors(t *testing.T) {
 					"matrixOS.OsName": {"matrixos"},
 				},
 			}
-			o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "ref"})
+			o, err := NewOstree(NewOstreeOptions{Config: cfg})
 			if err != nil {
 				t.Fatalf("NewOstree failed: %v", err)
 			}
@@ -326,7 +322,7 @@ func TestDeploy_Errors(t *testing.T) {
 				t.Fatalf("Sysroot failed: %v", err)
 			}
 
-			err = o.Deploy(sysroot, nil)
+			err = o.Deploy("ref", sysroot, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deploy() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -366,8 +362,7 @@ func TestBootedStatus_Errors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			o.runner = func(cmd *runner.Cmd) error {
-				stdout := cmd.Stdout
+			o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 				if tt.mockErr != nil {
 					return tt.mockErr
 				}
@@ -414,8 +409,7 @@ func TestListDeployments(t *testing.T) {
 		]
 	}`
 
-	runCommand = func(cmd *runner.Cmd) error {
-		stdout := cmd.Stdout
+	runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		// Expect ostree admin status --json
 		stdout.Write([]byte(fakeJSON))
 		return nil
@@ -508,8 +502,7 @@ func TestListDeployments_NoDeployments(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
-		stdout := cmd.Stdout
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		stdout.Write([]byte(`{"deployments": []}`))
 		return nil
 	}
@@ -535,7 +528,7 @@ func TestListDeployments_CommandError(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		return fmt.Errorf("ostree command failed")
 	}
 
@@ -557,8 +550,7 @@ func TestListDeployments_InvalidJSON(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
-		stdout := cmd.Stdout
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		stdout.Write([]byte(`{not valid json}`))
 		return nil
 	}
@@ -579,18 +571,17 @@ func TestSwitch(t *testing.T) {
 			"Ostree.Sysroot": {sysroot},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: ref})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
-		args, name := cmd.Args, cmd.Name
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		lastCmdArgs = append([]string{name}, args...)
 		return nil
 	}
 
-	err = o.Switch()
+	err = o.Switch(ref)
 	if err != nil {
 		t.Fatalf("Switch failed: %v", err)
 	}
@@ -606,16 +597,16 @@ func TestSwitch_MissingSysroot(t *testing.T) {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "ref"})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		return nil
 	}
 
-	err = o.Switch()
+	err = o.Switch("ref")
 	if err == nil {
 		t.Fatal("Switch should fail when Ostree.Sysroot is missing")
 	}
@@ -628,16 +619,16 @@ func TestSwitch_CommandError(t *testing.T) {
 			"Ostree.Sysroot": {sysroot},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "ref"})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		return fmt.Errorf("ostree admin switch failed")
 	}
 
-	err = o.Switch()
+	err = o.Switch("ref")
 	if err == nil {
 		t.Fatal("Switch should propagate command error")
 	}
@@ -653,19 +644,18 @@ func TestSwitch_Verbose(t *testing.T) {
 			"Ostree.Sysroot": {sysroot},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: ref})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
-		args, name := cmd.Args, cmd.Name
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		lastCmdArgs = append([]string{name}, args...)
 		return nil
 	}
 
 	o.SetVerbose(true)
-	err = o.Switch()
+	err = o.Switch(ref)
 	if err != nil {
 		t.Fatalf("Switch failed: %v", err)
 	}

@@ -2,16 +2,25 @@ package ostree
 
 import (
 	"fmt"
+	"io"
 	"matrixos/vector/lib/config"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"matrixos/vector/lib/runner"
 )
 
 func TestRepoOperations(t *testing.T) {
 	repoDir := setupTestRepo(t)
+
+	// Test ListRemotes (empty)
+	remotes, err := ListRemotes(repoDir, false)
+	if err != nil {
+		t.Fatalf("ListRemotes failed: %v", err)
+	}
+	if len(remotes) != 0 {
+		t.Errorf("expected 0 remotes, got %d", len(remotes))
+	}
 
 	// Test AddRemote
 	cfg := &config.MockConfig{
@@ -29,22 +38,13 @@ func TestRepoOperations(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	// Test ListRemotes (empty)
-	remotes, err := o.ListRemotes()
-	if err != nil {
-		t.Fatalf("ListRemotes failed: %v", err)
-	}
-	if len(remotes) != 0 {
-		t.Errorf("expected 0 remotes, got %d", len(remotes))
-	}
-
 	err = o.AddRemote()
 	if err != nil {
 		t.Fatalf("AddRemote failed: %v", err)
 	}
 
 	// Test ListRemotes (1)
-	remotes, err = o.ListRemotes()
+	remotes, err = ListRemotes(repoDir, false)
 	if err != nil {
 		t.Fatalf("ListRemotes failed: %v", err)
 	}
@@ -52,10 +52,10 @@ func TestRepoOperations(t *testing.T) {
 		t.Errorf("expected [origin], got %v", remotes)
 	}
 
-	// Test LocalRefs (empty)
-	refs, err := o.LocalRefs()
+	// Test ListLocalRefs (empty)
+	refs, err := ListLocalRefs(repoDir, false)
 	if err != nil {
-		t.Fatalf("LocalRefs failed: %v", err)
+		t.Fatalf("ListLocalRefs failed: %v", err)
 	}
 	if len(refs) != 0 {
 		t.Errorf("expected 0 refs, got %d", len(refs))
@@ -82,20 +82,18 @@ func TestOstreeCommandsMocked(t *testing.T) {
 		Items: map[string][]string{
 			"Ostree.RepoDir":                {"/repo"},
 			"Ostree.Root":                   {"/"},
-			"Ostree.Remote":                 {"origin"},
 			"Ostree.KeepObjectsYoungerThan": {"2023-01-01"},
 		},
 		Bools: map[string]bool{
 			"Ostree.Gpg": false,
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "ref"})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
-		args, stdout := cmd.Args, cmd.Stdout
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		lastCmdArgs = args
 		// Mock rev-parse for GenerateStaticDelta
 		if len(args) > 0 && args[0] == "rev-parse" {
@@ -105,7 +103,7 @@ func TestOstreeCommandsMocked(t *testing.T) {
 	}
 
 	// Pull
-	if err := o.Pull(); err != nil {
+	if err := o.Pull("origin:ref"); err != nil {
 		t.Fatalf("Pull failed: %v", err)
 	}
 	if lastCmdArgs[1] != "pull" || lastCmdArgs[2] != "origin" || lastCmdArgs[3] != "ref" {
@@ -113,7 +111,7 @@ func TestOstreeCommandsMocked(t *testing.T) {
 	}
 
 	// Prune
-	if err := o.Prune(); err != nil {
+	if err := o.Prune("ref"); err != nil {
 		t.Fatalf("Prune failed: %v", err)
 	}
 	// args: --repo=/repo prune --depth=5 --refs-only --keep-younger-than=... --only-branch=ref
@@ -122,7 +120,7 @@ func TestOstreeCommandsMocked(t *testing.T) {
 	}
 
 	// GenerateStaticDelta
-	if err := o.GenerateStaticDelta(); err != nil {
+	if err := o.GenerateStaticDelta("ref"); err != nil {
 		t.Fatalf("GenerateStaticDelta failed: %v", err)
 	}
 	// First it calls rev-parse, then static-delta generate
@@ -163,8 +161,7 @@ func TestMaybeInitializeRemote(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
-		args := cmd.Args
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		cmds = append(cmds, strings.Join(args, " "))
 		return nil
 	}
@@ -195,8 +192,7 @@ func TestAddRemoteToRootfs(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
-		args := cmd.Args
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		lastArgs = args
 		return nil
 	}
@@ -218,6 +214,33 @@ func TestAddRemoteToRootfs(t *testing.T) {
 	}
 }
 
+func TestPullWithRemoteExplicit(t *testing.T) {
+	var lastArgs []string
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.RepoDir": {"/repo"},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	if err != nil {
+		t.Fatalf("NewOstree failed: %v", err)
+	}
+
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+		lastArgs = args
+		return nil
+	}
+
+	if err := o.PullWithRemote("myremote", "myref"); err != nil {
+		t.Fatalf("PullWithRemote failed: %v", err)
+	}
+
+	// Expected: --repo=/repo pull myremote myref
+	if len(lastArgs) < 4 || lastArgs[1] != "pull" || lastArgs[2] != "myremote" || lastArgs[3] != "myref" {
+		t.Errorf("PullWithRemote args mismatch: %v", lastArgs)
+	}
+}
+
 func TestPullInvalidRef(t *testing.T) {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
@@ -228,8 +251,8 @@ func TestPullInvalidRef(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
-	if err := o.Pull(); err == nil {
-		t.Error("Pull should fail for empty ref")
+	if err := o.Pull("invalid-ref"); err == nil {
+		t.Error("Pull should fail for ref without remote prefix")
 	}
 }
 
@@ -251,8 +274,7 @@ func TestMaybeInitializeRemoteIdempotency(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
-		args, stdout := cmd.Args, cmd.Stdout
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		cmds = append(cmds, strings.Join(args, " "))
 		// Mock ListRemotes output
 		// args: --repo=... remote list
@@ -292,7 +314,7 @@ func TestAddRemote_Error(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		return fmt.Errorf("error")
 	}
 	if err := o.AddRemote(); err == nil {
@@ -311,7 +333,7 @@ func TestOstreeWrappers(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		return nil
 	}
 
@@ -327,7 +349,7 @@ func TestLastCommit_Errors(t *testing.T) {
 	origRunCommand := runCommand
 	defer func() { runCommand = origRunCommand }()
 
-	runCommand = func(cmd *runner.Cmd) error {
+	runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		return fmt.Errorf("not found")
 	}
 
@@ -337,27 +359,39 @@ func TestLastCommit_Errors(t *testing.T) {
 	}
 }
 
+func TestListRemotes_Errors(t *testing.T) {
+	origRunCommand := runCommand
+	defer func() { runCommand = origRunCommand }()
+	runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+		return fmt.Errorf("error")
+	}
+
+	if _, err := ListRemotes("/repo", false); err == nil {
+		t.Error("ListRemotes should fail on error")
+	}
+}
+
 func TestMiscWrappers_Errors(t *testing.T) {
 	cfg := &config.MockConfig{Items: map[string][]string{"Ostree.RepoDir": {"/repo"}}}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "ref"})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(cmd *runner.Cmd) error {
+	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 		return fmt.Errorf("cmd error")
 	}
 
-	if err := o.Pull(); err == nil {
+	if err := o.Pull("ref"); err == nil {
 		t.Error("Pull should fail on cmd error")
 	}
-	if err := o.Prune(); err == nil {
+	if err := o.Prune("ref"); err == nil {
 		t.Error("Prune should fail on cmd error")
 	}
 	if err := o.UpdateSummary(); err == nil {
 		t.Error("UpdateSummary should fail on cmd error")
 	}
-	if err := o.GenerateStaticDelta(); err == nil {
+	if err := o.GenerateStaticDelta("ref"); err == nil {
 		t.Error("GenerateStaticDelta should fail on cmd error")
 	}
 	if err := o.Upgrade(nil); err == nil {
@@ -382,8 +416,7 @@ func TestRemoteRefs(t *testing.T) {
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		o.runner = func(cmd *runner.Cmd) error {
-			stdout := cmd.Stdout
+		o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 			stdout.Write([]byte("matrixos/amd64/gnome\nmatrixos/amd64/server\nmatrixos/amd64/dev/gnome\n"))
 			return nil
 		}
@@ -408,8 +441,7 @@ func TestRemoteRefs(t *testing.T) {
 
 	t.Run("VerifiesRepoPathAndRemote", func(t *testing.T) {
 		var capturedArgs []string
-		runCommand = func(cmd *runner.Cmd) error {
-			args, name, stdout := cmd.Args, cmd.Name, cmd.Stdout
+		runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 			capturedArgs = append([]string{name}, args...)
 			stdout.Write([]byte("ref1\n"))
 			return nil
@@ -487,7 +519,7 @@ func TestRemoteRefs(t *testing.T) {
 	})
 
 	t.Run("NoRefs", func(t *testing.T) {
-		runCommand = func(cmd *runner.Cmd) error {
+		runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 			return nil
 		}
 
@@ -513,7 +545,7 @@ func TestRemoteRefs(t *testing.T) {
 	})
 
 	t.Run("CommandError", func(t *testing.T) {
-		runCommand = func(cmd *runner.Cmd) error {
+		runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
 			return fmt.Errorf("remote refs failed")
 		}
 
@@ -534,44 +566,4 @@ func TestRemoteRefs(t *testing.T) {
 			t.Error("expected error when ostree command fails, got nil")
 		}
 	})
-}
-
-func TestLocalRefs(t *testing.T) {
-	cfg := &config.MockConfig{
-		Items: map[string][]string{
-			"Ostree.RepoDir": {"/repo"},
-		},
-	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
-	if err != nil {
-		t.Fatalf("NewOstree failed: %v", err)
-	}
-
-	o.runner = func(cmd *runner.Cmd) error {
-		stdout := cmd.Stdout
-		stdout.Write([]byte("ref1\nostree-metadata\nref2\n"))
-		return nil
-	}
-
-	refs, err := o.LocalRefs()
-	if err != nil {
-		t.Fatalf("LocalRefs failed: %v", err)
-	}
-
-	for _, ref := range refs {
-		if ref == "ostree-metadata" {
-			t.Errorf("LocalRefs() should not return 'ostree-metadata'")
-		}
-	}
-
-	if len(refs) != 2 {
-		t.Errorf("expected 2 refs, got %d", len(refs))
-	}
-
-	if refs[0] != "ref1" {
-		t.Errorf("refs[0] = %q, want %q", refs[0], "ref1")
-	}
-	if refs[1] != "ref2" {
-		t.Errorf("refs[1] = %q, want %q", refs[1], "ref2")
-	}
 }
