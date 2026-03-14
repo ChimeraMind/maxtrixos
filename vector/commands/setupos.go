@@ -63,73 +63,10 @@ type setupOSRunner struct {
 	stderr io.Writer
 }
 
-func defaultSetupOSRunner() *setupOSRunner {
-	return &setupOSRunner{
-		execCommand: func(name string, args ...string) cmdRunner {
-			cmd := execCommand(name, args...)
-			return &realCmdRunner{
-				cmd:    cmd,
-				stdout: &cmd.Stdout,
-				stderr: &cmd.Stderr,
-			}
-		},
-		readFile:  os.ReadFile,
-		writeFile: os.WriteFile,
-		appendFile: func(path string, data []byte) error {
-			f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			_, err = f.Write(data)
-			return err
-		},
-		mkdirAll:   os.MkdirAll,
-		stat:       os.Stat,
-		removeFile: os.Remove,
-		fileExists: func(path string) bool {
-			_, err := os.Stat(path)
-			return err == nil
-		},
-		copyFile: filesystems.CopyFile,
-		chmod: func(path string, mode os.FileMode) error {
-			return os.Chmod(path, mode)
-		},
-		chown: func(path string, uid, gid int) error {
-			return os.Chown(path, uid, gid)
-		},
-		getMountDevice:     filesystems.MountpointToDevice,
-		getPartitionNumber: filesystems.PartitionNumber,
-		getPartitionLabel:  filesystems.PartitionLabel,
-		getBlockDevice:     filesystems.BlockDeviceForPartition,
-		listBlockDevices: func(fields string) ([]string, error) {
-			cmd := execCommand("lsblk", "-no", fields)
-			out, err := cmd.Output()
-			if err != nil {
-				return nil, err
-			}
-			var lines []string
-			for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-				line = strings.TrimSpace(line)
-				if line != "" {
-					lines = append(lines, line)
-				}
-			}
-			return lines, nil
-		},
-		getBlkidValue: func(device, tag string) (string, error) {
-			cmd := execCommand("blkid", "-s", tag, "-o", "value", device)
-			out, err := cmd.Output()
-			if err != nil {
-				return "", err
-			}
-			return strings.TrimSpace(string(out)), nil
-		},
-		getEuid:        getEuid,
-		getCurrentUser: func() string { return os.Getenv("USER") },
-		stdin:          os.Stdin,
-		stdout:         os.Stdout,
-		stderr:         os.Stderr,
+// NewSetupOSCommand creates a new SetupOSCommand
+func NewSetupOSCommand() *SetupOSCommand {
+	return &SetupOSCommand{
+		fs: flag.NewFlagSet("setupOS", flag.ExitOnError),
 	}
 }
 

@@ -29,7 +29,7 @@ func newTestImageCommand(
 	cfg *config.MockConfig,
 	args []string,
 ) (*ImageCommand, error) {
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	cmd.ot = ot
 	cmd.im = im
 	cmd.fsenc = fsenc
@@ -64,7 +64,7 @@ func defaultImageTestConfig() *config.MockConfig {
 // --- Tests ---
 
 func TestImageName(t *testing.T) {
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	if name := cmd.Name(); name != "image" {
 		t.Errorf("Expected name 'image', got %q", name)
 	}
@@ -85,7 +85,7 @@ func TestImageParseArgsMissingRef(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	cmd.StartUI()
 	err := cmd.parseArgs([]string{})
 	if err == nil {
@@ -101,7 +101,7 @@ func TestImageParseArgs(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	cmd.StartUI()
 	if err := cmd.parseArgs([]string{
 		"--ref", "myref",
@@ -134,7 +134,7 @@ func TestImageParseArgsDefaults(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	cmd.StartUI()
 	if err := cmd.parseArgs([]string{"--ref=foo"}); err != nil {
 		t.Fatalf("parseArgs failed: %v", err)
@@ -156,7 +156,7 @@ func TestImageParseArgsNotRoot(t *testing.T) {
 	getEuid = func() int { return 1000 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	cmd.StartUI()
 	err := cmd.parseArgs([]string{"--ref", "mybranch"})
 	if err == nil {
@@ -226,7 +226,7 @@ func TestImageRunLuksValidationFail(t *testing.T) {
 // --- validateDevicePaths tests ---
 
 func TestValidateDevicePathsNone(t *testing.T) {
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	opts, err := cmd.validateDevicePaths()
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -246,7 +246,7 @@ func TestValidateDevicePathsPartialError(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 	tmpFile.Close()
 
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	cmd.efiDevicePath = tmpFile.Name()
 	cmd.bootDevicePath = ""
 	cmd.rootDevicePath = ""
@@ -272,7 +272,7 @@ func TestValidateDevicePathsAllThree(t *testing.T) {
 	bootFile.Close()
 	rootFile.Close()
 
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	cmd.efiDevicePath = efiFile.Name()
 	cmd.bootDevicePath = bootFile.Name()
 	cmd.rootDevicePath = rootFile.Name()
@@ -303,7 +303,7 @@ func TestValidateDevicePathsWholeAndPartitionsConflict(t *testing.T) {
 	rootFile.Close()
 	wholeFile.Close()
 
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	cmd.efiDevicePath = efiFile.Name()
 	cmd.bootDevicePath = bootFile.Name()
 	cmd.rootDevicePath = rootFile.Name()
@@ -323,7 +323,7 @@ func TestValidateDevicePathsWholeDeviceOnly(t *testing.T) {
 	defer os.Remove(wholeFile.Name())
 	wholeFile.Close()
 
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	cmd.wholeDevice = wholeFile.Name()
 
 	paths, err := cmd.validateDevicePaths()
@@ -339,7 +339,7 @@ func TestValidateDevicePathsWholeDeviceOnly(t *testing.T) {
 }
 
 func TestValidateDevicePathsNonExistentDevice(t *testing.T) {
-	cmd := NewImageCommand().(*ImageCommand)
+	cmd := NewImageCommand()
 	cmd.efiDevicePath = "/dev/nonexistent-test-xyz-999"
 
 	_, err := cmd.validateDevicePaths()

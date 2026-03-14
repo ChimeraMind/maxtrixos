@@ -32,7 +32,7 @@ type ReleaseCommand struct {
 }
 
 // NewReleaseCommand creates a new ReleaseCommand
-func NewReleaseCommand() ICommand {
+func NewReleaseCommand() *ReleaseCommand {
 	return &ReleaseCommand{}
 }
 

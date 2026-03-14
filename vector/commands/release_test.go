@@ -24,7 +24,7 @@ func newTestReleaseCommand(
 	cfg *config.MockConfig,
 	args []string,
 ) (*ReleaseCommand, error) {
-	cmd := NewReleaseCommand().(*ReleaseCommand)
+	cmd := NewReleaseCommand()
 	cmd.ot = ot
 	cmd.rel = rel
 	cmd.cfg = cfg
@@ -73,7 +73,7 @@ func requireReleaserTools(t *testing.T) {
 // --- Tests ---
 
 func TestReleaseName(t *testing.T) {
-	cmd := NewReleaseCommand().(*ReleaseCommand)
+	cmd := NewReleaseCommand()
 	if name := cmd.Name(); name != "release" {
 		t.Errorf("Expected name 'release', got %q", name)
 	}
@@ -94,7 +94,7 @@ func TestReleaseParseArgsMissingBranch(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewReleaseCommand().(*ReleaseCommand)
+	cmd := NewReleaseCommand()
 	cmd.StartUI()
 	err := cmd.parseArgs([]string{
 		"--chroot-dir", "/some/chroot",
@@ -113,7 +113,7 @@ func TestReleaseParseArgsMissingChrootDir(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewReleaseCommand().(*ReleaseCommand)
+	cmd := NewReleaseCommand()
 	cmd.StartUI()
 	err := cmd.parseArgs([]string{
 		"--ref", "matrixos/x86_64/dev/gnome",
@@ -132,7 +132,7 @@ func TestReleaseParseArgsMissingImageDir(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewReleaseCommand().(*ReleaseCommand)
+	cmd := NewReleaseCommand()
 	cmd.StartUI()
 	err := cmd.parseArgs([]string{
 		"--ref", "matrixos/x86_64/dev/gnome",
@@ -151,7 +151,7 @@ func TestReleaseParseArgsNotRoot(t *testing.T) {
 	getEuid = func() int { return 1000 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewReleaseCommand().(*ReleaseCommand)
+	cmd := NewReleaseCommand()
 	cmd.StartUI()
 	err := cmd.parseArgs([]string{
 		"--ref", "matrixos/x86_64/dev/gnome",
@@ -171,7 +171,7 @@ func TestReleaseParseArgsRemotePrefix(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewReleaseCommand().(*ReleaseCommand)
+	cmd := NewReleaseCommand()
 	cmd.StartUI()
 	err := cmd.parseArgs([]string{
 		"--ref", "origin:matrixos/x86_64/dev/gnome",
@@ -191,7 +191,7 @@ func TestReleaseParseArgsValid(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewReleaseCommand().(*ReleaseCommand)
+	cmd := NewReleaseCommand()
 	cmd.StartUI()
 	if err := cmd.parseArgs([]string{
 		"--ref", "matrixos/x86_64/dev/gnome",
@@ -224,7 +224,7 @@ func TestReleaseParseArgsDefaults(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewReleaseCommand().(*ReleaseCommand)
+	cmd := NewReleaseCommand()
 	cmd.StartUI()
 	if err := cmd.parseArgs([]string{
 		"--ref", "matrixos/x86_64/dev/gnome",
