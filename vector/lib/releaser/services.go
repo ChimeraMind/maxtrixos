@@ -11,6 +11,7 @@ import (
 
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
+	"matrixos/vector/lib/runner"
 )
 
 func (r *Releaser) SetupHostname() error {
@@ -184,13 +185,27 @@ func (r *Releaser) SetupServices() error {
 	}
 
 	systemctl := func(args ...string) error {
-		cmd := strings.Join(args, " ")
-		r.Print("Running systemctl %s ...\n", cmd)
-		// Use /bin/sh -c to prevent systemctl from acting as PID 1.
-		return filesystems.ChrootRun(
-			r.imageDir,
-			"/bin/sh", "-c", "systemctl "+cmd+"; exit $?",
-		)
+		systemctlCmd := strings.Join(args, " ")
+		r.Print("Running systemctl %s ...\n", systemctlCmd)
+		// Use "$@" to safely pass arguments without shell interpolation,
+		// preventing injection via malicious service names.
+		// bash -c 'cmd "$@"' -- <args...> passes args as positional params.
+		// The exit $? ensures we return the correct exit code from systemctl and
+		// prevent bash from optimizing the command, making systemctl run as PID 1
+		// and writing to /dev/kmsg instead of our captured stdout/stderr.
+		cmdArgs := []string{"-c", `systemctl "$@"; exit $?`, "--"}
+		cmdArgs = append(cmdArgs, args...)
+		cmd := runner.ChrootCmd{
+			Cmd: runner.Cmd{
+				Name:   "/bin/bash",
+				Args:   cmdArgs,
+				Stdin:  nil,
+				Stdout: r.stdout,
+				Stderr: r.stderr,
+			},
+			ChrootDir: r.imageDir,
+		}
+		return filesystems.ExecChrootRun(&cmd)
 	}
 
 	for _, svc := range enable {
