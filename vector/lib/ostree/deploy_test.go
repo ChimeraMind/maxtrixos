@@ -576,7 +576,7 @@ func TestSwitch(t *testing.T) {
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Ostree.Sysroot": {sysroot},
+			"Ostree.Root": {sysroot},
 		},
 	}
 	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: ref})
@@ -625,7 +625,7 @@ func TestSwitch_CommandError(t *testing.T) {
 	sysroot := t.TempDir()
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Ostree.Sysroot": {sysroot},
+			"Ostree.Root": {sysroot},
 		},
 	}
 	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "ref"})
@@ -650,7 +650,7 @@ func TestSwitch_Verbose(t *testing.T) {
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Ostree.Sysroot": {sysroot},
+			"Ostree.Root": {sysroot},
 		},
 	}
 	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: ref})
