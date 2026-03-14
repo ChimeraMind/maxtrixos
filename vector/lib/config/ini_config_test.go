@@ -17,8 +17,6 @@ func TestIniConfig_Load_Expansion(t *testing.T) {
 	// Define absolute paths for roots to ensure deterministic tests
 	rootPath := "/tmp/matrixos-root"
 	defaultRootPath := "/tmp/matrixos-default-root"
-	confRootPath := "/tmp/matrixos-conf-root"
-	artifactsRootPath := "/tmp/matrixos-artifacts"
 	privateRepoPath := "/tmp/matrixos-private"
 	defaultPrivateRepoPath := "/tmp/matrixos-default-private"
 
@@ -26,8 +24,6 @@ func TestIniConfig_Load_Expansion(t *testing.T) {
 [matrixOS]
 Root=` + rootPath + `
 DefaultRoot=` + defaultRootPath + `
-ConfRoot=` + confRootPath + `
-ArtifactsRoot=` + artifactsRootPath + `
 PrivateGitRepoPath=` + privateRepoPath + `
 DefaultPrivateGitRepoPath=` + defaultPrivateRepoPath + `
 LogsDir=/var/log/matrixos
@@ -45,7 +41,6 @@ SecureBootKekPublicKey=sb-keys/KEK.pem
 DefaultSecureBootPrivateKey=sb-keys/db.key
 DefaultSecureBootPublicKey=sb-keys/db.pem
 LocksDir=locks/seeder
-SeedersDir=build/seeders
 ChrootSeedersDir=build/seeders
 
 [Releaser]

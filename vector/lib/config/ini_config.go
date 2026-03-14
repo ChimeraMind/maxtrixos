@@ -527,9 +527,42 @@ func (c *IniConfig) Load() error {
 		return err
 	}
 
+	rootDependents := []string{
+		"matrixOS.PrivateGitRepoPath",
+		"matrixOS.LogsDir",
+		"matrixOS.LocksDir",
+		"Seeder.LocksDir",
+		"Seeder.DownloadsDir",
+		"Seeder.DistfilesDir",
+		"Seeder.BinpkgsDir",
+		"Seeder.PortageReposDir",
+		"Seeder.GpgKeysDir",
+		"Releaser.HooksDir",
+		"Releaser.LocksDir",
+		"Imager.ImagesDir",
+		"Imager.LocksDir",
+		"Imager.MountDir",
+		"Ostree.RepoDir",
+		"Ostree.DevGpgHomeDir",
+		"Ostree.GpgOfficialPublicKey",
+	}
+	defaultRootDependents := []string{
+		"Seeder.ChrootSeedersDir",
+	}
+
 	// Set defaults for base paths if missing, to allow expansion
 	rootVal, foundRoot := c.getVal("matrixOS.Root")
 	if !foundRoot {
+		log.Printf(
+			`WARNING WARNING WARNING:
+- matrixOS.Root is not set in %s.
+- Relative paths depending on it will be expanded using %s.
+- Those paths are:
+  - %s`,
+			fullPath,
+			c.sp.defaultRoot,
+			strings.Join(rootDependents, "\n  - "),
+		)
 		c.setVal("matrixOS.Root", c.sp.defaultRoot)
 	} else {
 		rootVal, err := smartRootify(rootVal, c.sp.defaultRoot)
@@ -544,8 +577,24 @@ func (c *IniConfig) Load() error {
 		return err
 	}
 
-	if err := c.loadConfRootConfigs(fullPath); err != nil {
-		return err
+	// Some very minimal sanity checks at this stage.
+	_, foundDefaultRoot := c.getVal("matrixOS.DefaultRoot")
+	if !foundDefaultRoot {
+		log.Printf(
+			`WARNING WARNING WARNING:
+- matrixOS.DefaultRoot is not set in %s.
+- Relative paths depending on it will be expanded using %s.
+- Those paths are:
+  - %s`,
+			fullPath,
+			c.sp.defaultRoot,
+			strings.Join(defaultRootDependents, "\n  - "),
+		)
+		c.setVal("matrixOS.DefaultRoot", c.sp.defaultRoot)
+	}
+
+	for _, key := range rootDependents {
+		c.expand(key, "matrixOS.Root")
 	}
 
 	privateRepoDependents := []string{
@@ -558,6 +607,10 @@ func (c *IniConfig) Load() error {
 
 	if err := c.loadPrivateRepoConfigs(); err != nil {
 		return err
+	}
+
+	for _, key := range defaultRootDependents {
+		c.expand(key, "matrixOS.DefaultRoot")
 	}
 
 	return nil
