@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 )
-
+// ReleaseLockDir returns the lock directory, creating it if necessary.
 func (r *Releaser) ReleaseLockDir() (string, error) {
 	lockDir, err := r.LockDir()
 	if err != nil {
@@ -21,8 +21,8 @@ func (r *Releaser) ReleaseLockDir() (string, error) {
 	return lockDir, nil
 }
 
-func (r *Releaser) ReleaseLockPath() (string, error) {
-	name := r.ref
+// ReleaseLockPath returns the lock file path for the given release name.
+func (r *Releaser) ReleaseLockPath(name string) (string, error) {
 	if name == "" {
 		return "", errors.New("missing release name")
 	}
@@ -39,12 +39,17 @@ func (r *Releaser) ReleaseLockPath() (string, error) {
 	return lockFile, nil
 }
 
-func (r *Releaser) ExecuteWithReleaseLock(fn func() error) error {
-	lockPath, err := r.ReleaseLockPath()
+// ExecuteWithReleaseLock acquires an exclusive file lock for the given release name,
+// executes fn under that lock, and releases the lock when fn returns.
+// If the lock cannot be acquired within the configured timeout, an error is returned.
+// If fn panics or the process crashes, the OS closes the file descriptor and
+// releases the lock automatically.
+func (r *Releaser) ExecuteWithReleaseLock(name string, fn func() error) error {
+	lockPath, err := r.ReleaseLockPath(name)
 	if err != nil {
 		return fmt.Errorf("failed to get release lock path: %w", err)
 	}
-	r.Print("Acquiring release %s lock via %s ...\n", r.ref, lockPath)
+	r.Print("Acquiring release %s lock via %s ...\n", name, lockPath)
 
 	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -76,6 +81,6 @@ func (r *Releaser) ExecuteWithReleaseLock(fn func() error) error {
 		return fmt.Errorf("timed out waiting for release lock %s", lockPath)
 	}
 
-	r.Print("Lock for releaser %s, %s acquired!\n", r.ref, lockPath)
+	r.Print("Lock for releaser %s, %s acquired!\n", name, lockPath)
 	return fn()
 }

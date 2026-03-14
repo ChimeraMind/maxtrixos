@@ -1,13 +1,12 @@
 package releaser
 
+// CheckMatrixOS validates the matrixOS development environment.
 func (r *Releaser) CheckMatrixOS() error {
 	return r.qa.CheckMatrixOSPrivate()
 }
 
+// PreCleanQAChecks runs pre-clean quality assurance checks on the image directory.
 func (r *Releaser) PreCleanQAChecks() error {
-	if err := checkImageDir(r.imageDir); err != nil {
-		return err
-	}
 	r.Print("Pre clean QA Checks ...\n")
 
 	sbCertPath, err := r.SecureBootCertPath()

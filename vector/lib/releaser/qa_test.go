@@ -9,7 +9,6 @@ import (
 
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/ostree"
-	"matrixos/vector/lib/runner"
 	"matrixos/vector/lib/validation"
 )
 
@@ -25,7 +24,6 @@ func newTestReleaserWithQA(t *testing.T, cfg *config.MockConfig) *Releaser {
 	return &Releaser{
 		cfg:    cfg,
 		ostree: &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		qa:     qa,
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
@@ -45,7 +43,6 @@ func TestCheckMatrixOS_ConfigError(t *testing.T) {
 	r := &Releaser{
 		cfg:    &config.ErrConfig{Err: wantErr},
 		ostree: &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		qa:     qa,
 		stdout: &bytes.Buffer{},
 		stderr: &bytes.Buffer{},
@@ -152,7 +149,6 @@ func TestPreCleanQAChecks_SecureBootCertPathConfigError(t *testing.T) {
 	r := &Releaser{
 		cfg:      cfg,
 		ostree:   &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		qa:       qa,
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},

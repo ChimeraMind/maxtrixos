@@ -55,8 +55,7 @@ func TestReleaseLockDir_MissingConfig(t *testing.T) {
 func TestReleaseLockPath_ReturnsExpectedPath(t *testing.T) {
 	r := newLockTestReleaser(t)
 
-	r.ref = "myrelease"
-	p, err := r.ReleaseLockPath()
+	p, err := r.ReleaseLockPath("myrelease")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -66,11 +65,10 @@ func TestReleaseLockPath_ReturnsExpectedPath(t *testing.T) {
 	}
 }
 
-func TestReleaseLockPath_EmptyRef(t *testing.T) {
+func TestReleaseLockPath_EmptyName(t *testing.T) {
 	r := newLockTestReleaser(t)
-	r.ref = ""
 
-	_, err := r.ReleaseLockPath()
+	_, err := r.ReleaseLockPath("")
 	if err == nil {
 		t.Fatal("expected error for empty release name")
 	}
@@ -79,8 +77,7 @@ func TestReleaseLockPath_EmptyRef(t *testing.T) {
 func TestReleaseLockPath_NestedName(t *testing.T) {
 	r := newLockTestReleaser(t)
 
-	r.ref = "origin/matrixos"
-	p, err := r.ReleaseLockPath()
+	p, err := r.ReleaseLockPath("origin/matrixos")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -96,8 +93,7 @@ func TestExecuteWithReleaseLock_RunsFunction(t *testing.T) {
 	r := newLockTestReleaser(t)
 
 	called := false
-	r.ref = "test"
-	err := r.ExecuteWithReleaseLock(func() error {
+	err := r.ExecuteWithReleaseLock("test", func() error {
 		called = true
 		return nil
 	})
@@ -113,8 +109,7 @@ func TestExecuteWithReleaseLock_PropagatesFnError(t *testing.T) {
 	r := newLockTestReleaser(t)
 
 	want := errors.New("fn failed")
-	r.ref = "test"
-	err := r.ExecuteWithReleaseLock(func() error {
+	err := r.ExecuteWithReleaseLock("test", func() error {
 		return want
 	})
 	if !errors.Is(err, want) {
@@ -125,21 +120,19 @@ func TestExecuteWithReleaseLock_PropagatesFnError(t *testing.T) {
 func TestExecuteWithReleaseLock_InvalidTimeout(t *testing.T) {
 	r := newLockTestReleaser(t)
 	r.cfg.(*config.MockConfig).Items["Releaser.LockWaitSeconds"] = []string{"notanumber"}
-	r.ref = "test"
 
-	err := r.ExecuteWithReleaseLock(func() error { return nil })
+	err := r.ExecuteWithReleaseLock("test", func() error { return nil })
 	if err == nil {
 		t.Fatal("expected error for non-numeric timeout")
 	}
 }
 
-func TestExecuteWithReleaseLock_EmptyRef(t *testing.T) {
+func TestExecuteWithReleaseLock_EmptyName(t *testing.T) {
 	r := newLockTestReleaser(t)
-	r.ref = ""
 
-	err := r.ExecuteWithReleaseLock(func() error { return nil })
+	err := r.ExecuteWithReleaseLock("", func() error { return nil })
 	if err == nil {
-		t.Fatal("expected error for empty ref")
+		t.Fatal("expected error for empty name")
 	}
 }
 
@@ -147,8 +140,7 @@ func TestExecuteWithReleaseLock_MutualExclusion(t *testing.T) {
 	r := newLockTestReleaser(t)
 
 	// Hold the lock from outside the Releaser so the inner call blocks.
-	r.ref = "contended"
-	lockPath, err := r.ReleaseLockPath()
+	lockPath, err := r.ReleaseLockPath("contended")
 	if err != nil {
 		t.Fatalf("unexpected error getting lock path: %v", err)
 	}
@@ -164,7 +156,7 @@ func TestExecuteWithReleaseLock_MutualExclusion(t *testing.T) {
 	// Use a very short timeout so we don't slow down the test suite.
 	r.cfg.(*config.MockConfig).Items["Releaser.LockWaitSeconds"] = []string{"1"}
 
-	err = r.ExecuteWithReleaseLock(func() error {
+	err = r.ExecuteWithReleaseLock("contended", func() error {
 		t.Fatal("fn should never run while lock is held externally")
 		return nil
 	})
@@ -196,13 +188,12 @@ func TestExecuteWithReleaseLock_SequentialAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	var started atomic.Int32
 
-	r.ref = "serial"
 	for i := 1; i <= 2; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
 			started.Add(1)
-			err := r.ExecuteWithReleaseLock(func() error {
+			err := r.ExecuteWithReleaseLock("serial", func() error {
 				appendOrder(id)
 				time.Sleep(10 * time.Millisecond) // hold briefly
 				return nil

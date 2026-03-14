@@ -12,26 +12,22 @@ import (
 	"matrixos/vector/lib/ostree"
 )
 
+// SymlinkEtc creates a /etc -> usr/etc symlink in the image directory
+// to prevent emerge from recreating /etc during post-clean.
 func (r *Releaser) SymlinkEtc() error {
-	if err := checkImageDir(r.imageDir); err != nil {
-		return err
-	}
 	r.Print("Symlinking /etc to prevent emerge packages recreating it ...\n")
 	return os.Symlink("usr/etc", filepath.Join(r.imageDir, "etc"))
 }
 
+// UnlinkEtc removes the /etc symlink before an ostree commit.
 func (r *Releaser) UnlinkEtc() error {
-	if err := checkImageDir(r.imageDir); err != nil {
-		return err
-	}
 	r.Print("Removing /etc symlink before ostree commit ...\n")
 	return os.Remove(filepath.Join(r.imageDir, "etc"))
 }
 
+// AddExtraDotDotToUsrEtcPortage adjusts the /usr/etc/portage symlink
+// after /etc has been moved to /usr/etc, adding an extra "../" prefix.
 func (r *Releaser) AddExtraDotDotToUsrEtcPortage() error {
-	if err := checkImageDir(r.imageDir); err != nil {
-		return err
-	}
 	r.Print("Fixing /usr/etc/portage symlink after move of /etc to /usr/etc ...\n")
 	etcPortageDir := filepath.Join(r.imageDir, "usr/etc/portage")
 
@@ -57,10 +53,9 @@ func (r *Releaser) AddExtraDotDotToUsrEtcPortage() error {
 	return nil
 }
 
+// RemoveExtraDotDotFromUsrEtcPortage removes the extra "../" prefix from the
+// /usr/etc/portage symlink so it works after client-side deployment.
 func (r *Releaser) RemoveExtraDotDotFromUsrEtcPortage() error {
-	if err := checkImageDir(r.imageDir); err != nil {
-		return err
-	}
 	r.Print("Removing extra ../ from /usr/etc/portage so that it works after client deployment.\n")
 	etcPortageDir := filepath.Join(r.imageDir, "usr/etc/portage")
 
@@ -86,16 +81,15 @@ func (r *Releaser) RemoveExtraDotDotFromUsrEtcPortage() error {
 	return nil
 }
 
+// OstreePrepare prepares and validates the filesystem hierarchy for OSTree.
 func (r *Releaser) OstreePrepare() error {
-	if err := checkImageDir(r.imageDir); err != nil {
-		return err
-	}
 	if err := r.ostree.PrepareFilesystemHierarchy(r.imageDir); err != nil {
 		return err
 	}
 	return r.ostree.ValidateFilesystemHierarchy(r.imageDir)
 }
 
+// MaybeOstreeInit initialises the local ostree repository if it does not already exist.
 func (r *Releaser) MaybeOstreeInit() error {
 	repoDir, err := r.ostree.RepoDir()
 	if err != nil {
@@ -125,8 +119,11 @@ func (r *Releaser) MaybeOstreeInit() error {
 	return r.ostree.SetGpg(gpgEnabled)
 }
 
-func (r *Releaser) Release(opts CommitOptions) error {
-	if err := checkImageDir(r.imageDir); err != nil {
+// Release commits the image directory to the ostree repository.
+func (r *Releaser) Release(opts CommitOptions, verbose bool) error {
+	imageDir := r.imageDir
+	repoDir, err := r.ostree.RepoDir()
+	if err != nil {
 		return err
 	}
 	if opts.Branch == "" {
@@ -134,9 +131,25 @@ func (r *Releaser) Release(opts CommitOptions) error {
 	}
 
 	// Verify /etc does not exist (it should have been moved to /usr/etc).
-	etcDir := filepath.Join(r.imageDir, "etc")
+	etcDir := filepath.Join(imageDir, "etc")
 	if filesystems.PathExists(etcDir) {
-		return fmt.Errorf("%s/etc exists; this is illegal and breaks clients", r.imageDir)
+		return fmt.Errorf("%s/etc exists; this is illegal and breaks clients", imageDir)
+	}
+
+	// Resolve parent commit if a parent branch is specified.
+	var parentRev string
+	if opts.ParentBranch != "" {
+		r.ostree.SetRef(opts.ParentBranch)
+		rev, err := r.ostree.LastCommit()
+		if err != nil {
+			return fmt.Errorf("unable to run ostree rev-parse for parent branch: %w", err)
+		}
+		r.Print(
+			"Setting ostree branch parent of %s to be %s ...\n",
+			opts.Branch,
+			opts.ParentBranch,
+		)
+		parentRev = rev
 	}
 
 	// Read build metadata.
@@ -145,7 +158,7 @@ func (r *Releaser) Release(opts CommitOptions) error {
 		return err
 	}
 	metadata := "not available"
-	metadataPath := filepath.Join(r.imageDir, metadataFile, "build")
+	metadataPath := filepath.Join(imageDir, metadataFile, "build")
 	if filesystems.FileExists(metadataPath) {
 		r.Print("Reading metadata file %s for release commit subject ...\n", metadataPath)
 		data, err := os.ReadFile(metadataPath)
@@ -181,13 +194,8 @@ func (r *Releaser) Release(opts CommitOptions) error {
 	)
 
 	// Normalise timestamps before commit.
-	r.Print(
-		"Normalizing files at %s before ostree commit to have same timestamp ...\n",
-		r.imageDir,
-	)
-
-	timeZero := time.Unix(1, 0)
-	if err := filesystems.NormalizeTimestamps(r.imageDir, timeZero); err != nil {
+	r.Print("Normalizing files at %s before ostree commit to have same timestamp ...\n", imageDir)
+	if err := filesystems.NormalizeTimestamps(imageDir, time.Unix(1, 0)); err != nil {
 		return err
 	}
 
@@ -197,12 +205,14 @@ func (r *Releaser) Release(opts CommitOptions) error {
 		return err
 	}
 	commitOpts := ostree.CommitOptions{
+		RepoDir:  repoDir,
+		Branch:   opts.Branch,
 		Subject:  subject,
 		Body:     body,
-		Parent:   opts.ParentRev,
+		Parent:   parentRev,
 		GpgArgs:  gpgArgs,
 		Consume:  opts.Consume,
-		ImageDir: r.imageDir,
+		ImageDir: imageDir,
 	}
 	if err := r.ostree.Commit(commitOpts); err != nil {
 		return fmt.Errorf("ostree commit failed: %w", err)

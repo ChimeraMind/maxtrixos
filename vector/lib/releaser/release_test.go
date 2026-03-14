@@ -117,6 +117,28 @@ func TestNewReleaser_NilOpts(t *testing.T) {
 	}
 }
 
+func TestNewReleaser_EmptyChrootDir(t *testing.T) {
+	_, err := NewReleaser(
+		&config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+		&ostree.MockOstree{},
+		&NewReleaserOptions{ChrootDir: "", ImageDir: t.TempDir(), Ref: "origin/matrixos"},
+	)
+	if err == nil {
+		t.Fatal("expected error for empty ChrootDir")
+	}
+}
+
+func TestNewReleaser_EmptyImageDir(t *testing.T) {
+	_, err := NewReleaser(
+		&config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+		&ostree.MockOstree{},
+		&NewReleaserOptions{ChrootDir: "/tmp", ImageDir: "", Ref: "origin/matrixos"},
+	)
+	if err == nil {
+		t.Fatal("expected error for empty ImageDir")
+	}
+}
+
 func TestNewReleaser_EmptyRef(t *testing.T) {
 	_, err := NewReleaser(
 		&config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
@@ -125,6 +147,17 @@ func TestNewReleaser_EmptyRef(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected error for empty Ref")
+	}
+}
+
+func TestNewReleaser_InvalidImageDir(t *testing.T) {
+	_, err := NewReleaser(
+		&config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+		&ostree.MockOstree{},
+		&NewReleaserOptions{ChrootDir: "/tmp", ImageDir: "/nonexistent/dir", Ref: "ref"},
+	)
+	if err == nil {
+		t.Fatal("expected error for nonexistent ImageDir")
 	}
 }
 
@@ -293,11 +326,32 @@ func TestNewReleaser_ErrorMessages(t *testing.T) {
 			wantInErr: "options",
 		},
 		{
+			name:      "empty ChrootDir",
+			cfg:       &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+			ot:        &ostree.MockOstree{},
+			opts:      &NewReleaserOptions{ChrootDir: "", ImageDir: t.TempDir(), Ref: "r"},
+			wantInErr: "ChrootDir",
+		},
+		{
+			name:      "empty ImageDir",
+			cfg:       &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+			ot:        &ostree.MockOstree{},
+			opts:      &NewReleaserOptions{ChrootDir: "/c", ImageDir: "", Ref: "r"},
+			wantInErr: "ImageDir",
+		},
+		{
 			name:      "empty Ref",
 			cfg:       &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
 			ot:        &ostree.MockOstree{},
 			opts:      &NewReleaserOptions{ChrootDir: "/c", ImageDir: t.TempDir(), Ref: ""},
 			wantInErr: "Ref",
+		},
+		{
+			name:      "nonexistent ImageDir",
+			cfg:       &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+			ot:        &ostree.MockOstree{},
+			opts:      &NewReleaserOptions{ChrootDir: "/c", ImageDir: "/no/such/dir", Ref: "r"},
+			wantInErr: "ImageDir",
 		},
 	}
 	for _, tc := range tests {
@@ -387,6 +441,23 @@ func TestCheckImageDir_SymlinkToFile(t *testing.T) {
 // NewReleaser – ImageDir that is a file, not a directory
 // ---------------------------------------------------------------------------
 
+func TestNewReleaser_ImageDirIsFile(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "notadir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	_, err = NewReleaser(
+		&config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+		&ostree.MockOstree{},
+		&NewReleaserOptions{ChrootDir: "/chroot", ImageDir: f.Name(), Ref: "ref"},
+	)
+	if err == nil {
+		t.Fatal("expected error when ImageDir is a file")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // CommitOptions – struct zero value
 // ---------------------------------------------------------------------------
@@ -398,9 +469,6 @@ func TestCommitOptions_ZeroValue(t *testing.T) {
 	}
 	if opts.ParentBranch != "" {
 		t.Errorf("expected empty ParentBranch, got %q", opts.ParentBranch)
-	}
-	if opts.ParentRev != "" {
-		t.Errorf("expected empty ParentRev, got %q", opts.ParentRev)
 	}
 	if opts.Consume {
 		t.Error("expected Consume false")
