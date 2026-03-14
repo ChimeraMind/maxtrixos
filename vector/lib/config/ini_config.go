@@ -94,11 +94,9 @@ func searchPaths(cfgName string) []searchPath {
 	markerDir, err := findMarkerDir()
 	if err == nil && markerDir != "" {
 		sps = append(sps, searchPath{
-			fileName:      cfgName,
-			dirPath:       filepath.Join(markerDir, "conf"),
-			confRoot:      markerDir,
-			artifactsRoot: markerDir,
-			defaultRoot:   markerDir,
+			fileName:    cfgName,
+			dirPath:     filepath.Join(markerDir, "conf"),
+			defaultRoot: markerDir,
 		})
 	}
 
@@ -529,11 +527,20 @@ func (c *IniConfig) Load() error {
 		return err
 	}
 
-	if err := c.loadRootConfigs(fullPath); err != nil {
-		return err
+	// Set defaults for base paths if missing, to allow expansion
+	rootVal, foundRoot := c.getVal("matrixOS.Root")
+	if !foundRoot {
+		c.setVal("matrixOS.Root", c.sp.defaultRoot)
+	} else {
+		rootVal, err := smartRootify(rootVal, c.sp.defaultRoot)
+		if err != nil {
+			return err
+		}
+		c.setVal("matrixOS.Root", rootVal)
 	}
 
-	if err := c.loadDefaultRootConfigs(fullPath); err != nil {
+	// Expand base paths to absolute
+	if err := c.expandAbs("matrixOS.Root"); err != nil {
 		return err
 	}
 
