@@ -6,17 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/seeder"
 	"matrixos/vector/lib/validation"
 )
-
-// newSeeder is the factory used to create an ISeeder.
-// Tests replace it with a function that returns a mock.
-var newSeeder = func(cfg config.IConfig, opts *seeder.NewSeederOptions) (seeder.ISeeder, error) {
-	return seeder.NewSeeder(cfg, opts)
-}
 
 // SeedsCommand orchestrates the seeder workflow — detecting,
 // preparing, and building chroot filesystems using the configured
@@ -28,6 +21,7 @@ type SeedsCommand struct {
 	fs *flag.FlagSet
 
 	// Library instances
+	sd  seeder.ISeeder
 	det seeder.ISeederDetector
 	qa  *validation.QA
 
@@ -72,6 +66,14 @@ func (c *SeedsCommand) Init(args []string) error {
 		return fmt.Errorf("failed to initialize QA: %w", err)
 	}
 	c.qa = qa
+
+	sd, err := seeder.NewSeeder(
+		c.cfg, &seeder.NewSeederOptions{Verbose: c.verbose},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize seeder: %w", err)
+	}
+	c.sd = sd
 
 	det, err := seeder.NewSeederDetector(c.cfg)
 	if err != nil {
@@ -150,36 +152,14 @@ func (c *SeedsCommand) Run() error {
 	return c.RunWithGuard(c.runSeeds)
 }
 
-// updateStdWriters updates the stdout and stderr writers with the given label
-// and propagates them to the seeder library.
-func (c *SeedsCommand) updateStdWriters(sd seeder.ISeeder, name string) (*styledWriter, *styledWriter) {
-	stdoutWriter := c.SetStdout(name)
-	stderrWriter := c.SetStderr(name)
-	sd.SetStdout(stdoutWriter)
-	sd.SetStderr(stderrWriter)
-	c.det.SetStderr(stderrWriter)
-	return stdoutWriter, stderrWriter
-}
-
 // runSeeds implements the seeder workflow, mirroring the bash seeder
 // script's main() function.
 func (c *SeedsCommand) runSeeds() error {
-	sd, err := newSeeder(
-		c.cfg,
-		&seeder.NewSeederOptions{Verbose: c.verbose},
-	)
-	if err != nil {
-		return fmt.Errorf("failed to initialize seeder: %w", err)
-	}
+	stdoutWriter := c.SetStdout("all")
+	stderrWriter := c.SetStderr("all")
 
-	writerSetup := func(tsd seeder.ISeeder) {
-		stdoutWriter, stderrWriter := c.updateStdWriters(tsd, "main")
-		c.PushCleanup(func() {
-			stdoutWriter.Flush()
-			stderrWriter.Flush()
-		})
-	}
-	writerSetup(sd)
+	c.sd.SetStdout(stdoutWriter)
+	c.sd.SetStderr(stderrWriter)
 
 	// Verify seeder environment.
 	if err := c.qa.VerifySeederEnvironmentSetup("/"); err != nil {
@@ -188,22 +168,29 @@ func (c *SeedsCommand) runSeeds() error {
 		)
 	}
 
-	c.PushCleanup(sd.Cleanup)
+	// Register cleanup.
+	c.PushCleanup(func() {
+		stdoutWriter.Flush()
+		stderrWriter.Flush()
+		c.sd.Cleanup()
+	})
 
 	// Import Gentoo GPG keys.
-	if err := sd.ImportGentooGpgKeys(); err != nil {
+	if err := c.sd.ImportGentooGpgKeys(); err != nil {
 		return fmt.Errorf("GPG key import failed: %w", err)
 	}
 
 	// Ensure private repo is initialized.
-	if err := sd.MaybeInitializePrivateRepo(); err != nil {
+	if err := c.sd.MaybeInitializePrivateRepo(); err != nil {
 		return fmt.Errorf(
 			"private repo initialization failed: %w", err,
 		)
 	}
 
 	// Detect seeders.
-	seeders, err := c.det.Detect(c.skipFilter(), c.onlyFilter())
+	seeders, err := c.det.Detect(
+		c.skipFilter(), c.onlyFilter(),
+	)
 	if err != nil {
 		return fmt.Errorf("seeder detection failed: %w", err)
 	}
@@ -212,9 +199,11 @@ func (c *SeedsCommand) runSeeds() error {
 	}
 
 	// Print execution plan.
-	c.Printf("Will execute seeders in the following order:\n")
+	c.sd.Print(
+		"Will execute seeders in the following order:\n",
+	)
 	for _, s := range seeders {
-		c.Printf("  %s\n", s.Dir)
+		c.sd.Print("  %s\n", s.ChrootExec)
 	}
 
 	// Initialize output files.
@@ -224,22 +213,21 @@ func (c *SeedsCommand) runSeeds() error {
 
 	// Execute each seeder under its lock.
 	for _, info := range seeders {
-		err = sd.ExecuteWithSeederLock(
+		info := info // capture loop variable
+		err := c.sd.ExecuteWithSeederLock(
 			info.Name,
-			func() error { return c.seederWorker(sd, info) },
+			func() error { return c.seederWorker(info) },
 		)
 		if err != nil {
-			writerSetup(sd)
 			return fmt.Errorf(
 				"seeder %s failed: %w", info.Name, err,
 			)
 		}
 	}
 
-	writerSetup(sd)
-	c.Printf("Seeds build complete:\n")
+	c.sd.Print("Seeds build complete:\n")
 	for _, info := range seeders {
-		c.Printf("  [%s] %s done.\n", info.Name, info.Dir)
+		c.sd.Print("  [%s] %s done.\n", info.Name, info.ChrootExec)
 	}
 	return nil
 }
@@ -247,22 +235,13 @@ func (c *SeedsCommand) runSeeds() error {
 // seederWorker processes a single seeder: parse params, resolve chroot
 // dir, run prepper, set up mounts/DNS/dirs, execute chroot script,
 // mark done, and record results.
-func (c *SeedsCommand) seederWorker(sd seeder.ISeeder, info seeder.SeederInfo) error {
-	sd.Print(
+func (c *SeedsCommand) seederWorker(info seeder.SeederInfo) error {
+	c.sd.Print(
 		"[%s] Accepted seeder for execution\n", info.Name,
 	)
 
-	stdoutWriter, stderrWriter := c.updateStdWriters(sd, info.Name)
-	c.PushCleanup(func() {
-		sd.Cleanup()
-		stdoutWriter.Flush()
-		stderrWriter.Flush()
-	})
-	// To umount all the mount points.
-	defer sd.Cleanup()
-
 	// Parse seeder params.
-	paramsName, err := sd.ParamsExecutableName()
+	paramsName, err := c.sd.ParamsExecutableName()
 	if err != nil {
 		return err
 	}
@@ -271,7 +250,7 @@ func (c *SeedsCommand) seederWorker(sd seeder.ISeeder, info seeder.SeederInfo) e
 		return fmt.Errorf("unable to find %s", paramsPath)
 	}
 
-	params, err := sd.ParseSeederParams(info.Name, paramsPath)
+	params, err := c.sd.ParseSeederParams(paramsPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse params: %w", err)
 	}
@@ -279,7 +258,7 @@ func (c *SeedsCommand) seederWorker(sd seeder.ISeeder, info seeder.SeederInfo) e
 	// Resolve chroot directory.
 	chrootDir := params.PreferredChrootDir
 	if c.chrootDir != "" {
-		sd.PrintWarning(
+		c.sd.PrintWarning(
 			"[%s] Overriding chroot dir with --chroot-dir='%s'. This can be dangerous for multiple chroots.\n",
 			info.Name,
 			c.chrootDir,
@@ -292,28 +271,28 @@ func (c *SeedsCommand) seederWorker(sd seeder.ISeeder, info seeder.SeederInfo) e
 			info.Name,
 		)
 	}
-
-	flagFile, err := sd.SeederDoneFlagFile(info.Name, chrootDir)
-	if err != nil {
-		return err
+	if !filesystems.DirectoryExists(chrootDir) {
+		return fmt.Errorf(
+			"[%s] resolved chroot dir does not exist: %s",
+			info.Name, chrootDir,
+		)
 	}
 
 	// Check if already done.
-	done, err := sd.IsSeederDone(info.Name, chrootDir)
+	done, err := c.sd.IsSeederDone(info.Name, chrootDir)
 	if err != nil {
 		return err
 	}
-
 	if done {
-		sd.Print(
-			"[%s] Already marked as done via %s. Skipping.\n",
-			info.Name, flagFile,
+		c.sd.Print(
+			"[%s] Already marked as done. Skipping.\n",
+			info.Name,
 		)
 		return nil
 	}
 
 	// Execute prepper.
-	sd.Print(
+	c.sd.Print(
 		"[%s] Executing prepper %s ...\n",
 		info.Name, info.PrepperExec,
 	)
@@ -322,7 +301,7 @@ func (c *SeedsCommand) seederWorker(sd seeder.ISeeder, info seeder.SeederInfo) e
 		Resume:     c.resume,
 		Stage3File: c.stage3File,
 	}
-	if err := sd.ExecutePrepper(
+	if err := c.sd.ExecutePrepper(
 		info, params, prepOpts,
 	); err != nil {
 		return fmt.Errorf(
@@ -331,46 +310,43 @@ func (c *SeedsCommand) seederWorker(sd seeder.ISeeder, info seeder.SeederInfo) e
 	}
 
 	// Setup mounts.
-	opts := seeder.SetupChrootMountsOptions{
-		ChrootDir:     chrootDir,
-		SkipIfMounted: true,
-	}
-	if err := sd.SetupChrootMounts(opts); err != nil {
+	if err := c.sd.SetupChrootMounts(chrootDir); err != nil {
 		return fmt.Errorf(
 			"[%s] mount setup failed: %w", info.Name, err,
 		)
 	}
 
 	// Setup DNS.
-	if err := sd.SetupChrootDNS(chrootDir); err != nil {
+	if err := c.sd.SetupChrootDNS(chrootDir); err != nil {
 		return fmt.Errorf(
 			"[%s] DNS setup failed: %w", info.Name, err,
 		)
 	}
 
 	// Setup chroot dirs.
-	if err := sd.SetupChrootDirs(chrootDir); err != nil {
+	if err := c.sd.SetupChrootDirs(chrootDir); err != nil {
 		return fmt.Errorf(
 			"[%s] dir setup failed: %w", info.Name, err,
 		)
 	}
 
 	// Execute seeder inside chroot.
-	sd.Print(
+	c.sd.Print(
 		"[%s] Running seeder inside %s ...\n",
 		info.Name, chrootDir,
 	)
-	if err := sd.Seed(chrootDir, info); err != nil {
+	if err := c.sd.Seed(chrootDir, info); err != nil {
 		return fmt.Errorf(
 			"[%s] chroot execution failed: %w", info.Name, err,
 		)
 	}
 
 	// Mark done.
-	sd.Print("[%s] Flagging %s as complete ...\n",
+	c.sd.Print(
+		"[%s] Flagging %s as complete ...\n",
 		info.Name, chrootDir,
 	)
-	if err := sd.MarkSeederDone(info.Name, chrootDir); err != nil {
+	if err := c.sd.MarkSeederDone(info.Name, chrootDir); err != nil {
 		return err
 	}
 
@@ -381,7 +357,9 @@ func (c *SeedsCommand) seederWorker(sd seeder.ISeeder, info seeder.SeederInfo) e
 		)
 	}
 
-	sd.Print("[%s] SUCCESS: Build complete.\n", info.Name)
+	c.sd.Print(
+		"[%s] SUCCESS: Build complete.\n", info.Name,
+	)
 	return nil
 }
 
@@ -418,7 +396,7 @@ func (c *SeedsCommand) onlyFilter() seeder.SeederFilterFunc {
 // files if the corresponding flags were provided.
 func (c *SeedsCommand) initOutputFiles() error {
 	if c.builtRootfsFile != "" {
-		c.Printf(
+		c.sd.Print(
 			"Writing built chroots to %s ...\n",
 			c.builtRootfsFile,
 		)
@@ -432,7 +410,7 @@ func (c *SeedsCommand) initOutputFiles() error {
 		}
 	}
 	if c.builtSeedersFile != "" {
-		c.Printf(
+		c.sd.Print(
 			"Writing built seeders to %s ...\n",
 			c.builtSeedersFile,
 		)
