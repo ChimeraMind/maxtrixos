@@ -6,9 +6,7 @@
       - Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
         now that we have separate mount namespaces via unshare.
         -> no chance of leaking mounts when SIGKILL is sent.
-- Add vector command for:
-  $ ostree admin pin 1
-  $ ostree admin status
+- Wrap ostree admin kargs edit-in-place ...
 - Test and consider migration to systemd-boot (while supporting GRUB).
 - Add UKI building to kernel build (make USE flag optional).
 - Test bootc & migration to UKI.

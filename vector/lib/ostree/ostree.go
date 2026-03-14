@@ -148,6 +148,10 @@ type IOstree interface {
 	Deploy(sysroot string, bootArgs []string) error
 	// Upgrade runs `ostree admin upgrade`.
 	Upgrade(args []string) error
+	// Pin pins a deployment by index so that it can be persisted as rollback target.
+	Pin(targetIndex int) error
+	// Unpin removes a previously pinned deployment.
+	Unpin(targetIndex int) error
 	// ListPackages lists the packages in a commit.
 	ListPackages(commit string) ([]string, error)
 	// ListContents lists the contents of a path in a commit.

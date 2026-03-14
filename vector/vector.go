@@ -18,22 +18,26 @@ Usage:
 
   help        - this command.
   branch      - vector branch command. Operates on OS ostree branches.
-    show         show current OS ostree branch.
-    list         list all the available OS branches.
-    switch       switch to a new branch.
+    show            show the currently booted branch and its metadata.
+    deployment      show local branch deployments with their associated metadata.
+    pin <index>     pin a deployment to preserve it as rollback target at boot.
+	unpin <index>   unpin a deployment (inverse of pin).
+    remote          list all the remote OS branches available.
+    local           list all the local OS branches available.
+    switch <ref>    switch to a new OS branch from those available.
   upgrade     - system upgrade tool, wraps ostree.
   setupOS     - setup tool, configures passwords, accounts, languages, etc.
   readwrite   - temporarily (until next upgrade) turn OS into a (mutable) read-write system.
   jailbreak   - permanently turns this system into a regular mutable Gentoo.
   dev 	      - development toolkit command, orchestrates development workflow and tools.
-    janitor      cleans up development toolkit artifacts, such as old images and downloads.
-    vm           runs generated image tests using QEMU.
+    janitor         cleans up development toolkit artifacts, such as old images and downloads.
+    vm              runs generated image tests using QEMU.
   build       - build toolkit command, orchestrates building OS artifacts.
-    seeds        builds chroot filesystems using the configured seeders.
-    release      generates a single OS release (ostree commit).
-    releases     generates multiple OS releases across all detected seeders.
-    image        generates a single OS image.
-    images 	     generates multiple OS images based on released branches.
+    seeds           builds chroot filesystems using the configured seeders.
+    release         generates a single OS release (ostree commit).
+    releases        generates multiple OS releases across all detected seeders.
+    image           generates a single OS image.
+    images 	        generates multiple OS images based on released branches.
 `
 )
 

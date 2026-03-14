@@ -214,10 +214,9 @@ vector upgrade
 If an update fails, simply boot into the previous entry (`ostree:1`). To manage deployments:
 
 ```shell
-sudo vector branch show         # show the currently booted deployment.
-sudo vector branch deployment    # show all local deployments.
-sudo vector branch pin 1         # pin deployment 1.
-sudo vector branch unpin 1       # unpin deployment 1.
+vector branch deployment  # to show which deployments are available.
+vector branch pin 1       # to pin deployment 1.
+vector branch unpin 1     # in case you want to clean up the pinning of deployment 1.
 ```
 
 ### Branch Switching
