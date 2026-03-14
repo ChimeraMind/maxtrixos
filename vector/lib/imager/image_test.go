@@ -1023,14 +1023,14 @@ func TestSetupPasswords(t *testing.T) {
 	})
 }
 
-// --- ReleaseVersion Tests ---
+// --- ExtractReleaseVersion Tests ---
 
-func TestReleaseVersion(t *testing.T) {
+func TestExtractReleaseVersion(t *testing.T) {
 	t.Run("FallbackToDate", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 		im.SetRootfs(tmpDir)
-		result, err := im.ReleaseVersion()
+		result, err := im.ExtractReleaseVersion()
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
@@ -1049,7 +1049,7 @@ func TestReleaseVersion(t *testing.T) {
 
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 		im.SetRootfs(tmpDir)
-		result, err := im.ReleaseVersion()
+		result, err := im.ExtractReleaseVersion()
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
@@ -1060,7 +1060,7 @@ func TestReleaseVersion(t *testing.T) {
 
 	t.Run("EmptyRootfs", func(t *testing.T) {
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
-		_, err := im.ReleaseVersion()
+		_, err := im.ExtractReleaseVersion()
 		if err == nil {
 			t.Error("should error for empty rootfs")
 		}
@@ -1070,7 +1070,7 @@ func TestReleaseVersion(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
 		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		im.SetRootfs("/tmp/rootfs")
-		_, err := im.ReleaseVersion()
+		_, err := im.ExtractReleaseVersion()
 		if err == nil {
 			t.Error("should error from broken config")
 		}
@@ -1451,19 +1451,19 @@ func TestInstallBootloader(t *testing.T) {
 	})
 }
 
-// --- ShowTestInfo Tests ---
+// --- ShowImageTestInfo Tests ---
 
-func TestShowTestInfo(t *testing.T) {
+func TestShowImageTestInfo(t *testing.T) {
 	im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 	// Should not panic with valid artifacts.
-	im.ShowTestInfo([]string{"/tmp/test.img", "/tmp/test.img.xz"})
+	im.ShowImageTestInfo([]string{"/tmp/test.img", "/tmp/test.img.xz"})
 	// Should not panic with empty artifacts.
-	im.ShowTestInfo(nil)
+	im.ShowImageTestInfo(nil)
 }
 
-// --- PackageList Tests ---
+// --- ExtractPackageList Tests ---
 
-func TestPackageList(t *testing.T) {
+func TestExtractPackageList(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		vdb := filepath.Join(tmpDir, "usr", "var-db-pkg")
@@ -1473,7 +1473,7 @@ func TestPackageList(t *testing.T) {
 
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 		im.SetRootfs(tmpDir)
-		result, err := im.PackageList()
+		result, err := im.ExtractPackageList()
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
@@ -1486,7 +1486,7 @@ func TestPackageList(t *testing.T) {
 		tmpDir := t.TempDir()
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 		im.SetRootfs(tmpDir)
-		result, err := im.PackageList()
+		result, err := im.ExtractPackageList()
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
@@ -1497,7 +1497,7 @@ func TestPackageList(t *testing.T) {
 
 	t.Run("Empty", func(t *testing.T) {
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
-		_, err := im.PackageList()
+		_, err := im.ExtractPackageList()
 		if err == nil {
 			t.Error("should error for empty rootfs")
 		}
@@ -1507,7 +1507,7 @@ func TestPackageList(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
 		im, _ := NewImage(ec, &cds.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		im.SetRootfs("/tmp/rootfs")
-		_, err := im.PackageList()
+		_, err := im.ExtractPackageList()
 		if err == nil {
 			t.Error("should error from broken config")
 		}
@@ -1758,6 +1758,8 @@ func TestSetupVmtestConfig(t *testing.T) {
 		os.WriteFile(filepath.Join(loaderDir, "ostree-1.conf"), []byte(confContent), 0644)
 
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		im.SetImagePath(filepath.Join(tmpDir, "test.img"))
+		im.SetImageMode(ModeCreateImageFile)
 		im.bootfsMount = tmpDir
 		err := im.SetupVmtestConfig()
 		if err != nil {
