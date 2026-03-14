@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -303,6 +304,106 @@ func TestSetupCommonRootfsMountsProcDisabled(t *testing.T) {
 			t.Error("proc should not be mounted when MountProc is false")
 		}
 	}
+}
+
+func TestNewCommonRootfsMounts_SkipIfMounted(t *testing.T) {
+	t.Run("Skips if already mounted", func(t *testing.T) {
+		setupMockExec(t)
+		setupMockSyscalls(t)
+
+		tmpDir := t.TempDir()
+		preMountedDev := filepath.Join(tmpDir, "dev")
+		if err := os.MkdirAll(preMountedDev, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Mock that /dev is already mounted
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: preMountedDev},
+		})
+
+		var mountingCalls, skippingCalls []string
+		mounter, err := NewCommonRootfsMounts(
+			CommonRootfsMountsOptions{
+				MountPoint:    tmpDir,
+				SkipIfMounted: true,
+				Mounting: func(tg string) {
+					mountingCalls = append(mountingCalls, tg)
+				},
+				Skipping: func(tg string) {
+					skippingCalls = append(skippingCalls, tg)
+				},
+			},
+		)
+		if err != nil {
+			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+		}
+		defer mounter.Cleanup()
+
+		if err := mounter.Setup(); err != nil {
+			t.Errorf("Setup failed: %v", err)
+		}
+
+		if len(skippingCalls) != 1 {
+			t.Errorf("Expected 1 skipping call, got %d", len(skippingCalls))
+		}
+		if skippingCalls[0] != preMountedDev {
+			t.Errorf("Expected to skip %s, but skipped %s", preMountedDev, skippingCalls[0])
+		}
+
+		for _, mnt := range mountingCalls {
+			if mnt == preMountedDev {
+				t.Errorf("Should not have tried to mount %s", preMountedDev)
+			}
+		}
+	})
+
+	t.Run("Fails if already mounted and not skipping", func(t *testing.T) {
+		setupMockExec(t)
+		// Don't use setupMockSyscalls, we need a custom Mount mock
+		origMount := Mount
+		t.Cleanup(func() { Mount = origMount })
+
+		tmpDir := t.TempDir()
+		preMountedDev := filepath.Join(tmpDir, "dev")
+		if err := os.MkdirAll(preMountedDev, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Mock that /dev is already mounted
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: preMountedDev},
+		})
+
+		Mount = func(source, target, fstype string, flags uintptr, data string) error {
+			if target == preMountedDev {
+				return fmt.Errorf("mock mount failed: already mounted")
+			}
+			return nil
+		}
+
+		mounter, err := NewCommonRootfsMounts(
+			CommonRootfsMountsOptions{
+				MountPoint:    tmpDir,
+				SkipIfMounted: false, // This is the default, but let's be explicit
+			},
+		)
+		if err != nil {
+			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
+		}
+		defer mounter.Cleanup()
+
+		err = mounter.Setup()
+		if err == nil {
+			t.Error("Setup should have failed, but it didn't")
+		}
+		if err != nil {
+			expectedError := "mock mount failed: already mounted"
+			if !strings.Contains(err.Error(), expectedError) {
+				t.Errorf("Setup() failed with wrong error: got %q, want something containing %q", err, expectedError)
+			}
+		}
+	})
 }
 
 func TestBindMount(t *testing.T) {

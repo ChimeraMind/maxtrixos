@@ -321,7 +321,11 @@ func (c *SeedsCommand) seederWorker(info seeder.SeederInfo) error {
 	}
 
 	// Setup mounts.
-	if err := c.sd.SetupChrootMounts(chrootDir); err != nil {
+	opts := seeder.SetupChrootMountsOptions{
+		ChrootDir:     chrootDir,
+		SkipIfMounted: true,
+	}
+	if err := c.sd.SetupChrootMounts(opts); err != nil {
 		return fmt.Errorf(
 			"[%s] mount setup failed: %w", info.Name, err,
 		)

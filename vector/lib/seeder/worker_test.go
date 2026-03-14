@@ -1567,7 +1567,10 @@ func TestSetupChrootMounts_Success(t *testing.T) {
 		stderr:       &bytes.Buffer{},
 	}
 
-	if err := sd.SetupChrootMounts(chrootDir); err != nil {
+	opts := SetupChrootMountsOptions{
+		ChrootDir: chrootDir,
+	}
+	if err := sd.SetupChrootMounts(opts); err != nil {
 		t.Fatalf("SetupChrootMounts: %v", err)
 	}
 
@@ -1607,7 +1610,10 @@ func TestSetupChrootMounts_PrivateRepoError(t *testing.T) {
 		stderr:       &bytes.Buffer{},
 	}
 
-	err := sd.SetupChrootMounts(chrootDir)
+	opts := SetupChrootMountsOptions{
+		ChrootDir: chrootDir,
+	}
+	err := sd.SetupChrootMounts(opts)
 	if err == nil {
 		t.Fatal("expected error from broken private repo config")
 	}
@@ -1634,7 +1640,10 @@ func TestSetupChrootMounts_DistDirError(t *testing.T) {
 		stderr:       &bytes.Buffer{},
 	}
 
-	err := sd.SetupChrootMounts(chrootDir)
+	opts := SetupChrootMountsOptions{
+		ChrootDir: chrootDir,
+	}
+	err := sd.SetupChrootMounts(opts)
 	if err == nil {
 		t.Fatal("expected error from broken distfiles config")
 	}
@@ -1661,7 +1670,10 @@ func TestSetupChrootMounts_BinpkgsError(t *testing.T) {
 		stderr:       &bytes.Buffer{},
 	}
 
-	err := sd.SetupChrootMounts(chrootDir)
+	opts := SetupChrootMountsOptions{
+		ChrootDir: chrootDir,
+	}
+	err := sd.SetupChrootMounts(opts)
 	if err == nil {
 		t.Fatal("expected error from broken binpkgs config")
 	}
