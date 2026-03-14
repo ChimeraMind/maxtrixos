@@ -1,10 +1,7 @@
 # Overall TODO
 
 Golang migration:
-    - [WAITING] Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
-        chroot.sh code implemented. Now wait for deployment before
-        changing code vector side. If successful, do this also for releaser
-        and imager.
+    - [WAITING] Add delegated system mounts support for: imager, releaser.
     - [WAITING] Migrate vector_builder.sh to Golang.
     - [sd-boot] Closely watch https://github.com/ostreedev/ostree/pull/3359
         This will be our trampoline to support bootc in the future.
@@ -20,5 +17,4 @@ Features:
     - Add UKI building to kernel build (make USE flag optional).
     - Test bootc & migration to UKI.
     - Support Cloud Init (add VM tests).
-    -  Add more VM tests (test flatpak, test snap, test SecureBoot, etc).
-      - Add tests for vector
+    - Add more VM tests (test flatpak, test snap, test SecureBoot, etc).
