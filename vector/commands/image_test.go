@@ -2,34 +2,30 @@ package commands
 
 import (
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 
+	"matrixos/vector/lib/cds"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/imager"
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/validation"
 )
 
-// --- Test helpers ---
+// --- Mocks ---
 
-// defaultMockOstree returns a MockOstree with sensible defaults for image tests.
-func defaultMockOstree() *ostree.MockOstree {
-	return &ostree.MockOstree{}
-}
+// --- Test helpers ---
 
 // newTestImageCommand creates an ImageCommand with injected mocks,
 // bypassing Init() which requires real config, ostree binary, etc.
 func newTestImageCommand(
-	ot ostree.IOstree,
+	ot cds.IOstree,
 	im *imager.MockImage,
 	fsenc *filesystems.MockFsenc,
 	cfg *config.MockConfig,
 	args []string,
 ) (*ImageCommand, error) {
-	cmd := NewImageCommand()
+	cmd := &ImageCommand{}
 	cmd.ot = ot
 	cmd.im = im
 	cmd.fsenc = fsenc
@@ -48,6 +44,14 @@ func newTestImageCommand(
 	return cmd, nil
 }
 
+func defaultMockImage() *imager.MockImage {
+	return imager.DefaultMockImage()
+}
+
+func defaultMockFsenc() *filesystems.MockFsenc {
+	return filesystems.DefaultMockFsenc()
+}
+
 func defaultImageTestConfig() *config.MockConfig {
 	return &config.MockConfig{
 		Items: map[string][]string{
@@ -64,7 +68,7 @@ func defaultImageTestConfig() *config.MockConfig {
 // --- Tests ---
 
 func TestImageName(t *testing.T) {
-	cmd := NewImageCommand()
+	cmd := &ImageCommand{}
 	if name := cmd.Name(); name != "image" {
 		t.Errorf("Expected name 'image', got %q", name)
 	}
@@ -85,7 +89,7 @@ func TestImageParseArgsMissingRef(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImageCommand()
+	cmd := &ImageCommand{}
 	cmd.StartUI()
 	err := cmd.parseArgs([]string{})
 	if err == nil {
@@ -101,7 +105,7 @@ func TestImageParseArgs(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImageCommand()
+	cmd := &ImageCommand{}
 	cmd.StartUI()
 	if err := cmd.parseArgs([]string{
 		"--ref", "myref",
@@ -134,7 +138,7 @@ func TestImageParseArgsDefaults(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImageCommand()
+	cmd := &ImageCommand{}
 	cmd.StartUI()
 	if err := cmd.parseArgs([]string{"--ref=foo"}); err != nil {
 		t.Fatalf("parseArgs failed: %v", err)
@@ -151,50 +155,57 @@ func TestImageParseArgsDefaults(t *testing.T) {
 	}
 }
 
-func TestImageParseArgsNotRoot(t *testing.T) {
+func TestImageRunGenerateNotRoot(t *testing.T) {
 	origEuid := getEuid
 	getEuid = func() int { return 1000 }
 	defer func() { getEuid = origEuid }()
 
-	cmd := NewImageCommand()
-	cmd.StartUI()
-	err := cmd.parseArgs([]string{"--ref", "mybranch"})
+	ot := &cds.MockOstree{}
+	im := defaultMockImage()
+	fsenc := defaultMockFsenc()
+	cfg := defaultImageTestConfig()
+
+	cmd, err := newTestImageCommand(ot, im, fsenc, cfg, []string{"--ref", "mybranch"})
 	if err == nil {
 		t.Fatal("Expected error for non-root, got nil")
 	}
 	if !strings.Contains(err.Error(), "must be run as root") {
 		t.Errorf("Unexpected error: %v", err)
 	}
+	// cmd is nil because parseArgs fails for non-root
+	_ = cmd
 }
 
-// requireImagerTools skips the test if the host does not have
-// the executables that VerifyImagerEnvironmentSetup checks for.
-func requireImagerTools(t *testing.T) {
-	t.Helper()
-	for _, tool := range []string{
-		"blockdev", "btrfs", "chroot", "cryptsetup", "efibootmgr",
-		"findmnt", "fstrim", "gpg", "grub-install", "losetup",
-		"mkfs.vfat", "mkfs.btrfs", "openssl", "ostree", "partprobe",
-		"qemu-img", "qemu-system-x86_64", "sgdisk", "unshare", "udevadm", "xz",
-	} {
-		if _, err := exec.LookPath(tool); err != nil {
-			t.Skipf("skipping: required tool %q not found in PATH", tool)
-		}
-	}
-}
-
-func TestImageRunLuksValidationFail(t *testing.T) {
-	requireImagerTools(t)
-
+func TestImageRunGenerateMissingRef(t *testing.T) {
 	origEuid := getEuid
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	ot := defaultMockOstree()
-	im := imager.DefaultMockImage()
-	fsenc := filesystems.DefaultMockFsenc()
+	ot := &cds.MockOstree{}
+	im := defaultMockImage()
+	fsenc := defaultMockFsenc()
+	cfg := defaultImageTestConfig()
+
+	cmd, err := newTestImageCommand(ot, im, fsenc, cfg, []string{})
+	if err == nil {
+		t.Fatal("Expected error for missing --ref, got nil")
+	}
+	if !strings.Contains(err.Error(), "--ref is required") {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	_ = cmd
+}
+
+func TestImageRunGenerateLuksValidationFail(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	ot := &cds.MockOstree{}
+	im := defaultMockImage()
+	fsenc := defaultMockFsenc()
 	// Enable encryption in config but omit the encryption key so that
-	// the real Fsenc created by runImage fails ValidateLuksVariables.
+	// the real Fsenc created by runGenerate fails ValidateLuksVariables.
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
 			"Ostree.Sysroot":          {"/sysroot"},
@@ -226,7 +237,7 @@ func TestImageRunLuksValidationFail(t *testing.T) {
 // --- validateDevicePaths tests ---
 
 func TestValidateDevicePathsNone(t *testing.T) {
-	cmd := NewImageCommand()
+	cmd := &ImageCommand{}
 	opts, err := cmd.validateDevicePaths()
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -246,10 +257,11 @@ func TestValidateDevicePathsPartialError(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 	tmpFile.Close()
 
-	cmd := NewImageCommand()
-	cmd.efiDevicePath = tmpFile.Name()
-	cmd.bootDevicePath = ""
-	cmd.rootDevicePath = ""
+	cmd := &ImageCommand{
+		efiDevicePath:  tmpFile.Name(),
+		bootDevicePath: "",
+		rootDevicePath: "",
+	}
 
 	_, err = cmd.validateDevicePaths()
 	if err == nil {
@@ -272,10 +284,11 @@ func TestValidateDevicePathsAllThree(t *testing.T) {
 	bootFile.Close()
 	rootFile.Close()
 
-	cmd := NewImageCommand()
-	cmd.efiDevicePath = efiFile.Name()
-	cmd.bootDevicePath = bootFile.Name()
-	cmd.rootDevicePath = rootFile.Name()
+	cmd := &ImageCommand{
+		efiDevicePath:  efiFile.Name(),
+		bootDevicePath: bootFile.Name(),
+		rootDevicePath: rootFile.Name(),
+	}
 
 	opts, err := cmd.validateDevicePaths()
 	if err != nil {
@@ -303,11 +316,12 @@ func TestValidateDevicePathsWholeAndPartitionsConflict(t *testing.T) {
 	rootFile.Close()
 	wholeFile.Close()
 
-	cmd := NewImageCommand()
-	cmd.efiDevicePath = efiFile.Name()
-	cmd.bootDevicePath = bootFile.Name()
-	cmd.rootDevicePath = rootFile.Name()
-	cmd.wholeDevice = wholeFile.Name()
+	cmd := &ImageCommand{
+		efiDevicePath:  efiFile.Name(),
+		bootDevicePath: bootFile.Name(),
+		rootDevicePath: rootFile.Name(),
+		wholeDevice:    wholeFile.Name(),
+	}
 
 	_, err := cmd.validateDevicePaths()
 	if err == nil {
@@ -323,8 +337,9 @@ func TestValidateDevicePathsWholeDeviceOnly(t *testing.T) {
 	defer os.Remove(wholeFile.Name())
 	wholeFile.Close()
 
-	cmd := NewImageCommand()
-	cmd.wholeDevice = wholeFile.Name()
+	cmd := &ImageCommand{
+		wholeDevice: wholeFile.Name(),
+	}
 
 	paths, err := cmd.validateDevicePaths()
 	if err != nil {
@@ -339,8 +354,9 @@ func TestValidateDevicePathsWholeDeviceOnly(t *testing.T) {
 }
 
 func TestValidateDevicePathsNonExistentDevice(t *testing.T) {
-	cmd := NewImageCommand()
-	cmd.efiDevicePath = "/dev/nonexistent-test-xyz-999"
+	cmd := &ImageCommand{
+		efiDevicePath: "/dev/nonexistent-test-xyz-999",
+	}
 
 	_, err := cmd.validateDevicePaths()
 	if err == nil {
@@ -353,28 +369,51 @@ func TestValidateDevicePathsNonExistentDevice(t *testing.T) {
 
 // --- initializeOstree tests ---
 
+func TestInitializeOstreeLocal(t *testing.T) {
+	mock := &cds.MockOstree{
+		Refs: []string{"ref1", "ref2"},
+	}
+	cmd := &ImageCommand{}
+	cmd.ot = mock
+	cmd.StartUI()
+
+	output, err := runCaptureStdout(func() error {
+		return cmd.initializeLocalOstree()
+	})
+	if err != nil {
+		t.Fatalf("initializeLocalOstree failed: %v", err)
+	}
+
+	if !strings.Contains(output, "Local refs:") {
+		t.Errorf("Expected 'Local refs:' in output, got:\n%s", output)
+	}
+}
+
 func TestInitializeOstreeRemote(t *testing.T) {
 	origEuid := getEuid
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	mock := &ostree.MockOstree{
+	mock := &cds.MockOstree{
 		Refs:    []string{"remote:branch1"},
 		Remote_: "remote",
 	}
-	mock.SetRef("mybranch")
-	cfg := defaultImageTestConfig()
-
-	cmd, err := newTestImageCommand(
-		mock, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
-		[]string{"--ref", "matrixos/x86_64/dev/someref"},
-	)
-	if err != nil {
-		t.Fatalf("newTestImageCommand failed: %v", err)
+	cmd := &ImageCommand{}
+	if err := cmd.Init([]string{"--ref", "someref"}); err != nil {
+		t.Fatalf("Init failed: %v", err)
 	}
+	cmd.ot = mock
+
+	// Although this has no effect because cmd.ot is mocked.
+	overlay := map[string][]string{
+		"Ostree.Remote": {"remote"},
+	}
+	cmd.cfg.AddOverlay(overlay)
+
+	cmd.StartUI()
 
 	output, err := runCaptureStdout(func() error {
-		return cmd.initializeRemoteOstree()
+		return cmd.initializeRemoteOstree("mybranch")
 	})
 	if err != nil {
 		t.Fatalf("initializeRemoteOstree failed: %v", err)
@@ -389,21 +428,67 @@ func TestInitializeOstreeRemote(t *testing.T) {
 	}
 }
 
-// --- Run() tests ---
+// --- TestImageHelperProcess (subprocess helper) ---
 
-func TestImageRunShortNameRefRejected(t *testing.T) {
+func TestImageHelperProcess(t *testing.T) {
+	if os.Getenv("GO_WANT_IMAGE_HELPER_PROCESS") != "1" {
+		return
+	}
+	defer os.Exit(0)
+
+	args := os.Args
+	for len(args) > 0 {
+		if args[0] == "--" {
+			args = args[1:]
+			break
+		}
+		args = args[1:]
+	}
+	if len(args) == 0 {
+		os.Exit(1)
+	}
+
+	switch args[0] {
+	case "sync":
+		// noop
+	default:
+		os.Exit(1)
+	}
+}
+
+// --- Run() dispatch tests ---
+
+func TestImageRunDispatch(t *testing.T) {
 	origEuid := getEuid
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	ot := defaultMockOstree()
+	ot := &cds.MockOstree{}
+	im := defaultMockImage()
+	fsenc := defaultMockFsenc()
+	cfg := defaultImageTestConfig()
+
+	// ref is required; verify that parseArgs rejects missing --ref.
+	_, err := newTestImageCommand(ot, im, fsenc, cfg, []string{})
+	if err == nil || !strings.Contains(err.Error(), "--ref is required") {
+		t.Errorf("Expected '--ref is required' error, got: %v", err)
+	}
+}
+
+// --- BranchShortName conversion test ---
+
+func TestImageRunGenerateShortNameRef(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	ot := &cds.MockOstree{}
+	im := defaultMockImage()
+	fsenc := defaultMockFsenc()
 	cfg := defaultImageTestConfig()
 
 	// Use a branch shortname (no slashes — IsBranchShortName returns true).
-	cmd, err := newTestImageCommand(
-		ot, imager.DefaultMockImage(), filesystems.DefaultMockFsenc(), cfg,
-		[]string{"--ref", "mybranch"},
-	)
+	cmd, err := newTestImageCommand(ot, im, fsenc, cfg, []string{"--ref", "mybranch"})
 	if err != nil {
 		t.Fatalf("newTestImageCommand failed: %v", err)
 	}
@@ -421,25 +506,25 @@ func TestImageRunShortNameRefRejected(t *testing.T) {
 // --- Ref with remote extraction test ---
 
 func TestExtractRemoteFromRefIntegration(t *testing.T) {
-	// Verify that ostree.ExtractRemoteFromRef works as expected.
-	remote := ostree.ExtractRemoteFromRef("origin:matrixos/x86_64/dev/mybranch")
+	// Verify that cds.ExtractRemoteFromRef works as expected.
+	remote := cds.ExtractRemoteFromRef("origin:matrixos/x86_64/dev/mybranch")
 	if remote != "origin" {
 		t.Errorf("Expected 'origin', got %q", remote)
 	}
 
-	remote = ostree.ExtractRemoteFromRef("matrixos/x86_64/dev/mybranch")
+	remote = cds.ExtractRemoteFromRef("matrixos/x86_64/dev/mybranch")
 	if remote != "" {
 		t.Errorf("Expected empty, got %q", remote)
 	}
 }
 
 func TestCleanRemoteFromRefIntegration(t *testing.T) {
-	cleaned := ostree.CleanRemoteFromRef("origin:matrixos/x86_64/dev/mybranch")
+	cleaned := cds.CleanRemoteFromRef("origin:matrixos/x86_64/dev/mybranch")
 	if cleaned != "matrixos/x86_64/dev/mybranch" {
 		t.Errorf("Expected ref without remote, got %q", cleaned)
 	}
 
-	cleaned = ostree.CleanRemoteFromRef("matrixos/x86_64/dev/mybranch")
+	cleaned = cds.CleanRemoteFromRef("matrixos/x86_64/dev/mybranch")
 	if cleaned != "matrixos/x86_64/dev/mybranch" {
 		t.Errorf("Expected same ref, got %q", cleaned)
 	}

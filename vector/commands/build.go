@@ -18,11 +18,7 @@ type BuildCommand struct {
 // NewBuildCommand creates a new BuildCommand
 func NewBuildCommand() *BuildCommand {
 	subcommands := map[string]func() ICommand{
-		"image":    func() ICommand { return NewImageCommand() },
-		"images":   func() ICommand { return NewImagesCommand() },
-		"release":  func() ICommand { return NewReleaseCommand() },
-		"releases": func() ICommand { return NewReleasesCommand() },
-		"seeds":    func() ICommand { return NewSeedsCommand() },
+		"image": NewImageCommand,
 	}
 	return &BuildCommand{
 		fs:          flag.NewFlagSet("build", flag.ExitOnError),
@@ -30,10 +26,12 @@ func NewBuildCommand() *BuildCommand {
 	}
 }
 
+// Name returns the name of the command
 func (c *BuildCommand) Name() string {
 	return c.fs.Name()
 }
 
+// Init initializes the command
 func (c *BuildCommand) Init(args []string) error {
 	var names []string
 	for name := range c.subcommands {
@@ -57,6 +55,7 @@ func (c *BuildCommand) Init(args []string) error {
 	return nil
 }
 
+// Run runs the command
 func (c *BuildCommand) Run() error {
 	sf, ok := c.subcommands[c.sub]
 	if !ok {
