@@ -247,11 +247,11 @@ func (o *Ostree) BootedHash() (string, error) {
 }
 
 func (o *Ostree) Switch() error {
-	sysroot, err := o.Root()
+	root, err := o.Root()
 	if err != nil {
 		return err
 	}
-	return o.ostreeRun("admin", "switch", "--sysroot="+sysroot, o.ref)
+	return o.ostreeRun("admin", "switch", "--sysroot="+root, o.ref)
 }
 
 func (o *Ostree) PostCopy() error {
