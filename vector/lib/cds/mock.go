@@ -28,6 +28,9 @@ type MockOstree struct {
 	PackagesErr      error
 	PackagesByCommit map[string][]string
 
+	LocalRefs_   []string
+	LocalRefsErr error
+
 	RemoveFullResult    string
 	RemoveFullResultSet bool // when true, return RemoveFullResult even if empty
 	RemoveFullErr       error
@@ -95,7 +98,9 @@ func (m *MockOstree) GenerateStaticDelta(string, bool) error                { re
 func (m *MockOstree) UpdateSummary(bool) error                              { return nil }
 func (m *MockOstree) AddRemote(bool) error                                  { return nil }
 func (m *MockOstree) AddRemoteToRootfs(string, bool) error                  { return nil }
-func (m *MockOstree) LocalRefs(bool) ([]string, error)                      { return nil, nil }
+func (m *MockOstree) LocalRefs(_ bool) ([]string, error) {
+	return m.LocalRefs_, m.LocalRefsErr
+}
 func (m *MockOstree) ListContents(string, string, bool) (*[]filesystems.PathInfo, error) {
 	return nil, nil
 }
