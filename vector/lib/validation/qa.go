@@ -233,6 +233,7 @@ func (q *QA) VerifyDistroRootfsEnvironmentSetup(imageDir string) error {
 		"find",
 		"findmnt",
 		"fstrim",
+		"git",
 		"gpg",
 		"losetup",
 		"mkfs.btrfs",
@@ -304,6 +305,7 @@ func (q *QA) VerifySeederEnvironmentSetup(imageDir string) error {
 	}
 	executables := []string{
 		"chroot",
+		"git",
 		"gpg",
 		"openssl",
 		"ostree",
