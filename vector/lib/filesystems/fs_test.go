@@ -276,7 +276,7 @@ func TestHelperProcess(t *testing.T) {
 
 func TestDeviceUUID(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		setupMockBlkid(t, map[string]string{
+		setupMockLsblk(t, map[string]string{
 			"/dev/sda1:UUID": "1234-5678",
 		})
 
@@ -297,7 +297,7 @@ func TestDeviceUUID(t *testing.T) {
 	})
 
 	t.Run("DeviceNotFound", func(t *testing.T) {
-		setupMockBlkidFail(t)
+		setupMockLsblkFail(t)
 		_, err := DeviceUUID("/dev/sda1")
 		if err == nil {
 			t.Error("Expected error for device not found in by-uuid, got nil")
@@ -305,7 +305,7 @@ func TestDeviceUUID(t *testing.T) {
 	})
 
 	t.Run("NonexistentDevice", func(t *testing.T) {
-		setupMockBlkidFail(t)
+		setupMockLsblkFail(t)
 		_, err := DeviceUUID("/dev/nonexistent_device_xyz")
 		if err == nil {
 			t.Error("Expected error for nonexistent device path, got nil")
@@ -315,7 +315,7 @@ func TestDeviceUUID(t *testing.T) {
 
 func TestDevicePartUUID(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		setupMockBlkid(t, map[string]string{
+		setupMockLsblk(t, map[string]string{
 			"/dev/sda1:PARTUUID": "abcdef-01",
 		})
 
@@ -336,7 +336,7 @@ func TestDevicePartUUID(t *testing.T) {
 	})
 
 	t.Run("DeviceNotFound", func(t *testing.T) {
-		setupMockBlkidFail(t)
+		setupMockLsblkFail(t)
 		_, err := DevicePartUUID("/dev/sda1")
 		if err == nil {
 			t.Error("Expected error for device not found in by-partuuid, got nil")
@@ -344,10 +344,177 @@ func TestDevicePartUUID(t *testing.T) {
 	})
 
 	t.Run("NonexistentDevice", func(t *testing.T) {
-		setupMockBlkidFail(t)
+		setupMockLsblkFail(t)
 		_, err := DevicePartUUID("/dev/nonexistent_device_xyz")
 		if err == nil {
 			t.Error("Expected error for nonexistent device path, got nil")
+		}
+	})
+}
+
+func TestMountpointToDevice(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: "/mnt", Source: "/dev/sda1", FSType: "ext4"},
+		})
+
+		device, err := MountpointToDevice("/mnt")
+		if err != nil {
+			t.Fatalf("MountpointToDevice failed: %v", err)
+		}
+		if device != "/dev/sda1" {
+			t.Errorf("Expected device /dev/sda1, got %s", device)
+		}
+	})
+
+	t.Run("NoMountpoint", func(t *testing.T) {
+		_, err := MountpointToDevice("")
+		if err == nil {
+			t.Error("Expected error for missing mountpoint, got nil")
+		}
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{})
+		_, err := MountpointToDevice("/mnt")
+		if err == nil {
+			t.Error("Expected error when mount not found")
+		}
+	})
+
+	t.Run("MultipleOutputs", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: "/mnt", Source: "/dev/sda1", FSType: "ext4"},
+			{Mountpoint: "/mnt", Source: "/dev/sda2", FSType: "ext4"},
+		})
+		device, err := MountpointToDevice("/mnt")
+		if err != nil {
+			t.Fatalf("MountpointToDevice failed: %v", err)
+		}
+		if device != "/dev/sda2" {
+			t.Errorf("Expected most recent device /dev/sda2, got %s", device)
+		}
+	})
+}
+
+func TestMountpointToUUID(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:UUID": "abcd-1234-ef56-7890",
+		})
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: "/mnt", Source: "/dev/sda1", FSType: "ext4"},
+		})
+
+		uuid, err := MountpointToUUID("/mnt")
+		if err != nil {
+			t.Fatalf("MountpointToUUID failed: %v", err)
+		}
+		if uuid != "abcd-1234-ef56-7890" {
+			t.Errorf("Expected UUID abcd-1234-ef56-7890, got %s", uuid)
+		}
+	})
+
+	t.Run("NoMountpoint", func(t *testing.T) {
+		_, err := MountpointToUUID("")
+		if err == nil {
+			t.Error("Expected error for missing mountpoint, got nil")
+		}
+	})
+
+	t.Run("MountNotFound", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{})
+		_, err := MountpointToUUID("/mnt")
+		if err == nil {
+			t.Error("Expected error when mount not found")
+		}
+	})
+
+	t.Run("NoUUID", func(t *testing.T) {
+		setupMockLsblkFail(t)
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: "/mnt", Source: "tmpfs", FSType: "tmpfs"},
+		})
+		_, err := MountpointToUUID("/mnt")
+		if err == nil {
+			t.Error("Expected error for no UUID found, got nil")
+		}
+	})
+}
+
+func TestMountpointToFSType(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: "/mnt", Source: "/dev/sda1", FSType: "ext4"},
+		})
+
+		fstype, err := MountpointToFSType("/mnt")
+		if err != nil {
+			t.Fatalf("MountpointToFSType failed: %v", err)
+		}
+		if fstype != "ext4" {
+			t.Errorf("Expected FSTYPE ext4, got %s", fstype)
+		}
+	})
+
+	t.Run("SuccessVfat", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: "/boot/efi", Source: "/dev/sda2", FSType: "vfat"},
+		})
+
+		fstype, err := MountpointToFSType("/boot/efi")
+		if err != nil {
+			t.Fatalf("MountpointToFSType failed: %v", err)
+		}
+		if fstype != "vfat" {
+			t.Errorf("Expected FSTYPE vfat, got %s", fstype)
+		}
+	})
+
+	t.Run("NoMountpoint", func(t *testing.T) {
+		_, err := MountpointToFSType("")
+		if err == nil {
+			t.Error("Expected error for missing mountpoint, got nil")
+		}
+	})
+
+	t.Run("MountNotFound", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{})
+		_, err := MountpointToFSType("/mnt")
+		if err == nil {
+			t.Error("Expected error when mount not found")
+		}
+	})
+}
+
+func TestListSubmounts(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: "/mnt/test"},
+			{Mountpoint: "/mnt/test/sub"},
+		})
+
+		submounts, err := ListSubmounts("/mnt/test")
+		if err != nil {
+			t.Fatalf("ListSubmounts failed: %v", err)
+		}
+		if len(submounts) != 2 {
+			t.Errorf("Expected 2 submounts, got %d", len(submounts))
+		}
+	})
+
+	t.Run("NoMountpoint", func(t *testing.T) {
+		_, err := ListSubmounts("")
+		if err == nil {
+			t.Error("Expected error for missing mountpoint, got nil")
+		}
+	})
+
+	t.Run("ReadFail", func(t *testing.T) {
+		setupMockMountInfoFail(t)
+		_, err := ListSubmounts("/mnt")
+		if err == nil {
+			t.Error("Expected error from mountinfo read failure")
 		}
 	})
 }
@@ -1246,34 +1413,6 @@ func setupMockSysClassBlock(t *testing.T) string {
 	return tmpDir
 }
 
-// setupMockDevDiskByLabel creates a temp directory simulating /dev/disk/by-label/
-// and redirects devDiskByLabelPath to it. Returns the temp dir.
-func setupMockDevDiskByLabel(t *testing.T) string {
-	t.Helper()
-	tmpDir := filepath.Join(t.TempDir(), "by-label")
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	orig := devDiskByLabelPath
-	devDiskByLabelPath = tmpDir
-	t.Cleanup(func() { devDiskByLabelPath = orig })
-	return tmpDir
-}
-
-// setupMockDevDiskByPartType creates a temp directory simulating /dev/disk/by-parttypeuuid/
-// and redirects devDiskByPartTypePath to it. Returns the temp dir.
-func setupMockDevDiskByPartType(t *testing.T) string {
-	t.Helper()
-	tmpDir := filepath.Join(t.TempDir(), "by-parttypeuuid")
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	orig := devDiskByPartTypePath
-	devDiskByPartTypePath = tmpDir
-	t.Cleanup(func() { devDiskByPartTypePath = orig })
-	return tmpDir
-}
-
 // createSysfsPartition creates a fake sysfs partition directory inside the
 // parent device directory with the given partition number.
 func createSysfsPartition(t *testing.T, sysClassBlock, parentName, partName string, partNum int) {
@@ -1578,20 +1717,11 @@ func TestPartitionNumber(t *testing.T) {
 
 func TestPartitionLabel(t *testing.T) {
 	t.Run("HasLabel", func(t *testing.T) {
-		labelDir := setupMockDevDiskByLabel(t)
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:LABEL": "MY_LABEL",
+		})
 
-		// Create a device file to resolve against.
-		devFile := filepath.Join(t.TempDir(), "sda1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		// Create a symlink: by-label/MY_LABEL -> devFile
-		if err := os.Symlink(devFile, filepath.Join(labelDir, "MY_LABEL")); err != nil {
-			t.Fatal(err)
-		}
-
-		result, err := PartitionLabel(devFile)
+		result, err := PartitionLabel("/dev/sda1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1601,15 +1731,10 @@ func TestPartitionLabel(t *testing.T) {
 	})
 
 	t.Run("NoLabel", func(t *testing.T) {
-		setupMockDevDiskByLabel(t)
+		setupMockLsblkFail(t)
 
-		devFile := filepath.Join(t.TempDir(), "sdb1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		// No symlink created, so no label found.
-		result, err := PartitionLabel(devFile)
+		// No label found is not an error for PartitionLabel.
+		result, err := PartitionLabel("/dev/sdb1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1628,19 +1753,12 @@ func TestPartitionLabel(t *testing.T) {
 
 func TestPartitionType(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		partTypeDir := setupMockDevDiskByPartType(t)
-
-		devFile := filepath.Join(t.TempDir(), "sda1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-
 		typeGUID := "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
-		if err := os.Symlink(devFile, filepath.Join(partTypeDir, typeGUID)); err != nil {
-			t.Fatal(err)
-		}
+		setupMockLsblk(t, map[string]string{
+			"/dev/sda1:PARTTYPE": typeGUID,
+		})
 
-		result, err := PartitionType(devFile)
+		result, err := PartitionType("/dev/sda1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1651,14 +1769,9 @@ func TestPartitionType(t *testing.T) {
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		setupMockDevDiskByPartType(t)
+		setupMockLsblkFail(t)
 
-		devFile := filepath.Join(t.TempDir(), "sdb1")
-		if err := os.WriteFile(devFile, nil, 0644); err != nil {
-			t.Fatal(err)
-		}
-
-		_, err := PartitionType(devFile)
+		_, err := PartitionType("/dev/sdb1")
 		if err == nil {
 			t.Error("expected error when partition type not found")
 		}

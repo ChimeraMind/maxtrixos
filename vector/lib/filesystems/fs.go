@@ -29,9 +29,7 @@ var (
 	sysLlistxattr                                = unix.Llistxattr
 
 	// Mockable paths for block-device sysfs queries.
-	sysClassBlockPath     = "/sys/class/block"
-	devDiskByLabelPath    = "/dev/disk/by-label"
-	devDiskByPartTypePath = "/dev/disk/by-parttypeuuid"
+	sysClassBlockPath = "/sys/class/block"
 )
 
 // BLKFLSBUF is the ioctl command to flush block device buffers.
@@ -243,7 +241,7 @@ func DevicePartUUID(devPath string) (string, error) {
 	if devPath == "" {
 		return "", fmt.Errorf("missing argument devpath")
 	}
-	return resolveDeviceAttribute(devPath, devDiskByPartUUIDPath)
+	return resolveDeviceAttribute(devPath, "PARTUUID")
 }
 
 // MountpointToDevice returns the device path for a given mountpoint
@@ -264,7 +262,7 @@ func MountpointToDevice(mnt string) (string, error) {
 }
 
 // MountpointToUUID returns the UUID for a given mountpoint by reading
-// /proc/self/mountinfo and resolving the device UUID from /dev/disk/by-uuid/.
+// /proc/self/mountinfo and resolving the device UUID.
 func MountpointToUUID(mnt string) (string, error) {
 	if mnt == "" {
 		return "", fmt.Errorf("missing mnt parameter")
@@ -274,7 +272,7 @@ func MountpointToUUID(mnt string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("no UUID found for mountpoint %s", mnt)
 	}
-	uuid, err := resolveDeviceAttribute(entry.Source, devDiskByUUIDPath)
+	uuid, err := resolveDeviceAttribute(entry.Source, "UUID")
 	if err != nil {
 		return "", fmt.Errorf("no UUID found for mountpoint %s: %w", mnt, err)
 	}
@@ -1232,7 +1230,7 @@ func BlockDeviceForPartition(partitionPath string) (string, error) {
 	// The real sysfs path for a partition is:
 	//   /sys/devices/.../sdX/sdX1
 	// Resolving the sysfs symlink and going up one directory gives the parent.
-	realPath, err := resolveDeviceLink(partSysfs)
+	realPath, err := filepath.EvalSymlinks(partSysfs)
 	if err != nil {
 		return "", fmt.Errorf("cannot resolve sysfs path for %s: %w", partitionPath, err)
 	}
@@ -1262,14 +1260,13 @@ func PartitionNumber(partitionPath string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-// PartitionLabel returns the filesystem label of a partition device
-// by scanning /dev/disk/by-label/ for a symlink pointing to the device.
+// PartitionLabel returns the filesystem label of a partition device.
 func PartitionLabel(partitionPath string) (string, error) {
 	if partitionPath == "" {
 		return "", fmt.Errorf("missing partitionPath parameter")
 	}
 
-	label, err := resolveDeviceAttribute(partitionPath, devDiskByLabelPath)
+	label, err := resolveDeviceAttribute(partitionPath, "LABEL")
 	if err != nil {
 		// No label is not necessarily an error; some partitions have none.
 		return "", nil
@@ -1278,14 +1275,13 @@ func PartitionLabel(partitionPath string) (string, error) {
 }
 
 // PartitionType returns the partition type GUID (uppercased) for a
-// partition device by scanning /dev/disk/by-parttypeuuid/ for a symlink
-// pointing to the device.
+// partition device.
 func PartitionType(partitionPath string) (string, error) {
 	if partitionPath == "" {
 		return "", fmt.Errorf("missing partitionPath parameter")
 	}
 
-	partType, err := resolveDeviceAttribute(partitionPath, devDiskByPartTypePath)
+	partType, err := resolveDeviceAttribute(partitionPath, "PARTTYPE")
 	if err != nil {
 		return "", fmt.Errorf("cannot determine partition type for %s: %w", partitionPath, err)
 	}
@@ -1374,19 +1370,19 @@ func BlockDeviceInfo(blockDevice string) ([]BlockDevicePartitionInfo, error) {
 		info := BlockDevicePartitionInfo{Device: partDev}
 
 		// UUID (best-effort, some partitions may not have one).
-		if uuid, err := resolveDeviceAttribute(partDev, devDiskByUUIDPath); err == nil {
+		if uuid, err := resolveDeviceAttribute(partDev, "UUID"); err == nil {
 			info.UUID = uuid
 		}
 		// PARTUUID
-		if partuuid, err := resolveDeviceAttribute(partDev, devDiskByPartUUIDPath); err == nil {
+		if partuuid, err := resolveDeviceAttribute(partDev, "PARTUUID"); err == nil {
 			info.PartUUID = partuuid
 		}
 		// LABEL
-		if label, err := resolveDeviceAttribute(partDev, devDiskByLabelPath); err == nil {
+		if label, err := resolveDeviceAttribute(partDev, "LABEL"); err == nil {
 			info.Label = label
 		}
 		// PARTTYPE
-		if partType, err := resolveDeviceAttribute(partDev, devDiskByPartTypePath); err == nil {
+		if partType, err := resolveDeviceAttribute(partDev, "PARTTYPE"); err == nil {
 			info.PartType = strings.ToUpper(partType)
 		}
 		// FSType – resolve via mountinfo if the partition is mounted.

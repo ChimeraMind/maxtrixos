@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -14,11 +13,11 @@ var (
 	// mountInfoPath is the path to the mountinfo file.
 	mountInfoPath = "/proc/self/mountinfo"
 
-	// ReadMountInfo reads and parses the system mount info. Replaceable for testing.
-	ReadMountInfo = defaultReadMountInfo
+	// readMountInfo reads and parses the system mount info. Replaceable for testing.
+	readMountInfo = defaultReadMountInfo
 
-	// blkidLookup queries a device attribute via blkid. Replaceable for testing.
-	blkidLookup = defaultBlkidLookup
+	// lsblkLookup queries a device attribute via lsblk. Replaceable for testing.
+	lsblkLookup = defaultLsblkLookup
 )
 
 // MountInfoEntry represents a parsed line from /proc/self/mountinfo.
@@ -254,15 +253,12 @@ func formatMountEntries(entries []*MountInfoEntry) string {
 	return strings.Join(lines, "\n")
 }
 
-// defaultBlkidLookup queries a single device attribute via blkid.
-// tag is the blkid attribute name: UUID, PARTUUID, LABEL, PARTTYPE, etc.
-func defaultBlkidLookup(devPath, tag string) (string, error) {
-	cmd := exec.Command("blkid", "-o", "value", "-s", tag, devPath)
-	cmd.Stderr = os.Stderr
-	out, err := cmd.Output()
-
+// defaultLsblkLookup queries a single device attribute via lsblk.
+// tag is the lsblk column name: UUID, PARTUUID, LABEL, PARTTYPE, etc.
+func defaultLsblkLookup(devPath, tag string) (string, error) {
+	out, err := exec.Command("lsblk", "-n", "-d", "-o", tag, devPath).Output()
 	if err != nil {
-		return "", fmt.Errorf("blkid lookup failed for %s tag %s: %w", devPath, tag, err)
+		return "", fmt.Errorf("lsblk lookup failed for %s tag %s: %w", devPath, tag, err)
 	}
 	val := strings.TrimSpace(string(out))
 	if val == "" {
@@ -272,8 +268,8 @@ func defaultBlkidLookup(devPath, tag string) (string, error) {
 }
 
 // resolveDeviceAttribute looks up a device attribute (UUID, PARTUUID, etc.)
-// for a block device using blkid. The tag parameter is the blkid attribute name
+// for a block device using lsblk. The tag parameter is the lsblk column name
 // (e.g. "UUID", "PARTUUID", "LABEL", "PARTTYPE").
 func resolveDeviceAttribute(devPath, tag string) (string, error) {
-	return blkidLookup(devPath, tag)
+	return lsblkLookup(devPath, tag)
 }

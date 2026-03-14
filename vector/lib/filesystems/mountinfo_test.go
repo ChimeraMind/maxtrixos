@@ -26,29 +26,29 @@ func setupMockMountInfoFail(t *testing.T) {
 	t.Cleanup(func() { ReadMountInfo = orig })
 }
 
-// setupMockBlkid replaces blkidLookup with a function backed by the given map.
+// setupMockLsblk replaces lsblkLookup with a function backed by the given map.
 // The map keys are "devPath:tag" strings, values are the results.
-func setupMockBlkid(t *testing.T, results map[string]string) {
+func setupMockLsblk(t *testing.T, results map[string]string) {
 	t.Helper()
-	orig := blkidLookup
-	blkidLookup = func(devPath, tag string) (string, error) {
+	orig := lsblkLookup
+	lsblkLookup = func(devPath, tag string) (string, error) {
 		key := devPath + ":" + tag
 		if val, ok := results[key]; ok {
 			return val, nil
 		}
 		return "", fmt.Errorf("no %s found for device %s", tag, devPath)
 	}
-	t.Cleanup(func() { blkidLookup = orig })
+	t.Cleanup(func() { lsblkLookup = orig })
 }
 
-// setupMockBlkidFail replaces blkidLookup with a function that always fails.
-func setupMockBlkidFail(t *testing.T) {
+// setupMockLsblkFail replaces lsblkLookup with a function that always fails.
+func setupMockLsblkFail(t *testing.T) {
 	t.Helper()
-	orig := blkidLookup
-	blkidLookup = func(devPath, tag string) (string, error) {
+	orig := lsblkLookup
+	lsblkLookup = func(devPath, tag string) (string, error) {
 		return "", fmt.Errorf("no %s found for device %s", tag, devPath)
 	}
-	t.Cleanup(func() { blkidLookup = orig })
+	t.Cleanup(func() { lsblkLookup = orig })
 }
 
 func TestParseMountInfoLine(t *testing.T) {
@@ -575,7 +575,7 @@ func TestListMountsByPrefixSymlink(t *testing.T) {
 
 func TestResolveDeviceAttribute(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		setupMockBlkid(t, map[string]string{
+		setupMockLsblk(t, map[string]string{
 			"/dev/sda1:UUID": "1234-5678",
 		})
 
@@ -589,7 +589,7 @@ func TestResolveDeviceAttribute(t *testing.T) {
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		setupMockBlkidFail(t)
+		setupMockLsblkFail(t)
 
 		_, err := resolveDeviceAttribute("/dev/sda1", "UUID")
 		if err == nil {
@@ -598,7 +598,7 @@ func TestResolveDeviceAttribute(t *testing.T) {
 	})
 
 	t.Run("PARTUUID", func(t *testing.T) {
-		setupMockBlkid(t, map[string]string{
+		setupMockLsblk(t, map[string]string{
 			"/dev/sda1:PARTUUID": "aaaa-bbbb-cccc",
 		})
 
@@ -612,7 +612,7 @@ func TestResolveDeviceAttribute(t *testing.T) {
 	})
 
 	t.Run("LABEL", func(t *testing.T) {
-		setupMockBlkid(t, map[string]string{
+		setupMockLsblk(t, map[string]string{
 			"/dev/sda1:LABEL": "MY_DISK",
 		})
 
@@ -626,7 +626,7 @@ func TestResolveDeviceAttribute(t *testing.T) {
 	})
 
 	t.Run("PARTTYPE", func(t *testing.T) {
-		setupMockBlkid(t, map[string]string{
+		setupMockLsblk(t, map[string]string{
 			"/dev/sda1:PARTTYPE": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b",
 		})
 
@@ -640,7 +640,7 @@ func TestResolveDeviceAttribute(t *testing.T) {
 	})
 
 	t.Run("LoopDevice", func(t *testing.T) {
-		setupMockBlkid(t, map[string]string{
+		setupMockLsblk(t, map[string]string{
 			"/dev/loop7p3:UUID": "abcd-ef01",
 		})
 
