@@ -296,8 +296,23 @@ func MountpointToFSType(mnt string) (string, error) {
 	return entry.FSType, nil
 }
 
+// CleanupMountsOptions represents the options for cleaning up mounts.
+type CleanupMountsOptions struct {
+	Mounts []string
+	Stdout io.Writer
+	Stderr io.Writer
+}
+
 // CleanupMounts unmounts a list of mounts in reverse order.
-func CleanupMounts(mounts []string) {
+func CleanupMounts(opts CleanupMountsOptions) {
+	mounts := opts.Mounts
+	if opts.Stdout == nil {
+		opts.Stdout = os.Stdout
+	}
+	if opts.Stderr == nil {
+		opts.Stderr = os.Stderr
+	}
+
 	DevicesSettle()
 	for i := len(mounts) - 1; i >= 0; i-- {
 		mnt := mounts[i]
@@ -305,14 +320,14 @@ func CleanupMounts(mounts []string) {
 		if !mounted {
 			continue
 		}
-		fmt.Printf("Unmounting %s ...\n", mnt)
+		fmt.Fprintf(opts.Stdout, "Unmounting %s ...\n", mnt)
 		if err := Unmount(mnt, 0); err != nil {
 			FlushBlockDeviceBuffers(mnt)
-			fmt.Fprintf(os.Stderr, "Unable to umount %s: %v", mnt, err)
+			fmt.Fprintf(opts.Stderr, "Unable to umount %s: %v", mnt, err)
 			if entry, mntErr := findMountByTarget(mnt); mntErr == nil {
-				fmt.Fprintf(os.Stderr, "%s\n", entry.String())
+				fmt.Fprintf(opts.Stderr, "%s\n", entry.String())
 			}
-			fmt.Fprintf(os.Stderr, "For safety, calling umount -l %s\n", mnt)
+			fmt.Fprintf(opts.Stderr, "For safety, calling umount -l %s\n", mnt)
 			Unmount(mnt, unix.MNT_DETACH)
 			continue
 		}
@@ -443,29 +458,51 @@ type CommonRootfsMounts struct {
 	mounted     func(string)
 	mounts      []string
 	slaveMounts []string
+	stdout      io.Writer
+	stderr      io.Writer
+}
+
+// CommonRootfsMountsOptions represents the options for setting up common rootfs mounts.
+type CommonRootfsMountsOptions struct {
+	MountPoint string
+	Mounting   func(string)
+	Mounted    func(string)
+	Stdout     io.Writer
+	Stderr     io.Writer
 }
 
 // NewCommonRootfsMounts creates a new CommonRootfsMounts for the given mount point.
-func NewCommonRootfsMounts(mnt string, mounting func(string), mounted func(string)) (*CommonRootfsMounts, error) {
-	if mnt == "" {
-		return nil, fmt.Errorf("missing mnt parameter")
+func NewCommonRootfsMounts(opts CommonRootfsMountsOptions) (*CommonRootfsMounts, error) {
+	if opts.MountPoint == "" {
+		return nil, fmt.Errorf("missing mount point parameter")
+	}
+
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
 	}
 
 	return &CommonRootfsMounts{
-		mountPoint: mnt,
-		mounting:   mounting,
-		mounted:    mounted,
+		mountPoint: opts.MountPoint,
+		mounting:   opts.Mounting,
+		mounted:    opts.Mounted,
 		slaveMounts: []string{
 			"/dev",
 			"/dev/pts",
 			"/sys",
 		},
+		stdout: stdout,
+		stderr: stderr,
 	}, nil
 }
 
 // add adds a mount to the list of mounts to be cleaned up later.
 func (m *CommonRootfsMounts) add(mnt string) {
-	fmt.Printf("Mounting: %s ...\n", mnt)
+	fmt.Fprintf(m.stdout, "Mounting: %s ...\n", mnt)
 	m.mounts = append(m.mounts, mnt)
 }
 
@@ -534,7 +571,12 @@ func (m *CommonRootfsMounts) Setup() error {
 
 // Cleanup unmounts all the mounts that were set up by Setup.
 func (m *CommonRootfsMounts) Cleanup() error {
-	CleanupMounts(m.mounts)
+	opts := CleanupMountsOptions{
+		Mounts: m.mounts,
+		Stdout: m.stdout,
+		Stderr: m.stderr,
+	}
+	CleanupMounts(opts)
 	return nil
 }
 
@@ -582,7 +624,7 @@ func BindUmount(mnt string) error {
 	if err := CheckDirNotFsRoot(mnt); err != nil {
 		return err
 	}
-	CleanupMounts([]string{mnt})
+	CleanupMounts(CleanupMountsOptions{Mounts: []string{mnt}})
 	return nil
 }
 
