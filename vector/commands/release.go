@@ -182,30 +182,28 @@ func (c *ReleaseCommand) runRelease() error {
 // executeRelease performs the full release pipeline.
 // It is split from runRelease to allow testing with a mock releaser.
 func (c *ReleaseCommand) executeRelease(ref, fullBranch string) error {
-	rel := c.rel
-
 	// Verify releaser environment.
 	if err := c.qa.VerifyReleaserEnvironmentSetup("/"); err != nil {
 		return fmt.Errorf("environment verification failed: %w", err)
 	}
 
 	// Pre-release operations.
-	if err := rel.CheckMatrixOS(); err != nil {
+	if err := c.rel.CheckMatrixOS(); err != nil {
 		return fmt.Errorf("matrixOS check failed: %w", err)
 	}
-	if err := rel.SyncFilesystem(); err != nil {
+	if err := c.rel.SyncFilesystem(); err != nil {
 		return fmt.Errorf("filesystem sync failed: %w", err)
 	}
-	if err := rel.PreCleanQAChecks(); err != nil {
+	if err := c.rel.PreCleanQAChecks(); err != nil {
 		return fmt.Errorf("pre-clean QA checks failed: %w", err)
 	}
-	if err := rel.CleanRootfs(); err != nil {
+	if err := c.rel.CleanRootfs(); err != nil {
 		return fmt.Errorf("rootfs clean failed: %w", err)
 	}
-	if err := rel.SetupServices(); err != nil {
+	if err := c.rel.SetupServices(); err != nil {
 		return fmt.Errorf("services setup failed: %w", err)
 	}
-	if err := rel.SetupHostname(); err != nil {
+	if err := c.rel.SetupHostname(); err != nil {
 		return fmt.Errorf("hostname setup failed: %w", err)
 	}
 
@@ -215,21 +213,21 @@ func (c *ReleaseCommand) executeRelease(ref, fullBranch string) error {
 	}
 
 	// Release hook and ostree preparation.
-	if err := rel.ReleaseHook(); err != nil {
+	if err := c.rel.ReleaseHook(); err != nil {
 		return fmt.Errorf("release hook failed: %w", err)
 	}
-	if err := rel.OstreePrepare(); err != nil {
+	if err := c.rel.OstreePrepare(); err != nil {
 		return fmt.Errorf("ostree preparation failed: %w", err)
 	}
-	if err := rel.MaybeOstreeInit(); err != nil {
+	if err := c.rel.MaybeOstreeInit(); err != nil {
 		return fmt.Errorf("ostree init failed: %w", err)
 	}
 
 	// --- First commit: full branch (no consume) ---
-	if err := rel.UnlinkEtc(); err != nil {
+	if err := c.rel.UnlinkEtc(); err != nil {
 		return fmt.Errorf("unlink /etc failed: %w", err)
 	}
-	if err := rel.Release(releaser.CommitOptions{
+	if err := c.rel.Release(releaser.CommitOptions{
 		Branch:  fullBranch,
 		Consume: false,
 	}); err != nil {
@@ -237,28 +235,28 @@ func (c *ReleaseCommand) executeRelease(ref, fullBranch string) error {
 	}
 
 	// Re-link /etc and fix portage for post-clean shrink (uses emerge).
-	if err := rel.SymlinkEtc(); err != nil {
+	if err := c.rel.SymlinkEtc(); err != nil {
 		return fmt.Errorf("symlink /etc failed: %w", err)
 	}
-	if err := rel.AddExtraDotDotToUsrEtcPortage(); err != nil {
+	if err := c.rel.AddExtraDotDotToUsrEtcPortage(); err != nil {
 		return fmt.Errorf("add extra ../ to /usr/etc/portage failed: %w", err)
 	}
 
 	// Remove dev artifacts to produce the smaller branch.
-	if err := rel.PostCleanShrink(); err != nil {
+	if err := c.rel.PostCleanShrink(); err != nil {
 		return fmt.Errorf("post-clean shrink failed: %w", err)
 	}
 
 	// Restore portage symlink for client-side deployment.
-	if err := rel.RemoveExtraDotDotFromUsrEtcPortage(); err != nil {
+	if err := c.rel.RemoveExtraDotDotFromUsrEtcPortage(); err != nil {
 		return fmt.Errorf("remove extra ../ from /usr/etc/portage failed: %w", err)
 	}
 
 	// --- Second commit: regular branch (consume, parent=full) ---
-	if err := rel.UnlinkEtc(); err != nil {
+	if err := c.rel.UnlinkEtc(); err != nil {
 		return fmt.Errorf("unlink /etc (second commit) failed: %w", err)
 	}
-	if err := rel.Release(releaser.CommitOptions{
+	if err := c.rel.Release(releaser.CommitOptions{
 		Branch:       ref,
 		ParentBranch: fullBranch,
 		Consume:      true,
@@ -266,7 +264,7 @@ func (c *ReleaseCommand) executeRelease(ref, fullBranch string) error {
 		return fmt.Errorf("branch release failed: %w", err)
 	}
 
-	rel.Print("Released filesystem at %s to ostree as branch: %s.\n",
+	c.rel.Print("Released filesystem at %s to ostree as branch: %s.\n",
 		c.imageDir,
 		ref,
 	)
