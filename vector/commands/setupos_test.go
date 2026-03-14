@@ -72,6 +72,7 @@ func setupOSTestConfig() *config.MockConfig {
 			"Imager.RelativeEfiBootPath":           {"efi/BOOT"},
 			"Imager.EfiStandardBootExecutablePath": {`\EFI\BOOT\BOOTX64.EFI`},
 			"Jailbreak.BootLoaderEntry":            {"matrixos-jailbroken.conf"},
+			"Imager.EspPartitionType":              {"C12A7328-F81F-11D2-BA4B-00A0C93EC93B"},
 		},
 	}
 }
@@ -95,6 +96,7 @@ func newTestSetupOSCommand(
 // initializes UI and scanner.  For tests that exercise individual methods.
 func initSetupOSCmd(runner *setupOSRunner) *SetupOSCommand {
 	cmd := &SetupOSCommand{}
+	cmd.cfg = setupOSTestConfig()
 	cmd.StartUI()
 	cmd.run = runner
 	cmd.prompt = NewPrompter(runner.stdin, runner.stdout, runner.stderr, &cmd.UI)

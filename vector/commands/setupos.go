@@ -707,13 +707,17 @@ func (c *SetupOSCommand) setupLocalizationKeymap(jailbrokenEntry string) error {
 	return nil
 }
 
-// efiPartTypeGUID is the EFI System Partition GUID.
-const efiPartTypeGUID = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B"
-
 // detectWindows scans EFI partitions for Windows bootloader and adds grub entries.
 func (c *SetupOSCommand) detectWindows(efiRoot, relativeEfiBoot string) error {
 	fmt.Fprintf(c.run.stdout, "   %sScanning for Windows installations...%s\n",
 		c.iconSearch, c.cReset)
+
+	espPartType, err := c.cfg.GetItem("Imager.EspPartitionType")
+	if err != nil || espPartType == "" {
+		fmt.Fprintf(c.run.stderr, "   %s%sESP partition type not configured, skipping Windows detection.%s\n",
+			c.cYellow, c.iconWarn, c.cReset)
+		return nil
+	}
 
 	lines, err := c.run.listBlockDevices("PATH,PARTTYPE")
 	if err != nil {
@@ -728,7 +732,7 @@ func (c *SetupOSCommand) detectWindows(efiRoot, relativeEfiBoot string) error {
 		if len(fields) < 2 {
 			continue
 		}
-		if strings.EqualFold(fields[1], efiPartTypeGUID) {
+		if strings.EqualFold(fields[1], espPartType) {
 			efiPartitions = append(efiPartitions, fields[0])
 		}
 	}
