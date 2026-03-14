@@ -103,7 +103,7 @@ func (m *MockOstree) ListEtcChanges(string, string) ([]EtcChange, error) { retur
 func (m *MockOstree) DeployedRootfs(string, bool) (string, error)        { return "", nil }
 func (m *MockOstree) BootedRef(bool) (string, error)                     { return "", nil }
 func (m *MockOstree) BootedHash(bool) (string, error)                    { return "", nil }
-func (m *MockOstree) Deploy(string, []string, bool) error                { return nil }
+func (m *MockOstree) Deploy(string, string, []string, bool) error        { return nil }
 
 // Methods with configurable behavior for tests.
 func (m *MockOstree) Root() (string, error) {

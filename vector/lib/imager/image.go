@@ -1903,7 +1903,6 @@ func (im *Image) ShowImageTestInfo(artifacts []string) error {
 	im.Print("\n")
 	im.Print("To move to a USB stick:\n")
 	im.Print("    dd if=IMAGE_PATH of=/dev/sdX bs=4M conv=sparse,sync status=progress\n")
-	im.Print("\n")
 	return nil
 }
 
