@@ -498,23 +498,18 @@ func (s *Seeder) ExecuteInChroot(chrootDir string, info SeederInfo) error {
 	}
 
 	env := os.Environ()
+	// Inside the chroot, we always want /matrixos.
 	env = append(env, "MATRIXOS_DEV_DIR="+defaultDevDir)
 
-	unshareArgs := []string{
-		"--pid", "--fork", "--kill-child",
-		"--mount", "--uts", "--ipc",
-		fmt.Sprintf("--mount-proc=%s/proc", chrootDir),
-		"chroot", chrootDir, info.ChrootExec,
-	}
-
-	cmd := &runner.Cmd{
-		Name:   "unshare",
-		Args:   unshareArgs,
-		Stdout: s.stdout,
-		Stderr: s.stderr,
-	}
-	cmd.Env = env
-	return s.runner(cmd)
+	return s.chrootRunner(&runner.ChrootCmd{
+		Cmd: runner.Cmd{
+			Name:   info.ChrootExec,
+			Env:    env,
+			Stdout: s.stdout,
+			Stderr: s.stderr,
+		},
+		ChrootDir: chrootDir,
+	})
 }
 
 // --- Artifact cleanup ---
