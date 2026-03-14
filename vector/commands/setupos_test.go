@@ -357,6 +357,143 @@ func TestSetupOSSetupLocalization(t *testing.T) {
 	}
 }
 
+func TestSetupOSParseLocalizationFlags(t *testing.T) {
+	cmd := &SetupOSCommand{}
+	err := cmd.parseArgs([]string{
+		"--locale", "en_US.UTF-8",
+		"--keymap", "us",
+		"--timezone", "Europe/Rome",
+		"--hostname", "myhost",
+	})
+	if err != nil {
+		t.Fatalf("parseArgs failed: %v", err)
+	}
+	if cmd.localeFlag != "en_US.UTF-8" {
+		t.Errorf("expected locale='en_US.UTF-8', got %q", cmd.localeFlag)
+	}
+	if cmd.keymapFlag != "us" {
+		t.Errorf("expected keymap='us', got %q", cmd.keymapFlag)
+	}
+	if cmd.timezoneFlag != "Europe/Rome" {
+		t.Errorf("expected timezone='Europe/Rome', got %q", cmd.timezoneFlag)
+	}
+	if cmd.hostnameFlag != "myhost" {
+		t.Errorf("expected hostname='myhost', got %q", cmd.hostnameFlag)
+	}
+}
+
+func TestSetupOSLocalizationAllFlagsNoPrompt(t *testing.T) {
+	var capturedArgs []string
+	runner := testSetupOSRunner()
+	runner.execCommand = func(name string, args ...string) cmdRunner {
+		if name == "systemd-firstboot" {
+			capturedArgs = args
+		}
+		return &mockCmdRunner{}
+	}
+
+	cmd := initSetupOSCmd(runner)
+	cmd.localeFlag = "en_US.UTF-8"
+	cmd.keymapFlag = "us"
+	cmd.timezoneFlag = "Europe/Rome"
+	cmd.hostnameFlag = "myhost"
+
+	var stdout bytes.Buffer
+	cmd.run.stdout = &stdout
+
+	err := cmd.setupLocalization()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	joined := strings.Join(capturedArgs, " ")
+	if strings.Contains(joined, "--prompt") {
+		t.Errorf("expected no --prompt when all flags set, got args: %v", capturedArgs)
+	}
+	for _, want := range []string{
+		"--locale=en_US.UTF-8",
+		"--keymap=us",
+		"--timezone=Europe/Rome",
+		"--hostname=myhost",
+		"--reset",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("expected %q in systemd-firstboot args, got: %v", want, capturedArgs)
+		}
+	}
+}
+
+func TestSetupOSLocalizationPartialFlagsPrompt(t *testing.T) {
+	var capturedArgs []string
+	runner := testSetupOSRunner()
+	runner.execCommand = func(name string, args ...string) cmdRunner {
+		if name == "systemd-firstboot" {
+			capturedArgs = args
+		}
+		return &mockCmdRunner{}
+	}
+
+	cmd := initSetupOSCmd(runner)
+	cmd.localeFlag = "en_US.UTF-8"
+	cmd.timezoneFlag = "Europe/Rome"
+	// keymapFlag and hostnameFlag left empty.
+
+	var stdout bytes.Buffer
+	cmd.run.stdout = &stdout
+
+	err := cmd.setupLocalization()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	joined := strings.Join(capturedArgs, " ")
+	if !strings.Contains(joined, "--prompt") {
+		t.Errorf("expected --prompt when not all flags set, got args: %v", capturedArgs)
+	}
+	if !strings.Contains(joined, "--locale=en_US.UTF-8") {
+		t.Errorf("expected --locale in args, got: %v", capturedArgs)
+	}
+	if !strings.Contains(joined, "--timezone=Europe/Rome") {
+		t.Errorf("expected --timezone in args, got: %v", capturedArgs)
+	}
+	if strings.Contains(joined, "--keymap=") {
+		t.Errorf("unexpected --keymap in args, got: %v", capturedArgs)
+	}
+	if strings.Contains(joined, "--hostname=") {
+		t.Errorf("unexpected --hostname in args, got: %v", capturedArgs)
+	}
+}
+
+func TestSetupOSLocalizationNoFlagsPrompt(t *testing.T) {
+	var capturedArgs []string
+	runner := testSetupOSRunner()
+	runner.execCommand = func(name string, args ...string) cmdRunner {
+		if name == "systemd-firstboot" {
+			capturedArgs = args
+		}
+		return &mockCmdRunner{}
+	}
+
+	cmd := initSetupOSCmd(runner)
+	// All flags left empty.
+
+	var stdout bytes.Buffer
+	cmd.run.stdout = &stdout
+
+	err := cmd.setupLocalization()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	joined := strings.Join(capturedArgs, " ")
+	if !strings.Contains(joined, "--prompt") {
+		t.Errorf("expected --prompt when no flags set, got args: %v", capturedArgs)
+	}
+	if !strings.Contains(joined, "--reset") {
+		t.Errorf("expected --reset in args, got: %v", capturedArgs)
+	}
+}
+
 func TestSetupOSSetupAccountsService(t *testing.T) {
 	writtenFiles := make(map[string][]byte)
 	runner := testSetupOSRunner()

@@ -147,6 +147,10 @@ type SetupOSCommand struct {
 	skipEncryption bool
 	skipPasswords  bool
 	usernameFlag   string
+	localeFlag     string
+	keymapFlag     string
+	timezoneFlag   string
+	hostnameFlag   string
 
 	// prompt handles interactive user input.
 	prompt *Prompter
@@ -184,6 +188,10 @@ func (c *SetupOSCommand) parseArgs(args []string) error {
 	c.fs.BoolVar(&c.skipEncryption, "skip-encryption", false, "Skip disk encryption password change step")
 	c.fs.BoolVar(&c.skipPasswords, "skip-passwords", false, "Skip username change, user password and root password steps")
 	c.fs.StringVar(&c.usernameFlag, "username", "", "Set the username directly without prompting (useful with --skip-passwords)")
+	c.fs.StringVar(&c.localeFlag, "locale", "", "Set the system locale (e.g. en_US.UTF-8)")
+	c.fs.StringVar(&c.keymapFlag, "keymap", "", "Set the console keymap (e.g. us)")
+	c.fs.StringVar(&c.timezoneFlag, "timezone", "", "Set the system timezone (e.g. Europe/Rome)")
+	c.fs.StringVar(&c.hostnameFlag, "hostname", "", "Set the system hostname")
 	c.fs.Usage = func() {
 		fmt.Printf("Usage: vector %s [flags]\n", c.Name())
 		fmt.Println("  Setup matrixOS: configure username, passwords, locale, disk encryption and boot entries.")
@@ -531,7 +539,23 @@ func (c *SetupOSCommand) setupLocalization() error {
 	fmt.Fprintf(c.run.stdout, "   %s%sConfiguring system locale and timezone...%s\n",
 		c.cBold, c.iconGear, c.cReset)
 
-	firstbootCmd := c.run.execCommand("systemd-firstboot", "--prompt", "--reset")
+	firstbootArgs := []string{"--reset"}
+	if c.localeFlag != "" {
+		firstbootArgs = append(firstbootArgs, "--locale="+c.localeFlag)
+	}
+	if c.keymapFlag != "" {
+		firstbootArgs = append(firstbootArgs, "--keymap="+c.keymapFlag)
+	}
+	if c.timezoneFlag != "" {
+		firstbootArgs = append(firstbootArgs, "--timezone="+c.timezoneFlag)
+	}
+	if c.hostnameFlag != "" {
+		firstbootArgs = append(firstbootArgs, "--hostname="+c.hostnameFlag)
+	}
+	if c.localeFlag == "" || c.keymapFlag == "" || c.timezoneFlag == "" || c.hostnameFlag == "" {
+		firstbootArgs = append(firstbootArgs, "--prompt")
+	}
+	firstbootCmd := c.run.execCommand("systemd-firstboot", firstbootArgs...)
 	firstbootCmd.SetStdout(c.run.stdout)
 	firstbootCmd.SetStderr(c.run.stderr)
 	if rr, ok := firstbootCmd.(*realCmdRunner); ok {
