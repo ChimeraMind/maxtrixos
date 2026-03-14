@@ -14,9 +14,8 @@ type MockFsenc struct {
 	OsNameErr              error
 	ValidateLuksErr        error
 	LuksEncryptErr         error
+	LuksBackupHeaderErr    error
 }
-
-func (m *MockFsenc) Cleanup() {}
 
 func (m *MockFsenc) EncryptionEnabled() (bool, error) {
 	return m.EncryptionEnabled_, m.EncryptionEnabledErr
@@ -34,8 +33,12 @@ func (m *MockFsenc) OsName() (string, error) {
 	return m.OsName_, m.OsNameErr
 }
 
-func (m *MockFsenc) LuksEncrypt(devicePath, desiredLuksDevice string) error {
+func (m *MockFsenc) LuksEncrypt(devicePath, desiredLuksDevice string, deviceMappers *[]string) error {
 	return m.LuksEncryptErr
+}
+
+func (m *MockFsenc) LuksBackupHeader(devicePath, mountEfifs string) error {
+	return m.LuksBackupHeaderErr
 }
 
 func (m *MockFsenc) ValidateLuksVariables() error {
