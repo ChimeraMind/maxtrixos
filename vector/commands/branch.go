@@ -66,7 +66,6 @@ func (c *BranchCommand) parseArgs(args []string) error {
 	return nil
 }
 
-// Run runs the command
 func (c *BranchCommand) Run() error {
 	switch c.sub {
 	case "show":

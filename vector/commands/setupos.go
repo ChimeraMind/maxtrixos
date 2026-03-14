@@ -70,29 +70,8 @@ func NewSetupOSCommand() *SetupOSCommand {
 	}
 }
 
-// SetupOSCommand is a command for setting up matrixOS (username, passwords, locale, etc.)
-type SetupOSCommand struct {
-	BaseCommand
-	UI
-	fs  *flag.FlagSet
-	run *setupOSRunner
-
-	// Flags.
-	skipEncryption bool
-	skipPasswords  bool
-	usernameFlag   string
-
-	// prompt handles interactive user input.
-	prompt *Prompter
-}
-
-// NewSetupOSCommand creates a new SetupOSCommand
-func NewSetupOSCommand() *SetupOSCommand {
-	return &SetupOSCommand{}
-}
-
 func (c *SetupOSCommand) Name() string {
-	return "setupOS"
+	return c.fs.Name()
 }
 
 func (c *SetupOSCommand) Init(args []string) error {
@@ -121,17 +100,6 @@ func (c *SetupOSCommand) parseArgs(args []string) error {
 		c.fs.PrintDefaults()
 	}
 	return c.fs.Parse(args)
-}
-
-func (c *SetupOSCommand) configStr(key string) (string, error) {
-	val, err := c.cfg.GetItem(key)
-	if err != nil {
-		return "", fmt.Errorf("config key %s: %w", key, err)
-	}
-	if val == "" {
-		return "", fmt.Errorf("config key %s is empty", key)
-	}
-	return val, nil
 }
 
 func (c *SetupOSCommand) Run() error {
