@@ -65,6 +65,13 @@ func (im *Image) prepareRootfs() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if !filesystems.DirectoryExists(mountDir) {
+		im.Print("Creating mount dir: %s ...\n", mountDir)
+		if err := os.MkdirAll(mountDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create mount dir: %w", err)
+		}
+	}
+
 	mountRootfs, err := filesystems.CreateTempDir(mountDir, "rootfs")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp rootfs dir: %w", err)
