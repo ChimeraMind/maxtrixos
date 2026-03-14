@@ -104,6 +104,33 @@ func SplitCSV(s string) []string {
 	return result
 }
 
+// makeSkipFilter returns a filter function that returns true for names
+// present in the skip list.  Returns nil when the list is empty.
+func makeSkipFilter(skip []string) func(string) bool {
+	if len(skip) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(skip))
+	for _, s := range skip {
+		set[s] = true
+	}
+	return func(name string) bool { return set[name] }
+}
+
+// makeOnlyFilter returns a filter function that returns true for names
+// present in the allow list.  Returns nil when the list is empty
+// (meaning all names pass).
+func makeOnlyFilter(only []string) func(string) bool {
+	if len(only) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(only))
+	for _, s := range only {
+		set[s] = true
+	}
+	return func(name string) bool { return set[name] }
+}
+
 // initBaseConfig initializes the base configuration for the command.
 func (c *BaseCommand) initBaseConfig() error {
 	cfg, err := config.NewBaseConfig()

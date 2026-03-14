@@ -149,32 +149,14 @@ func (c *ImagesCommand) detectReleases(w io.Writer) ([]string, error) {
 // skipFilter returns a RefFilterFunc that skips branches present in the
 // --skip-releases list.  Returns nil when no skip list is configured.
 func (c *ImagesCommand) skipFilter() releaser.RefFilterFunc {
-	if len(c.skipReleases) == 0 {
-		return nil
-	}
-	set := make(map[string]bool, len(c.skipReleases))
-	for _, s := range c.skipReleases {
-		set[s] = true
-	}
-	return func(ref string) bool {
-		return set[ref]
-	}
+	return makeSkipFilter(c.skipReleases)
 }
 
 // onlyFilter returns a RefFilterFunc that accepts only branches present
 // in the --only-releases list.  Returns nil when no only-list is
 // configured (i.e. all branches pass).
 func (c *ImagesCommand) onlyFilter() releaser.RefFilterFunc {
-	if len(c.onlyReleases) == 0 {
-		return nil
-	}
-	set := make(map[string]bool, len(c.onlyReleases))
-	for _, s := range c.onlyReleases {
-		set[s] = true
-	}
-	return func(ref string) bool {
-		return set[ref]
-	}
+	return makeOnlyFilter(c.onlyReleases)
 }
 
 // runImages implements the main images building logic, mirroring

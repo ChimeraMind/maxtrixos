@@ -31,6 +31,7 @@ Usage:
   build       - build toolkit command, orchestrates building OS artifacts.
     seeds        builds chroot filesystems using the configured seeders.
     release      generates a single OS release (ostree commit).
+    releases     generates multiple OS releases across all detected seeders.
     image        generates a single OS image.
     images 	     generates multiple OS images based on released branches.
 `

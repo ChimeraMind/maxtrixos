@@ -161,7 +161,6 @@ func (c *ReleasesCommand) updateStdWriters(name string) (*styledWriter, *styledW
 	stderrWriter := c.SetStderr(name)
 	c.sd.SetStdout(stdoutWriter)
 	c.sd.SetStderr(stderrWriter)
-	c.det.SetStderr(stderrWriter)
 	return stdoutWriter, stderrWriter
 }
 
@@ -362,8 +361,7 @@ func (c *ReleasesCommand) releaseWorker(info seeder.SeederInfo) (string, error) 
 // --- Helper methods ---
 
 // findChrootDir locates the chroot directory for a seeder by parsing
-// its params.sh file. This grabs both the preferred chroot dir (which may not exist)
-// and the latest available chroot dir (which checks for existing chroots).
+// its params.sh file.
 func (c *ReleasesCommand) findChrootDir(info seeder.SeederInfo) (string, error) {
 	paramsName, err := c.sd.ParamsExecutableName()
 	if err != nil {
@@ -374,12 +372,12 @@ func (c *ReleasesCommand) findChrootDir(info seeder.SeederInfo) (string, error) 
 		return "", fmt.Errorf("unable to find %s", paramsPath)
 	}
 
-	params, err := c.sd.ParseSeederParams(info.Name, paramsPath)
+	params, err := c.sd.ParseSeederParams(paramsPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse params: %w", err)
 	}
 
-	chrootDir := params.LatestAvailableChrootDir
+	chrootDir := params.PreferredChrootDir
 	if chrootDir == "" {
 		return "", fmt.Errorf(
 			"no chroot dir specified in params.sh for seeder %s",
