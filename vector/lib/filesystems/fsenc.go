@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -61,7 +60,6 @@ func NewFsenc(cfg config.IConfig, opening, opened func(string)) (*Fsenc, error) 
 func (f *Fsenc) add(mapperName string) {
 	f.openMappersMu.Lock()
 	defer f.openMappersMu.Unlock()
-	log.Printf("Adding opened device-mapper name to tracking: %s", mapperName)
 	f.openMappers = append(f.openMappers, mapperName)
 }
 
