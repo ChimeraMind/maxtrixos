@@ -80,20 +80,19 @@ type MockSeeder struct {
 	ExecuteWithSeederLockErr error
 
 	// Worker operations
-	SeederDoneFlagFile_       string
-	SeederDoneFlagFileErr     error
-	IsSeederDone_             bool
-	IsSeederDoneErr           error
-	MarkSeederDoneErr         error
-	ParseSeederParams_        *SeederParams
-	ParseSeederParamsErr      error
-	ImportGentooGpgKeysErr    error
-	ExecutePrepperErr         error
-	SetupChrootMountsErr      error
-	SetupChrootDNSErr         error
-	SetupChrootDirsErr        error
-	SeedErr error
-	CleanTemporaryArtifactErr error
+	SeederDoneFlagFile_    string
+	SeederDoneFlagFileErr  error
+	IsSeederDone_          bool
+	IsSeederDoneErr        error
+	MarkSeederDoneErr      error
+	ParseSeederParams_     *SeederParams
+	ParseSeederParamsErr   error
+	ImportGentooGpgKeysErr error
+	ExecutePrepperErr      error
+	SetupChrootMountsErr   error
+	SetupChrootDNSErr      error
+	SetupChrootDirsErr     error
+	SeedErr                error
 
 	// Track calls
 	RetryableCmdCalled               bool
@@ -105,9 +104,8 @@ type MockSeeder struct {
 	CleanupCalled                    bool
 	SetupChrootDNSCalled             bool
 	SetupChrootDirsCalled            bool
-	SeedCalled            bool
+	SeedCalled                       bool
 	MarkSeederDoneCalled             bool
-	CleanTemporaryArtifactCalled     bool
 }
 
 // DefaultMockSeeder returns a MockSeeder with sensible defaults for tests.
@@ -293,8 +291,4 @@ func (m *MockSeeder) Seed(
 ) error {
 	m.SeedCalled = true
 	return m.SeedErr
-}
-func (m *MockSeeder) CleanTemporaryArtifact(dir string) error {
-	m.CleanTemporaryArtifactCalled = true
-	return m.CleanTemporaryArtifactErr
 }
