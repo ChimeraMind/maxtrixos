@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/imager"
@@ -15,14 +15,14 @@ import (
 // --- Test helpers ---
 
 // defaultMockOstree returns a MockOstree with sensible defaults for image tests.
-func defaultMockOstree() *cds.MockOstree {
-	return &cds.MockOstree{}
+func defaultMockOstree() *ostree.MockOstree {
+	return &ostree.MockOstree{}
 }
 
 // newTestImageCommand creates an ImageCommand with injected mocks,
 // bypassing Init() which requires real config, ostree binary, etc.
 func newTestImageCommand(
-	ot cds.IOstree,
+	ot ostree.IOstree,
 	im *imager.MockImage,
 	fsenc *filesystems.MockFsenc,
 	cfg *config.MockConfig,
@@ -339,7 +339,7 @@ func TestInitializeOstreeLocal(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	mock := &cds.MockOstree{
+	mock := &ostree.MockOstree{
 		LocalRefs_: []string{"ref1", "ref2"},
 	}
 	im := imager.DefaultMockImage()
@@ -375,7 +375,7 @@ func TestInitializeOstreeRemote(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
-	mock := &cds.MockOstree{
+	mock := &ostree.MockOstree{
 		Refs:    []string{"remote:branch1"},
 		Remote_: "remote",
 	}
@@ -437,25 +437,25 @@ func TestImageRunShortNameRefRejected(t *testing.T) {
 // --- Ref with remote extraction test ---
 
 func TestExtractRemoteFromRefIntegration(t *testing.T) {
-	// Verify that cds.ExtractRemoteFromRef works as expected.
-	remote := cds.ExtractRemoteFromRef("origin:matrixos/x86_64/dev/mybranch")
+	// Verify that ostree.ExtractRemoteFromRef works as expected.
+	remote := ostree.ExtractRemoteFromRef("origin:matrixos/x86_64/dev/mybranch")
 	if remote != "origin" {
 		t.Errorf("Expected 'origin', got %q", remote)
 	}
 
-	remote = cds.ExtractRemoteFromRef("matrixos/x86_64/dev/mybranch")
+	remote = ostree.ExtractRemoteFromRef("matrixos/x86_64/dev/mybranch")
 	if remote != "" {
 		t.Errorf("Expected empty, got %q", remote)
 	}
 }
 
 func TestCleanRemoteFromRefIntegration(t *testing.T) {
-	cleaned := cds.CleanRemoteFromRef("origin:matrixos/x86_64/dev/mybranch")
+	cleaned := ostree.CleanRemoteFromRef("origin:matrixos/x86_64/dev/mybranch")
 	if cleaned != "matrixos/x86_64/dev/mybranch" {
 		t.Errorf("Expected ref without remote, got %q", cleaned)
 	}
 
-	cleaned = cds.CleanRemoteFromRef("matrixos/x86_64/dev/mybranch")
+	cleaned = ostree.CleanRemoteFromRef("matrixos/x86_64/dev/mybranch")
 	if cleaned != "matrixos/x86_64/dev/mybranch" {
 		t.Errorf("Expected same ref, got %q", cleaned)
 	}

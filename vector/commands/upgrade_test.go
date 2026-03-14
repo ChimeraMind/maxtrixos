@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
 	"os"
 	"os/exec"
@@ -35,7 +35,7 @@ func newTestUpgradeCommand(ot ostree.IOstree, args []string) (*UpgradeCommand, e
 
 // newTestUpgradeCommandWithConfig creates an UpgradeCommand with mock ostree.IOstree and
 // a real config from a file, for tests that need config values (e.g. bootloader).
-func newTestUpgradeCommandWithConfig(ot cds.IOstree, cfg *config.MockConfig, args []string) (*UpgradeCommand, error) {
+func newTestUpgradeCommandWithConfig(ot ostree.IOstree, cfg *config.MockConfig, args []string) (*UpgradeCommand, error) {
 	cmd := &UpgradeCommand{}
 	cmd.ot = ot
 	cmd.cfg = cfg

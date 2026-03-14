@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 )

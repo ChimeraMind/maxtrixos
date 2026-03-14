@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"matrixos/vector/lib/runner"
 )
 
 // ClientSideGpgArgs returns arguments for client-side GPG verification.
@@ -89,6 +87,7 @@ func (o *Ostree) getDevGpgHomeDir() (string, error) {
 	return dir, nil
 }
 
+// GpgHomeDir returns the path to the GPG homedir, creating and setting permissions if needed.
 func (o *Ostree) GpgHomeDir() (string, error) {
 	devGpgHomeDir, err := o.getDevGpgHomeDir()
 	if err != nil {
@@ -100,6 +99,7 @@ func (o *Ostree) GpgHomeDir() (string, error) {
 	return devGpgHomeDir, nil
 }
 
+// GpgKeyID returns the GPG key ID to use for signing.
 func (o *Ostree) GpgKeyID() (string, error) {
 	homeDir, err := o.GpgHomeDir()
 	if err != nil {
@@ -111,19 +111,19 @@ func (o *Ostree) GpgKeyID() (string, error) {
 	}
 
 	out := new(bytes.Buffer)
-	err = o.runner(&runner.Cmd{
-		Name: "gpg",
-		Args: []string{
-			"--homedir", homeDir,
-			"--batch", "--yes",
-			"--with-colons",
-			"--show-keys",
-			"--keyid-format", "LONG",
-			pubkeyPath,
-		},
-		Stdout: out,
-		Stderr: o.stdout,
-	})
+	err = o.runner(
+		nil,
+		out,
+		o.stdout,
+		"gpg",
+		"--homedir", homeDir,
+		"--batch",
+		"--yes",
+		"--with-colons",
+		"--show-keys",
+		"--keyid-format", "LONG",
+		pubkeyPath,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -154,6 +154,7 @@ func (o *Ostree) GpgKeyID() (string, error) {
 	return keyID, nil
 }
 
+// ImportGpgKey imports a GPG key into the GPG homedir.
 func (o *Ostree) ImportGpgKey(keyPath string) error {
 	if keyPath == "" {
 		return errors.New("missing keyPath parameter")
@@ -167,14 +168,18 @@ func (o *Ostree) ImportGpgKey(keyPath string) error {
 		return err
 	}
 
-	return o.runner(&runner.Cmd{
-		Name:   "gpg",
-		Args:   []string{"--homedir", homeDir, "--batch", "--yes", "--import", keyPath},
-		Stdout: o.stdout,
-		Stderr: o.stderr,
-	})
+	return o.runner(
+		nil,
+		o.stdout,
+		o.stderr,
+		"gpg",
+		"--homedir", homeDir,
+		"--batch", "--yes",
+		"--import", keyPath,
+	)
 }
 
+// GpgSignFile signs a file with GPG.
 func (o *Ostree) GpgSignFile(file string) error {
 	if file == "" {
 		return errors.New("missing file parameter")
@@ -195,19 +200,19 @@ func (o *Ostree) GpgSignFile(file string) error {
 
 	ascFile := GpgSignedFilePath(file)
 
-	err = o.runner(&runner.Cmd{
-		Name: "gpg",
-		Args: []string{
-			"--homedir", homeDir,
-			"--batch", "--yes",
-			"--local-user", keyID,
-			"--armor", "--detach-sign",
-			"--output", ascFile,
-			file,
-		},
-		Stdout: o.stdout,
-		Stderr: o.stdout,
-	})
+	err = o.runner(
+		nil,
+		o.stdout,
+		o.stdout,
+		"gpg",
+		"--homedir", homeDir,
+		"--batch", "--yes",
+		"--local-user", keyID,
+		"--armor",
+		"--detach-sign",
+		"--output", ascFile,
+		file,
+	)
 	if err != nil {
 		return err
 	}
@@ -216,6 +221,9 @@ func (o *Ostree) GpgSignFile(file string) error {
 	return nil
 }
 
+// GpgKeys returns the list of GPG key paths used for signing and verification.
+// The list contains the private key, the best available public key, and
+// (if different) the official public key.
 func (o *Ostree) GpgKeys() ([]string, error) {
 	var keys []string
 
@@ -243,7 +251,8 @@ func (o *Ostree) GpgKeys() ([]string, error) {
 	return keys, nil
 }
 
-func (o *Ostree) InitializeSigningGpg() error {
+// InitializeSigningGpg imports GPG keys into the local GPG keyring.
+func (o *Ostree) InitializeSigningGpg(verbose bool) error {
 	keys, err := o.GpgKeys()
 	if err != nil {
 		return err
@@ -262,13 +271,13 @@ func (o *Ostree) InitializeSigningGpg() error {
 	return nil
 }
 
-// initializeRemoteSigningGpg imports GPG keys into the remote ostree repository.
-func (o *Ostree) initializeRemoteSigningGpg(remote, repoDir string) error {
+// InitializeRemoteSigningGpg imports GPG keys into the remote ostree repository.
+func (o *Ostree) InitializeRemoteSigningGpg(remote, repoDir string, verbose bool) error {
 	if remote == "" {
-		return errors.New("initializeRemoteSigningGpg: missing remote parameter")
+		return errors.New("InitializeRemoteSigningGpg: missing remote parameter")
 	}
 	if repoDir == "" {
-		return errors.New("initializeRemoteSigningGpg: missing repoDir parameter")
+		return errors.New("InitializeRemoteSigningGpg: missing repoDir parameter")
 	}
 
 	keys, err := o.GpgKeys()
@@ -282,7 +291,7 @@ func (o *Ostree) initializeRemoteSigningGpg(remote, repoDir string) error {
 			o.PrintError("WARNING: Remote signing GPG key %s not present, skipping import ...\n", key)
 			continue
 		}
-		err := o.ostreeRun("--repo="+repoDir, "remote", "gpg-import", remote, "-k", key)
+		err := o.ostreeRun(verbose, "--repo="+repoDir, "remote", "gpg-import", remote, "-k", key)
 		if err != nil {
 			return fmt.Errorf("failed to import gpg key %s to remote %s: %w", key, remote, err)
 		}
@@ -290,7 +299,8 @@ func (o *Ostree) initializeRemoteSigningGpg(remote, repoDir string) error {
 	return nil
 }
 
-func (o *Ostree) MaybeInitializeGpg() error {
+// MaybeInitializeGpg initializes GPG keys for an ostree repository.
+func (o *Ostree) MaybeInitializeGpg(verbose bool) error {
 	repoDir, err := o.RepoDir()
 	if err != nil {
 		return err
@@ -300,11 +310,11 @@ func (o *Ostree) MaybeInitializeGpg() error {
 		return err
 	}
 
-	return o.maybeInitializeGpgForRepo(remote, repoDir)
+	return o.MaybeInitializeGpgForRepo(remote, repoDir, verbose)
 }
 
-// maybeInitializeGpgForRepo initializes GPG keys for an ostree repository.
-func (o *Ostree) maybeInitializeGpgForRepo(remote, repoDir string) error {
+// MaybeInitializeGpgForRepo initializes GPG keys for an ostree repository.
+func (o *Ostree) MaybeInitializeGpgForRepo(remote, repoDir string, verbose bool) error {
 	gpgEnabled, err := o.GpgEnabled()
 	if err != nil {
 		return err
@@ -314,12 +324,13 @@ func (o *Ostree) maybeInitializeGpgForRepo(remote, repoDir string) error {
 		return nil
 	}
 
-	if err := o.InitializeSigningGpg(); err != nil {
+	if err := o.InitializeSigningGpg(verbose); err != nil {
 		return err
 	}
-	return o.initializeRemoteSigningGpg(remote, repoDir)
+	return o.InitializeRemoteSigningGpg(remote, repoDir, verbose)
 }
 
+// GpgArgs returns the gpg arguments for ostree commands.
 func (o *Ostree) GpgArgs() ([]string, error) {
 	gpgEnabled, err := o.GpgEnabled()
 	if err != nil {

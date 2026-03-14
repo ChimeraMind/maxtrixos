@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 )
@@ -17,7 +17,7 @@ import (
 
 func TestImageCleanupTracking(t *testing.T) {
 	cfg := baseImageConfig()
-	im := newTestImage(cfg, &cds.MockOstree{})
+	im := newTestImage(cfg, &ostree.MockOstree{})
 	var stdout, stderr bytes.Buffer
 	im.SetStdout(&stdout)
 	im.SetStderr(&stderr)
@@ -58,7 +58,7 @@ func TestImageCleanupTracking(t *testing.T) {
 
 func TestImageCleanupCalledOnEmptyState(t *testing.T) {
 	cfg := baseImageConfig()
-	im := newTestImage(cfg, &cds.MockOstree{})
+	im := newTestImage(cfg, &ostree.MockOstree{})
 	var stdout, stderr bytes.Buffer
 	im.SetStdout(&stdout)
 	im.SetStderr(&stderr)
@@ -68,7 +68,7 @@ func TestImageCleanupCalledOnEmptyState(t *testing.T) {
 
 func TestImageConcurrentResourceTracking(t *testing.T) {
 	cfg := baseImageConfig()
-	im := newTestImage(cfg, &cds.MockOstree{})
+	im := newTestImage(cfg, &ostree.MockOstree{})
 	var stdout, stderr bytes.Buffer
 	im.SetStdout(&stdout)
 	im.SetStderr(&stderr)
@@ -101,7 +101,7 @@ func TestImageConcurrentResourceTracking(t *testing.T) {
 // --- productionizeImage tests ---
 
 func newProductionTestImage(cfg *config.MockConfig) *Image {
-	im := newTestImage(cfg, &cds.MockOstree{})
+	im := newTestImage(cfg, &ostree.MockOstree{})
 	im.mode = ModeCreateImageFile
 	return im
 }

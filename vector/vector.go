@@ -6,7 +6,7 @@ package main
 import (
 	"fmt"
 	"matrixos/vector/commands"
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"os"
 )
 
@@ -39,7 +39,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cds.SetupEnvironment()
+	ostree.SetupEnvironment()
 
 	cmds := []commands.ICommand{
 		commands.NewBranchCommand(),

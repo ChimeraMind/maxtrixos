@@ -92,7 +92,7 @@ func TestBranchShowNoBooted(t *testing.T) {
 	}
 }
 
-func TestBranchRemote(t *testing.T) {
+func TestBranchList(t *testing.T) {
 	mock := &ostree.MockOstree{
 		Refs: []string{"origin:branch1", "origin:branch2"},
 	}

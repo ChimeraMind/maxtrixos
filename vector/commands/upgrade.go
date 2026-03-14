@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode"
 
-	"matrixos/vector/lib/cds"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/filesystems"
 )
 

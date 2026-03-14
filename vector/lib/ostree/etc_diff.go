@@ -195,12 +195,15 @@ func classifyEtcChange(relPath string, old, new_, user *filesystems.PathInfo) *E
 	}
 }
 
-func (o *Ostree) ListEtcChanges(aCommit, bCommit string) ([]EtcChange, error) {
-	oldEtcContent, err := o.ListContents(aCommit, "/usr/etc")
+// ListEtcChanges performs a 3-way diff between the old pristine /usr/etc,
+// the new pristine /usr/etc, and the user's live /etc, and returns a list of
+// changes with their classification (add/update/remove/conflict/user-only).
+func (o *Ostree) ListEtcChanges(oldSHA, newSHA string) ([]EtcChange, error) {
+	oldEtcContent, err := o.ListContents(oldSHA, "/usr/etc", false)
 	if err != nil {
 		return nil, err
 	}
-	newEtcContent, err := o.ListContents(bCommit, "/usr/etc")
+	newEtcContent, err := o.ListContents(newSHA, "/usr/etc", false)
 	if err != nil {
 		return nil, err
 	}
@@ -216,13 +219,14 @@ func (o *Ostree) ListEtcChanges(aCommit, bCommit string) ([]EtcChange, error) {
 // ConfigDiff runs "ostree admin --sysroot=<root> config-diff" and returns a
 // map whose keys are the status letter (e.g. "A", "M", "D") and whose values
 // are sorted slices of paths that have that status.
-func (o *Ostree) ConfigDiff() (map[string][]string, error) {
+func (o *Ostree) ConfigDiff(verbose bool) (map[string][]string, error) {
 	root, err := o.Root()
 	if err != nil {
 		return nil, err
 	}
 
 	stdout, err := o.ostreeRunCapture(
+		verbose,
 		"admin",
 		"--sysroot="+root,
 		"config-diff",

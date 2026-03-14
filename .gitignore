@@ -1,7 +1,7 @@
 /ostree/
-/out/
-/locks/
-/logs/
+out/
+locks/
+logs/
 **/*.img*
 
 # Local image testing with qemu

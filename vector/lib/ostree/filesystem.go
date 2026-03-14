@@ -9,10 +9,11 @@ import (
 	"matrixos/vector/lib/filesystems"
 )
 
-func (o *Ostree) SetupEtc(rootfs string) error {
-	o.Print("Setting up /etc...\n")
-	etcDir := filepath.Join(rootfs, "etc")
-	usrEtcDir := filepath.Join(rootfs, "usr", "etc")
+// SetupEtc moves the /etc directory to /usr/etc.
+func (o *Ostree) SetupEtc(imageDir string) error {
+	o.Print("Setting up /etc...")
+	etcDir := filepath.Join(imageDir, "etc")
+	usrEtcDir := filepath.Join(imageDir, "usr", "etc")
 
 	o.Print("Moving %s to %s\n", etcDir, usrEtcDir)
 	return filesystems.Move(etcDir, usrEtcDir)
@@ -37,7 +38,7 @@ func (o *Ostree) prepareVarHome(imageDir, homeName, varHomeName string) error {
 		}
 	} else if homeExists && homeInfo.IsDir() {
 		if pathExists(varHomeDir) { // path exists is correct.
-			o.PrintError("WARNING: removing %s\n", varHomeDir)
+			o.PrintError("WARNING: removing %s", varHomeDir)
 			os.RemoveAll(varHomeDir)
 		}
 		if err := filesystems.Move(homeDir, varHomeDir); err != nil {
@@ -145,7 +146,7 @@ func prepareMachineID(imageDir string) error {
 // prepareVarDbPkg moves var/db/pkg to the read-only VDB location and creates
 // a relative symlink back.
 func (o *Ostree) prepareVarDbPkg(imageDir, roVdbPath string) error {
-	o.Print("Setting up /var/db/pkg...\n")
+	o.Print("Setting up /var/db/pkg...")
 	varDbPkg := filepath.Join(imageDir, "var", "db", "pkg")
 	usrVarDbPkg := filepath.Join(imageDir, roVdbPath)
 
@@ -164,8 +165,8 @@ func (o *Ostree) prepareVarDbPkg(imageDir, roVdbPath string) error {
 }
 
 // prepareOpt moves /opt to /usr/opt and symlinks it.
-func (o *Ostree) prepareOpt(imageDir string) error {
-	o.Print("Setting up /opt...\n")
+func prepareOpt(imageDir string) error {
+	fmt.Println("Setting up /opt...")
 	return moveDirToTargetAndSymlink(
 		filepath.Join(imageDir, "opt"),
 		filepath.Join(imageDir, "usr", "opt"),
@@ -174,8 +175,8 @@ func (o *Ostree) prepareOpt(imageDir string) error {
 }
 
 // prepareSrv moves /srv to /var/srv and symlinks it.
-func (o *Ostree) prepareSrv(imageDir string) error {
-	o.Print("Setting up /srv...\n")
+func prepareSrv(imageDir string) error {
+	fmt.Println("Setting up /srv...")
 	return moveDirToTargetAndSymlink(
 		filepath.Join(imageDir, "srv"),
 		filepath.Join(imageDir, "var", "srv"),
@@ -184,17 +185,17 @@ func (o *Ostree) prepareSrv(imageDir string) error {
 }
 
 // prepareStaticDirs creates /lab, /snap, and /usr/src directories.
-func (o *Ostree) prepareStaticDirs(imageDir string) error {
+func prepareStaticDirs(imageDir string) error {
 	dirs := []struct {
 		path string
 		desc string
 	}{
-		{"lab", "Setting up /lab (for everything homelabbing and your LAN)...\n"},
-		{"snap", "Setting up /snap ...\n"},
-		{filepath.Join("usr", "src"), "Setting up /usr/src (for snap) ...\n"},
+		{"lab", "Setting up /lab (for everything homelabbing and your LAN)..."},
+		{"snap", "Setting up /snap ..."},
+		{filepath.Join("usr", "src"), "Setting up /usr/src (for snap) ..."},
 	}
 	for _, d := range dirs {
-		o.Print("%s", d.desc)
+		fmt.Println(d.desc)
 		if err := os.MkdirAll(filepath.Join(imageDir, d.path), 0755); err != nil {
 			return fmt.Errorf("failed to create %s: %w", d.path, err)
 		}
@@ -203,8 +204,8 @@ func (o *Ostree) prepareStaticDirs(imageDir string) error {
 }
 
 // prepareUsrLocal moves /usr/local to /var/usrlocal and symlinks it.
-func (o *Ostree) prepareUsrLocal(imageDir string) error {
-	o.Print("Setting up /usr/local...\n")
+func prepareUsrLocal(imageDir string) error {
+	fmt.Println("Setting up /usr/local...")
 	usrLocalDir := filepath.Join(imageDir, "usr", "local")
 	relUsrLocal := "var/usrlocal"
 	imageUsrLocal := filepath.Join(imageDir, relUsrLocal)
@@ -222,25 +223,27 @@ func (o *Ostree) prepareUsrLocal(imageDir string) error {
 	return nil
 }
 
-func (o *Ostree) PrepareFilesystemHierarchy(rootfs string) error {
-	marker := filepath.Join(rootfs, "var", ".matrixos-prepared")
+// PrepareFilesystemHierarchy prepares the filesystem hierarchy for OSTree.
+// It ports the logic from ostree_lib.prepare_filesystem_hierarchy in ostree_lib.sh.
+func (o *Ostree) PrepareFilesystemHierarchy(imageDir string) error {
+	marker := filepath.Join(imageDir, "var", ".matrixos-prepared")
 	if fileExists(marker) {
 		return fmt.Errorf("filesystem hierarchy already prepared: %s exists", marker)
 	}
 
-	if err := prepareSysrootAndOstreeLink(rootfs); err != nil {
+	if err := prepareSysrootAndOstreeLink(imageDir); err != nil {
 		return err
 	}
 
-	if err := prepareTmpDir(rootfs); err != nil {
+	if err := prepareTmpDir(imageDir); err != nil {
 		return err
 	}
 
-	if err := prepareMachineID(rootfs); err != nil {
+	if err := prepareMachineID(imageDir); err != nil {
 		return err
 	}
 
-	if err := o.SetupEtc(rootfs); err != nil {
+	if err := o.SetupEtc(imageDir); err != nil {
 		return err
 	}
 
@@ -251,28 +254,28 @@ func (o *Ostree) PrepareFilesystemHierarchy(rootfs string) error {
 	if matrixOsRoVdb == "" {
 		return fmt.Errorf("config item Releaser.ReadOnlyVdb is not set")
 	}
-	if err := o.prepareVarDbPkg(rootfs, matrixOsRoVdb); err != nil {
+	if err := o.prepareVarDbPkg(imageDir, matrixOsRoVdb); err != nil {
 		return err
 	}
 
-	if err := o.prepareOpt(rootfs); err != nil {
+	if err := prepareOpt(imageDir); err != nil {
 		return err
 	}
 
-	if err := o.prepareSrv(rootfs); err != nil {
+	if err := prepareSrv(imageDir); err != nil {
 		return err
 	}
 
-	if err := o.prepareStaticDirs(rootfs); err != nil {
+	if err := prepareStaticDirs(imageDir); err != nil {
 		return err
 	}
 
-	o.Print("Setting up /home ...\n")
-	if err := o.prepareVarHome(rootfs, "home", "home"); err != nil {
+	o.Print("Setting up /home ...")
+	if err := o.prepareVarHome(imageDir, "home", "home"); err != nil {
 		return err
 	}
-	o.Print("Setting up /root ...\n")
-	if err := o.prepareVarHome(rootfs, "root", "roothome"); err != nil {
+	o.Print("Setting up /root ...")
+	if err := o.prepareVarHome(imageDir, "root", "roothome"); err != nil {
 		return err
 	}
 
@@ -284,9 +287,9 @@ func (o *Ostree) PrepareFilesystemHierarchy(rootfs string) error {
 		return fmt.Errorf("config item Imager.EfiRoot is not set")
 	}
 	o.Print("Setting up %s...\n", efiRoot)
-	os.MkdirAll(filepath.Join(rootfs, efiRoot), 0755)
+	os.MkdirAll(filepath.Join(imageDir, efiRoot), 0755)
 
-	if err := o.prepareUsrLocal(rootfs); err != nil {
+	if err := prepareUsrLocal(imageDir); err != nil {
 		return err
 	}
 
@@ -297,9 +300,10 @@ func (o *Ostree) PrepareFilesystemHierarchy(rootfs string) error {
 	return nil
 }
 
-func (o *Ostree) ValidateFilesystemHierarchy(rootfs string) error {
-	if rootfs == "" {
-		return fmt.Errorf("missing rootfs parameter")
+// ValidateFilesystemHierarchy validates the filesystem hierarchy for OSTree.
+func (o *Ostree) ValidateFilesystemHierarchy(imageDir string) error {
+	if imageDir == "" {
+		return fmt.Errorf("missing imageDir parameter")
 	}
 
 	expected := []string{
@@ -313,7 +317,7 @@ func (o *Ostree) ValidateFilesystemHierarchy(rootfs string) error {
 
 	var issues int
 	for _, relPath := range expected {
-		fullPath := filepath.Join(rootfs, relPath)
+		fullPath := filepath.Join(imageDir, relPath)
 
 		// Check if it's a symlink and if it points to a directory.
 		// We use Lstat to check the link itself and Stat to check the target.
