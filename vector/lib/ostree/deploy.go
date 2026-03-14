@@ -21,6 +21,7 @@ type Deployment struct {
 	Staged   bool   `json:"staged"`
 	Index    int    `json:"index"`
 	Serial   int    `json:"serial"`
+	Pinned   bool   `json:"pinned"`
 }
 
 // BuildDeploymentRootfs builds the path to the deployed rootfs given a sysroot, osName,
