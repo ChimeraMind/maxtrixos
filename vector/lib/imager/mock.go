@@ -58,6 +58,7 @@ type MockImage struct {
 	PackageListErr               error
 	InstallBootloaderResult      []string
 	InstallBootloaderErr         error
+	Mode_                        ImageMode
 
 	// Track calls
 	ClearPartitionTableCalled bool
@@ -127,6 +128,7 @@ func (m *MockImage) SetRootDevice(device string)     { m.RootDevice_ = device }
 func (m *MockImage) RootDevice() string              { return m.RootDevice_ }
 func (m *MockImage) SetDevicePath(devicePath string) { m.DevicePath_ = devicePath }
 func (m *MockImage) DevicePath() string              { return m.DevicePath_ }
+func (m *MockImage) SetImagePath(imagePath string)   { m.ImagePath_ = imagePath }
 func (m *MockImage) SetRootfs(rootfs string)         { m.Rootfs_ = rootfs }
 func (m *MockImage) Rootfs() string                  { return m.Rootfs_ }
 func (m *MockImage) Ref() string                     { return m.Ref_ }
@@ -177,20 +179,30 @@ func (m *MockImage) BuildMetadataFile() (string, error)            { return "", 
 func (m *MockImage) ReleaseVersion() (string, error) {
 	return m.ReleaseVersion_, m.ReleaseVersionErr
 }
-func (m *MockImage) ImagePath() (string, error) {
+func (m *MockImage) ImagePath() string {
+	return m.ImagePath_
+}
+func (m *MockImage) BuildImagePath() (string, error) {
 	return m.ImagePath_, m.ImagePathErr
 }
-func (m *MockImage) ImagePathWithReleaseVersion(releaseVersion string) (string, error) {
+func (m *MockImage) SetImageMode(mode ImageMode) error {
+	m.Mode_ = mode
+	return nil
+}
+func (m *MockImage) ImageMode() ImageMode {
+	return m.Mode_
+}
+func (m *MockImage) BuildImagePathWithReleaseVersion(releaseVersion string) (string, error) {
 	return m.ImagePathWithReleaseVersion_, m.ImagePathWithReleaseVerErr
 }
-func (m *MockImage) CreateImage(imagePath, imageSize string) error {
+func (m *MockImage) CreateImage(imageSize string) error {
 	m.CreateImageCalled = true
 	return nil
 }
-func (m *MockImage) ImagePathWithCompressorExtension(imagePath string) (string, error) {
+func (m *MockImage) BuildImagePathWithCompressorExtension() (string, error) {
 	return m.ImagePathWithCompExt_, m.ImagePathWithCompExtErr
 }
-func (m *MockImage) CompressImage(imagePath string) error {
+func (m *MockImage) CompressImage() error {
 	m.CompressImageCalled = true
 	return nil
 }
@@ -274,7 +286,7 @@ func (m *MockImage) InstallBootloader() error {
 func (m *MockImage) Cleanup() {
 	m.CleanupCalled = true
 }
-func (m *MockImage) TestImage(imagePath string) error {
+func (m *MockImage) TestImage() error {
 	m.TestImageCalled = true
 	return nil
 }
@@ -282,10 +294,10 @@ func (m *MockImage) FinalizeFilesystems() error {
 	m.FinalizeFsCalled = true
 	return nil
 }
-func (m *MockImage) Qcow2ImagePath(imagePath string) (string, error) {
+func (m *MockImage) Qcow2ImagePath() (string, error) {
 	return m.Qcow2ImagePath_, m.Qcow2ImagePathErr
 }
-func (m *MockImage) CreateQcow2Image(imagePath string) error {
+func (m *MockImage) CreateQcow2Image() error {
 	m.CreateQcow2ImageCalled = true
 	return nil
 }
@@ -296,9 +308,9 @@ func (m *MockImage) ShowFinalFilesystemInfo() error {
 func (m *MockImage) ShowTestInfo(artifacts []string) {
 	m.ShowTestInfoCalled = true
 }
-func (m *MockImage) RemoveImageFile(imagePath string) error { return nil }
-func (m *MockImage) ImageLockDir() (string, error)          { return "", nil }
-func (m *MockImage) ImageLockPath() (string, error)         { return "", nil }
+func (m *MockImage) RemoveImageFile() error         { return nil }
+func (m *MockImage) ImageLockDir() (string, error)  { return "", nil }
+func (m *MockImage) ImageLockPath() (string, error) { return "", nil }
 
 // ExecuteWithImageLock either calls fn directly or returns the configured error.
 func (m *MockImage) ExecuteWithImageLock(fn func() error) error {

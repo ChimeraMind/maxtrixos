@@ -25,9 +25,11 @@ func TestIntegrationCreateAndPartitionImage(t *testing.T) {
 
 	mockRunner := runner.NewMockRunner()
 	im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
+	im.imagePath = imagePath
+	im.mode = ModeCreateImageFile
 
 	// Step 1: Create a real sparse image file.
-	if err := im.CreateImage(imagePath, "64M"); err != nil {
+	if err := im.CreateImage("64M"); err != nil {
 		t.Fatalf("CreateImage failed: %v", err)
 	}
 
@@ -117,9 +119,11 @@ func TestIntegrationFormatAndMountWorkflow(t *testing.T) {
 
 	mockRunner := runner.NewMockRunner()
 	im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
+	im.imagePath = imagePath
+	im.mode = ModeCreateImageFile
 
 	// Create a real sparse image.
-	if err := im.CreateImage(imagePath, "64M"); err != nil {
+	if err := im.CreateImage("64M"); err != nil {
 		t.Fatalf("CreateImage failed: %v", err)
 	}
 
@@ -294,7 +298,9 @@ func TestIntegrationClearPartitionAndRepartition(t *testing.T) {
 	im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
 	// Create a real sparse image.
-	if err := im.CreateImage(imagePath, "128M"); err != nil {
+	im.imagePath = imagePath
+	im.mode = ModeCreateImageFile
+	if err := im.CreateImage("128M"); err != nil {
 		t.Fatalf("CreateImage failed: %v", err)
 	}
 
@@ -386,9 +392,11 @@ func TestIntegrationCreateImageIdempotent(t *testing.T) {
 	imagePath := filepath.Join(tmpDir, "test.img")
 
 	im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+	im.imagePath = imagePath
+	im.mode = ModeCreateImageFile
 
 	// Create first image.
-	if err := im.CreateImage(imagePath, "1M"); err != nil {
+	if err := im.CreateImage("1M"); err != nil {
 		t.Fatalf("First CreateImage failed: %v", err)
 	}
 
@@ -401,7 +409,7 @@ func TestIntegrationCreateImageIdempotent(t *testing.T) {
 	f.Close()
 
 	// Create second image (should replace the first).
-	if err := im.CreateImage(imagePath, "2M"); err != nil {
+	if err := im.CreateImage("2M"); err != nil {
 		t.Fatalf("Second CreateImage failed: %v", err)
 	}
 
