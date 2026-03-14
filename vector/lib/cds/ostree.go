@@ -1189,7 +1189,7 @@ func (o *Ostree) GpgKeyID() (string, error) {
 	err = o.runner(
 		nil,
 		out,
-		os.Stderr,
+		os.Stdout,
 		"gpg",
 		"--homedir", homeDir,
 		"--batch",
@@ -1246,7 +1246,7 @@ func (o *Ostree) ImportGpgKey(keyPath string) error {
 	return o.runner(
 		nil,
 		os.Stdout,
-		os.Stderr,
+		os.Stdout,
 		"gpg",
 		"--homedir", homeDir,
 		"--batch", "--yes",
@@ -1278,7 +1278,7 @@ func (o *Ostree) GpgSignFile(file string) error {
 	err = o.runner(
 		nil,
 		os.Stdout,
-		os.Stderr,
+		os.Stdout,
 		"gpg",
 		"--homedir", homeDir,
 		"--batch", "--yes",
