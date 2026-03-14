@@ -92,6 +92,7 @@ func (m *MockOstree) BootCommit(string) (string, error) {
 	}
 	return "abc123commit", nil
 }
+func (m *MockOstree) Commit(_ CommitOptions) error   { return nil }
 func (m *MockOstree) InitRepo() error                { return nil }
 func (m *MockOstree) ListRemotes() ([]string, error) { return nil, nil }
 func (m *MockOstree) ImportGpgKey(string) error      { return nil }
