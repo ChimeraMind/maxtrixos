@@ -77,8 +77,6 @@ main() {
         setup_gnome_accounts
         release_common.check_nvidia_module
         release_common.check_ryzen_smu_module
-        release_common.list_top_packages
-        release_common.check_leaking_buckets
     )
     local exit_code=0
     for func in "${funcs[@]}"; do

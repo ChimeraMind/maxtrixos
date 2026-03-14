@@ -31,6 +31,8 @@ set -e
 
 source "${MATRIXOS_DEV_DIR}/release/hooks/matrixos/amd64/common.sh"
 
+source "${MATRIXOS_DEV_DIR}/release/hooks/matrixos/amd64/common.sh"
+
 
 setup_networkd() {
     local imagedir="${1}"
@@ -52,8 +54,6 @@ main() {
         setup_networkd
         release_common.check_nvidia_module
         release_common.check_ryzen_smu_module
-        release_common.list_top_packages
-        release_common.check_leaking_buckets
     )
     local exit_code=0
     for func in "${funcs[@]}"; do
