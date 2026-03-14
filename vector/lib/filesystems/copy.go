@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -153,9 +154,7 @@ func CopyFilePreserveXattrs(src, dst string) error {
 		if err != nil {
 			continue
 		}
-		if err := sysLsetxattr(dst, name, val, 0); err != nil {
-			return fmt.Errorf("failed to set xattr %q on %s: %w", name, dst, err)
-		}
+		sysLsetxattr(dst, name, val, 0)
 	}
 	return nil
 }
@@ -179,28 +178,12 @@ func CopyFileReflink(src, dst string) error {
 	return nil
 }
 
-// CheckHardlinkPreservationOptions specifies options for the
-// CheckHardlinkPreservation function.
-type CheckHardlinkPreservationOptions struct {
-	Stdout io.Writer // informational output (nil defaults to os.Stdout)
-	Stderr io.Writer // error/warning output (nil defaults to os.Stderr)
-}
-
 // CheckHardlinkPreservation verifies that hardlinks are preserved between source and destination.
-func CheckHardlinkPreservation(src, dst string, opts CheckHardlinkPreservationOptions) error {
-	stdout := opts.Stdout
-	if stdout == nil {
-		stdout = os.Stdout
-	}
-	stderr := opts.Stderr
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-
+func CheckHardlinkPreservation(src, dst string) error {
 	if src == "" || dst == "" {
 		return fmt.Errorf("missing parameter (src: %s, dst: %s)", src, dst)
 	}
-	fmt.Fprintf(stdout, "Checking hardlink preservation from %s to %s...\n", src, dst)
+	log.Printf("Checking hardlink preservation from %s to %s...", src, dst)
 
 	// 1. Walk the source directory to find files with multiple links.
 	// 2. Track Inodes to find the first pair of files sharing the same inode.
@@ -250,7 +233,7 @@ func CheckHardlinkPreservation(src, dst string, opts CheckHardlinkPreservationOp
 	}
 
 	if !foundPair {
-		fmt.Fprintln(stderr, "WARNING: no hardlinked file pairs found in source. Cannot verify.")
+		log.Println("WARNING: no hardlinked file pairs found in source. Cannot verify.")
 		return nil
 	}
 
@@ -289,7 +272,7 @@ func CheckHardlinkPreservation(src, dst string, opts CheckHardlinkPreservationOp
 		)
 	}
 
-	fmt.Fprintf(stdout, "SUCCESS: hardlinks preserved (Inode: %d).\n", stat1.Ino)
+	log.Printf("SUCCESS: hardlinks preserved (Inode: %d).", stat1.Ino)
 	return nil
 }
 
@@ -317,66 +300,4 @@ func CpReflinkCopyAllowed(src, dst string, useCpFlag bool) (bool, error) {
 		return false, err
 	}
 	return srcCap && dstCap, nil
-}
-
-// RsyncCopyOptions controls the behaviour of RsyncCopy.
-type RsyncCopyOptions struct {
-	Src      string    // source directory
-	Dst      string    // destination directory
-	Excludes []string  // paths to exclude
-	Verbose  bool      // enable verbose/progress output
-	Stdout   io.Writer // informational output (nil defaults to os.Stdout)
-	Stderr   io.Writer // error/warning output (nil defaults to os.Stderr)
-}
-
-// RsyncCopy copies src to dst using rsync with the provided options.
-func RsyncCopy(opts RsyncCopyOptions) error {
-	if opts.Src == "" || opts.Dst == "" {
-		return fmt.Errorf("missing parameters (src: %s, dst: %s)", opts.Src, opts.Dst)
-	}
-	if len(opts.Excludes) == 0 {
-		return fmt.Errorf("unable to get sync excluded paths")
-	}
-
-	stdout := opts.Stdout
-	if stdout == nil {
-		stdout = os.Stdout
-	}
-	stderr := opts.Stderr
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-
-	// Normalise trailing slashes for rsync semantics.
-	src := strings.TrimRight(opts.Src, "/") + "/"
-	dst := strings.TrimRight(opts.Dst, "/") + "/"
-
-	args := []string{
-		"--archive",
-		"--hard-links",
-		"--acls",
-		"--xattrs",
-		"--no-D",
-		"--numeric-ids",
-		"--delete-during",
-		"--one-file-system",
-	}
-
-	if opts.Verbose {
-		args = append(args, "--verbose", "--partial", "--progress")
-	}
-
-	for _, exc := range opts.Excludes {
-		args = append(args, "--exclude="+exc)
-	}
-	args = append(args, src, dst)
-
-	fmt.Fprintf(stdout, "Running: rsync %s\n", strings.Join(args, " "))
-	cmd := exec.Command("rsync", args...)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("rsync failed: %w", err)
-	}
-	return nil
 }
