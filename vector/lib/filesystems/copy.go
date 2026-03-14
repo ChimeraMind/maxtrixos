@@ -301,3 +301,62 @@ func CpReflinkCopyAllowed(src, dst string, useCpFlag bool) (bool, error) {
 	}
 	return srcCap && dstCap, nil
 }
+
+// RsyncCopyOptions controls the behaviour of RsyncCopy.
+type RsyncCopyOptions struct {
+	Src      string    // source directory
+	Dst      string    // destination directory
+	Excludes []string  // paths to exclude
+	Verbose  bool      // enable verbose/progress output
+	Stdout   io.Writer // informational output (nil defaults to os.Stdout)
+	Stderr   io.Writer // error/warning output (nil defaults to os.Stderr)
+}
+
+// RsyncCopy copies src to dst using rsync with the provided options.
+func RsyncCopy(opts RsyncCopyOptions) error {
+	if opts.Src == "" || opts.Dst == "" {
+		return fmt.Errorf("missing parameters (src: %s, dst: %s)", opts.Src, opts.Dst)
+	}
+	if len(opts.Excludes) == 0 {
+		return fmt.Errorf("unable to get sync excluded paths")
+	}
+
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+
+	// Normalise trailing slashes for rsync semantics.
+	src := strings.TrimRight(opts.Src, "/") + "/"
+	dst := strings.TrimRight(opts.Dst, "/") + "/"
+
+	args := []string{
+		"--archive",
+		"--no-D",
+		"--numeric-ids",
+		"--delete-during",
+		"--one-file-system",
+	}
+
+	if opts.Verbose {
+		args = append(args, "--verbose", "--partial", "--progress")
+	}
+
+	for _, exc := range opts.Excludes {
+		args = append(args, "--exclude="+exc)
+	}
+	args = append(args, src, dst)
+
+	fmt.Fprintf(stdout, "Running: rsync %s\n", strings.Join(args, " "))
+	cmd := exec.Command("rsync", args...)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("rsync failed: %w", err)
+	}
+	return nil
+}
