@@ -497,7 +497,7 @@ func (o *Ostree) GenerateStaticDelta() error {
 }
 
 func (o *Ostree) UpdateSummary() error {
-	o.Print("Updating ostree summary ...")
+	o.Print("Updating ostree summary ...\n")
 
 	repoDir, err := o.RepoDir()
 	if err != nil {
