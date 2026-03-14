@@ -548,8 +548,12 @@ func (c *IniConfig) Load() error {
 		return err
 	}
 
-	if err := c.loadArtifactsRootConfigs(fullPath); err != nil {
-		return err
+	privateRepoDependents := []string{
+		"Seeder.SecureBootPrivateKey",
+		"Seeder.SecureBootPublicKey",
+		"Seeder.SecureBootKekPublicKey",
+		"Ostree.GpgPrivateKey",
+		"Ostree.GpgPublicKey",
 	}
 
 	if err := c.loadPrivateRepoConfigs(); err != nil {
