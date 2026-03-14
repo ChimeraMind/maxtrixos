@@ -728,6 +728,148 @@ func TestBindMount(t *testing.T) {
 	if bm.Dst() != dst {
 		t.Errorf("Dst() = %q, want %q", bm.Dst(), dst)
 	}
+	if err := bm.Mount(); err != nil {
+		t.Errorf("Mount() failed: %v", err)
+	}
+}
+
+func TestBindMountReadOnly(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	t.Run("ReadOnlyMounts", func(t *testing.T) {
+		var mountCalls []uintptr
+		origMount := Mount
+		Mount = func(source, target, fstype string, flags uintptr, data string) error {
+			mountCalls = append(mountCalls, flags)
+			return nil
+		}
+		t.Cleanup(func() { Mount = origMount })
+
+		bm, err := NewBindMount(BindMountOptions{
+			Src:      src,
+			Dst:      dst,
+			ReadOnly: true,
+		})
+		if err != nil {
+			t.Fatalf("NewBindMount failed: %v", err)
+		}
+		if err := bm.Mount(); err != nil {
+			t.Fatalf("Mount() failed: %v", err)
+		}
+
+		// Expect 3 mount calls: MS_BIND, MS_SLAVE, MS_REMOUNT|MS_RDONLY|MS_BIND.
+		if len(mountCalls) != 3 {
+			t.Fatalf("expected 3 mount calls, got %d", len(mountCalls))
+		}
+		roFlags := uintptr(unix.MS_REMOUNT | unix.MS_RDONLY | unix.MS_BIND)
+		if mountCalls[2] != roFlags {
+			t.Errorf("third mount flags = %#x, want %#x", mountCalls[2], roFlags)
+		}
+	})
+
+	t.Run("ReadOnlyRemountFails", func(t *testing.T) {
+		callIdx := 0
+		origMount := Mount
+		Mount = func(source, target, fstype string, flags uintptr, data string) error {
+			callIdx++
+			if callIdx == 3 {
+				return fmt.Errorf("mock remount RO fail")
+			}
+			return nil
+		}
+		t.Cleanup(func() { Mount = origMount })
+
+		newSrc := t.TempDir()
+		newDst := t.TempDir()
+		bm, err := NewBindMount(BindMountOptions{
+			Src:      newSrc,
+			Dst:      newDst,
+			ReadOnly: true,
+		})
+		if err != nil {
+			t.Fatalf("NewBindMount failed: %v", err)
+		}
+		if err := bm.Mount(); err == nil {
+			t.Error("Mount() should fail when RO remount fails")
+		}
+	})
+
+	t.Run("WithoutReadOnly", func(t *testing.T) {
+		var mountCalls []uintptr
+		origMount := Mount
+		Mount = func(source, target, fstype string, flags uintptr, data string) error {
+			mountCalls = append(mountCalls, flags)
+			return nil
+		}
+		t.Cleanup(func() { Mount = origMount })
+
+		newSrc := t.TempDir()
+		newDst := t.TempDir()
+		bm, err := NewBindMount(BindMountOptions{
+			Src: newSrc,
+			Dst: newDst,
+		})
+		if err != nil {
+			t.Fatalf("NewBindMount failed: %v", err)
+		}
+		if err := bm.Mount(); err != nil {
+			t.Fatalf("Mount() failed: %v", err)
+		}
+
+		// Expect 2 mount calls: MS_BIND, MS_SLAVE (no RO remount).
+		if len(mountCalls) != 2 {
+			t.Fatalf("expected 2 mount calls, got %d", len(mountCalls))
+		}
+	})
+}
+
+func TestBindMountMkdirAll(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	src := t.TempDir()
+	dst := filepath.Join(t.TempDir(), "sub", "dir")
+
+	bm, err := NewBindMount(BindMountOptions{
+		Src:      src,
+		Dst:      dst,
+		MkdirAll: true,
+	})
+	if err != nil {
+		t.Fatalf("NewBindMount with MkdirAll failed: %v", err)
+	}
+	if !DirectoryExists(dst) {
+		t.Error("MkdirAll did not create destination directory")
+	}
+	if err := bm.Mount(); err != nil {
+		t.Errorf("Mount() failed: %v", err)
+	}
+}
+
+func TestBindMountDoubleMount(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	bm, err := NewBindMount(BindMountOptions{
+		Src: src,
+		Dst: dst,
+	})
+	if err != nil {
+		t.Fatalf("NewBindMount failed: %v", err)
+	}
+	if err := bm.Mount(); err != nil {
+		t.Fatalf("first Mount() failed: %v", err)
+	}
+	if err := bm.Mount(); err == nil {
+		t.Error("second Mount() should fail but didn't")
+	}
 }
 
 func TestCleanupLoopDevices(t *testing.T) {
@@ -987,6 +1129,9 @@ func TestBindUmount(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewBindMount failed: %v", err)
 		}
+		if err := bm.Mount(); err != nil {
+			t.Fatalf("Mount() failed: %v", err)
+		}
 		if err := bm.Unmount(); err != nil {
 			t.Errorf("Unmount failed: %v", err)
 		}
@@ -1058,6 +1203,9 @@ func TestBindMountDistdir(t *testing.T) {
 		if bm.Dst() != expected {
 			t.Errorf("Dst() = %q, want %q", bm.Dst(), expected)
 		}
+		if err := bm.Mount(); err != nil {
+			t.Errorf("Mount() failed: %v", err)
+		}
 	})
 }
 
@@ -1074,6 +1222,9 @@ func TestBindUmountDistdir(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatalf("BindMountDistdir failed: %v", err)
+		}
+		if err := bm.Mount(); err != nil {
+			t.Fatalf("Mount() failed: %v", err)
 		}
 		setupMockMountInfo(t, []*MountInfoEntry{
 			{Mountpoint: bm.Dst()},
@@ -1107,6 +1258,9 @@ func TestBindMountBinpkgs(t *testing.T) {
 		if bm.Dst() != expected {
 			t.Errorf("Dst() = %q, want %q", bm.Dst(), expected)
 		}
+		if err := bm.Mount(); err != nil {
+			t.Errorf("Mount() failed: %v", err)
+		}
 	})
 }
 
@@ -1123,6 +1277,9 @@ func TestBindUmountBinpkgs(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatalf("BindMountBinpkgs failed: %v", err)
+		}
+		if err := bm.Mount(); err != nil {
+			t.Fatalf("Mount() failed: %v", err)
 		}
 		setupMockMountInfo(t, []*MountInfoEntry{
 			{Mountpoint: bm.Dst()},

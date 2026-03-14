@@ -531,10 +531,10 @@ func (m *CommonRootfsMounts) Setup() error {
 		if err := Mount(d, dst, "", unix.MS_BIND, ""); err != nil {
 			return fmt.Errorf("failed to bind mount %s: %w", d, err)
 		}
-		m.mounted(dst)
 		if err := Mount("", dst, "", unix.MS_SLAVE, ""); err != nil {
 			return fmt.Errorf("failed to make slave %s: %w", dst, err)
 		}
+		m.mounted(dst)
 	}
 
 	chrootDevShm := filepath.Join(m.mountPoint, "dev", "shm")
@@ -598,16 +598,21 @@ type BindMountOptions struct {
 
 // BindMounter represents a bind mount that tracks its mounted state.
 type BindMounter struct {
-	src     string
-	dst     string
-	mounted bool
-	stdout  io.Writer
-	stderr  io.Writer
+	src      string
+	dst      string
+	readOnly bool
+	mounted  bool
+	stdout   io.Writer
+	stderr   io.Writer
 }
 
-// NewBindMount creates and performs a bind mount from src to dst.
+// NewBindMount validates the bind mount parameters and returns a
+// BindMounter ready to be mounted. Call Mount() to perform the actual
+// mount. This separation allows the caller to register Unmount()
+// cleanup before any mount happens, preventing mount-point leaks.
+//
 // When MkdirAll is true the destination path is created automatically.
-// When ReadOnly is true the mount is remounted read-only after binding.
+// When ReadOnly is true Mount() remounts the bind read-only after binding.
 func NewBindMount(opts BindMountOptions) (*BindMounter, error) {
 	if opts.Src == "" {
 		return nil, fmt.Errorf("missing src parameter")
@@ -643,29 +648,39 @@ func NewBindMount(opts BindMountOptions) (*BindMounter, error) {
 		stderr = os.Stderr
 	}
 
-	if err := Mount(opts.Src, opts.Dst, "", unix.MS_BIND, ""); err != nil {
-		return nil, fmt.Errorf("mount bind failed: %w", err)
-	}
-	if err := Mount("", opts.Dst, "", unix.MS_SLAVE, ""); err != nil {
-		return nil, fmt.Errorf("mount make-slave failed: %w", err)
+	return &BindMounter{
+		src:      opts.Src,
+		dst:      opts.Dst,
+		readOnly: opts.ReadOnly,
+		stdout:   stdout,
+		stderr:   stderr,
+	}, nil
+}
+
+// Mount performs the bind mount. It is safe to register Unmount()
+// as a cleanup before calling Mount() so that partial mounts are
+// always cleaned up.
+func (b *BindMounter) Mount() error {
+	if b.mounted {
+		return fmt.Errorf("%s is already mounted", b.dst)
 	}
 
-	if opts.ReadOnly {
+	if err := Mount(b.src, b.dst, "", unix.MS_BIND, ""); err != nil {
+		return fmt.Errorf("mount bind failed: %w", err)
+	}
+	if err := Mount("", b.dst, "", unix.MS_SLAVE, ""); err != nil {
+		return fmt.Errorf("mount make-slave failed: %w", err)
+	}
+
+	if b.readOnly {
 		flags := unix.MS_REMOUNT | unix.MS_RDONLY | unix.MS_BIND
-		if err := Mount("", opts.Dst, "", uintptr(flags), ""); err != nil {
-			// Best-effort unmount on failure.
-			_ = Unmount(opts.Dst, 0)
-			return nil, fmt.Errorf("remount read-only %s: %w", opts.Dst, err)
+		if err := Mount("", b.dst, "", uintptr(flags), ""); err != nil {
+			return fmt.Errorf("remount read-only %s: %w", b.dst, err)
 		}
 	}
 
-	return &BindMounter{
-		src:     opts.Src,
-		dst:     opts.Dst,
-		mounted: true,
-		stdout:  stdout,
-		stderr:  stderr,
-	}, nil
+	b.mounted = true
+	return nil
 }
 
 // Dst returns the destination mountpoint path.
@@ -704,7 +719,8 @@ type BindMountDistdirOptions struct {
 	Stderr       io.Writer
 }
 
-// BindMountDistdir binds the distfiles directory.
+// BindMountDistdir creates a bind mounter for the distfiles directory.
+// Call Mount() on the returned BindMounter to perform the actual mount.
 func BindMountDistdir(opts BindMountDistdirOptions) (*BindMounter, error) {
 	if opts.DistfilesDir == "" {
 		return nil, fmt.Errorf("missing parameter distfilesDir")
@@ -743,7 +759,8 @@ type BindMountBinpkgsOptions struct {
 	Stderr     io.Writer
 }
 
-// BindMountBinpkgs binds the binpkgs directory.
+// BindMountBinpkgs creates a bind mounter for the binpkgs directory.
+// Call Mount() on the returned BindMounter to perform the actual mount.
 func BindMountBinpkgs(opts BindMountBinpkgsOptions) (*BindMounter, error) {
 	if opts.BinpkgsDir == "" {
 		return nil, fmt.Errorf("missing parameter binpkgsDir")
