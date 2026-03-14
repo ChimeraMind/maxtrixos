@@ -45,8 +45,8 @@ func baseImageConfig() *config.MockConfig {
 	}
 }
 
-func newTestImage(cfg *config.MockConfig, ostree *ostree.MockOstree) *Image {
-	im, _ := NewImage(cfg, ostree, filesystems.DefaultMockFsenc(), nil)
+func newTestImage(cfg *config.MockConfig, ostree *cds.MockOstree) *Image {
+	im, _ := NewImage(cfg, ostree, nil)
 	return im
 }
 
@@ -66,7 +66,7 @@ func TestImageImplementsIImage(t *testing.T) {
 
 func TestNewImage(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		im, err := NewImage(baseImageConfig(), &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		im, err := NewImage(baseImageConfig(), &cds.MockOstree{}, nil)
 		if err != nil {
 			t.Fatalf("NewImage() error: %v", err)
 		}
@@ -76,23 +76,130 @@ func TestNewImage(t *testing.T) {
 	})
 
 	t.Run("NilConfig", func(t *testing.T) {
-		_, err := NewImage(nil, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		_, err := NewImage(nil, &cds.MockOstree{}, nil)
 		if err == nil {
 			t.Fatal("expected error for nil config")
 		}
 	})
 
 	t.Run("NilOstree", func(t *testing.T) {
-		_, err := NewImage(baseImageConfig(), nil, filesystems.DefaultMockFsenc(), nil)
+		_, err := NewImage(baseImageConfig(), nil, nil)
 		if err == nil {
 			t.Fatal("expected error for nil ostree")
 		}
 	})
 
-	t.Run("NilFsenc", func(t *testing.T) {
-		_, err := NewImage(baseImageConfig(), &ostree.MockOstree{}, nil, nil)
-		if err == nil {
-			t.Fatal("expected error for nil fsenc")
+// --- Config Accessor Tests ---
+
+func TestConfigAccessors(t *testing.T) {
+	cfg := baseImageConfig()
+	im := newTestImage(cfg, &cds.MockOstree{})
+
+	tests := []struct {
+		name     string
+		fn       func() (string, error)
+		expected string
+	}{
+		{"ImagesOutDir", im.ImagesOutDir, "/tmp/images"},
+		{"MountDir", im.MountDir, "/tmp/mnt"},
+		{"ImageSize", im.ImageSize, "32G"},
+		{"EfiPartitionSize", im.EfiPartitionSize, "200M"},
+		{"BootPartitionSize", im.BootPartitionSize, "1G"},
+		{"Compressor", im.Compressor, "xz -f -0 -T0"},
+		{"EspPartitionType", im.EspPartitionType, "C12A7328-F81F-11D2-BA4B-00A0C93EC93B"},
+		{"BootPartitionType", im.BootPartitionType, "BC13C2FF-59E6-4262-A352-B275FD6F7172"},
+		{"RootPartitionType", im.RootPartitionType, "4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709"},
+		{"OsName", im.OsName, "matrixos"},
+		{"BootRoot", im.BootRoot, "/boot"},
+		{"EfiRoot", im.EfiRoot, "/efi"},
+		{"RelativeEfiBootPath", im.RelativeEfiBootPath, "EFI/BOOT"},
+		{"EfiExecutable", im.EfiExecutable, "BOOTX64.EFI"},
+		{"EfiCertificateFileName", im.EfiCertificateFileName, "secureboot.pem"},
+		{"EfiCertificateFileNameDer", im.EfiCertificateFileNameDer, "secureboot.der"},
+		{"EfiCertificateFileNameKek", im.EfiCertificateFileNameKek, "secureboot-kek.pem"},
+		{"EfiCertificateFileNameKekDer", im.EfiCertificateFileNameKekDer, "secureboot-kek.der"},
+		{"ReadOnlyVdb", im.ReadOnlyVdb, "/usr/var-db-pkg"},
+		{"DevDir", im.DevDir, "/opt/matrixos"},
+		{"LockDir", im.LockDir, "/tmp/locks"},
+		{"LockWaitSeconds", im.LockWaitSeconds, "300"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, err := tt.fn()
+			if err != nil {
+				t.Fatalf("%s() error: %v", tt.name, err)
+			}
+			if val != tt.expected {
+				t.Errorf("%s() = %q, want %q", tt.name, val, tt.expected)
+			}
+		})
+	}
+}
+
+func TestConfigAccessorsEmptyValue(t *testing.T) {
+	accessors := []struct {
+		key  string
+		name string
+		fn   func(*Image) (string, error)
+	}{
+		{"Imager.ImagesDir", "ImagesOutDir", func(im *Image) (string, error) { return im.ImagesOutDir() }},
+		{"Imager.MountDir", "MountDir", func(im *Image) (string, error) { return im.MountDir() }},
+		{"Imager.ImageSize", "ImageSize", func(im *Image) (string, error) { return im.ImageSize() }},
+		{"matrixOS.OsName", "OsName", func(im *Image) (string, error) { return im.OsName() }},
+		{"Imager.LocksDir", "LockDir", func(im *Image) (string, error) { return im.LockDir() }},
+	}
+
+	for _, tt := range accessors {
+		t.Run(tt.name+"_Empty", func(t *testing.T) {
+			cfg := baseImageConfig()
+			cfg.Items[tt.key] = []string{""}
+			im := newTestImage(cfg, &cds.MockOstree{})
+			_, err := tt.fn(im)
+			if err == nil {
+				t.Errorf("%s() should return error for empty value", tt.name)
+			}
+		})
+	}
+}
+
+func TestConfigAccessorsConfigError(t *testing.T) {
+	ec := &config.ErrConfig{Err: errors.New("cfg error")}
+	im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+	im.runner = runner.NewMockRunner().Run
+
+	accessors := []struct {
+		name string
+		fn   func() (string, error)
+	}{
+		{"ImagesOutDir", im.ImagesOutDir},
+		{"MountDir", im.MountDir},
+		{"ImageSize", im.ImageSize},
+		{"OsName", im.OsName},
+		{"BootRoot", im.BootRoot},
+		{"EfiRoot", im.EfiRoot},
+		{"LockDir", im.LockDir},
+	}
+
+	for _, tt := range accessors {
+		t.Run(tt.name+"_ConfigError", func(t *testing.T) {
+			_, err := tt.fn()
+			if err == nil {
+				t.Errorf("%s() should return error from broken config", tt.name)
+			}
+		})
+	}
+}
+
+// --- BuildMetadataFile Tests ---
+
+func TestBuildMetadataFile(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		cfg := baseImageConfig()
+		im := newTestImage(cfg, &cds.MockOstree{})
+		result, err := im.BuildMetadataFile()
+		if err != nil {
+			t.Fatalf("BuildMetadataFile() error: %v", err)
 		}
 	})
 }
@@ -204,7 +311,7 @@ func TestSetImageMode(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{})
+		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
 		_, err := im.BuildMetadataFile()
 		if err == nil {
 			t.Error("should error from broken config")
@@ -271,7 +378,7 @@ func TestImagePath(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{})
+		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
 		_, err := im.ImagePath("someref")
 		if err == nil {
 			t.Error("should error from broken config")
@@ -359,7 +466,7 @@ func TestImagePathWithCompressorExtension(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{})
+		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
 		_, err := im.ImagePathWithCompressorExtension("/tmp/x.img")
 		if err == nil {
 			t.Error("should error when config fails")
@@ -547,7 +654,7 @@ func TestCompressImage(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{})
+		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
 		err := im.CompressImage("/tmp/test.img")
 		if err == nil {
 			t.Error("should error when config fails")
@@ -561,8 +668,9 @@ func TestClearPartitionTable(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		runner := runner.NewMockRunner()
 		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+		im.devicePath = "/dev/sda"
 
-		err := im.ClearPartitionTable("/dev/sda")
+		err := im.ClearPartitionTable()
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
@@ -579,16 +687,43 @@ func TestClearPartitionTable(t *testing.T) {
 
 	t.Run("EmptyDevice", func(t *testing.T) {
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
-		err := im.ClearPartitionTable("")
+		err := im.ClearPartitionTable()
 		if err == nil {
 			t.Error("should error for empty devicePath")
 		}
 	})
 
-	t.Run("CreateImageFileSuccess", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
-		im.imagePath = "/tmp/test.img"
-		err := im.SetImageMode(ModeCreateImageFile)
+	t.Run("FirstSgdiskFails", func(t *testing.T) {
+		runner := runner.NewMockRunnerFailOnCall(0, errors.New("sgdisk error"))
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+		im.devicePath = "/dev/sda"
+
+		err := im.ClearPartitionTable()
+		if err == nil {
+			t.Error("should propagate sgdisk error")
+		}
+	})
+}
+
+// --- DatedFsLabel Tests ---
+
+func TestDatedFsLabel(t *testing.T) {
+	im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+	label := im.DatedFsLabel()
+	expected := time.Now().Format("20060102")
+	if label != expected {
+		t.Errorf("DatedFsLabel() = %q, want %q", label, expected)
+	}
+}
+
+// --- PartitionDevices Tests ---
+
+func TestPartitionDevices(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		runner := runner.NewMockRunner()
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+
+		err := im.PartitionDevices("200M", "1G", "32G", "/dev/loop0")
 		if err != nil {
 			t.Fatalf("SetImageMode() error: %v", err)
 		}
@@ -597,10 +732,386 @@ func TestClearPartitionTable(t *testing.T) {
 		}
 	})
 
-	t.Run("CreateImageFileNoPath", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
-		// imagePath is empty.
-		err := im.SetImageMode(ModeCreateImageFile)
+	t.Run("EmptyParams", func(t *testing.T) {
+		runner := runner.NewMockRunner()
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+
+		if err := im.PartitionDevices("", "1G", "32G", "/dev/x"); err == nil {
+			t.Error("should error for empty efiSize")
+		}
+		if err := im.PartitionDevices("200M", "", "32G", "/dev/x"); err == nil {
+			t.Error("should error for empty bootSize")
+		}
+		if err := im.PartitionDevices("200M", "1G", "", "/dev/x"); err == nil {
+			t.Error("should error for empty imageSize")
+		}
+		if err := im.PartitionDevices("200M", "1G", "32G", ""); err == nil {
+			t.Error("should error for empty devicePath")
+		}
+	})
+
+	t.Run("SgdiskFails", func(t *testing.T) {
+		runner := runner.NewMockRunnerFailOnCall(0, errors.New("sgdisk failed"))
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+
+		err := im.PartitionDevices("200M", "1G", "32G", "/dev/loop0")
+		if err == nil {
+			t.Error("should propagate sgdisk error")
+		}
+	})
+
+	t.Run("ConfigError", func(t *testing.T) {
+		ec := &config.ErrConfig{Err: errors.New("cfg error")}
+		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		runner := runner.NewMockRunner()
+		im.runner = runner.Run
+
+		err := im.PartitionDevices("200M", "1G", "32G", "/dev/loop0")
+		if err == nil {
+			t.Error("should error from broken config")
+		}
+	})
+}
+
+// --- FormatEfifs Tests ---
+
+func TestFormatEfifs(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		runner := runner.NewMockRunner()
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+		im.efiDevice = "/dev/loop0p1"
+
+		err := im.FormatEfifs()
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(runner.Calls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(runner.Calls))
+		}
+		if runner.Calls[0].Name != "mkfs.vfat" {
+			t.Errorf("expected mkfs.vfat, got %q", runner.Calls[0].Name)
+		}
+	})
+
+	t.Run("Empty", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		if err := im.FormatEfifs(); err == nil {
+			t.Error("should error for empty device")
+		}
+	})
+}
+
+// --- MountEfifs Tests ---
+
+func TestMountEfifs(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		mountPoint := filepath.Join(tmpDir, "efi")
+		runner := runner.NewMockRunner()
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+		im.efiDevice = "/dev/loop0p1"
+
+		err := im.MountEfifs(mountPoint)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(runner.Calls) != 1 || runner.Calls[0].Name != "mount" {
+			t.Errorf("expected mount call, got %v", runner.Calls)
+		}
+	})
+
+	t.Run("EmptyParams", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		if err := im.MountEfifs("/tmp/efi"); err == nil {
+			t.Error("should error for empty device")
+		}
+		im.efiDevice = "/dev/x"
+		if err := im.MountEfifs(""); err == nil {
+			t.Error("should error for empty mount point")
+		}
+	})
+}
+
+// --- FormatBootfs Tests ---
+
+func TestFormatBootfs(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		runner := runner.NewMockRunner()
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+		im.bootDevice = "/dev/loop0p2"
+
+		err := im.FormatBootfs()
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if runner.Calls[0].Name != "mkfs.btrfs" {
+			t.Errorf("expected mkfs.btrfs, got %q", runner.Calls[0].Name)
+		}
+	})
+
+	t.Run("Empty", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		if err := im.FormatBootfs(); err == nil {
+			t.Error("should error for empty device")
+		}
+	})
+}
+
+// --- MountBootfs Tests ---
+
+func TestMountBootfs(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		mountPoint := filepath.Join(tmpDir, "boot")
+		runner := runner.NewMockRunner()
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+		im.bootDevice = "/dev/loop0p2"
+
+		err := im.MountBootfs(mountPoint)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(runner.Calls) != 1 || runner.Calls[0].Name != "mount" {
+			t.Errorf("expected mount call, got %v", runner.Calls)
+		}
+	})
+
+	t.Run("EmptyParams", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		if err := im.MountBootfs("/boot"); err == nil {
+			t.Error("should error for empty device")
+		}
+		im.bootDevice = "/dev/x"
+		if err := im.MountBootfs(""); err == nil {
+			t.Error("should error for empty mount point")
+		}
+	})
+}
+
+// --- FormatRootfs Tests ---
+
+func TestFormatRootfs(t *testing.T) {
+	runner := runner.NewMockRunner()
+	im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+	im.rootDevice = "/dev/loop0p3"
+
+	err := im.FormatRootfs()
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if runner.Calls[0].Name != "mkfs.btrfs" {
+		t.Errorf("expected mkfs.btrfs, got %q", runner.Calls[0].Name)
+	}
+}
+
+// --- RootfsKernelArgs Tests ---
+
+func TestRootfsKernelArgs(t *testing.T) {
+	im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+	args := im.RootfsKernelArgs()
+	if len(args) != 1 || args[0] != "rootflags=discard=async" {
+		t.Errorf("unexpected kernel args: %v", args)
+	}
+}
+
+// --- MountRootfs Tests ---
+
+func TestMountRootfs(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		runner := runner.NewMockRunner()
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+		im.rootDevice = "/dev/loop0p3"
+
+		err := im.MountRootfs("/tmp/rootfs")
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if runner.Calls[0].Name != "mount" {
+			t.Errorf("expected mount, got %q", runner.Calls[0].Name)
+		}
+		// Check btrfs options.
+		found := false
+		for _, arg := range runner.Calls[0].Args {
+			if strings.Contains(arg, "compress-force=zstd:6") {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected btrfs compression options in mount args")
+		}
+	})
+
+	t.Run("EmptyParams", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		if err := im.MountRootfs("/tmp/mnt"); err == nil {
+			t.Error("should error for empty rootDevice")
+		}
+		im.rootDevice = "/dev/x"
+		if err := im.MountRootfs(""); err == nil {
+			t.Error("should error for empty mountRootfs")
+		}
+	})
+}
+
+// --- GetKernelPath Tests ---
+
+func TestGetKernelPath(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		modulesDir := filepath.Join(tmpDir, "usr", "lib", "modules")
+		os.MkdirAll(filepath.Join(modulesDir, "6.1.0-matrixos"), 0755)
+		os.MkdirAll(filepath.Join(modulesDir, "6.2.0-matrixos"), 0755)
+
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		result, err := im.GetKernelPath(tmpDir)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		// Should return the first sorted (6.1.0).
+		if result != "6.1.0-matrixos" {
+			t.Errorf("got %q, want 6.1.0-matrixos", result)
+		}
+	})
+
+	t.Run("NoModulesDir", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		_, err := im.GetKernelPath(tmpDir)
+		if err == nil {
+			t.Error("should error when modules dir doesn't exist")
+		}
+	})
+
+	t.Run("EmptyModulesDir", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		os.MkdirAll(filepath.Join(tmpDir, "usr", "lib", "modules"), 0755)
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		_, err := im.GetKernelPath(tmpDir)
+		if err == nil {
+			t.Error("should error for empty modules dir")
+		}
+	})
+
+	t.Run("EmptyParam", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		_, err := im.GetKernelPath("")
+		if err == nil {
+			t.Error("should error for empty param")
+		}
+	})
+}
+
+// --- SetupPasswords Tests ---
+
+func TestSetupPasswords(t *testing.T) {
+	t.Run("EmptyParam", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		err := im.SetupPasswords("")
+		if err == nil {
+			t.Error("should error for empty param")
+		}
+	})
+}
+
+// --- ReleaseVersion Tests ---
+
+func TestReleaseVersion(t *testing.T) {
+	t.Run("FallbackToDate", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		result, err := im.ReleaseVersion(tmpDir)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		expected := time.Now().Format("20060102")
+		if result != expected {
+			t.Errorf("got %q, want %q", result, expected)
+		}
+	})
+
+	t.Run("FromMetadata", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		metadataDir := filepath.Join(tmpDir, "etc", "matrixos")
+		os.MkdirAll(metadataDir, 0755)
+		os.WriteFile(filepath.Join(metadataDir, "build.txt"),
+			[]byte("SEED_NAME=matrixos-gnome-20260215\nBUILD_DATE=2026-02-15\n"), 0644)
+
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		result, err := im.ReleaseVersion(tmpDir)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if result != "20260215" {
+			t.Errorf("got %q, want 20260215", result)
+		}
+	})
+
+	t.Run("EmptyRootfs", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		_, err := im.ReleaseVersion("")
+		if err == nil {
+			t.Error("should error for empty rootfs")
+		}
+	})
+
+	t.Run("ConfigError", func(t *testing.T) {
+		ec := &config.ErrConfig{Err: errors.New("cfg error")}
+		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		_, err := im.ReleaseVersion("/tmp/rootfs")
+		if err == nil {
+			t.Error("should error from broken config")
+		}
+	})
+}
+
+// --- Qcow2ImagePath Tests ---
+
+func TestQcow2ImagePath(t *testing.T) {
+	im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+
+	t.Run("Success", func(t *testing.T) {
+		result, err := im.Qcow2ImagePath("/tmp/images/test.img")
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if result != "/tmp/images/test.img.qcow2" {
+			t.Errorf("got %q, want /tmp/images/test.img.qcow2", result)
+		}
+	})
+
+	t.Run("Empty", func(t *testing.T) {
+		_, err := im.Qcow2ImagePath("")
+		if err == nil {
+			t.Error("should error for empty path")
+		}
+	})
+}
+
+// --- CreateQcow2Image Tests ---
+
+func TestCreateQcow2Image(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		runner := runner.NewMockRunner()
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+
+		err := im.CreateQcow2Image("/tmp/images/test.img")
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(runner.Calls) != 1 || runner.Calls[0].Name != "qemu-img" {
+			t.Errorf("expected qemu-img call, got %v", runner.Calls)
+		}
+		// Verify output path ends with .qcow2.
+		args := runner.Calls[0].Args
+		if args[len(args)-1] != "/tmp/images/test.img.qcow2" {
+			t.Errorf("last arg should be qcow2 path, got %q", args[len(args)-1])
+		}
+	})
+
+	t.Run("Empty", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		err := im.CreateQcow2Image("")
 		if err == nil {
 			t.Error("should error for empty imagePath")
 		}
@@ -647,22 +1158,10 @@ func TestNewImageWithOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("WithEncryption", func(t *testing.T) {
-		fsenc := &filesystems.MockFsenc{EncryptionEnabled_: true}
-		opts := &NewImageOptions{Mode: ModeCreateImageFile}
-		im, err := NewImage(baseImageConfig(), &ostree.MockOstree{}, fsenc, opts)
-		if err != nil {
-			t.Fatalf("NewImage() error: %v", err)
-		}
-		if !im.encrypted {
-			t.Error("expected encrypted = true")
-		}
-	})
-
-	t.Run("EncryptionCheckError", func(t *testing.T) {
-		fsenc := &filesystems.MockFsenc{EncryptionEnabledErr: errImageTest}
-		opts := &NewImageOptions{} // opts must be non-nil to trigger encryption check assignment
-		_, err := NewImage(baseImageConfig(), &ostree.MockOstree{}, fsenc, opts)
+	t.Run("ConfigError", func(t *testing.T) {
+		ec := &config.ErrConfig{Err: errors.New("cfg error")}
+		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
+		_, err := im.ImageLockDir()
 		if err == nil {
 			t.Error("expected error from EncryptionEnabled")
 		}
@@ -741,8 +1240,9 @@ func TestShowFinalFilesystemInfo(t *testing.T) {
 
 		runner := runner.NewMockRunner()
 		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
+		im.devicePath = "/dev/loop0"
 
-		err := im.ShowFinalFilesystemInfo("/dev/loop0", bootDir, efiDir)
+		err := im.ShowFinalFilesystemInfo(bootDir, efiDir)
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
@@ -755,14 +1255,120 @@ func TestShowFinalFilesystemInfo(t *testing.T) {
 
 	t.Run("EmptyParams", func(t *testing.T) {
 		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
-		if err := im.ShowFinalFilesystemInfo("", "/a", "/b"); err == nil {
-			t.Error("should error for empty blockDevice")
+		if err := im.ShowFinalFilesystemInfo("/a", "/b"); err == nil {
+			t.Error("should error for empty devicePath")
 		}
-		if err := im.ShowFinalFilesystemInfo("/dev/x", "", "/b"); err == nil {
+		im.devicePath = "/dev/x"
+		if err := im.ShowFinalFilesystemInfo("", "/b"); err == nil {
 			t.Error("should error for empty mountBootfs")
 		}
-		if err := im.ShowFinalFilesystemInfo("/dev/x", "/a", ""); err == nil {
+		if err := im.ShowFinalFilesystemInfo("/a", ""); err == nil {
 			t.Error("should error for empty mountEfifs")
+		}
+	})
+}
+
+// --- InstallBootloader Tests ---
+
+func TestInstallBootloader(t *testing.T) {
+	t.Run("EmptyOstreeDeployRootfs", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		im.devicePath = "/dev/sda"
+		_, err := im.InstallBootloader("", "/mnt/efi", "/mnt/boot", "/mnt/efi/EFI/BOOT")
+		if err == nil {
+			t.Fatal("expected error for empty ostreeDeployRootfs")
+		}
+		if !strings.Contains(err.Error(), "ostreeDeployRootfs") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("EmptyMountEfifs", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		im.devicePath = "/dev/sda"
+		_, err := im.InstallBootloader("/rootfs", "", "/mnt/boot", "/mnt/efi/EFI/BOOT")
+		if err == nil {
+			t.Fatal("expected error for empty mountEfifs")
+		}
+		if !strings.Contains(err.Error(), "mountEfifs") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("EmptyMountBootfs", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		im.devicePath = "/dev/sda"
+		_, err := im.InstallBootloader("/rootfs", "/mnt/efi", "", "/mnt/efi/EFI/BOOT")
+		if err == nil {
+			t.Fatal("expected error for empty mountBootfs")
+		}
+		if !strings.Contains(err.Error(), "mountBootfs") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("EmptyDevicePath", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		_, err := im.InstallBootloader("/rootfs", "/mnt/efi", "/mnt/boot", "/mnt/efi/EFI/BOOT")
+		if err == nil {
+			t.Fatal("expected error for empty devicePath")
+		}
+		if !strings.Contains(err.Error(), "devicePath") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("EmptyEfibootDir", func(t *testing.T) {
+		im := newTestImage(baseImageConfig(), &cds.MockOstree{})
+		im.devicePath = "/dev/sda"
+		_, err := im.InstallBootloader("/rootfs", "/mnt/efi", "/mnt/boot", "")
+		if err == nil {
+			t.Fatal("expected error for empty efibootDir")
+		}
+		if !strings.Contains(err.Error(), "efibootDir") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("ConfigErrors", func(t *testing.T) {
+		// Missing EfiRoot config
+		cfg := baseImageConfig()
+		delete(cfg.Items, "Imager.EfiRoot")
+		im := newTestImage(cfg, &cds.MockOstree{})
+		im.devicePath = "/dev/sda"
+		_, err := im.InstallBootloader("/rootfs", "/mnt/efi", "/mnt/boot", "/efi/EFI/BOOT")
+		if err == nil {
+			t.Fatal("expected error for missing EfiRoot config")
+		}
+
+		// Missing BootRoot config
+		cfg2 := baseImageConfig()
+		delete(cfg2.Items, "Imager.BootRoot")
+		im2 := newTestImage(cfg2, &cds.MockOstree{})
+		im2.devicePath = "/dev/sda"
+		_, err = im2.InstallBootloader("/rootfs", "/mnt/efi", "/mnt/boot", "/efi/EFI/BOOT")
+		if err == nil {
+			t.Fatal("expected error for missing BootRoot config")
+		}
+
+		// Missing OsName config
+		cfg3 := baseImageConfig()
+		delete(cfg3.Items, "matrixOS.OsName")
+		im3 := newTestImage(cfg3, &cds.MockOstree{})
+		im3.devicePath = "/dev/sda"
+		_, err = im3.InstallBootloader("/rootfs", "/mnt/efi", "/mnt/boot", "/efi/EFI/BOOT")
+		if err == nil {
+			t.Fatal("expected error for missing OsName config")
+		}
+
+		// Missing EfiExecutable config
+		cfg4 := baseImageConfig()
+		delete(cfg4.Items, "Imager.EfiExecutable")
+		im4 := newTestImage(cfg4, &cds.MockOstree{})
+		im4.devicePath = "/dev/sda"
+		_, err = im4.InstallBootloader("/rootfs", "/mnt/efi", "/mnt/boot", "/efi/EFI/BOOT")
+		if err == nil {
+			t.Fatal("expected error for missing EfiExecutable config")
 		}
 	})
 }
@@ -819,7 +1425,7 @@ func TestPackageList(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{})
+		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
 		_, err := im.PackageList("/tmp/rootfs")
 		if err == nil {
 			t.Error("should error from broken config")
@@ -1067,7 +1673,7 @@ func TestInstallSecurebootCerts(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{})
+		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
 		err := im.InstallSecurebootCerts("/rootfs", "/efi", "/efiboot")
 		if err == nil {
 			t.Error("should error from broken config")
@@ -1188,7 +1794,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &cds.MockOstree{})
+		im, _ := NewImage(ec, &cds.MockOstree{}, nil)
 		err := im.ExecuteWithImageLock("test/ref", func() error { return nil })
 		if err == nil {
 			t.Error("should error from broken config")
