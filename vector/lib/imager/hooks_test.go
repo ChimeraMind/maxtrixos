@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"matrixos/vector/lib/config"
@@ -151,10 +152,13 @@ func TestSetupHooks(t *testing.T) {
 		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"})
 		im.SetRootfs("/tmp/rootfs")
 		im.ref = "matrixos/amd64/gnome"
-		// Should return nil when hooks dir doesn't exist.
+		// Should return error when hooks dir doesn't exist.
 		err := im.SetupHooks()
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		if err == nil {
+			t.Fatal("expected error when hooks dir does not exist")
+		}
+		if !strings.Contains(err.Error(), "does not exist") {
+			t.Errorf("unexpected error: %v", err)
 		}
 	})
 
@@ -168,8 +172,11 @@ func TestSetupHooks(t *testing.T) {
 		im.ref = "matrixos/amd64/gnome"
 
 		err := im.SetupHooks()
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		if err == nil {
+			t.Fatal("expected error when hook script does not exist")
+		}
+		if !strings.Contains(err.Error(), "does not exist") {
+			t.Errorf("unexpected error: %v", err)
 		}
 	})
 
