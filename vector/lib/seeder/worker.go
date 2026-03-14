@@ -321,15 +321,6 @@ func (s *Seeder) generatePrepperEnvVars(env []string, params *SeederParams, opts
 		return nil, err
 	}
 
-	useCpReflink, err := s.UseCpReflinkModeInsteadOfRsync()
-	if err != nil {
-		return nil, err
-	}
-	var useCpReflinkStr string
-	if useCpReflink {
-		useCpReflinkStr = "1"
-	}
-
 	metadataFile, err := s.BuildMetadataFile()
 	if err != nil {
 		return nil, err
@@ -371,7 +362,6 @@ func (s *Seeder) generatePrepperEnvVars(env []string, params *SeederParams, opts
 		"SEEDER_CHROOTS_DIR="+params.ChrootsDir,
 		"SEEDER_BUILD_METADATA_FILE="+metadataFile,
 		"PREFERRED_SEEDER_CHROOT_DIR="+params.PreferredChrootDir,
-		"USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC="+useCpReflinkStr,
 		"PREPPERS_PHASES_STATE_DIR="+preppersPhasesStateDir,
 		"SEEDER_GPG_KEYS_DIR="+gpgKeysDir,
 	)

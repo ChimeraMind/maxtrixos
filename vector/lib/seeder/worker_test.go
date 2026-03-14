@@ -812,40 +812,6 @@ func TestExecutePrepper_Resume(t *testing.T) {
 	}
 }
 
-func TestExecutePrepper_UseCpReflink(t *testing.T) {
-	tmp := t.TempDir()
-	outputFile := filepath.Join(tmp, "env-output.txt")
-	prepperScript := writePrepperScript(t, tmp, outputFile)
-
-	sd := newPrepperSeeder(
-		"/dev/dir",
-		"/downloads",
-		"https://example.com/stage3.tar.xz",
-	)
-	// Enable the reflink flag.
-	sd.cfg.(*config.MockConfig).Bools["Seeder.UseCpReflinkModeInsteadOfRsync"] = true
-
-	info := SeederInfo{PrepperExec: prepperScript}
-	params := &SeederParams{
-		ChrootName:         "bedrock",
-		ChrootsDir:         "/chroots",
-		PreferredChrootDir: "/chroots/bedrock",
-	}
-	opts := &PrepperOptions{
-		ChrootDir: "/chroots/bedrock",
-	}
-
-	if err := sd.ExecutePrepper(info, params, opts); err != nil {
-		t.Fatalf("ExecutePrepper: %v", err)
-	}
-
-	env := readEnvFile(t, outputFile)
-	if env["USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC"] != "1" {
-		t.Errorf("USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC: got %q, want %q",
-			env["USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC"], "1")
-	}
-}
-
 func TestExecutePrepper_ScriptFailure(t *testing.T) {
 	tmp := t.TempDir()
 
