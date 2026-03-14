@@ -2,6 +2,7 @@ package commands
 
 import (
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -166,7 +167,25 @@ func TestImageParseArgsNotRoot(t *testing.T) {
 	}
 }
 
+// requireImagerTools skips the test if the host does not have
+// the executables that VerifyImagerEnvironmentSetup checks for.
+func requireImagerTools(t *testing.T) {
+	t.Helper()
+	for _, tool := range []string{
+		"blockdev", "btrfs", "chroot", "cryptsetup", "efibootmgr",
+		"findmnt", "fstrim", "gpg", "grub-install", "losetup",
+		"mkfs.vfat", "mkfs.btrfs", "openssl", "ostree", "partprobe",
+		"qemu-img", "qemu-system-x86_64", "sgdisk", "unshare", "udevadm", "xz",
+	} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("skipping: required tool %q not found in PATH", tool)
+		}
+	}
+}
+
 func TestImageRunLuksValidationFail(t *testing.T) {
+	requireImagerTools(t)
+
 	origEuid := getEuid
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
@@ -333,42 +352,6 @@ func TestValidateDevicePathsNonExistentDevice(t *testing.T) {
 }
 
 // --- initializeOstree tests ---
-
-func TestInitializeOstreeLocal(t *testing.T) {
-	origEuid := getEuid
-	getEuid = func() int { return 0 }
-	defer func() { getEuid = origEuid }()
-
-	mock := &ostree.MockOstree{
-		LocalRefs_: []string{"ref1", "ref2"},
-	}
-	im := imager.DefaultMockImage()
-	fsenc := filesystems.DefaultMockFsenc()
-	cfg := defaultImageTestConfig()
-
-	cmd, err := newTestImageCommand(
-		mock, im, fsenc, cfg,
-		[]string{"--ref", "matrixos/x86_64/dev/test"},
-	)
-	if err != nil {
-		t.Fatalf("newTestImageCommand failed: %v", err)
-	}
-
-	output, err := runCaptureStdout(func() error {
-		return cmd.initializeLocalOstree()
-	})
-	if err != nil {
-		t.Fatalf("initializeLocalOstree failed: %v", err)
-	}
-
-	plain := stripAnsi(output)
-	if !strings.Contains(plain, "Local refs:") {
-		t.Errorf("Expected 'Local refs:' in output, got:\n%s", plain)
-	}
-	if !strings.Contains(plain, "ref1") || !strings.Contains(plain, "ref2") {
-		t.Errorf("Expected refs in output, got:\n%s", plain)
-	}
-}
 
 func TestInitializeOstreeRemote(t *testing.T) {
 	origEuid := getEuid

@@ -3,8 +3,8 @@ package commands
 import (
 	"bufio"
 	"fmt"
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
+	"matrixos/vector/lib/ostree"
 	"strings"
 )
 
@@ -84,7 +84,24 @@ func (c *BaseCommand) shortRef(ref string) string {
 		}
 	}
 	return remote + strings.Join(srefs, "/")
+}
 
+// splitCSV splits a comma-separated string into a trimmed slice of strings.
+// Empty input returns nil.
+func SplitCSV(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }
 
 // initBaseConfig initializes the base configuration for the command.

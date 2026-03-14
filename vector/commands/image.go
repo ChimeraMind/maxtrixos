@@ -163,6 +163,11 @@ func (c *ImageCommand) runImage() error {
 	c.ot.SetStderr(stderrWriter)
 	c.ot.SetVerbose(false) // ostree's own verbose flag, separate from ours.
 
+	// Verify imager environment.
+	if err := c.qa.VerifyImagerEnvironmentSetup("/"); err != nil {
+		return fmt.Errorf("environment verification failed: %w", err)
+	}
+
 	fsenc, err := filesystems.NewFsenc(
 		c.cfg,
 		func(mapperName string) {
@@ -204,39 +209,23 @@ func (c *ImageCommand) runImage() error {
 		return err
 	}
 
-	remote, err := c.ot.Remote()
+	// Handle refs that contain the remote prefix (e.g. "origin:matrixos/...").
+	rr, err := c.resolveRefRemote(ref, c.im.PrintWarning)
 	if err != nil {
 		return err
 	}
-
-	// Check if ref contains remote.
-	if remoted := ostree.ExtractRemoteFromRef(ref); remoted != "" {
-		remote = remoted
-		ref = ostree.CleanRemoteFromRef(ref)
-		c.im.PrintWarning(
-			"WARNING: %s contains the remote reference, using remote=%s and ref=%s\n",
-			c.ref, remote, ref)
-
-		overlay := map[string][]string{
-			"Ostree.Remote": {remote},
-		}
-		// Need to save the remote back into the ostree config.
-		if err := c.cfg.AddOverlay(overlay); err != nil {
-			return fmt.Errorf("failed to add config overlay: %w", err)
-		}
-	}
-
-	// Verify imager environment.
-	if err := c.qa.VerifyImagerEnvironmentSetup("/"); err != nil {
-		return fmt.Errorf("environment verification failed: %w", err)
-	}
+	ref = rr.Ref
 
 	c.im.SetRef(ref)
 	c.ot.SetRef(ref)
 
+	if err := c.initGpg(); err != nil {
+		return err
+	}
+
 	// Initialize ostree.
 	if c.localOstree {
-		if err := c.initializeLocalOstree(); err != nil {
+		if err := c.showLocalRefs(); err != nil {
 			return err
 		}
 	} else {
@@ -307,42 +296,10 @@ func (c *ImageCommand) validateDevicePaths() (*imager.BuildOptions, error) {
 	return opts, nil
 }
 
-// initializeLocalOstree sets up the ostree environment for local deployment (no pull).
-func (c *ImageCommand) initializeLocalOstree() error {
-	refs, err := c.ot.LocalRefs()
-	if err != nil {
-		return fmt.Errorf("failed to list local refs: %w", err)
-	}
-	c.im.Print("Local refs:")
-	for _, r := range refs {
-		c.im.Print("  %s\n", r)
-	}
-
-	if err := c.ot.MaybeInitializeRemote(); err != nil {
-		return fmt.Errorf("failed to initialize remote: %w", err)
-	}
-	if err := c.ot.MaybeInitializeGpg(); err != nil {
-		return fmt.Errorf("failed to initialize GPG: %w", err)
-	}
-	return nil
-}
-
 // initializeRemoteOstree sets up the ostree remote and pulls the specified ref.
 func (c *ImageCommand) initializeRemoteOstree() error {
-	if err := c.ot.MaybeInitializeRemote(); err != nil {
-		return fmt.Errorf("failed to initialize remote: %w", err)
-	}
-	if err := c.ot.MaybeInitializeGpg(); err != nil {
-		return fmt.Errorf("failed to initialize GPG: %w", err)
-	}
-
-	refs, err := c.ot.RemoteRefs()
-	if err != nil {
-		return fmt.Errorf("failed to list remote refs: %w", err)
-	}
-	c.im.Print("Remote refs:")
-	for _, r := range refs {
-		c.im.Print("  %s\n", r)
+	if err := c.showRemoteRefs(); err != nil {
+		return err
 	}
 
 	remote, err := c.ot.Remote()
@@ -354,6 +311,32 @@ func (c *ImageCommand) initializeRemoteOstree() error {
 		c.cBold, c.iconDownload, remote, c.ot.Ref(), c.cReset)
 	if err := c.ot.Pull(); err != nil {
 		return fmt.Errorf("ostree pull failed: %w", err)
+	}
+	return nil
+}
+
+// showLocalRefs prints the local ostree refs to the provided printf function.
+func (c *ImageCommand) showLocalRefs() error {
+	refs, err := c.ot.LocalRefs()
+	if err != nil {
+		return fmt.Errorf("failed to list local refs: %w", err)
+	}
+	c.im.Print("Local refs:\n")
+	for _, r := range refs {
+		c.im.Print("  %s\n", r)
+	}
+	return nil
+}
+
+// showRemoteRefs prints the remote ostree refs to the provided printf function.
+func (c *ImageCommand) showRemoteRefs() error {
+	refs, err := c.ot.RemoteRefs()
+	if err != nil {
+		return fmt.Errorf("failed to list remote refs: %w", err)
+	}
+	c.im.Print("Remote refs:\n")
+	for _, r := range refs {
+		c.im.Print("  %s\n", r)
 	}
 	return nil
 }

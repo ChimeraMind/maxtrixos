@@ -42,14 +42,16 @@ type ImagesCommand struct {
 }
 
 // NewImagesCommand creates a new ImagesCommand
-func NewImagesCommand() *ImagesCommand {
+func NewImagesCommand() ICommand {
 	return &ImagesCommand{}
 }
 
+// Name returns the name of the command
 func (c *ImagesCommand) Name() string {
 	return "images"
 }
 
+// Init initializes the command
 func (c *ImagesCommand) Init(args []string) error {
 	if err := c.parseArgs(args); err != nil {
 		return err
@@ -121,8 +123,9 @@ func (c *ImagesCommand) parseArgs(args []string) error {
 	return nil
 }
 
-// Run uses the SignalGuard to ensure cleanup functions are executed even
-// when the process is terminated by SIGINT or SIGTERM.
+// Run runs the command.  The SignalGuard ensures that all registered
+// cleanup functions are executed even when the process is terminated by
+// SIGINT or SIGTERM.
 func (c *ImagesCommand) Run() error {
 	return c.RunWithGuard(c.runImages)
 }
@@ -130,17 +133,20 @@ func (c *ImagesCommand) Run() error {
 // detectReleases detects available OS releases using either local or
 // remote listing, then applies the skip/only filters.
 func (c *ImagesCommand) detectReleases(w io.Writer) ([]string, error) {
-	det, err := releaser.NewReleaseDetector(c.ot)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize release detector: %w", err)
+	rOpts := &releaser.NewMinimalReleaserForImagesOptions{
+		Verbose: c.verbose,
 	}
-	det.SetStderr(w)
+	rel, err := releaser.NewMinimalReleaser(c.cfg, c.ot, rOpts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize releaser: %w", err)
+	}
+	defer rel.Cleanup()
 
 	var refs []string
 	if c.localOstree {
-		refs, err = det.DetectLocalReleases(c.skipFilter(), c.onlyFilter())
+		refs, err = rel.DetectLocalReleases(c.skipFilter(), c.onlyFilter())
 	} else {
-		refs, err = det.DetectRemoteReleases(c.skipFilter(), c.onlyFilter())
+		refs, err = rel.DetectRemoteReleases(c.skipFilter(), c.onlyFilter())
 	}
 
 	return refs, err
@@ -149,14 +155,32 @@ func (c *ImagesCommand) detectReleases(w io.Writer) ([]string, error) {
 // skipFilter returns a RefFilterFunc that skips branches present in the
 // --skip-releases list.  Returns nil when no skip list is configured.
 func (c *ImagesCommand) skipFilter() releaser.RefFilterFunc {
-	return makeSkipFilter(c.skipReleases)
+	if len(c.skipReleases) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(c.skipReleases))
+	for _, s := range c.skipReleases {
+		set[s] = true
+	}
+	return func(ref string) bool {
+		return set[ref]
+	}
 }
 
 // onlyFilter returns a RefFilterFunc that accepts only branches present
 // in the --only-releases list.  Returns nil when no only-list is
 // configured (i.e. all branches pass).
 func (c *ImagesCommand) onlyFilter() releaser.RefFilterFunc {
-	return makeOnlyFilter(c.onlyReleases)
+	if len(c.onlyReleases) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(c.onlyReleases))
+	for _, s := range c.onlyReleases {
+		set[s] = true
+	}
+	return func(ref string) bool {
+		return set[ref]
+	}
 }
 
 // runImages implements the main images building logic, mirroring
@@ -193,7 +217,6 @@ func (c *ImagesCommand) runImages() error {
 	// 3) on images only build server, where ostree repo is pulled from a remote.
 	// Case 2 and 3 are fine, we use the remote prefix and happy days.
 	// For case 1, we detect this from the absence of the remote: prefix and set remote="local".
-	var released []string
 	for _, ref := range refs {
 		// Skip full-suffixed branches unless explicitly included.
 		c.ot.SetRef(ref)
@@ -211,13 +234,6 @@ func (c *ImagesCommand) runImages() error {
 		if err := c.imageWorker(ref); err != nil {
 			return fmt.Errorf("image build failed for ref %s: %w", ref, err)
 		}
-		released = append(released, ref)
-	}
-
-	fmt.Fprintf(stdoutWriter, "Successfully built images for %d releases:\n",
-		len(released))
-	for _, r := range released {
-		fmt.Fprintf(stdoutWriter, "  %s\n", r)
 	}
 
 	return nil
@@ -277,6 +293,21 @@ func (c *ImagesCommand) imageWorker(ref string) error {
 		return err
 	}
 
+	if err := c.initGpg(); err != nil {
+		return err
+	}
+
+	// Initialize ostree for this ref.
+	if c.localOstree {
+		if err := c.showLocalRefs(im); err != nil {
+			return err
+		}
+	} else {
+		if err := c.initializeRemoteOstree(im); err != nil {
+			return err
+		}
+	}
+
 	buildOpts := &imager.BuildOptions{}
 
 	// Execute the build under an exclusive image lock.
@@ -288,22 +319,6 @@ func (c *ImagesCommand) imageWorker(ref string) error {
 			stderrWriter.Flush()
 		})
 		defer c.RunCleanups()
-
-		if err := c.initGpg(); err != nil {
-			return err
-		}
-
-		// Initialize ostree for this ref.
-		if c.localOstree {
-			if err := c.showLocalRefs(im); err != nil {
-				return err
-			}
-		} else {
-			if err := c.initializeRemoteOstree(im); err != nil {
-				return err
-			}
-		}
-
 		return im.Build(buildOpts)
 	})
 }
