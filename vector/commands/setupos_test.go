@@ -932,3 +932,228 @@ func TestSetupOSFullRunHappyPath(t *testing.T) {
 		t.Errorf("expected completion message, got: %s", stdout.String())
 	}
 }
+
+func TestSetupOSFullRunAllFlags(t *testing.T) {
+	// Track every external command in order.
+	var cmdLog []string
+	writtenFiles := make(map[string][]byte)
+	var appendedFiles []string
+
+	runner := testSetupOSRunner()
+	runner.execCommand = func(name string, args ...string) cmdRunner {
+		entry := name + " " + strings.Join(args, " ")
+		cmdLog = append(cmdLog, entry)
+
+		switch name {
+		case "id":
+			return &mockCmdRunner{outputVal: []byte("1000")}
+		case "getent":
+			// group exists for the default user
+			return &mockCmdRunner{outputVal: []byte("matrix:x:1000:")}
+		case "lsblk":
+			if len(args) >= 2 && args[1] == "MOUNTPOINT" {
+				return &mockCmdRunner{outputVal: []byte("")}
+			}
+			return &mockCmdRunner{}
+		default:
+			return &mockCmdRunner{}
+		}
+	}
+	runner.readFile = func(path string) ([]byte, error) {
+		switch path {
+		case "/proc/cmdline":
+			return []byte("root=UUID=abc rd.luks.uuid=my-luks-uuid rw ostree=/ostree/boot"), nil
+		case "/etc/locale.conf":
+			return []byte("LANG=it_IT.UTF-8\n"), nil
+		case "/etc/vconsole.conf":
+			return []byte("KEYMAP=it\n"), nil
+		case "/boot/loader/entries/matrixos-boot.conf":
+			return []byte("title matrixOS\noptions root=UUID=abc rw\n"), nil
+		}
+		return nil, fmt.Errorf("not mocked: %s", path)
+	}
+	runner.writeFile = func(path string, data []byte, perm os.FileMode) error {
+		writtenFiles[path] = data
+		return nil
+	}
+	runner.appendFile = func(path string, data []byte) error {
+		appendedFiles = append(appendedFiles, path)
+		return nil
+	}
+	runner.stat = func(path string) (os.FileInfo, error) {
+		if path == "/var/lib/AccountsService/users" {
+			return fakeFileInfo{}, nil
+		}
+		return nil, fmt.Errorf("not found")
+	}
+	runner.fileExists = func(path string) bool {
+		switch path {
+		case "/dev/disk/by-uuid/my-luks-uuid":
+			return true
+		case "/usr/share/pixmaps/faces/tree.jpg":
+			return true
+		case "/efi/efi/BOOT/grub.cfg":
+			return true
+		}
+		if strings.HasSuffix(path, "/EFI/Microsoft/Boot/bootmgfw.efi") {
+			return true
+		}
+		return false
+	}
+	runner.listBlockDevices = func(fields string) ([]string, error) {
+		return []string{
+			"/dev/sdb1 C12A7328-F81F-11D2-BA4B-00A0C93EC93B",
+		}, nil
+	}
+	runner.getBlkidValue = func(device, tag string) (string, error) {
+		return "WIN-UUID-1234", nil
+	}
+	runner.glob = func(pattern string) ([]string, error) {
+		return []string{"/boot/loader/entries/matrixos-boot.conf"}, nil
+	}
+
+	cfg := setupOSTestConfig()
+	cmd := &SetupOSCommand{}
+	cmd.cfg = cfg
+	cmd.StartUI()
+	cmd.run = runner
+	cmd.prompt = NewPrompter(runner.stdin, runner.stdout, runner.stderr, &cmd.UI)
+
+	// Parse with all flags to avoid any interactive prompts.
+	err := cmd.parseArgs([]string{
+		"--skip-encryption",
+		"--skip-passwords",
+		"--username", "alice",
+		"--locale", "it_IT.UTF-8",
+		"--keymap", "it",
+		"--timezone", "Europe/Rome",
+		"--hostname", "testbox",
+	})
+	if err != nil {
+		t.Fatalf("parseArgs failed: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	cmd.run.stdout = &stdout
+
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("Run() unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+
+	// Verify final message.
+	if !strings.Contains(output, "Setup complete") {
+		t.Errorf("expected completion message, got: %s", output)
+	}
+
+	// Verify skip messages for encryption and passwords.
+	if !strings.Contains(output, "Skipping disk encryption") {
+		t.Errorf("expected skip-encryption message, got: %s", output)
+	}
+	if !strings.Contains(output, "Skipping steps 2-4") {
+		t.Errorf("expected skip-passwords message, got: %s", output)
+	}
+	if !strings.Contains(output, "username=alice") {
+		t.Errorf("expected username=alice in skip message, got: %s", output)
+	}
+
+	// Verify systemd-firstboot was called with all flags and no --prompt.
+	var firstbootEntry string
+	for _, entry := range cmdLog {
+		if strings.HasPrefix(entry, "systemd-firstboot ") {
+			firstbootEntry = entry
+			break
+		}
+	}
+	if firstbootEntry == "" {
+		t.Fatal("expected systemd-firstboot to be called")
+	}
+	for _, want := range []string{
+		"--reset",
+		"--locale=it_IT.UTF-8",
+		"--keymap=it",
+		"--timezone=Europe/Rome",
+		"--hostname=testbox",
+	} {
+		if !strings.Contains(firstbootEntry, want) {
+			t.Errorf("expected %q in systemd-firstboot args, got: %s", want, firstbootEntry)
+		}
+	}
+	if strings.Contains(firstbootEntry, "--prompt") {
+		t.Errorf("did not expect --prompt when all flags set, got: %s", firstbootEntry)
+	}
+
+	// Verify env-update was called (best-effort locale fix).
+	found := false
+	for _, entry := range cmdLog {
+		if entry == "env-update " {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected env-update to be called, cmdLog: %v", cmdLog)
+	}
+
+	// Verify AccountsService config was written for alice.
+	asCfg, ok := writtenFiles["/var/lib/AccountsService/users/alice"]
+	if !ok {
+		t.Error("expected AccountsService config to be written for alice")
+	} else {
+		if !strings.Contains(string(asCfg), "Languages=it_IT.UTF-8") {
+			t.Errorf("AccountsService config missing language, got: %s", string(asCfg))
+		}
+	}
+
+	// Verify keymap was added to BLS entry (ostree path).
+	blsData, ok := writtenFiles["/boot/loader/entries/matrixos-boot.conf"]
+	if !ok {
+		t.Error("expected BLS config to be written with keymap")
+	} else {
+		if !strings.Contains(string(blsData), "vconsole.keymap=it") {
+			t.Errorf("expected vconsole.keymap=it in BLS config, got: %s", string(blsData))
+		}
+	}
+
+	// Verify Windows detection found the partition and appended grub entry.
+	if len(appendedFiles) == 0 {
+		t.Error("expected grub.cfg to be appended with Windows entry")
+	} else if appendedFiles[0] != "/efi/efi/BOOT/grub.cfg" {
+		t.Errorf("expected append to grub.cfg, got: %s", appendedFiles[0])
+	}
+
+	// Verify efibootmgr was called.
+	var efiEntry string
+	for _, entry := range cmdLog {
+		if strings.HasPrefix(entry, "efibootmgr ") {
+			efiEntry = entry
+			break
+		}
+	}
+	if efiEntry == "" {
+		t.Fatal("expected efibootmgr to be called")
+	}
+	if !strings.Contains(efiEntry, "--label") {
+		t.Errorf("expected --label in efibootmgr args, got: %s", efiEntry)
+	}
+	if !strings.Contains(efiEntry, "matrixOS on EFI") {
+		t.Errorf("expected 'matrixOS on EFI' in efibootmgr args, got: %s", efiEntry)
+	}
+
+	// Verify step ordering: systemd-firstboot before efibootmgr.
+	firstbootIdx := -1
+	efiIdx := -1
+	for i, entry := range cmdLog {
+		if strings.HasPrefix(entry, "systemd-firstboot ") && firstbootIdx == -1 {
+			firstbootIdx = i
+		}
+		if strings.HasPrefix(entry, "efibootmgr ") && efiIdx == -1 {
+			efiIdx = i
+		}
+	}
+	if firstbootIdx >= efiIdx {
+		t.Errorf("expected systemd-firstboot (idx=%d) before efibootmgr (idx=%d)", firstbootIdx, efiIdx)
+	}
+}
