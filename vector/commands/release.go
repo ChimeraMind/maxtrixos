@@ -3,6 +3,7 @@ package commands
 import (
 	"flag"
 	"fmt"
+	"os"
 
 	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/releaser"
@@ -146,6 +147,11 @@ func (c *ReleaseCommand) runRelease() error {
 	fullBranch, err := c.ot.BranchToFull()
 	if err != nil {
 		return fmt.Errorf("failed to compute full branch name: %w", err)
+	}
+
+	// Create c.imageDir if it doesn't exist and check it's a valid directory.
+	if err := os.MkdirAll(c.imageDir, 0755); err != nil {
+		return fmt.Errorf("failed to create imageDir: %w", err)
 	}
 
 	// Create the releaser instance.
