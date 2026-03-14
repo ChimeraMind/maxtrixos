@@ -10,8 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"matrixos/vector/lib/ostree"
-	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/cds"
 	"matrixos/vector/lib/runner"
 )
 
@@ -24,12 +23,10 @@ func TestIntegrationCreateAndPartitionImage(t *testing.T) {
 	imagePath := filepath.Join(tmpDir, "test.img")
 
 	mockRunner := runner.NewMockRunner()
-	im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
-	im.imagePath = imagePath
-	im.mode = ModeCreateImageFile
+	im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
 	// Step 1: Create a real sparse image file.
-	if err := im.CreateImage("64M"); err != nil {
+	if err := im.CreateImage(imagePath, "64M"); err != nil {
 		t.Fatalf("CreateImage failed: %v", err)
 	}
 
@@ -70,7 +67,7 @@ func TestIntegrationCreateAndPartitionImage(t *testing.T) {
 
 	// Step 3: Partition the device.
 	mockRunner.Calls = nil // reset
-	if err := im.PartitionDevices("200M", "1G", "64M"); err != nil {
+	if err := im.PartitionDevices("200M", "1G", "64M", imagePath); err != nil {
 		t.Fatalf("PartitionDevices failed: %v", err)
 	}
 
@@ -118,12 +115,10 @@ func TestIntegrationFormatAndMountWorkflow(t *testing.T) {
 	imagePath := filepath.Join(tmpDir, "test.img")
 
 	mockRunner := runner.NewMockRunner()
-	im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
-	im.imagePath = imagePath
-	im.mode = ModeCreateImageFile
+	im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
 	// Create a real sparse image.
-	if err := im.CreateImage("64M"); err != nil {
+	if err := im.CreateImage(imagePath, "64M"); err != nil {
 		t.Fatalf("CreateImage failed: %v", err)
 	}
 
@@ -202,10 +197,6 @@ func TestIntegrationFormatAndMountWorkflow(t *testing.T) {
 	if _, err := os.Stat(mountEfi); os.IsNotExist(err) {
 		t.Errorf("MountEfifs: mount point directory was not created: %s", mountEfi)
 	}
-	// Verify mount point was stored.
-	if im.EfifsMount() != mountEfi {
-		t.Errorf("MountEfifs: expected efifsMount %q, got %q", mountEfi, im.EfifsMount())
-	}
 
 	// --- Mount Boot ---
 	mockRunner.Calls = nil
@@ -218,10 +209,6 @@ func TestIntegrationFormatAndMountWorkflow(t *testing.T) {
 	}
 	if mockRunner.Calls[0].Name != "mount" {
 		t.Errorf("MountBootfs: expected mount, got %q", mockRunner.Calls[0].Name)
-	}
-	// Verify mount point was stored.
-	if im.BootfsMount() != mountBoot {
-		t.Errorf("MountBootfs: expected bootfsMount %q, got %q", mountBoot, im.BootfsMount())
 	}
 
 	// --- Mount Root ---
@@ -250,10 +237,6 @@ func TestIntegrationFormatAndMountWorkflow(t *testing.T) {
 	if !foundCompress {
 		t.Errorf("MountRootfs: expected compress-force option, got %v", mockRunner.Calls[0].Args)
 	}
-	// Verify mount point was stored.
-	if im.RootfsMount() != mountRoot {
-		t.Errorf("MountRootfs: expected rootfsMount %q, got %q", mountRoot, im.RootfsMount())
-	}
 }
 
 // TestIntegrationPartitionTypeGUIDs verifies that partition type GUIDs from config
@@ -261,10 +244,10 @@ func TestIntegrationFormatAndMountWorkflow(t *testing.T) {
 func TestIntegrationPartitionTypeGUIDs(t *testing.T) {
 	mockRunner := runner.NewMockRunner()
 	cfg := baseImageConfig()
-	im := newTestImageWithRunner(cfg, &ostree.MockOstree{}, mockRunner)
+	im := newTestImageWithRunner(cfg, &cds.MockOstree{}, mockRunner)
 
 	im.devicePath = "/dev/fake"
-	if err := im.PartitionDevices("200M", "1G", "32G"); err != nil {
+	if err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake"); err != nil {
 		t.Fatalf("PartitionDevices failed: %v", err)
 	}
 
@@ -295,12 +278,10 @@ func TestIntegrationClearPartitionAndRepartition(t *testing.T) {
 	imagePath := filepath.Join(tmpDir, "device.img")
 
 	mockRunner := runner.NewMockRunner()
-	im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
+	im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
 	// Create a real sparse image.
-	im.imagePath = imagePath
-	im.mode = ModeCreateImageFile
-	if err := im.CreateImage("128M"); err != nil {
+	if err := im.CreateImage(imagePath, "128M"); err != nil {
 		t.Fatalf("CreateImage failed: %v", err)
 	}
 
@@ -321,7 +302,7 @@ func TestIntegrationClearPartitionAndRepartition(t *testing.T) {
 	clearCalls := len(mockRunner.Calls)
 
 	// Partition.
-	if err := im.PartitionDevices("100M", "500M", "128M"); err != nil {
+	if err := im.PartitionDevices("100M", "500M", "128M", imagePath); err != nil {
 		t.Fatalf("PartitionDevices failed: %v", err)
 	}
 	partCalls := len(mockRunner.Calls) - clearCalls
@@ -348,7 +329,7 @@ func TestIntegrationClearPartitionAndRepartition(t *testing.T) {
 // correct date-based prefix.
 func TestIntegrationFormatFsLabels(t *testing.T) {
 	mockRunner := runner.NewMockRunner()
-	im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
+	im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
 	im.efiDevice = "/dev/fake1"
 	im.bootDevice = "/dev/fake2"
@@ -391,12 +372,10 @@ func TestIntegrationCreateImageIdempotent(t *testing.T) {
 	tmpDir := t.TempDir()
 	imagePath := filepath.Join(tmpDir, "test.img")
 
-	im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
-	im.imagePath = imagePath
-	im.mode = ModeCreateImageFile
+	im := newTestImage(baseImageConfig(), &cds.MockOstree{})
 
 	// Create first image.
-	if err := im.CreateImage("1M"); err != nil {
+	if err := im.CreateImage(imagePath, "1M"); err != nil {
 		t.Fatalf("First CreateImage failed: %v", err)
 	}
 
@@ -409,7 +388,7 @@ func TestIntegrationCreateImageIdempotent(t *testing.T) {
 	f.Close()
 
 	// Create second image (should replace the first).
-	if err := im.CreateImage("2M"); err != nil {
+	if err := im.CreateImage(imagePath, "2M"); err != nil {
 		t.Fatalf("Second CreateImage failed: %v", err)
 	}
 
@@ -439,10 +418,9 @@ func TestIntegrationPartitionDevicesConfigErrors(t *testing.T) {
 		cfg := baseImageConfig()
 		delete(cfg.Items, "Imager.EspPartitionType")
 		mockRunner := runner.NewMockRunner()
-		im := newTestImageWithRunner(cfg, &ostree.MockOstree{}, mockRunner)
-		im.devicePath = "/dev/fake"
+		im := newTestImageWithRunner(cfg, &cds.MockOstree{}, mockRunner)
 
-		err := im.PartitionDevices("200M", "1G", "32G")
+		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
 		if err == nil {
 			t.Fatal("Expected error for missing EspPartitionType")
 		}
@@ -452,10 +430,9 @@ func TestIntegrationPartitionDevicesConfigErrors(t *testing.T) {
 		cfg := baseImageConfig()
 		delete(cfg.Items, "Imager.BootPartitionType")
 		mockRunner := runner.NewMockRunner()
-		im := newTestImageWithRunner(cfg, &ostree.MockOstree{}, mockRunner)
-		im.devicePath = "/dev/fake"
+		im := newTestImageWithRunner(cfg, &cds.MockOstree{}, mockRunner)
 
-		err := im.PartitionDevices("200M", "1G", "32G")
+		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
 		if err == nil {
 			t.Fatal("Expected error for missing BootPartitionType")
 		}
@@ -465,10 +442,9 @@ func TestIntegrationPartitionDevicesConfigErrors(t *testing.T) {
 		cfg := baseImageConfig()
 		delete(cfg.Items, "Imager.RootPartitionType")
 		mockRunner := runner.NewMockRunner()
-		im := newTestImageWithRunner(cfg, &ostree.MockOstree{}, mockRunner)
-		im.devicePath = "/dev/fake"
+		im := newTestImageWithRunner(cfg, &cds.MockOstree{}, mockRunner)
 
-		err := im.PartitionDevices("200M", "1G", "32G")
+		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
 		if err == nil {
 			t.Fatal("Expected error for missing RootPartitionType")
 		}
@@ -480,10 +456,9 @@ func TestIntegrationPartitionDevicesConfigErrors(t *testing.T) {
 func TestIntegrationPartitionDevicesSgdiskFailures(t *testing.T) {
 	t.Run("EfiPartitionFails", func(t *testing.T) {
 		mockRunner := runner.NewMockRunnerFailOnCall(0, os.ErrPermission)
-		im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
-		im.devicePath = "/dev/fake"
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
-		err := im.PartitionDevices("200M", "1G", "32G")
+		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
 		if err == nil {
 			t.Fatal("Expected error when EFI sgdisk fails")
 		}
@@ -494,10 +469,9 @@ func TestIntegrationPartitionDevicesSgdiskFailures(t *testing.T) {
 
 	t.Run("BootPartitionFails", func(t *testing.T) {
 		mockRunner := runner.NewMockRunnerFailOnCall(1, os.ErrPermission)
-		im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
-		im.devicePath = "/dev/fake"
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
-		err := im.PartitionDevices("200M", "1G", "32G")
+		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
 		if err == nil {
 			t.Fatal("Expected error when boot sgdisk fails")
 		}
@@ -508,10 +482,9 @@ func TestIntegrationPartitionDevicesSgdiskFailures(t *testing.T) {
 
 	t.Run("RootPartitionFails", func(t *testing.T) {
 		mockRunner := runner.NewMockRunnerFailOnCall(2, os.ErrPermission)
-		im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
-		im.devicePath = "/dev/fake"
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
-		err := im.PartitionDevices("200M", "1G", "32G")
+		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
 		if err == nil {
 			t.Fatal("Expected error when root sgdisk fails")
 		}
@@ -522,10 +495,9 @@ func TestIntegrationPartitionDevicesSgdiskFailures(t *testing.T) {
 
 	t.Run("AutoGrowFlagFails", func(t *testing.T) {
 		mockRunner := runner.NewMockRunnerFailOnCall(3, os.ErrPermission)
-		im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
-		im.devicePath = "/dev/fake"
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
-		err := im.PartitionDevices("200M", "1G", "32G")
+		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
 		if err == nil {
 			t.Fatal("Expected error when auto-grow flag fails")
 		}
@@ -536,10 +508,9 @@ func TestIntegrationPartitionDevicesSgdiskFailures(t *testing.T) {
 
 	t.Run("PartprobeFails", func(t *testing.T) {
 		mockRunner := runner.NewMockRunnerFailOnCall(4, os.ErrPermission)
-		im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
-		im.devicePath = "/dev/fake"
+		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
-		err := im.PartitionDevices("200M", "1G", "32G")
+		err := im.PartitionDevices("200M", "1G", "32G", "/dev/fake")
 		if err == nil {
 			t.Fatal("Expected error when partprobe fails")
 		}
@@ -553,7 +524,7 @@ func TestIntegrationPartitionDevicesSgdiskFailures(t *testing.T) {
 // mount point directories when they don't exist.
 func TestIntegrationMountCreatesDirectories(t *testing.T) {
 	mockRunner := runner.NewMockRunner()
-	im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
+	im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
 	im.efiDevice = "/dev/fake1"
 	im.bootDevice = "/dev/fake2"
@@ -569,9 +540,6 @@ func TestIntegrationMountCreatesDirectories(t *testing.T) {
 	if _, err := os.Stat(deepEfi); os.IsNotExist(err) {
 		t.Error("MountEfifs did not create nested mount point directory")
 	}
-	if im.EfifsMount() != deepEfi {
-		t.Errorf("MountEfifs: expected efifsMount %q, got %q", deepEfi, im.EfifsMount())
-	}
 
 	deepBoot := filepath.Join(tmpDir, "x", "y", "boot")
 	if err := im.MountBootfs(deepBoot); err != nil {
@@ -580,9 +548,6 @@ func TestIntegrationMountCreatesDirectories(t *testing.T) {
 	if _, err := os.Stat(deepBoot); os.IsNotExist(err) {
 		t.Error("MountBootfs did not create nested mount point directory")
 	}
-	if im.BootfsMount() != deepBoot {
-		t.Errorf("MountBootfs: expected bootfsMount %q, got %q", deepBoot, im.BootfsMount())
-	}
 
 	deepRoot := filepath.Join(tmpDir, "r", "o", "rootfs")
 	if err := im.MountRootfs(deepRoot); err != nil {
@@ -590,9 +555,6 @@ func TestIntegrationMountCreatesDirectories(t *testing.T) {
 	}
 	if _, err := os.Stat(deepRoot); os.IsNotExist(err) {
 		t.Error("MountRootfs did not create nested mount point directory")
-	}
-	if im.RootfsMount() != deepRoot {
-		t.Errorf("MountRootfs: expected rootfsMount %q, got %q", deepRoot, im.RootfsMount())
 	}
 }
 
@@ -606,7 +568,7 @@ func TestIntegrationNewImageWithOptions(t *testing.T) {
 		DevicePath: "/dev/sda",
 	}
 
-	im, err := NewImage(baseImageConfig(), &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), opts)
+	im, err := NewImage(baseImageConfig(), &cds.MockOstree{}, opts)
 	if err != nil {
 		t.Fatalf("NewImage failed: %v", err)
 	}
@@ -629,7 +591,7 @@ func TestIntegrationNewImageWithOptions(t *testing.T) {
 // and that subsequent operations use the new values.
 func TestIntegrationDeviceSetters(t *testing.T) {
 	mockRunner := runner.NewMockRunner()
-	im := newTestImageWithRunner(baseImageConfig(), &ostree.MockOstree{}, mockRunner)
+	im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, mockRunner)
 
 	// Set devices via setters.
 	im.SetEfiDevice("/dev/sda1")
