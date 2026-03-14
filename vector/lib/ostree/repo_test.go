@@ -13,15 +13,6 @@ import (
 func TestRepoOperations(t *testing.T) {
 	repoDir := setupTestRepo(t)
 
-	// Test ListRemotes (empty)
-	remotes, err := ListRemotes(repoDir, false)
-	if err != nil {
-		t.Fatalf("ListRemotes failed: %v", err)
-	}
-	if len(remotes) != 0 {
-		t.Errorf("expected 0 remotes, got %d", len(remotes))
-	}
-
 	// Test AddRemote
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
@@ -38,13 +29,22 @@ func TestRepoOperations(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
+	// Test ListRemotes (empty)
+	remotes, err := o.ListRemotes()
+	if err != nil {
+		t.Fatalf("ListRemotes failed: %v", err)
+	}
+	if len(remotes) != 0 {
+		t.Errorf("expected 0 remotes, got %d", len(remotes))
+	}
+
 	err = o.AddRemote()
 	if err != nil {
 		t.Fatalf("AddRemote failed: %v", err)
 	}
 
 	// Test ListRemotes (1)
-	remotes, err = ListRemotes(repoDir, false)
+	remotes, err = o.ListRemotes()
 	if err != nil {
 		t.Fatalf("ListRemotes failed: %v", err)
 	}
@@ -52,10 +52,10 @@ func TestRepoOperations(t *testing.T) {
 		t.Errorf("expected [origin], got %v", remotes)
 	}
 
-	// Test ListLocalRefs (empty)
-	refs, err := ListLocalRefs(repoDir, false)
+	// Test LocalRefs (empty)
+	refs, err := o.LocalRefs()
 	if err != nil {
-		t.Fatalf("ListLocalRefs failed: %v", err)
+		t.Fatalf("LocalRefs failed: %v", err)
 	}
 	if len(refs) != 0 {
 		t.Errorf("expected 0 refs, got %d", len(refs))
@@ -218,30 +218,6 @@ func TestAddRemoteToRootfs(t *testing.T) {
 	}
 }
 
-func TestPullWithRemoteExplicit(t *testing.T) {
-	origRunCommand := runCommand
-	defer func() { runCommand = origRunCommand }()
-
-	var lastArgs []string
-	runCommand = func(cmd *runner.Cmd) error {
-		args := cmd.Args
-		lastArgs = args
-		return nil
-	}
-
-	repoDir := "/repo"
-	ref := "myref"
-
-	if err := PullWithRemote(repoDir, "myremote", ref, false); err != nil {
-		t.Fatalf("PullWithRemote failed: %v", err)
-	}
-
-	// Expected: --repo=/repo pull myremote myref
-	if len(lastArgs) < 4 || lastArgs[1] != "pull" || lastArgs[2] != "myremote" || lastArgs[3] != "myref" {
-		t.Errorf("PullWithRemote args mismatch: %v", lastArgs)
-	}
-}
-
 func TestPullInvalidRef(t *testing.T) {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
@@ -358,18 +334,6 @@ func TestLastCommit_Errors(t *testing.T) {
 	// Test standalone LastCommit if exposed or wrapper
 	if _, err := LastCommit("/repo", "ref", false); err == nil {
 		t.Error("LastCommit should fail if cmd fails")
-	}
-}
-
-func TestListRemotes_Errors(t *testing.T) {
-	origRunCommand := runCommand
-	defer func() { runCommand = origRunCommand }()
-	runCommand = func(cmd *runner.Cmd) error {
-		return fmt.Errorf("error")
-	}
-
-	if _, err := ListRemotes("/repo", false); err == nil {
-		t.Error("ListRemotes should fail on error")
 	}
 }
 
