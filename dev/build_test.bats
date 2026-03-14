@@ -8,7 +8,6 @@ setup() {
 
     STUB_BIN="${TEST_TMPDIR}/bin"
     mkdir -p "${STUB_BIN}"
-    export PATH="${STUB_BIN}:${PATH}"
 
     # Stub sleep to avoid delays.
     cat > "${STUB_BIN}/sleep" << 'EOF'
@@ -21,6 +20,10 @@ EOF
     local tmp="${TEST_TMPDIR}/_script.sh"
     sed '/^main "\${@}"$/d' "${BATS_TEST_DIRNAME}/build.sh" > "${tmp}"
     source "${tmp}"
+
+    # Prepend stubs AFTER sourcing build.sh, because it sources
+    # /etc/profile which resets PATH.
+    export PATH="${STUB_BIN}:${PATH}"
 }
 
 teardown() {
