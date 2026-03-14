@@ -39,6 +39,44 @@ type MockOstree struct {
 
 	BootCommitResult string
 	BootCommitErr    error
+
+	RepoDir_   string
+	RepoDirErr error
+
+	OsName_   string
+	OsNameErr error
+
+	FancyOsName_   string
+	FancyOsNameErr error
+
+	GpgEnabled_   bool
+	GpgEnabledErr error
+
+	GpgArgs_   []string
+	GpgArgsErr error
+
+	SetGpgErr    error
+	SetGpgCalled bool
+	SetGpgArg    bool
+
+	InitRepoErr    error
+	InitRepoCalled bool
+
+	CommitErr    error
+	CommitCalled bool
+	CommitOpts   CommitOptions
+
+	PruneErr    error
+	PruneCalled bool
+
+	GenerateStaticDeltaErr    error
+	GenerateStaticDeltaCalled bool
+
+	UpdateSummaryErr    error
+	UpdateSummaryCalled bool
+
+	PrepareFilesystemHierarchyErr  error
+	ValidateFilesystemHierarchyErr error
 }
 
 // Config accessors — return zero values (not used in branch/upgrade tests).
@@ -62,13 +100,13 @@ func (m *MockOstree) RemoveFullFromBranch() (string, error) {
 	// Default: strip -full suffix if present.
 	return strings.TrimSuffix(m.Ref_, "-full"), nil
 }
-func (m *MockOstree) GpgEnabled() (bool, error)                  { return false, nil }
+func (m *MockOstree) GpgEnabled() (bool, error)                  { return m.GpgEnabled_, m.GpgEnabledErr }
 func (m *MockOstree) GpgPrivateKeyPath() (string, error)         { return "", nil }
 func (m *MockOstree) GpgPublicKeyPath() (string, error)          { return "", nil }
 func (m *MockOstree) GpgOfficialPubKeyPath() (string, error)     { return "", nil }
-func (m *MockOstree) OsName() (string, error)                    { return "", nil }
+func (m *MockOstree) OsName() (string, error)                    { return m.OsName_, m.OsNameErr }
 func (m *MockOstree) Arch() (string, error)                      { return "", nil }
-func (m *MockOstree) RepoDir() (string, error)                   { return "", nil }
+func (m *MockOstree) RepoDir() (string, error)                   { return m.RepoDir_, m.RepoDirErr }
 func (m *MockOstree) Sysroot() (string, error)                   { return "", nil }
 func (m *MockOstree) Remote() (string, error)                    { return m.Remote_, m.RemoteErr }
 func (m *MockOstree) RemoteURL() (string, error)                 { return "", nil }
@@ -77,13 +115,21 @@ func (m *MockOstree) GpgBestPubKeyPath() (string, error)         { return "", ni
 func (m *MockOstree) ClientSideGpgArgs() ([]string, error)       { return nil, nil }
 func (m *MockOstree) GpgHomeDir() (string, error)                { return "", nil }
 func (m *MockOstree) GpgKeyID() (string, error)                  { return "", nil }
-func (m *MockOstree) FancyOsName() (string, error)               { return "", nil }
-func (m *MockOstree) GpgArgs() ([]string, error)                 { return nil, nil }
-func (m *MockOstree) SetGpg(_ bool) error                        { return nil }
-func (m *MockOstree) SetVerbose(_ bool)                          {}
-func (m *MockOstree) SetupEtc(string) error                      { return nil }
-func (m *MockOstree) PrepareFilesystemHierarchy(string) error    { return nil }
-func (m *MockOstree) ValidateFilesystemHierarchy(string) error   { return nil }
+func (m *MockOstree) FancyOsName() (string, error)               { return m.FancyOsName_, m.FancyOsNameErr }
+func (m *MockOstree) GpgArgs() ([]string, error)                 { return m.GpgArgs_, m.GpgArgsErr }
+func (m *MockOstree) SetGpg(enabled bool) error {
+	m.SetGpgCalled = true
+	m.SetGpgArg = enabled
+	return m.SetGpgErr
+}
+func (m *MockOstree) SetVerbose(_ bool)     {}
+func (m *MockOstree) SetupEtc(string) error { return nil }
+func (m *MockOstree) PrepareFilesystemHierarchy(string) error {
+	return m.PrepareFilesystemHierarchyErr
+}
+func (m *MockOstree) ValidateFilesystemHierarchy(string) error {
+	return m.ValidateFilesystemHierarchyErr
+}
 func (m *MockOstree) BootCommit(string) (string, error) {
 	if m.BootCommitErr != nil {
 		return "", m.BootCommitErr
@@ -93,8 +139,15 @@ func (m *MockOstree) BootCommit(string) (string, error) {
 	}
 	return "abc123commit", nil
 }
-func (m *MockOstree) Commit(_ CommitOptions) error   { return nil }
-func (m *MockOstree) InitRepo() error                { return nil }
+func (m *MockOstree) Commit(opts CommitOptions) error {
+	m.CommitCalled = true
+	m.CommitOpts = opts
+	return m.CommitErr
+}
+func (m *MockOstree) InitRepo() error {
+	m.InitRepoCalled = true
+	return m.InitRepoErr
+}
 func (m *MockOstree) ListRemotes() ([]string, error) { return nil, nil }
 func (m *MockOstree) ImportGpgKey(string) error      { return nil }
 func (m *MockOstree) GpgSignFile(string) error       { return nil }
@@ -103,9 +156,18 @@ func (m *MockOstree) InitializeSigningGpg() error    { return nil }
 func (m *MockOstree) MaybeInitializeGpg() error      { return nil }
 func (m *MockOstree) MaybeInitializeRemote() error   { return nil }
 func (m *MockOstree) Pull() error                    { return nil }
-func (m *MockOstree) Prune() error                   { return nil }
-func (m *MockOstree) GenerateStaticDelta() error     { return nil }
-func (m *MockOstree) UpdateSummary() error           { return nil }
+func (m *MockOstree) Prune() error {
+	m.PruneCalled = true
+	return m.PruneErr
+}
+func (m *MockOstree) GenerateStaticDelta() error {
+	m.GenerateStaticDeltaCalled = true
+	return m.GenerateStaticDeltaErr
+}
+func (m *MockOstree) UpdateSummary() error {
+	m.UpdateSummaryCalled = true
+	return m.UpdateSummaryErr
+}
 func (m *MockOstree) AddRemote() error               { return nil }
 func (m *MockOstree) AddRemoteToRootfs(string) error { return nil }
 func (m *MockOstree) LocalRefs() ([]string, error) {
