@@ -5,6 +5,9 @@ func (r *Releaser) CheckMatrixOS() error {
 }
 
 func (r *Releaser) PreCleanQAChecks() error {
+	if err := checkImageDir(r.imageDir); err != nil {
+		return err
+	}
 	r.Print("Pre clean QA Checks ...\n")
 
 	sbCertPath, err := r.SecureBootCertPath()
