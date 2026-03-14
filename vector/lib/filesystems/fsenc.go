@@ -27,9 +27,13 @@ type IFsenc interface {
 	// OsName returns the OS name as defined in the config.
 	OsName() (string, error)
 
-	// Operations
+	// LuksEncrypt encrypts the given block device with LUKS and opens it as
+	// desiredLuksDevice (the full /dev/mapper/<name> path).
 	LuksEncrypt(devicePath, desiredLuksDevice string) error
+	// ValidateLuksVariables checks that all required LUKS-related configuration
+	// variables are set when encryption is enabled.
 	ValidateLuksVariables() error
+	// Cleanup cleans up the previously opened (or in opening) device mappers.
 	Cleanup()
 }
 
@@ -63,7 +67,6 @@ func (f *Fsenc) add(mapperName string) {
 	f.openMappers = append(f.openMappers, mapperName)
 }
 
-// Cleanup cleans up the previously opened (or in opening) device mappers.
 func (f *Fsenc) Cleanup() {
 	f.openMappersMu.Lock()
 	mappers := slices.Clone(f.openMappers)
@@ -73,7 +76,6 @@ func (f *Fsenc) Cleanup() {
 	CleanupCryptsetupDevices(mappers)
 }
 
-// EncryptionEnabled returns whether rootfs encryption is enabled.
 func (f *Fsenc) EncryptionEnabled() (bool, error) {
 	return f.cfg.GetBool("Imager.Encryption")
 }
@@ -108,12 +110,6 @@ func (f *Fsenc) OsName() (string, error) {
 	return name, nil
 }
 
-// LuksEncrypt formats a device with LUKS encryption and opens it.
-//
-// devicePath is the block device to encrypt (e.g. a partition on a loop device).
-// desiredLuksDevice is the full /dev/mapper/<name> path expected after opening.
-// deviceMappers is a pointer to the caller's slice that tracks opened device-mapper
-// names for cleanup; the LUKS name is appended on success.
 func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string) error {
 	if devicePath == "" {
 		return errors.New("missing devicePath parameter")
@@ -197,9 +193,6 @@ func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string) error {
 	return nil
 }
 
-// ValidateLuksVariables checks that all required LUKS-related configuration
-// variables are set when encryption is enabled. This mirrors
-// imager_env.validate_luks_variables() from imagerenv.include.sh.
 func (f *Fsenc) ValidateLuksVariables() error {
 	enabled, err := f.EncryptionEnabled()
 	if err != nil {

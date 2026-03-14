@@ -9,7 +9,6 @@ import (
 	"matrixos/vector/lib/filesystems"
 )
 
-// SetupEtc moves the /etc directory to /usr/etc.
 func (o *Ostree) SetupEtc(rootfs string) error {
 	o.Print("Setting up /etc...")
 	etcDir := filepath.Join(rootfs, "etc")
@@ -223,8 +222,6 @@ func prepareUsrLocal(imageDir string) error {
 	return nil
 }
 
-// PrepareFilesystemHierarchy prepares the filesystem hierarchy for OSTree.
-// It ports the logic from ostree_lib.prepare_filesystem_hierarchy in ostree_lib.sh.
 func (o *Ostree) PrepareFilesystemHierarchy(rootfs string) error {
 	marker := filepath.Join(rootfs, "var", ".matrixos-prepared")
 	if fileExists(marker) {
@@ -300,7 +297,6 @@ func (o *Ostree) PrepareFilesystemHierarchy(rootfs string) error {
 	return nil
 }
 
-// ValidateFilesystemHierarchy validates the filesystem hierarchy for OSTree.
 func (o *Ostree) ValidateFilesystemHierarchy(rootfs string) error {
 	if rootfs == "" {
 		return fmt.Errorf("missing rootfs parameter")

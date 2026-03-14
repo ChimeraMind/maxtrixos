@@ -17,9 +17,6 @@ type AddRemoteOptions struct {
 	Sysroot   string
 }
 
-// InitRepo initialises the local ostree repository in archive mode.
-// The collection ID is read from the Ostree.CollectionId config key;
-// if set, it is passed as --collection-id.
 func (o *Ostree) InitRepo() error {
 	repoDir, err := o.RepoDir()
 	if err != nil {
@@ -359,7 +356,6 @@ func (o *Ostree) pruneFromRepo(repoDir, ref, keepObjectsYoungerThan string) erro
 	)
 }
 
-// ListRemotes lists all the remote refs in the configuration's ostree repository.
 func (o *Ostree) ListRemotes() ([]string, error) {
 	repoDir, err := o.RepoDir()
 	if err != nil {
@@ -368,7 +364,6 @@ func (o *Ostree) ListRemotes() ([]string, error) {
 	return o.listRemotesFromRepo(repoDir)
 }
 
-// LastCommit returns the last commit for the instance ref.
 func (o *Ostree) LastCommit() (string, error) {
 	repoDir, err := o.RepoDir()
 	if err != nil {
@@ -377,7 +372,6 @@ func (o *Ostree) LastCommit() (string, error) {
 	return o.lastCommitFromRepo(repoDir, o.ref)
 }
 
-// Pull pulls the instance ref from its configured remote.
 func (o *Ostree) Pull() error {
 	ref := o.ref
 	if ref == "" {
@@ -394,7 +388,6 @@ func (o *Ostree) Pull() error {
 	return o.pullFromRepo(repoDir, remote, ref)
 }
 
-// Prune prunes the ostree repo for the instance ref.
 func (o *Ostree) Prune() error {
 	ref := o.ref
 	if ref == "" {
@@ -411,7 +404,6 @@ func (o *Ostree) Prune() error {
 	return o.pruneFromRepo(repoDir, ref, keepObjectsYoungerThan)
 }
 
-// GenerateStaticDelta generates a static delta for an ostree repository.
 func (o *Ostree) GenerateStaticDelta() error {
 	ref := o.ref
 	if ref == "" {
@@ -504,7 +496,6 @@ func (o *Ostree) GenerateStaticDelta() error {
 	return o.ostreeRun(args...)
 }
 
-// UpdateSummary updates the summary of an ostree repository.
 func (o *Ostree) UpdateSummary() error {
 	o.Print("Updating ostree summary ...")
 
@@ -528,7 +519,6 @@ func (o *Ostree) UpdateSummary() error {
 	return o.ostreeRun(args...)
 }
 
-// AddRemote adds a remote to an ostree repo.
 func (o *Ostree) AddRemote() error {
 	repoDir, err := o.RepoDir()
 	if err != nil {
@@ -558,7 +548,6 @@ func (o *Ostree) AddRemote() error {
 	return o.addRemote(opts)
 }
 
-// AddRemoteToRootfs adds a remote to an ostree rootfs.
 func (o *Ostree) AddRemoteToRootfs(rootfs string) error {
 	gpgArgs, err := o.ClientSideGpgArgs()
 	if err != nil {
@@ -583,7 +572,6 @@ func (o *Ostree) AddRemoteToRootfs(rootfs string) error {
 	return o.addRemote(opts)
 }
 
-// LocalRefs lists the locally available ostree refs.
 func (o *Ostree) LocalRefs() ([]string, error) {
 	repoDir, err := o.RepoDir()
 	if err != nil {
@@ -592,7 +580,6 @@ func (o *Ostree) LocalRefs() ([]string, error) {
 	return o.listLocalRefsFromRepo(repoDir)
 }
 
-// RemoteRefs lists the remote available ostree refs.
 func (o *Ostree) RemoteRefs() ([]string, error) {
 	repoDir, err := o.RepoDir()
 	if err != nil {
@@ -605,7 +592,6 @@ func (o *Ostree) RemoteRefs() ([]string, error) {
 	return o.listRemoteRefsFromRepo(repoDir, remote)
 }
 
-// MaybeInitializeRemote initializes an ostree remote.
 func (o *Ostree) MaybeInitializeRemote() error {
 	repoDir, err := o.RepoDir()
 	if err != nil {

@@ -5,7 +5,6 @@ import (
 	"io"
 )
 
-// DetectLocalReleases lists local ostree refs, filtered by skip and only functions.
 func (r *Releaser) DetectLocalReleases(skip, only RefFilterFunc) ([]string, error) {
 	refs, err := r.ostree.LocalRefs()
 	if err != nil {
@@ -14,7 +13,6 @@ func (r *Releaser) DetectLocalReleases(skip, only RefFilterFunc) ([]string, erro
 	return filterRefs(refs, skip, only, r.stderr), nil
 }
 
-// DetectRemoteReleases lists remote ostree refs, filtered by skip and only functions.
 func (r *Releaser) DetectRemoteReleases(skip, only RefFilterFunc) ([]string, error) {
 	refs, err := r.ostree.RemoteRefs()
 	if err != nil {

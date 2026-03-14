@@ -86,8 +86,6 @@ func (r *Releaser) rsyncCopy(src, dst string) error {
 	})
 }
 
-// SyncFilesystem synchronises the chroot directory into the image directory
-// using either cp --reflink=auto or rsync.
 func (r *Releaser) SyncFilesystem() error {
 	if r.chrootDir == "" || r.imageDir == "" {
 		return errors.New("chrootDir and imageDir are required")
