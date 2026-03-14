@@ -69,6 +69,7 @@ type MockImage struct {
 	SetupBootloaderCfgCalled  bool
 	SetupPasswordsCalled      bool
 	InstallBootloaderCalled   bool
+	CleanupCalled             bool
 	SetupVmtestConfigCalled   bool
 	InstallSecurebootCalled   bool
 	InstallMemtestCalled      bool
@@ -83,12 +84,17 @@ type MockImage struct {
 }
 
 func (m *MockImage) SetEfiDevice(device string)      { m.EfiDevice_ = device }
+func (m *MockImage) EfiDevice() string               { return m.EfiDevice_ }
 func (m *MockImage) SetBootDevice(device string)     { m.BootDevice_ = device }
+func (m *MockImage) BootDevice() string              { return m.BootDevice_ }
 func (m *MockImage) SetRootDevice(device string)     { m.RootDevice_ = device }
+func (m *MockImage) RootDevice() string              { return m.RootDevice_ }
 func (m *MockImage) SetDevicePath(devicePath string) { m.DevicePath_ = devicePath }
+func (m *MockImage) DevicePath() string              { return m.DevicePath_ }
 func (m *MockImage) SetRootfs(rootfs string)         { m.Rootfs_ = rootfs }
+func (m *MockImage) Rootfs() string                  { return m.Rootfs_ }
 
-func (m *MockImage) EfifsMount() string  { return m.EfifsMount_ }
+func (m *MockImage) EfifsMount() string { return m.EfifsMount_ }
 func (m *MockImage) EfiBootDir() (string, error) {
 	if m.EfifsMount_ == "" {
 		return "", errors.New("EFI filesystem not mounted")
@@ -223,6 +229,9 @@ func (m *MockImage) SetupHooks(ref string) error {
 func (m *MockImage) InstallBootloader() ([]string, error) {
 	m.InstallBootloaderCalled = true
 	return m.InstallBootloaderResult, m.InstallBootloaderErr
+}
+func (m *MockImage) Cleanup() {
+	m.CleanupCalled = true
 }
 func (m *MockImage) TestImage(imagePath, ref string) error {
 	m.TestImageCalled = true

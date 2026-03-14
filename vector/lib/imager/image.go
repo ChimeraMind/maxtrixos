@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -35,10 +36,15 @@ type NewImageOptions struct {
 type IImage interface {
 	// Device setters
 	SetEfiDevice(device string)
+	EfiDevice() string
 	SetBootDevice(device string)
+	BootDevice() string
 	SetRootDevice(device string)
+	RootDevice() string
 	SetDevicePath(devicePath string)
+	DevicePath() string
 	SetRootfs(rootfs string)
+	Rootfs() string
 
 	// Mount point accessors (set after successful Mount* calls)
 	EfifsMount() string
@@ -98,6 +104,7 @@ type IImage interface {
 	PackageList() ([]string, error)
 	SetupHooks(ref string) error
 	InstallBootloader() ([]string, error)
+	Cleanup()
 	TestImage(imagePath, ref string) error
 	FinalizeFilesystems() error
 	Qcow2ImagePath(imagePath string) (string, error)
@@ -125,6 +132,37 @@ type Image struct {
 	efifsMount  string
 	bootfsMount string
 	rootfsMount string
+
+	// trackedMounts records every mount point created by this Image
+	// so that Cleanup can attempt to unmount them all on failure or signal.
+	trackedMountsMu sync.Mutex
+	trackedMounts   []string
+}
+
+// trackMount appends a single mount point to the tracked list.
+func (im *Image) trackMount(mnt string) {
+	im.trackedMountsMu.Lock()
+	defer im.trackedMountsMu.Unlock()
+	im.trackedMounts = append(im.trackedMounts, mnt)
+}
+
+// trackMounts appends multiple mount points to the tracked list.
+func (im *Image) trackMounts(mnts []string) {
+	im.trackedMountsMu.Lock()
+	defer im.trackedMountsMu.Unlock()
+	im.trackedMounts = append(im.trackedMounts, mnts...)
+}
+
+// Cleanup unmounts all mount points tracked by this Image instance
+// in reverse order. It is safe to call multiple times.
+func (im *Image) Cleanup() {
+	im.trackedMountsMu.Lock()
+	mounts := make([]string, len(im.trackedMounts))
+	copy(mounts, im.trackedMounts)
+	im.trackedMounts = nil
+	im.trackedMountsMu.Unlock()
+
+	filesystems.CleanupMounts(mounts)
 }
 
 // NewImage creates a new Image instance.
@@ -154,17 +192,32 @@ func NewImage(cfg config.IConfig, ostree cds.IOstree, opts *NewImageOptions) (*I
 // SetEfiDevice sets the EFI device path.
 func (im *Image) SetEfiDevice(device string) { im.efiDevice = device }
 
+// EfiDevice returns the EFI device path.
+func (im *Image) EfiDevice() string { return im.efiDevice }
+
 // SetBootDevice sets the boot device path.
 func (im *Image) SetBootDevice(device string) { im.bootDevice = device }
+
+// BootDevice returns the boot device path.
+func (im *Image) BootDevice() string { return im.bootDevice }
 
 // SetRootDevice sets the root device path.
 func (im *Image) SetRootDevice(device string) { im.rootDevice = device }
 
+// RootDevice returns the root device path.
+func (im *Image) RootDevice() string { return im.rootDevice }
+
 // SetDevicePath sets the block device path (whole device or loop device).
 func (im *Image) SetDevicePath(devicePath string) { im.devicePath = devicePath }
 
+// DevicePath returns the block device path (whole device or loop device).
+func (im *Image) DevicePath() string { return im.devicePath }
+
 // SetRootfs sets the deployed ostree rootfs path.
 func (im *Image) SetRootfs(rootfs string) { im.rootfs = rootfs }
+
+// Rootfs returns the deployed ostree rootfs path.
+func (im *Image) Rootfs() string { return im.rootfs }
 
 // EfifsMount returns the EFI filesystem mount point (set by MountEfifs on success).
 func (im *Image) EfifsMount() string { return im.efifsMount }
@@ -737,6 +790,7 @@ func (im *Image) MountEfifs(mountEfifs string) error {
 		return err
 	}
 	im.efifsMount = mountEfifs
+	im.trackMount(mountEfifs)
 	return nil
 }
 
@@ -785,6 +839,7 @@ func (im *Image) MountBootfs(mountBootfs string) error {
 		return err
 	}
 	im.bootfsMount = mountBootfs
+	im.trackMount(mountBootfs)
 	return nil
 }
 
@@ -827,6 +882,7 @@ func (im *Image) MountRootfs(mountRootfs string) error {
 		return err
 	}
 	im.rootfsMount = mountRootfs
+	im.trackMount(mountRootfs)
 	return nil
 }
 
@@ -1231,6 +1287,7 @@ func (im *Image) InstallBootloader() ([]string, error) {
 		return extraMounts, fmt.Errorf("failed to bind mount EFI: %w", err)
 	}
 	extraMounts = append(extraMounts, mnt)
+	im.trackMount(mnt)
 
 	// Bind mount boot into the chroot.
 	bootChrootMount := filepath.Join(im.rootfs, bootRoot)
@@ -1242,6 +1299,7 @@ func (im *Image) InstallBootloader() ([]string, error) {
 		return extraMounts, fmt.Errorf("failed to bind mount boot: %w", err)
 	}
 	extraMounts = append(extraMounts, mnt)
+	im.trackMount(mnt)
 
 	// Setup common rootfs mounts (dev, proc, etc.) without proc for bootloader.
 	chrootMounts, err := filesystems.SetupCommonRootfsMounts(im.rootfs)
@@ -1249,6 +1307,7 @@ func (im *Image) InstallBootloader() ([]string, error) {
 		return extraMounts, fmt.Errorf("failed to setup common rootfs mounts: %w", err)
 	}
 	extraMounts = append(extraMounts, chrootMounts...)
+	im.trackMounts(chrootMounts)
 
 	// Run grub-install inside the chroot.
 	err = filesystems.ChrootRun(im.rootfs, "/usr/bin/grub-install",
