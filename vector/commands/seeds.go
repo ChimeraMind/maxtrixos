@@ -159,6 +159,7 @@ func (c *SeedsCommand) updateStdWriters(name string) (*styledWriter, *styledWrit
 	stderrWriter := c.SetStderr(name)
 	c.sd.SetStdout(stdoutWriter)
 	c.sd.SetStderr(stderrWriter)
+	c.det.SetStderr(stderrWriter)
 	return stdoutWriter, stderrWriter
 }
 
