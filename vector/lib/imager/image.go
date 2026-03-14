@@ -1680,12 +1680,8 @@ func (im *Image) FinalizeFilesystems() error {
 		return errors.New("missing efifsMount, call MountEfifs first")
 	}
 
-	fmt.Fprintf(os.Stdout, "Executing fstrim on %s\n", im.rootfsMount)
-	// fstrim may fail on USB sticks, so ignore errors.
-	im.runner(nil, os.Stdout, os.Stderr, "fstrim", "-v", im.rootfsMount)
-
-	fmt.Fprintf(os.Stdout, "Executing fstrim on %s\n", im.bootfsMount)
-	im.runner(nil, os.Stdout, os.Stderr, "fstrim", "-v", im.bootfsMount)
+	// fstrim may fail on USB sticks, so errors are intentionally ignored.
+	filesystems.FstrimAll(im.runner, os.Stdout, os.Stderr, im.rootfsMount, im.bootfsMount)
 
 	return nil
 }

@@ -17,12 +17,7 @@ func Fstrim(run runner.Func, stdout, stderr io.Writer, mountPoint string) error 
 		return fmt.Errorf("missing mount point for fstrim")
 	}
 	fmt.Fprintf(stdout, "Executing fstrim on %s\n", mountPoint)
-	return run(&runner.Cmd{
-		Name:   "fstrim",
-		Args:   []string{"-v", mountPoint},
-		Stdout: stdout,
-		Stderr: stderr,
-	})
+	return run(nil, stdout, stderr, "fstrim", "-v", mountPoint)
 }
 
 // FstrimAll runs fstrim on every mount point in the supplied list. It logs
