@@ -37,6 +37,7 @@ type IOstree interface {
 	GpgPublicKeyPath() (string, error)
 	GpgOfficialPubKeyPath() (string, error)
 	OsName() (string, error)
+	FancyOsName() (string, error)
 	Arch() (string, error)
 	RepoDir() (string, error)
 	Sysroot() (string, error)
