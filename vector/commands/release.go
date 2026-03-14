@@ -170,8 +170,8 @@ func (c *ReleaseCommand) runRelease() error {
 	c.rel.SetStderr(stderrWriter)
 
 	// Register cleanup.
-	c.PushCleanup(c.rel.Cleanup)
 	c.PushCleanup(func() {
+		c.rel.Cleanup()
 		stdoutWriter.Flush()
 		stderrWriter.Flush()
 	})
