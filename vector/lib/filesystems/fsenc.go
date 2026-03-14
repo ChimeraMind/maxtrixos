@@ -169,15 +169,19 @@ func (f *Fsenc) LuksEncrypt(devicePath, desiredLuksDevice string) error {
 	// Track the opened device-mapper name for cleanup.
 	f.add(luksName)
 	f.opening(luksName)
-	err = f.runner(
-		stdin, os.Stdout, os.Stderr,
-		"cryptsetup",
-		"open",
-		"--allow-discards",
-		"--key-file="+keyFileArg,
-		devicePath,
-		luksName,
-	)
+	err = f.runner(&runner.Cmd{
+		Name: "cryptsetup",
+		Args: []string{
+			"open",
+			"--allow-discards",
+			"--key-file=" + keyFileArg,
+			devicePath,
+			luksName,
+		},
+		Stdin:  stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+	})
 	if err != nil {
 		return fmt.Errorf("cryptsetup open failed on %s: %w", devicePath, err)
 	}

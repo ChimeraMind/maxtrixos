@@ -2,11 +2,10 @@ package runner
 
 // MockRunnerCall records a single command invocation.
 type MockRunnerCall struct {
-	Name      string
-	Args      []string
-	Dir       string
-	Env       []string
-	ChrootDir string // set only by ChrootRun / ChrootOutput
+	Name string
+	Args []string
+	Dir  string
+	Env  []string
 }
 
 // MockRunner records calls and returns configurable errors.
@@ -71,28 +70,14 @@ func (mr *MockRunner) CombinedOutput(c *Cmd) ([]byte, error) {
 func (mr *MockRunner) ChrootRun(c *ChrootCmd) error {
 	mr.Calls = append(mr.Calls, MockRunnerCall{
 		Name: "chroot:" + c.Name, Args: c.Args,
-		Dir: c.Dir, Env: c.Env, ChrootDir: c.ChrootDir,
 	})
 	return mr.errForCall()
-}
-
-// DirRun implements the DirRunFunc signature.
-func (mr *MockRunner) DirRun(dir string, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
-	mr.Calls = append(mr.Calls, MockRunnerCall{Name: name, Args: args})
-	if mr.FailOn >= 0 && len(mr.Calls)-1 == mr.FailOn {
-		return mr.Err
-	}
-	if mr.FailOn < 0 && mr.Err != nil {
-		return mr.Err
-	}
-	return nil
 }
 
 // ChrootOutput implements the ChrootOutputFunc signature.
 func (mr *MockRunner) ChrootOutput(c *ChrootCmd) ([]byte, error) {
 	mr.Calls = append(mr.Calls, MockRunnerCall{
 		Name: "chroot:" + c.Name, Args: c.Args,
-		Dir: c.Dir, Env: c.Env, ChrootDir: c.ChrootDir,
 	})
 	return mr.outputForCall(), mr.errForCall()
 }

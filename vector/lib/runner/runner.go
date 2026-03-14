@@ -118,20 +118,14 @@ func chrootArgs(c *ChrootCmd) ([]string, error) {
 	return cmdArgs, nil
 }
 
-// DirRunFunc is a function type that executes an external command with the
-// working directory set to dir. It mirrors Func but adds a dir parameter
-// that maps to exec.Cmd.Dir.
-type DirRunFunc func(dir string, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error
-
-// DirRun is the default DirRunFunc implementation. It executes the named
-// program with the given arguments, setting the working directory to dir.
-var DirRun DirRunFunc = func(dir string, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	cmd.Stdin = stdin
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
+// ChrootCmd describes a command to execute inside a chroot via unshare.
+// It embeds Cmd (where Name is the executable to run inside the chroot)
+// and adds the chroot-specific ChrootDir field. The unshare argument
+// list is built automatically by the default ChrootRun / ChrootOutput
+// implementations.
+type ChrootCmd struct {
+	Cmd
+	ChrootDir string // root directory for the chroot
 }
 
 // ChrootRunFunc is a function type that executes a command inside a chroot
@@ -144,30 +138,18 @@ type ChrootOutputFunc func(cmd *ChrootCmd) ([]byte, error)
 
 // ChrootRun is the default ChrootRunFunc implementation.
 var ChrootRun ChrootRunFunc = func(c *ChrootCmd) error {
-	uArgs, err := chrootArgs(c)
+	uArgs, err := chrootArgs(c.ChrootDir, c.Name, c.Args...)
 	if err != nil {
 		return err
 	}
-	return Run(&Cmd{
-		Name:   "unshare",
-		Args:   uArgs,
-		Env:    c.Env,
-		Stdin:  c.Stdin,
-		Stdout: c.Stdout,
-		Stderr: c.Stderr,
-	})
+	return Run(&Cmd{Name: "unshare", Args: uArgs, Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr})
 }
 
 // ChrootOutput is the default ChrootOutputFunc implementation.
 var ChrootOutput ChrootOutputFunc = func(c *ChrootCmd) ([]byte, error) {
-	uArgs, err := chrootArgs(c)
+	uArgs, err := chrootArgs(c.ChrootDir, c.Name, c.Args...)
 	if err != nil {
 		return nil, err
 	}
-	return Output(&Cmd{
-		Name:  "unshare",
-		Args:  uArgs,
-		Env:   c.Env,
-		Stdin: c.Stdin,
-	})
+	return Output(&Cmd{Name: "unshare", Args: uArgs})
 }

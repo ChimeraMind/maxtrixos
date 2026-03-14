@@ -2,13 +2,13 @@ package ostree
 
 import (
 	"fmt"
-	"io"
 	"matrixos/vector/lib/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"matrixos/vector/lib/runner"
 )
 
 func TestDeploy(t *testing.T) {
@@ -34,7 +34,8 @@ func TestDeploy(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, name, stdout := cmd.Args, cmd.Name, cmd.Stdout
 		cmdArgs := append([]string{name}, args...)
 		commands = append(commands, cmdArgs)
 
@@ -182,7 +183,8 @@ func TestBootedStatus(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		stdout := cmd.Stdout
 		// Mock ostree admin status --json
 		jsonOutput := `{
 			"deployments": [
@@ -222,7 +224,8 @@ func TestBootedStatus(t *testing.T) {
 func TestDeployedRootfsWithSysroot(t *testing.T) {
 	origRunCommand := runCommand
 	defer func() { runCommand = origRunCommand }()
-	runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	runCommand = func(cmd *runner.Cmd) error {
+		stdout := cmd.Stdout
 		fmt.Fprintln(stdout, "hash123")
 		return nil
 	}
@@ -292,7 +295,8 @@ func TestDeploy_Errors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+			runCommand = func(cmd *runner.Cmd) error {
+				args, stdout := cmd.Args, cmd.Stdout
 				cmdStr := strings.Join(args, " ")
 				if strings.Contains(cmdStr, tt.failAtCmd) {
 					return fmt.Errorf("simulated error")
@@ -362,7 +366,8 @@ func TestBootedStatus_Errors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+			o.runner = func(cmd *runner.Cmd) error {
+				stdout := cmd.Stdout
 				if tt.mockErr != nil {
 					return tt.mockErr
 				}
@@ -409,7 +414,8 @@ func TestListDeployments(t *testing.T) {
 		]
 	}`
 
-	runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	runCommand = func(cmd *runner.Cmd) error {
+		stdout := cmd.Stdout
 		// Expect ostree admin status --json
 		stdout.Write([]byte(fakeJSON))
 		return nil
@@ -502,7 +508,8 @@ func TestListDeployments_NoDeployments(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		stdout := cmd.Stdout
 		stdout.Write([]byte(`{"deployments": []}`))
 		return nil
 	}
@@ -528,7 +535,7 @@ func TestListDeployments_CommandError(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
 		return fmt.Errorf("ostree command failed")
 	}
 
@@ -550,7 +557,8 @@ func TestListDeployments_InvalidJSON(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		stdout := cmd.Stdout
 		stdout.Write([]byte(`{not valid json}`))
 		return nil
 	}
@@ -576,7 +584,8 @@ func TestSwitch(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, name := cmd.Args, cmd.Name
 		lastCmdArgs = append([]string{name}, args...)
 		return nil
 	}
@@ -602,7 +611,7 @@ func TestSwitch_MissingSysroot(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
 		return nil
 	}
 
@@ -624,7 +633,7 @@ func TestSwitch_CommandError(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
 		return fmt.Errorf("ostree admin switch failed")
 	}
 
@@ -649,7 +658,8 @@ func TestSwitch_Verbose(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		args, name := cmd.Args, cmd.Name
 		lastCmdArgs = append([]string{name}, args...)
 		return nil
 	}

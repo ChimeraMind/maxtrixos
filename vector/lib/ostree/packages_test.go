@@ -2,13 +2,13 @@ package ostree
 
 import (
 	"fmt"
-	"io"
 	"matrixos/vector/lib/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"matrixos/vector/lib/runner"
 )
 
 func TestCommitAndListPackages(t *testing.T) {
@@ -133,7 +133,8 @@ func TestListPackagesMocked(t *testing.T) {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
 
-	o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	o.runner = func(cmd *runner.Cmd) error {
+		stdout := cmd.Stdout
 		// Mock ls -R output
 		output := `d00755 0 0 0 abc abc /
 d00755 0 0 0 abc abc /var/db/pkg/cat/pkg
@@ -179,7 +180,8 @@ l00777 0 0 0 ddd444 /etc/localtime -> /usr/share/zoneinfo/UTC
 d00755 0 0 0 eee555 fff666 /etc/conf.d
 -00644 0 0 100 ggg777 /etc/conf.d/net
 `
-		o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+		o.runner = func(cmd *runner.Cmd) error {
+			stdout := cmd.Stdout
 			stdout.Write([]byte(mockOutput))
 			return nil
 		}
@@ -292,7 +294,7 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+		o.runner = func(cmd *runner.Cmd) error {
 			return fmt.Errorf("ostree ls failed")
 		}
 
@@ -313,7 +315,7 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+		o.runner = func(cmd *runner.Cmd) error {
 			// Write nothing
 			return nil
 		}
@@ -339,7 +341,8 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+		o.runner = func(cmd *runner.Cmd) error {
+			args, name := cmd.Args, cmd.Name
 			capturedArgs = append([]string{name}, args...)
 			return nil
 		}
@@ -397,7 +400,8 @@ d00755 0 0 0 eee555 fff666 /etc/conf.d
 			t.Fatalf("NewOstree failed: %v", err)
 		}
 
-		o.runner = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+		o.runner = func(cmd *runner.Cmd) error {
+			stdout := cmd.Stdout
 			stdout.Write([]byte("this is not valid ostree ls output\n"))
 			return nil
 		}

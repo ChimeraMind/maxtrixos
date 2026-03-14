@@ -50,6 +50,24 @@ type MockSeeder struct {
 	Stage3DownloadUrl_             string
 	Stage3DownloadUrlErr           error
 
+	// New config accessors
+	DownloadsDir_                string
+	DownloadsDirErr              error
+	DistfilesDir_                string
+	DistfilesDirErr              error
+	BinpkgsDir_                  string
+	BinpkgsDirErr                error
+	GpgKeysDir_                  string
+	GpgKeysDirErr                error
+	DevDir_                      string
+	DevDirErr                    error
+	DefaultDevDir_               string
+	DefaultDevDirErr             error
+	GitRepo_                     string
+	GitRepoErr                   error
+	DefaultPrivateGitRepoPath_   string
+	DefaultPrivateGitRepoPathErr error
+
 	// Execution
 	RetryableCmdErr               error
 	MaybeInitializePrivateRepoErr error
@@ -61,10 +79,35 @@ type MockSeeder struct {
 	SeederLockPathErr        error
 	ExecuteWithSeederLockErr error
 
+	// Worker operations
+	SeederDoneFlagFile_       string
+	SeederDoneFlagFileErr     error
+	IsSeederDone_             bool
+	IsSeederDoneErr           error
+	MarkSeederDoneErr         error
+	ParseSeederParams_        *SeederParams
+	ParseSeederParamsErr      error
+	ImportGentooGpgKeysErr    error
+	ExecutePrepperErr         error
+	SetupChrootMountsCleanup  func()
+	SetupChrootMountsErr      error
+	SetupChrootDNSErr         error
+	SetupChrootDirsErr        error
+	ExecuteInChrootErr        error
+	CleanTemporaryArtifactErr error
+
 	// Track calls
 	RetryableCmdCalled               bool
 	MaybeInitializePrivateRepoCalled bool
 	ExecuteWithSeederLockCalled      bool
+	ImportGentooGpgKeysCalled        bool
+	ExecutePrepperCalled             bool
+	SetupChrootMountsCalled          bool
+	SetupChrootDNSCalled             bool
+	SetupChrootDirsCalled            bool
+	ExecuteInChrootCalled            bool
+	MarkSeederDoneCalled             bool
+	CleanTemporaryArtifactCalled     bool
 }
 
 // DefaultMockSeeder returns a MockSeeder with sensible defaults for tests.
@@ -173,4 +216,91 @@ func (m *MockSeeder) ExecuteWithSeederLock(name string, fn func() error) error {
 		return m.ExecuteWithSeederLockErr
 	}
 	return fn()
+}
+
+func (m *MockSeeder) DownloadsDir() (string, error) {
+	return m.DownloadsDir_, m.DownloadsDirErr
+}
+func (m *MockSeeder) DistfilesDir() (string, error) {
+	return m.DistfilesDir_, m.DistfilesDirErr
+}
+func (m *MockSeeder) BinpkgsDir() (string, error) {
+	return m.BinpkgsDir_, m.BinpkgsDirErr
+}
+func (m *MockSeeder) GpgKeysDir() (string, error) {
+	return m.GpgKeysDir_, m.GpgKeysDirErr
+}
+func (m *MockSeeder) DevDir() (string, error) {
+	return m.DevDir_, m.DevDirErr
+}
+func (m *MockSeeder) DefaultDevDir() (string, error) {
+	return m.DefaultDevDir_, m.DefaultDevDirErr
+}
+func (m *MockSeeder) GitRepo() (string, error) {
+	return m.GitRepo_, m.GitRepoErr
+}
+func (m *MockSeeder) DefaultPrivateGitRepoPath() (string, error) {
+	return m.DefaultPrivateGitRepoPath_, m.DefaultPrivateGitRepoPathErr
+}
+func (m *MockSeeder) SeederDoneFlagFile(
+	name, chrootDir string,
+) (string, error) {
+	return m.SeederDoneFlagFile_, m.SeederDoneFlagFileErr
+}
+func (m *MockSeeder) IsSeederDone(
+	name, chrootDir string,
+) (bool, error) {
+	return m.IsSeederDone_, m.IsSeederDoneErr
+}
+func (m *MockSeeder) MarkSeederDone(
+	name, chrootDir string,
+) error {
+	m.MarkSeederDoneCalled = true
+	return m.MarkSeederDoneErr
+}
+func (m *MockSeeder) ParseSeederParams(
+	paramsPath string,
+) (*SeederParams, error) {
+	return m.ParseSeederParams_, m.ParseSeederParamsErr
+}
+func (m *MockSeeder) ImportGentooGpgKeys() error {
+	m.ImportGentooGpgKeysCalled = true
+	return m.ImportGentooGpgKeysErr
+}
+func (m *MockSeeder) ExecutePrepper(
+	info SeederInfo, params *SeederParams, opts *PrepperOptions,
+) error {
+	m.ExecutePrepperCalled = true
+	return m.ExecutePrepperErr
+}
+func (m *MockSeeder) SetupChrootMounts(
+	chrootDir string,
+) (func(), error) {
+	m.SetupChrootMountsCalled = true
+	if m.SetupChrootMountsErr != nil {
+		return nil, m.SetupChrootMountsErr
+	}
+	cleanup := m.SetupChrootMountsCleanup
+	if cleanup == nil {
+		cleanup = func() {}
+	}
+	return cleanup, nil
+}
+func (m *MockSeeder) SetupChrootDNS(chrootDir string) error {
+	m.SetupChrootDNSCalled = true
+	return m.SetupChrootDNSErr
+}
+func (m *MockSeeder) SetupChrootDirs(chrootDir string) error {
+	m.SetupChrootDirsCalled = true
+	return m.SetupChrootDirsErr
+}
+func (m *MockSeeder) ExecuteInChroot(
+	chrootDir string, info SeederInfo,
+) error {
+	m.ExecuteInChrootCalled = true
+	return m.ExecuteInChrootErr
+}
+func (m *MockSeeder) CleanTemporaryArtifact(dir string) error {
+	m.CleanTemporaryArtifactCalled = true
+	return m.CleanTemporaryArtifactErr
 }

@@ -2,12 +2,12 @@ package ostree
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"matrixos/vector/lib/runner"
 )
 
 // checkOstreeAvailable skips the current test if the ostree binary is not
@@ -115,7 +115,8 @@ func TestRunVerbose(t *testing.T) {
 	origRunCommand := runCommand
 	defer func() { runCommand = origRunCommand }()
 
-	runCommand = func(_ io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
+	runCommand = func(cmd *runner.Cmd) error {
+		args := cmd.Args
 		if len(args) > 0 && args[0] == "--verbose" {
 			return nil
 		}
