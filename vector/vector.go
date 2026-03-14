@@ -29,8 +29,9 @@ Usage:
     janitor      cleans up development toolkit artifacts, such as old images and downloads.
     vm           runs generated image tests using QEMU.
   build       - build toolkit command, orchestrates building OS artifacts.
-    image        generates a single OS image.
     release      generates a single OS release (ostree commit).
+    image        generates a single OS image.
+    images 	     generates multiple OS images based on released branches.
 `
 )
 
