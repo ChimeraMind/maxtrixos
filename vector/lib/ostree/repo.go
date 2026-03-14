@@ -18,6 +18,29 @@ type AddRemoteOptions struct {
 	Verbose   bool
 }
 
+// InitRepo initialises the local ostree repository in archive mode.
+// The collection ID is read from the Ostree.CollectionId config key;
+// if set, it is passed as --collection-id.
+func (o *Ostree) InitRepo(verbose bool) error {
+	repoDir, err := o.RepoDir()
+	if err != nil {
+		return err
+	}
+
+	args := []string{"--repo=" + repoDir, "init", "--mode=archive"}
+
+	collectionID, _ := o.cfg.GetItem("Ostree.CollectionId")
+	if collectionID != "" {
+		collArgs, err := CollectionIDArgs(collectionID)
+		if err != nil {
+			return err
+		}
+		args = append(args, collArgs...)
+	}
+
+	return o.ostreeRun(verbose, args...)
+}
+
 // CollectionIDArgs returns the ostree --collection-id argument if a collection ID is provided.
 func CollectionIDArgs(collectionID string) ([]string, error) {
 	if collectionID == "" {
@@ -627,8 +650,7 @@ func (o *Ostree) MaybeInitializeRemote(verbose bool) error {
 	objectsDir := filepath.Join(repoDir, "objects")
 	if !directoryExists(objectsDir) {
 		o.Print("Initializing local ostree repo at %v ...\n", repoDir)
-		err := o.ostreeRun(verbose, "--repo="+repoDir, "init", "--mode=archive")
-		if err != nil {
+		if err := o.InitRepo(verbose); err != nil {
 			return err
 		}
 	} else {
