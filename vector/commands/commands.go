@@ -319,3 +319,11 @@ func (ui *UI) StartUI() {
 
 var execCommand = exec.Command
 var getEuid = os.Geteuid
+
+func getSysrootFlag(sysroot string) string {
+	return fmt.Sprintf("--sysroot=%s", sysroot)
+}
+
+func getRepoFlag(sysroot string) string {
+	return fmt.Sprintf("--repo=%s/ostree/repo", sysroot)
+}

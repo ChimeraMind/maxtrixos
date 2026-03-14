@@ -301,13 +301,7 @@ func checkFsCapabilitySupport(testDir string) (bool, error) {
 	tmpCopy := tmpBin.Name() + ".copy"
 	defer os.Remove(tmpCopy)
 
-	// Copy with cp -a (archive mode) to preserve xattrs, matching the
-	// bash version. This delegates capability preservation to coreutils
-	// which handles all xattr edge cases correctly.
-	if err := execRun(&runner.Cmd{
-		Name: "cp",
-		Args: []string{"-a", tmpBin.Name(), tmpCopy},
-	}); err != nil {
+	if err := CopyFilePreserveXattrs(tmpBin.Name(), tmpCopy); err != nil {
 		return false, err
 	}
 
@@ -321,7 +315,187 @@ func checkFsCapabilitySupport(testDir string) (bool, error) {
 		return false, nil
 	}
 
-	return strings.Contains(string(out), "cap_net_raw"), nil
+// CopyFile copies a file from src to dst atomically. It writes to a temporary
+// file first, syncs it, then renames to the final destination. This ensures the
+// destination is never left in a partial state.
+func CopyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst + ".tmp")
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	if err != nil {
+		return err
+	}
+
+	err = destFile.Sync()
+	if err != nil {
+		return err
+	}
+	sourceFile.Close()
+	destFile.Close()
+
+	return os.Rename(dst+".tmp", dst)
+}
+
+// CopyFilePreserveXattrs copies a file from src to dst, preserving permissions
+// and extended attributes (xattrs). This is equivalent to "cp -a" for regular files.
+func CopyFilePreserveXattrs(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode())
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return err
+	}
+
+	// Copy extended attributes (includes security.capability)
+	attrs, err := sysLlistxattr(src, nil)
+	if err != nil || attrs == 0 {
+		return nil // no xattrs or not supported
+	}
+	buf := make([]byte, attrs)
+	attrs, err = sysLlistxattr(src, buf)
+	if err != nil {
+		return nil
+	}
+
+	// xattr names are null-terminated strings packed together
+	for _, name := range strings.Split(strings.TrimRight(string(buf[:attrs]), "\x00"), "\x00") {
+		if name == "" {
+			continue
+		}
+		sz, err := sysLgetxattr(src, name, nil)
+		if err != nil {
+			continue
+		}
+		val := make([]byte, sz)
+		_, err = sysLgetxattr(src, name, val)
+		if err != nil {
+			continue
+		}
+		sysLsetxattr(dst, name, val, 0)
+	}
+	return nil
+}
+
+// CheckHardlinkPreservation verifies that hardlinks are preserved between source and destination.
+func CheckHardlinkPreservation(src, dst string) error {
+	if src == "" || dst == "" {
+		return fmt.Errorf("missing parameter (src: %s, dst: %s)", src, dst)
+	}
+	log.Printf("Checking hardlink preservation from %s to %s...", src, dst)
+
+	// 1. Walk the source directory to find files with multiple links.
+	// 2. Track Inodes to find the first pair of files sharing the same inode.
+	// Using a map for O(1) checks.
+
+	// Map from Inode (uint64) -> Path
+	seenInodes := make(map[uint64]string)
+
+	var file1Src, file2Src string
+	foundPair := false
+
+	// Sentinel error to stop walking early
+	errFoundPair := fmt.Errorf("found pair")
+
+	err := filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		sys, ok := info.Sys().(*syscall.Stat_t)
+		if !ok {
+			return nil
+		}
+
+		if sys.Nlink > 1 {
+			if existingPath, ok := seenInodes[sys.Ino]; ok {
+				file1Src = existingPath
+				file2Src = path
+				foundPair = true
+				return errFoundPair
+			}
+			seenInodes[sys.Ino] = path
+		}
+		return nil
+	})
+
+	if err != nil && err != errFoundPair {
+		return fmt.Errorf("error walking source directory: %w", err)
+	}
+
+	if !foundPair {
+		log.Println("WARNING: no hardlinked file pairs found in source. Cannot verify.")
+		return nil
+	}
+
+	relPath1, err := filepath.Rel(src, file1Src)
+	if err != nil {
+		return err
+	}
+	relPath2, err := filepath.Rel(src, file2Src)
+	if err != nil {
+		return err
+	}
+
+	file1Dst := filepath.Join(dst, relPath1)
+	file2Dst := filepath.Join(dst, relPath2)
+
+	info1, err := os.Stat(file1Dst)
+	if err != nil {
+		return err
+	}
+	info2, err := os.Stat(file2Dst)
+	if err != nil {
+		return err
+	}
+
+	stat1, ok1 := info1.Sys().(*syscall.Stat_t)
+	stat2, ok2 := info2.Sys().(*syscall.Stat_t)
+
+	if !ok1 || !ok2 {
+		return fmt.Errorf("could not get inode info")
+	}
+
+	if stat1.Ino != stat2.Ino {
+		return fmt.Errorf(
+			"CRITICAL: hardlinks BROKEN! Files were duplicated.\n  File 1: %s (inode: %d)\n  File 2: %s (inode: %d)",
+			file1Dst, stat1.Ino, file2Dst, stat2.Ino,
+		)
+	}
+
+	log.Printf("SUCCESS: hardlinks preserved (Inode: %d).", stat1.Ino)
+	return nil
 }
 
 // CheckDirIsRoot checks if a directory is the root of the filesystem and exits if it is.
@@ -888,4 +1062,125 @@ func PartitionType(partitionPath string) (string, error) {
 		return "", fmt.Errorf("cannot determine partition type for %s: %w", partitionPath, err)
 	}
 	return strings.ToUpper(partType), nil
+}
+
+// PrintDirectoryTree walks a directory tree rooted at root and prints every
+// path to w, one per line – equivalent to running "find <root>".
+func PrintDirectoryTree(w io.Writer, root string) error {
+	if root == "" {
+		return fmt.Errorf("missing root parameter")
+	}
+	return filepath.WalkDir(root, func(path string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			// Report inaccessible paths but keep walking.
+			fmt.Fprintf(w, "%s [error: %v]\n", path, err)
+			return nil
+		}
+		fmt.Fprintln(w, path)
+		return nil
+	})
+}
+
+// BlockDevicePartitionInfo holds blkid-style attributes for a single device.
+type BlockDevicePartitionInfo struct {
+	Device   string // e.g. /dev/loop0p1
+	UUID     string // filesystem UUID
+	PartUUID string // GPT partition UUID
+	Label    string // filesystem label
+	FSType   string // filesystem type (from mountinfo)
+	PartType string // GPT partition type GUID
+}
+
+// String formats the info in a blkid-like output line:
+//
+//	/dev/loop0p1: UUID="..." PARTUUID="..." LABEL="..." TYPE="..." PARTTYPE="..."
+func (bi *BlockDevicePartitionInfo) String() string {
+	var parts []string
+	if bi.UUID != "" {
+		parts = append(parts, fmt.Sprintf("UUID=%q", bi.UUID))
+	}
+	if bi.PartUUID != "" {
+		parts = append(parts, fmt.Sprintf("PARTUUID=%q", bi.PartUUID))
+	}
+	if bi.Label != "" {
+		parts = append(parts, fmt.Sprintf("LABEL=%q", bi.Label))
+	}
+	if bi.FSType != "" {
+		parts = append(parts, fmt.Sprintf("TYPE=%q", bi.FSType))
+	}
+	if bi.PartType != "" {
+		parts = append(parts, fmt.Sprintf("PARTTYPE=%q", bi.PartType))
+	}
+	return fmt.Sprintf("%s: %s", bi.Device, strings.Join(parts, " "))
+}
+
+// BlockDeviceInfo collects blkid-style information for all partitions on
+// a block device (e.g. /dev/loop0) by querying sysfs and /dev/disk/by-*
+// symlinks. The filesystem type is resolved from /proc/self/mountinfo
+// when the partition is currently mounted.
+func BlockDeviceInfo(blockDevice string) ([]BlockDevicePartitionInfo, error) {
+	if blockDevice == "" {
+		return nil, fmt.Errorf("missing blockDevice parameter")
+	}
+
+	parentBase := filepath.Base(blockDevice)
+	parentSysfs := filepath.Join(sysClassBlockPath, parentBase)
+
+	entries, err := os.ReadDir(parentSysfs)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read sysfs for %s: %w", blockDevice, err)
+	}
+
+	var infos []BlockDevicePartitionInfo
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), parentBase) {
+			continue
+		}
+		// Verify it's a partition by checking the "partition" sysfs file.
+		partFile := filepath.Join(parentSysfs, e.Name(), "partition")
+		if _, err := readFileBytes(partFile); err != nil {
+			continue
+		}
+
+		partDev := filepath.Join(filepath.Dir(blockDevice), e.Name())
+		info := BlockDevicePartitionInfo{Device: partDev}
+
+		// UUID (best-effort, some partitions may not have one).
+		if uuid, err := resolveDeviceAttribute(partDev, devDiskByUUIDPath); err == nil {
+			info.UUID = uuid
+		}
+		// PARTUUID
+		if partuuid, err := resolveDeviceAttribute(partDev, devDiskByPartUUIDPath); err == nil {
+			info.PartUUID = partuuid
+		}
+		// LABEL
+		if label, err := resolveDeviceAttribute(partDev, devDiskByLabelPath); err == nil {
+			info.Label = label
+		}
+		// PARTTYPE
+		if partType, err := resolveDeviceAttribute(partDev, devDiskByPartTypePath); err == nil {
+			info.PartType = strings.ToUpper(partType)
+		}
+		// FSType – resolve via mountinfo if the partition is mounted.
+		if mounts, err := findMountsBySource(partDev); err == nil && len(mounts) > 0 {
+			info.FSType = mounts[0].FSType
+		}
+
+		infos = append(infos, info)
+	}
+
+	return infos, nil
+}
+
+// PrintBlockDeviceInfo writes blkid-style information for all partitions
+// on blockDevice to w.
+func PrintBlockDeviceInfo(w io.Writer, blockDevice string) error {
+	infos, err := BlockDeviceInfo(blockDevice)
+	if err != nil {
+		return err
+	}
+	for _, info := range infos {
+		fmt.Fprintln(w, info.String())
+	}
+	return nil
 }

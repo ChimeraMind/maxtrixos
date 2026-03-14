@@ -731,16 +731,25 @@ func TestImageMountGetters(t *testing.T) {
 
 func TestShowFinalFilesystemInfo(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
+		// Create temp directories so PrintDirectoryTree can walk them.
+		bootDir := t.TempDir()
+		efiDir := t.TempDir()
+		// Create a few files to verify the walk.
+		os.MkdirAll(filepath.Join(bootDir, "grub"), 0755)
+		os.WriteFile(filepath.Join(bootDir, "grub", "grub.cfg"), []byte("test"), 0644)
+		os.MkdirAll(filepath.Join(efiDir, "EFI", "BOOT"), 0755)
+
 		runner := runner.NewMockRunner()
 		im := newTestImageWithRunner(baseImageConfig(), &cds.MockOstree{}, runner)
 
-		err := im.ShowFinalFilesystemInfo("/dev/loop0", "/mnt/boot", "/mnt/efi")
+		err := im.ShowFinalFilesystemInfo("/dev/loop0", bootDir, efiDir)
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
-		// find (boot) + find (efi) + blkid = 3 calls.
-		if len(runner.Calls) != 3 {
-			t.Fatalf("expected 3 runner calls, got %d", len(runner.Calls))
+		// No runner calls – directory listing and block device info
+		// are now pure Go.
+		if len(runner.Calls) != 0 {
+			t.Fatalf("expected 0 runner calls, got %d", len(runner.Calls))
 		}
 	})
 
@@ -1253,33 +1262,6 @@ func TestExecuteWithImageLock(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatalf("second call should succeed after lock release: %v", err)
-		}
-	})
-}
-
-// --- copyFile Tests ---
-
-func TestCopyFile(t *testing.T) {
-	t.Run("Success", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		src := filepath.Join(tmpDir, "src.txt")
-		dst := filepath.Join(tmpDir, "dst.txt")
-		os.WriteFile(src, []byte("hello world"), 0644)
-
-		err := copyFile(src, dst)
-		if err != nil {
-			t.Fatalf("error: %v", err)
-		}
-		data, _ := os.ReadFile(dst)
-		if string(data) != "hello world" {
-			t.Errorf("got %q, want 'hello world'", string(data))
-		}
-	})
-
-	t.Run("SrcNotFound", func(t *testing.T) {
-		err := copyFile("/nonexistent", "/tmp/dst")
-		if err == nil {
-			t.Error("should error for nonexistent source")
 		}
 	})
 }

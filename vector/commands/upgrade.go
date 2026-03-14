@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode"
 
+	"matrixos/vector/lib/cds"
 	"matrixos/vector/lib/filesystems"
-	"matrixos/vector/lib/ostree"
 )
 
 var (

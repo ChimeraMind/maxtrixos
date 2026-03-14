@@ -471,6 +471,318 @@ func TestCheckDirIsRoot(t *testing.T) {
 	}
 }
 
+func TestCheckHardlinkPreservation(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+
+	file1 := filepath.Join(srcDir, "file1")
+	if err := os.WriteFile(file1, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	file2 := filepath.Join(srcDir, "file2")
+	if err := os.Link(file1, file2); err != nil {
+		t.Fatal(err)
+	}
+
+	dstFile1 := filepath.Join(dstDir, "file1")
+	dstFile2 := filepath.Join(dstDir, "file2")
+	if err := os.WriteFile(dstFile1, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(dstFile1, dstFile2); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := CheckHardlinkPreservation(srcDir, dstDir); err != nil {
+		t.Errorf("CheckHardlinkPreservation failed when links preserved: %v", err)
+	}
+
+	dstDirBroken := t.TempDir()
+	dstBroken1 := filepath.Join(dstDirBroken, "file1")
+	dstBroken2 := filepath.Join(dstDirBroken, "file2")
+	if err := os.WriteFile(dstBroken1, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dstBroken2, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := CheckHardlinkPreservation(srcDir, dstDirBroken); err == nil {
+		t.Error("CheckHardlinkPreservation should fail when links are broken")
+	}
+}
+
+func TestCleanupMounts(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	t.Run("SuccessfulUnmount", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: "/mnt/test", Source: "/dev/sda1"},
+		})
+		CleanupMounts([]string{"/mnt/test"})
+	})
+
+	t.Run("MountNotExist", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{})
+		CleanupMounts([]string{"/mnt/test"})
+	})
+
+	t.Run("UnmountFail", func(t *testing.T) {
+		setupMockMountInfo(t, []*MountInfoEntry{
+			{Mountpoint: "/mnt/fail", Source: "/dev/sda1"},
+		})
+		os.Setenv("MOCK_UMOUNT_FAIL", "1")
+		defer os.Unsetenv("MOCK_UMOUNT_FAIL")
+		// Should not panic or error out, just log
+		CleanupMounts([]string{"/mnt/fail"})
+	})
+}
+
+func TestSetupCommonRootfsMounts(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	mounts, err := SetupCommonRootfsMounts(tmpDir)
+	if err != nil {
+		t.Errorf("SetupCommonRootfsMounts failed: %v", err)
+	}
+	if len(mounts) != 6 {
+		t.Errorf("Expected 6 mounts, got %d", len(mounts))
+	}
+}
+
+func TestBindMount(t *testing.T) {
+	setupMockExec(t)
+	setupMockSyscalls(t)
+
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	if _, err := BindMount(src, dst); err != nil {
+		t.Errorf("BindMount failed: %v", err)
+	}
+}
+
+func TestCleanupLoopDevices(t *testing.T) {
+	setupMockExec(t)
+
+	f, err := os.CreateTemp("", "loop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	defer os.Remove(f.Name())
+
+	// Mock sysfs backing_file read to make the device look attached.
+	setupMockLoop(t)
+	loopDir := filepath.Join(sysBlockPrefix, filepath.Base(f.Name()), "loop")
+	if err := os.MkdirAll(loopDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(loopDir, "backing_file"), []byte("/path/to/backing/file\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// openFile for Detach returns a temp file, ioctl succeeds via setupMockLoop defaults.
+	tmp, err2 := os.CreateTemp("", "loopdev")
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+	defer os.Remove(tmp.Name())
+	openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+		return tmp, nil
+	}
+
+	CleanupLoopDevices([]string{f.Name()})
+}
+
+func TestCopyFile(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		src := filepath.Join(tmpDir, "src.txt")
+		dst := filepath.Join(tmpDir, "dst.txt")
+		content := []byte("hello world")
+		if err := os.WriteFile(src, content, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyFile(src, dst); err != nil {
+			t.Fatalf("CopyFile failed: %v", err)
+		}
+
+		data, err := os.ReadFile(dst)
+		if err != nil {
+			t.Fatalf("Failed to read dst: %v", err)
+		}
+		if string(data) != string(content) {
+			t.Errorf("got %q, want %q", data, content)
+		}
+	})
+
+	t.Run("EmptyFile", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		src := filepath.Join(tmpDir, "src_empty.txt")
+		dst := filepath.Join(tmpDir, "dst_empty.txt")
+		if err := os.WriteFile(src, nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyFile(src, dst); err != nil {
+			t.Fatalf("CopyFile failed: %v", err)
+		}
+
+		info, err := os.Stat(dst)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Size() != 0 {
+			t.Errorf("expected empty file, got size %d", info.Size())
+		}
+	})
+
+	t.Run("SrcNotFound", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		err := CopyFile(filepath.Join(tmpDir, "nonexistent"), filepath.Join(tmpDir, "dst"))
+		if err == nil {
+			t.Error("expected error for nonexistent source")
+		}
+	})
+}
+
+func TestCopyFilePreserveXattrs(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("BasicCopy", func(t *testing.T) {
+		src := filepath.Join(dir, "src_basic")
+		dst := filepath.Join(dir, "dst_basic")
+		content := []byte("hello xattr world")
+		if err := os.WriteFile(src, content, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyFilePreserveXattrs(src, dst); err != nil {
+			t.Fatalf("CopyFilePreserveXattrs failed: %v", err)
+		}
+
+		got, err := os.ReadFile(dst)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != string(content) {
+			t.Errorf("content mismatch: got %q, want %q", got, content)
+		}
+
+		info, err := os.Stat(dst)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0644 {
+			t.Errorf("permissions mismatch: got %04o, want 0644", info.Mode().Perm())
+		}
+	})
+
+	t.Run("PreservesXattrs", func(t *testing.T) {
+		src := filepath.Join(dir, "src_xattr")
+		dst := filepath.Join(dir, "dst_xattr")
+		if err := os.WriteFile(src, []byte("data"), 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		attrName := "user.test_attr"
+		attrVal := []byte("test_value_123")
+		if err := unix.Lsetxattr(src, attrName, attrVal, 0); err != nil {
+			t.Skipf("filesystem does not support user xattrs: %v", err)
+		}
+
+		if err := CopyFilePreserveXattrs(src, dst); err != nil {
+			t.Fatalf("CopyFilePreserveXattrs failed: %v", err)
+		}
+
+		// Verify xattr was copied
+		sz, err := unix.Lgetxattr(dst, attrName, nil)
+		if err != nil {
+			t.Fatalf("xattr not found on dst: %v", err)
+		}
+		buf := make([]byte, sz)
+		_, err = unix.Lgetxattr(dst, attrName, buf)
+		if err != nil {
+			t.Fatalf("failed to read xattr: %v", err)
+		}
+		if string(buf) != string(attrVal) {
+			t.Errorf("xattr value mismatch: got %q, want %q", buf, attrVal)
+		}
+	})
+
+	t.Run("MultipleXattrs", func(t *testing.T) {
+		src := filepath.Join(dir, "src_multi")
+		dst := filepath.Join(dir, "dst_multi")
+		if err := os.WriteFile(src, []byte("multi"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		attrs := map[string]string{
+			"user.attr_a": "value_a",
+			"user.attr_b": "value_b",
+			"user.attr_c": "value_c",
+		}
+		for k, v := range attrs {
+			if err := unix.Lsetxattr(src, k, []byte(v), 0); err != nil {
+				t.Skipf("filesystem does not support user xattrs: %v", err)
+			}
+		}
+
+		if err := CopyFilePreserveXattrs(src, dst); err != nil {
+			t.Fatalf("CopyFilePreserveXattrs failed: %v", err)
+		}
+
+		for k, want := range attrs {
+			sz, err := unix.Lgetxattr(dst, k, nil)
+			if err != nil {
+				t.Errorf("xattr %s not found on dst: %v", k, err)
+				continue
+			}
+			buf := make([]byte, sz)
+			unix.Lgetxattr(dst, k, buf)
+			if string(buf) != want {
+				t.Errorf("xattr %s: got %q, want %q", k, buf, want)
+			}
+		}
+	})
+
+	t.Run("EmptyFile", func(t *testing.T) {
+		src := filepath.Join(dir, "src_empty")
+		dst := filepath.Join(dir, "dst_empty")
+		if err := os.WriteFile(src, nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := CopyFilePreserveXattrs(src, dst); err != nil {
+			t.Fatalf("CopyFilePreserveXattrs failed: %v", err)
+		}
+
+		info, err := os.Stat(dst)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Size() != 0 {
+			t.Errorf("expected empty file, got size %d", info.Size())
+		}
+	})
+
+	t.Run("SrcNotExist", func(t *testing.T) {
+		err := CopyFilePreserveXattrs("/nonexistent/file", filepath.Join(dir, "dst_noexist"))
+		if err == nil {
+			t.Error("expected error for nonexistent source")
+		}
+	})
+}
+
 func TestCheckFsCapabilitySupport(t *testing.T) {
 	tmpDir := t.TempDir()
 
