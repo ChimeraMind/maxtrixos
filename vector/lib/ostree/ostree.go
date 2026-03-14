@@ -45,6 +45,7 @@ type IOstree interface {
 	GpgHomeDir() (string, error)
 	GpgKeyID() (string, error)
 	GpgArgs() ([]string, error)
+	SetGpg(enabled bool) error
 
 	// Filesystem operations
 	SetupEtc(imageDir string) error

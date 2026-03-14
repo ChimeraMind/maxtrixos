@@ -75,6 +75,7 @@ func (m *MockOstree) ClientSideGpgArgs() ([]string, error)       { return nil, n
 func (m *MockOstree) GpgHomeDir() (string, error)                { return "", nil }
 func (m *MockOstree) GpgKeyID() (string, error)                  { return "", nil }
 func (m *MockOstree) GpgArgs() ([]string, error)                 { return nil, nil }
+func (m *MockOstree) SetGpg(_ bool) error                         { return nil }
 func (m *MockOstree) SetupEtc(string) error                      { return nil }
 func (m *MockOstree) PrepareFilesystemHierarchy(string) error    { return nil }
 func (m *MockOstree) ValidateFilesystemHierarchy(string) error   { return nil }
