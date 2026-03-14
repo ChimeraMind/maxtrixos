@@ -214,6 +214,7 @@ func CheckDirNotFsRoot(mnt string) error {
 // set up for a container or chroot environment, such as /dev, /proc, and /run/lock.
 type CommonRootfsMounts struct {
 	mountPoint  string
+	mountProc   bool
 	mounting    func(string)
 	mounted     func(string)
 	mounts      []string
@@ -225,6 +226,7 @@ type CommonRootfsMounts struct {
 // CommonRootfsMountsOptions represents the options for setting up common rootfs mounts.
 type CommonRootfsMountsOptions struct {
 	MountPoint string
+	MountProc  bool
 	Mounting   func(string)
 	Mounted    func(string)
 	Stdout     io.Writer
@@ -248,6 +250,7 @@ func NewCommonRootfsMounts(opts CommonRootfsMountsOptions) (*CommonRootfsMounts,
 
 	return &CommonRootfsMounts{
 		mountPoint: opts.MountPoint,
+		mountProc:  opts.MountProc,
 		mounting:   opts.Mounting,
 		mounted:    opts.Mounted,
 		slaveMounts: []string{
@@ -302,16 +305,18 @@ func (m *CommonRootfsMounts) Setup() error {
 	}
 	m.mounted(chrootDevShm)
 
-	chrootProc := filepath.Join(m.mountPoint, "proc")
-	if err := os.MkdirAll(chrootProc, 0755); err != nil {
-		return err
+	if m.mountProc {
+		chrootProc := filepath.Join(m.mountPoint, "proc")
+		if err := os.MkdirAll(chrootProc, 0755); err != nil {
+			return err
+		}
+		m.mounting(chrootProc)
+		m.add(chrootProc)
+		if err := Mount("proc", chrootProc, "proc", 0, ""); err != nil {
+			return fmt.Errorf("failed to mount proc: %w", err)
+		}
+		m.mounted(chrootProc)
 	}
-	m.mounting(chrootProc)
-	m.add(chrootProc)
-	if err := Mount("proc", chrootProc, "proc", 0, ""); err != nil {
-		return fmt.Errorf("failed to mount proc: %w", err)
-	}
-	m.mounted(chrootProc)
 
 	runLock := filepath.Join(m.mountPoint, "run", "lock")
 	if err := os.MkdirAll(runLock, 0755); err != nil {
