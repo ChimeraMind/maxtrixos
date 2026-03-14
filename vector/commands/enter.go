@@ -43,6 +43,31 @@ func (c *EnterCommand) Name() string {
 	return "enter"
 }
 
+// SeedersParams maps seeder names to their parsed params.
+type SeedersParams map[string]*seeder.SeederParams
+
+func (c *EnterCommand) makeSeederParams(sd seeder.ISeeder) (SeedersParams, error) {
+	paramsName, err := sd.ParamsExecutableName()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get params executable name: %w", err)
+	}
+
+	paramsMap := make(SeedersParams)
+	for _, info := range c.detected {
+		paramsPath := filepath.Join(info.Dir, paramsName)
+		if !filesystems.FileExists(paramsPath) {
+			continue
+		}
+		params, err := sd.ParseSeederParams(info.Name, paramsPath)
+		if err != nil {
+			// Skip seeders whose params cannot be parsed.
+			continue
+		}
+		paramsMap[info.Name] = params
+	}
+	return paramsMap, nil
+}
+
 func (c *EnterCommand) Init(args []string) error {
 	if err := c.parseArgs(args); err != nil {
 		return err
@@ -104,9 +129,22 @@ func (c *EnterCommand) Run() error {
 
 // run implements the enter workflow.
 func (c *EnterCommand) run() error {
+	sd, err := newSeeder(c.cfg, nil)
+	if err != nil {
+		return fmt.Errorf("failed to initialize seeder: %w", err)
+	}
+	c.PushCleanup(sd.Cleanup)
+	defer sd.Cleanup()
+
 	// Classify targets into absolute dirs and bare names.
 	var chrootDirs []string
 	var chrootNames []string
+
+	seedersParams, err := c.makeSeederParams(sd)
+	if err != nil {
+		return fmt.Errorf("failed to make params map: %w", err)
+	}
+
 	for _, target := range c.targets {
 		if target == "" {
 			continue
@@ -121,12 +159,24 @@ func (c *EnterCommand) run() error {
 			chrootNames = append(chrootNames, target)
 			continue
 		}
+
+		if params, ok := seedersParams[target]; ok {
+			if params.PreferredChrootDir != "" {
+				chrootDirs = append(chrootDirs, params.PreferredChrootDir)
+				continue
+			}
+			if params.LatestAvailableChrootDir != "" {
+				chrootDirs = append(chrootDirs, params.LatestAvailableChrootDir)
+				continue
+			}
+		}
+
 		return fmt.Errorf("unable to accept %s, unrecognized argument", target)
 	}
 
 	// Resolve bare names by scanning seeder params for SEEDER_CHROOTS_DIR.
 	if len(chrootNames) > 0 {
-		resolved, err := c.resolveNames(chrootNames)
+		resolved, err := c.resolveNames(sd, seedersParams, chrootNames)
 		if err != nil {
 			return err
 		}
@@ -143,7 +193,7 @@ func (c *EnterCommand) run() error {
 
 	// Enter each chroot.
 	for _, chrootDir := range chrootDirs {
-		if err := c.enterChroot(chrootDir); err != nil {
+		if err := c.enterChroot(sd, chrootDir); err != nil {
 			return fmt.Errorf("error entering chroot %s: %w", chrootDir, err)
 		}
 	}
@@ -153,14 +203,7 @@ func (c *EnterCommand) run() error {
 
 // resolveNames maps bare chroot names to full paths by examining
 // each detected seeder's params for SEEDER_CHROOTS_DIR.
-func (c *EnterCommand) resolveNames(names []string) ([]string, error) {
-	sd, err := newSeeder(c.cfg, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize seeder: %w", err)
-	}
-	c.PushCleanup(sd.Cleanup)
-	defer sd.Cleanup()
-
+func (c *EnterCommand) resolveNames(sd seeder.ISeeder, sps SeedersParams, names []string) ([]string, error) {
 	paramsName, err := sd.ParamsExecutableName()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get params executable name: %w", err)
@@ -174,9 +217,8 @@ func (c *EnterCommand) resolveNames(names []string) ([]string, error) {
 		if !filesystems.FileExists(paramsPath) {
 			continue
 		}
-		params, err := sd.ParseSeederParams(info.Name, paramsPath)
-		if err != nil {
-			// Skip seeders whose params cannot be parsed.
+		params, ok := sps[info.Name]
+		if !ok {
 			continue
 		}
 		if params.ChrootsDir == "" {
@@ -204,14 +246,7 @@ func (c *EnterCommand) resolveNames(names []string) ([]string, error) {
 
 // enterChroot sets up mounts, runs an interactive shell inside the
 // chroot, and tears down mounts afterwards.
-func (c *EnterCommand) enterChroot(chrootDir string) error {
-	sd, err := newSeeder(c.cfg, nil)
-	if err != nil {
-		return fmt.Errorf("failed to initialize seeder: %w", err)
-	}
-	c.PushCleanup(sd.Cleanup)
-	defer sd.Cleanup()
-
+func (c *EnterCommand) enterChroot(sd seeder.ISeeder, chrootDir string) error {
 	fmt.Printf("Entering seed %s: %s\n", filepath.Base(chrootDir), chrootDir)
 
 	if c.skipLock {
