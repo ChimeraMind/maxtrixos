@@ -101,9 +101,9 @@ func (c *BranchCommand) show() error {
 			booted = &dep
 			break
 		}
-		ref := c.args[0]
+		c.ot.SetRef(c.args[0])
 		c.ot.SetVerbose(false) // ostree's own verbose flag, separate from ours.
-		return c.ot.Switch(ref)
+		return c.ot.Switch()
 
 	if err := c.printDeployment(booted); err != nil {
 		return err

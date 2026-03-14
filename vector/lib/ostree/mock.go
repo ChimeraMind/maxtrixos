@@ -13,6 +13,7 @@ import (
 type MockOstree struct {
 	Root_            string
 	RootErr          error
+	Ref_             string
 	Deployments      []Deployment
 	DeploymentsErr   error
 	Refs             []string
@@ -45,11 +46,13 @@ func (m *MockOstree) SetStdout(_ io.Writer)                                   {}
 func (m *MockOstree) SetStderr(_ io.Writer)                                   {}
 func (m *MockOstree) Print(_ string, _ ...interface{})                        {}
 func (m *MockOstree) PrintError(_ string, _ ...interface{})                   {}
+func (m *MockOstree) Ref() string                                             { return m.Ref_ }
+func (m *MockOstree) SetRef(ref string)                                       { m.Ref_ = ref }
 func (m *MockOstree) FullBranchSuffix() (string, error)                       { return "-full", nil }
-func (m *MockOstree) IsBranchFullSuffixed(string) (bool, error)               { return false, nil }
+func (m *MockOstree) IsBranchFullSuffixed() (bool, error)                     { return false, nil }
 func (m *MockOstree) BranchShortnameToFull(_, _, _, _ string) (string, error) { return "", nil }
-func (m *MockOstree) BranchToFull(string) (string, error)                     { return "", nil }
-func (m *MockOstree) RemoveFullFromBranch(ref string) (string, error) {
+func (m *MockOstree) BranchToFull() (string, error)                           { return "", nil }
+func (m *MockOstree) RemoveFullFromBranch() (string, error) {
 	if m.RemoveFullErr != nil {
 		return "", m.RemoveFullErr
 	}
@@ -57,7 +60,7 @@ func (m *MockOstree) RemoveFullFromBranch(ref string) (string, error) {
 		return m.RemoveFullResult, nil
 	}
 	// Default: strip -full suffix if present.
-	return strings.TrimSuffix(ref, "-full"), nil
+	return strings.TrimSuffix(m.Ref_, "-full"), nil
 }
 func (m *MockOstree) GpgEnabled() (bool, error)                  { return false, nil }
 func (m *MockOstree) GpgPrivateKeyPath() (string, error)         { return "", nil }
@@ -99,10 +102,10 @@ func (m *MockOstree) InitializeRemoteSigningGpg(string, string) error { return n
 func (m *MockOstree) MaybeInitializeGpg() error                       { return nil }
 func (m *MockOstree) MaybeInitializeGpgForRepo(string, string) error  { return nil }
 func (m *MockOstree) MaybeInitializeRemote() error                    { return nil }
-func (m *MockOstree) Pull(string) error                               { return nil }
-func (m *MockOstree) PullWithRemote(string, string) error             { return nil }
-func (m *MockOstree) Prune(string) error                              { return nil }
-func (m *MockOstree) GenerateStaticDelta(string) error                { return nil }
+func (m *MockOstree) Pull() error                                     { return nil }
+func (m *MockOstree) PullWithRemote(string) error                     { return nil }
+func (m *MockOstree) Prune() error                                    { return nil }
+func (m *MockOstree) GenerateStaticDelta() error                      { return nil }
 func (m *MockOstree) UpdateSummary() error                            { return nil }
 func (m *MockOstree) AddRemote() error                                { return nil }
 func (m *MockOstree) AddRemoteToRootfs(string) error                  { return nil }
@@ -113,10 +116,10 @@ func (m *MockOstree) ListContents(string, string) (*[]filesystems.PathInfo, erro
 	return nil, nil
 }
 func (m *MockOstree) ListEtcChanges(string, string) ([]EtcChange, error) { return nil, nil }
-func (m *MockOstree) DeployedRootfs(string) (string, error)              { return "", nil }
+func (m *MockOstree) DeployedRootfs() (string, error)              { return "", nil }
 func (m *MockOstree) BootedRef() (string, error)                         { return "", nil }
 func (m *MockOstree) BootedHash() (string, error)                        { return "", nil }
-func (m *MockOstree) Deploy(string, string, []string) error              { return nil }
+func (m *MockOstree) Deploy(string, []string) error              { return nil }
 func (m *MockOstree) ConfigDiff() (map[string][]string, error)           { return nil, nil }
 
 // Methods with configurable behavior for tests.
@@ -135,12 +138,12 @@ func (m *MockOstree) RemoteRefs() ([]string, error) {
 	return m.Refs, m.RefsErr
 }
 
-func (m *MockOstree) Switch(ref string) error {
-	m.SwitchRef = ref
+func (m *MockOstree) Switch() error {
+	m.SwitchRef = m.Ref_
 	return m.SwitchErr
 }
 
-func (m *MockOstree) LastCommit(ref string) (string, error) {
+func (m *MockOstree) LastCommit() (string, error) {
 	return m.LastCommit_, m.LastCommitErr
 }
 

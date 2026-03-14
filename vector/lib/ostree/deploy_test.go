@@ -29,7 +29,7 @@ func TestDeploy(t *testing.T) {
 			"matrixOS.OsName": {"matrixos"},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: ref})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestDeploy(t *testing.T) {
 	}
 
 	// Call Deploy
-	err = o.Deploy(ref, gotSysroot, bootArgs)
+	err = o.Deploy(gotSysroot, bootArgs)
 	if err != nil {
 		t.Fatalf("Deploy failed: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestDeployIntegration(t *testing.T) {
 			"matrixOS.OsName": {"matrixos"},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: branch})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
@@ -160,13 +160,13 @@ func TestDeployIntegration(t *testing.T) {
 
 	// Perform Deployment
 	// This will pull from repoDir into sysroot/ostree/repo and then deploy
-	if err := o.Deploy(branch, gotSysroot, []string{"karg1=val1"}); err != nil {
+	if err := o.Deploy(gotSysroot, []string{"karg1=val1"}); err != nil {
 		t.Fatalf("Deploy failed: %v", err)
 	}
 
 	// Verify that the deployment directory was created
 	// We can verify the booted ref or just check if the deployment directory exists
-	if _, err := o.DeployedRootfs(branch); err != nil {
+	if _, err := o.DeployedRootfs(); err != nil {
 		t.Errorf("DeployedRootfs failed or deployment not found: %v", err)
 	}
 }
@@ -312,7 +312,7 @@ func TestDeploy_Errors(t *testing.T) {
 					"matrixOS.OsName": {"matrixos"},
 				},
 			}
-			o, err := NewOstree(NewOstreeOptions{Config: cfg})
+			o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "ref"})
 			if err != nil {
 				t.Fatalf("NewOstree failed: %v", err)
 			}
@@ -322,7 +322,7 @@ func TestDeploy_Errors(t *testing.T) {
 				t.Fatalf("Sysroot failed: %v", err)
 			}
 
-			err = o.Deploy("ref", sysroot, nil)
+			err = o.Deploy(sysroot, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deploy() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -571,7 +571,7 @@ func TestSwitch(t *testing.T) {
 			"Ostree.Sysroot": {sysroot},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: ref})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
@@ -581,7 +581,7 @@ func TestSwitch(t *testing.T) {
 		return nil
 	}
 
-	err = o.Switch(ref)
+	err = o.Switch()
 	if err != nil {
 		t.Fatalf("Switch failed: %v", err)
 	}
@@ -597,7 +597,7 @@ func TestSwitch_MissingSysroot(t *testing.T) {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "ref"})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
@@ -606,7 +606,7 @@ func TestSwitch_MissingSysroot(t *testing.T) {
 		return nil
 	}
 
-	err = o.Switch("ref")
+	err = o.Switch()
 	if err == nil {
 		t.Fatal("Switch should fail when Ostree.Sysroot is missing")
 	}
@@ -619,7 +619,7 @@ func TestSwitch_CommandError(t *testing.T) {
 			"Ostree.Sysroot": {sysroot},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: "ref"})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
@@ -628,7 +628,7 @@ func TestSwitch_CommandError(t *testing.T) {
 		return fmt.Errorf("ostree admin switch failed")
 	}
 
-	err = o.Switch("ref")
+	err = o.Switch()
 	if err == nil {
 		t.Fatal("Switch should propagate command error")
 	}
@@ -644,7 +644,7 @@ func TestSwitch_Verbose(t *testing.T) {
 			"Ostree.Sysroot": {sysroot},
 		},
 	}
-	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	o, err := NewOstree(NewOstreeOptions{Config: cfg, Ref: ref})
 	if err != nil {
 		t.Fatalf("NewOstree failed: %v", err)
 	}
@@ -655,7 +655,7 @@ func TestSwitch_Verbose(t *testing.T) {
 	}
 
 	o.SetVerbose(true)
-	err = o.Switch(ref)
+	err = o.Switch()
 	if err != nil {
 		t.Fatalf("Switch failed: %v", err)
 	}

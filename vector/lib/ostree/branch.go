@@ -74,8 +74,8 @@ func (o *Ostree) FullBranchSuffix() (string, error) {
 	return suffix, nil
 }
 
-// IsBranchFullSuffixed checks if a ref name is a "full" branch.
-func (o *Ostree) IsBranchFullSuffixed(ref string) (bool, error) {
+// isBranchFullSuffixed checks if a given ref name is a "full" branch.
+func (o *Ostree) isBranchFullSuffixed(ref string) (bool, error) {
 	if ref == "" {
 		return false, errors.New("missing ref parameter")
 	}
@@ -84,6 +84,11 @@ func (o *Ostree) IsBranchFullSuffixed(ref string) (bool, error) {
 		return false, err
 	}
 	return strings.HasSuffix(ref, "-"+val), nil
+}
+
+// IsBranchFullSuffixed checks if the instance ref is a "full" branch.
+func (o *Ostree) IsBranchFullSuffixed() (bool, error) {
+	return o.isBranchFullSuffixed(o.ref)
 }
 
 // BranchShortnameToFull converts a short branch name to a full one.
@@ -101,7 +106,7 @@ func (o *Ostree) BranchShortnameToFull(shortName, relStage, osName, arch string)
 		return "", errors.New("invalid arch parameter")
 	}
 
-	suffixed, err := o.IsBranchFullSuffixed(shortName)
+	suffixed, err := o.isBranchFullSuffixed(shortName)
 	if err != nil {
 		return "", err
 	}
@@ -118,12 +123,13 @@ func (o *Ostree) BranchShortnameToFull(shortName, relStage, osName, arch string)
 }
 
 // BranchToFull converts a normal branch name to a full one.
-func (o *Ostree) BranchToFull(ref string) (string, error) {
+func (o *Ostree) BranchToFull() (string, error) {
+	ref := o.ref
 	if ref == "" {
 		return "", errors.New("invalid ref parameter")
 	}
 
-	suffixed, err := o.IsBranchFullSuffixed(ref)
+	suffixed, err := o.isBranchFullSuffixed(ref)
 	if err != nil {
 		return "", err
 	}
@@ -140,12 +146,13 @@ func (o *Ostree) BranchToFull(ref string) (string, error) {
 }
 
 // RemoveFullFromBranch removes the "-full" suffix from a branch name.
-func (o *Ostree) RemoveFullFromBranch(ref string) (string, error) {
+func (o *Ostree) RemoveFullFromBranch() (string, error) {
+	ref := o.ref
 	if ref == "" {
 		return "", errors.New("invalid ref parameter")
 	}
 
-	suffixed, err := o.IsBranchFullSuffixed(ref)
+	suffixed, err := o.isBranchFullSuffixed(ref)
 	if err != nil {
 		return "", err
 	}
