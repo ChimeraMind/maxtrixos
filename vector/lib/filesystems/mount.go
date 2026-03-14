@@ -1,12 +1,15 @@
 package filesystems
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"golang.org/x/sys/unix"
 
@@ -349,12 +352,13 @@ type BindMountOptions struct {
 
 // BindMounter represents a bind mount that tracks its mounted state.
 type BindMounter struct {
-	src      string
-	dst      string
-	readOnly bool
-	mounted  bool
-	stdout   io.Writer
-	stderr   io.Writer
+	src       string
+	dst       string
+	readOnly  bool
+	mounted   bool
+	mountedMu sync.Mutex
+	stdout    io.Writer
+	stderr    io.Writer
 }
 
 // NewBindMount validates the bind mount parameters and returns a
@@ -412,8 +416,16 @@ func NewBindMount(opts BindMountOptions) (*BindMounter, error) {
 // as a cleanup before calling Mount() so that partial mounts are
 // always cleaned up.
 func (b *BindMounter) Mount() error {
+	// protect against accidental double mount.
+	b.mountedMu.Lock()
+	defer b.mountedMu.Unlock()
 	if b.mounted {
-		return fmt.Errorf("%s is already mounted", b.dst)
+		return fmt.Errorf("bind mount already mounted: %s -> %s", b.src, b.dst)
+	}
+	b.mounted = true
+
+	if _, err := os.Stat(b.dst); errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("%s does not exist", b.dst)
 	}
 
 	if err := Mount(b.src, b.dst, "", unix.MS_BIND, ""); err != nil {
@@ -429,8 +441,6 @@ func (b *BindMounter) Mount() error {
 			return fmt.Errorf("remount read-only %s: %w", b.dst, err)
 		}
 	}
-
-	b.mounted = true
 	return nil
 }
 
@@ -441,11 +451,21 @@ func (b *BindMounter) Dst() string {
 
 // Unmount unmounts the bind mount. It is safe to call multiple times.
 func (b *BindMounter) Unmount() error {
+	// Protect against accidental coding errors.
+	b.mountedMu.Lock()
+	defer b.mountedMu.Unlock()
 	if !b.mounted {
+		fmt.Fprintf(
+			b.stderr,
+			"Warning: unmount bind mount not marked as mounted: %s -> %s\n",
+			b.src,
+			b.dst,
+		)
 		return nil
 	}
+	b.mounted = false
+
 	if _, err := os.Stat(b.dst); os.IsNotExist(err) {
-		b.mounted = false
 		return fmt.Errorf("%s does not exist", b.dst)
 	}
 	if err := CheckDirNotFsRoot(b.dst); err != nil {
@@ -457,7 +477,6 @@ func (b *BindMounter) Unmount() error {
 		Stderr: b.stderr,
 	}
 	CleanupMounts(opts)
-	b.mounted = false
 	return nil
 }
 
