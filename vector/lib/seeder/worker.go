@@ -621,6 +621,7 @@ func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
 		Cmd: runner.Cmd{
 			Name:   info.ChrootChrootExec,
 			Env:    env,
+			Dir:    "/",
 			Stdout: s.stdout,
 			Stderr: s.stderr,
 		},
