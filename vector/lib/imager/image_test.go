@@ -107,7 +107,7 @@ func TestConfigAccessors(t *testing.T) {
 		fn       func() (string, error)
 		expected string
 	}{
-		{"ImagesOutDir", im.ImagesOutDir, "/tmp/images"},
+		{"ImagesDir", im.ImagesDir, "/tmp/images"},
 		{"MountDir", im.MountDir, "/tmp/mnt"},
 		{"ImageSize", im.ImageSize, "32G"},
 		{"EfiPartitionSize", im.EfiPartitionSize, "200M"},
@@ -150,7 +150,7 @@ func TestConfigAccessorsEmptyValue(t *testing.T) {
 		name string
 		fn   func(*Image) (string, error)
 	}{
-		{"Imager.ImagesDir", "ImagesOutDir", func(im *Image) (string, error) { return im.ImagesOutDir() }},
+		{"Imager.ImagesDir", "ImagesDir", func(im *Image) (string, error) { return im.ImagesDir() }},
 		{"Imager.MountDir", "MountDir", func(im *Image) (string, error) { return im.MountDir() }},
 		{"Imager.ImageSize", "ImageSize", func(im *Image) (string, error) { return im.ImageSize() }},
 		{"matrixOS.OsName", "OsName", func(im *Image) (string, error) { return im.OsName() }},
@@ -179,7 +179,7 @@ func TestConfigAccessorsConfigError(t *testing.T) {
 		name string
 		fn   func() (string, error)
 	}{
-		{"ImagesOutDir", im.ImagesOutDir},
+		{"ImagesDir", im.ImagesDir},
 		{"MountDir", im.MountDir},
 		{"ImageSize", im.ImageSize},
 		{"OsName", im.OsName},

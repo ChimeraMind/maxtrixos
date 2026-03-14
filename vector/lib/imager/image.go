@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -55,7 +56,7 @@ type IImage interface {
 	RootfsMount() string
 
 	// Config accessors
-	ImagesOutDir() (string, error)
+	ImagesDir() (string, error)
 	MountDir() (string, error)
 	ImageSize() (string, error)
 	EfiPartitionSize() (string, error)
@@ -164,8 +165,7 @@ func (im *Image) trackMounts(mnts []string) {
 // in reverse order. It is safe to call multiple times.
 func (im *Image) Cleanup() {
 	im.trackedMountsMu.Lock()
-	mounts := make([]string, len(im.trackedMounts))
-	copy(mounts, im.trackedMounts)
+	mounts := slices.Clone(im.trackedMounts)
 	im.trackedMounts = nil
 	im.trackedMountsMu.Unlock()
 
@@ -247,8 +247,8 @@ func (im *Image) BootfsMount() string { return im.bootfsMount }
 // RootfsMount returns the root filesystem mount point (set by MountRootfs on success).
 func (im *Image) RootfsMount() string { return im.rootfsMount }
 
-// ImagesOutDir returns the directory where generated images are stored.
-func (im *Image) ImagesOutDir() (string, error) {
+// ImagesDir returns the directory where generated images are stored.
+func (im *Image) ImagesDir() (string, error) {
 	v, err := im.cfg.GetItem("Imager.ImagesDir")
 	if err != nil {
 		return "", err
@@ -479,7 +479,7 @@ func parseHumanSize(s string) (int64, error) {
 
 // imagePath builds the full image file path from a suffix.
 func (im *Image) imagePath(suffix string) (string, error) {
-	outDir, err := im.ImagesOutDir()
+	outDir, err := im.ImagesDir()
 	if err != nil {
 		return "", err
 	}
