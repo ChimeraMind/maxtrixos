@@ -169,7 +169,6 @@ func (c *JailbreakCommand) Init(args []string) error {
 	}
 	c.StartUI()
 	c.run = defaultRunner()
-	c.prompt = NewPrompter(c.run.stdin, c.run.stdout, c.run.stderr, &c.UI)
 	return nil
 }
 
