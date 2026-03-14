@@ -1113,7 +1113,7 @@ func (o *Ostree) SetupEtc(imageDir string) error {
 	usrEtcDir := filepath.Join(imageDir, "usr", "etc")
 
 	fmt.Printf("Moving %s to %s\n", etcDir, usrEtcDir)
-	return os.Rename(etcDir, usrEtcDir)
+	return filesystems.Move(etcDir, usrEtcDir)
 }
 
 // BootCommit returns the boot commit from an ostree sysroot.
@@ -1834,7 +1834,7 @@ func (o *Ostree) prepareVarHome(imageDir, homeName, varHomeName string) error {
 			fmt.Println("WARNING: removing " + varHomeDir)
 			os.RemoveAll(varHomeDir)
 		}
-		if err := os.Rename(homeDir, varHomeDir); err != nil {
+		if err := filesystems.Move(homeDir, varHomeDir); err != nil {
 			return fmt.Errorf("failed to move home: %w", err)
 		}
 	} else if homeExists {
@@ -1864,7 +1864,7 @@ func moveDirToTargetAndSymlink(srcDir, targetDir, symlinkTarget string) error {
 				os.RemoveAll(targetDir)
 			}
 			fmt.Fprintf(os.Stderr, "WARNING: moving %s to %s.\n", srcDir, targetDir)
-			if err := os.Rename(srcDir, targetDir); err != nil {
+			if err := filesystems.Move(srcDir, targetDir); err != nil {
 				return fmt.Errorf("failed to move %s: %w", srcDir, err)
 			}
 		} else {
@@ -1910,7 +1910,7 @@ func prepareTmpDir(imageDir string) error {
 
 	// Move tmpDir only if it exists as a real directory (not a symlink).
 	if info, err := os.Lstat(tmpDir); err == nil && info.IsDir() && (info.Mode()&os.ModeSymlink == 0) {
-		if err := os.Rename(tmpDir, sysrootTmp); err != nil {
+		if err := filesystems.Move(tmpDir, sysrootTmp); err != nil {
 			return fmt.Errorf("failed to move tmp to sysroot/tmp: %w", err)
 		}
 	}
@@ -1947,7 +1947,7 @@ func prepareVarDbPkg(imageDir, roVdbPath string) error {
 	if err := os.MkdirAll(filepath.Dir(usrVarDbPkg), 0755); err != nil {
 		return fmt.Errorf("failed to create parent of usrVarDbPkg: %w", err)
 	}
-	if err := os.Rename(varDbPkg, usrVarDbPkg); err != nil {
+	if err := filesystems.Move(varDbPkg, usrVarDbPkg); err != nil {
 		return fmt.Errorf("failed to move var/db/pkg: %w", err)
 	}
 
@@ -2004,7 +2004,7 @@ func prepareUsrLocal(imageDir string) error {
 	imageUsrLocal := filepath.Join(imageDir, relUsrLocal)
 
 	if pathExists(usrLocalDir) {
-		if err := os.Rename(usrLocalDir, imageUsrLocal); err != nil {
+		if err := filesystems.Move(usrLocalDir, imageUsrLocal); err != nil {
 			return fmt.Errorf("failed to move usr/local: %w", err)
 		}
 	} else {
