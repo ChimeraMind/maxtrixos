@@ -4,12 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
-
-	"matrixos/vector/lib/runner"
 )
 
 func TestMountpointToDevice(t *testing.T) {
@@ -238,7 +235,6 @@ func TestSetupCommonRootfsMounts(t *testing.T) {
 	mounter, err := NewCommonRootfsMounts(
 		CommonRootfsMountsOptions{
 			MountPoint: tmpDir,
-			MountProc:  true,
 			Mounting: func(tg string) {
 				mountingCalls = append(mountingCalls, tg)
 			},
@@ -261,354 +257,6 @@ func TestSetupCommonRootfsMounts(t *testing.T) {
 	if len(mountedCalls) != 6 {
 		t.Errorf("Expected 6 mounted calls, got %d", len(mountedCalls))
 	}
-}
-
-func TestSetupCommonRootfsMountsProcDisabled(t *testing.T) {
-	setupMockExec(t)
-	setupMockSyscalls(t)
-
-	tmpDir := t.TempDir()
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	var mountingCalls, mountedCalls []string
-	mounter, err := NewCommonRootfsMounts(
-		CommonRootfsMountsOptions{
-			MountPoint: tmpDir,
-			MountProc:  false,
-			Mounting: func(tg string) {
-				mountingCalls = append(mountingCalls, tg)
-			},
-			Mounted: func(tg string) {
-				mountedCalls = append(mountedCalls, tg)
-			},
-		},
-	)
-	defer mounter.Cleanup()
-
-	if err != nil {
-		t.Fatalf("NewCommonRootfsMounts failed: %v", err)
-	}
-	if err := mounter.Setup(); err != nil {
-		t.Errorf("Setup failed: %v", err)
-	}
-	// Without MountProc, expect 5 mounts: /dev, /dev/pts, /sys, dev/shm, run/lock
-	if len(mountingCalls) != 5 {
-		t.Errorf("Expected 5 mounting calls, got %d", len(mountingCalls))
-	}
-	if len(mountedCalls) != 5 {
-		t.Errorf("Expected 5 mounted calls, got %d", len(mountedCalls))
-	}
-	// Verify proc was not mounted
-	for _, call := range mountingCalls {
-		if filepath.Base(call) == "proc" {
-			t.Error("proc should not be mounted when MountProc is false")
-		}
-	}
-}
-
-func TestNewCommonRootfsMounts_SkipIfMounted(t *testing.T) {
-	t.Run("Skips if already mounted", func(t *testing.T) {
-		setupMockExec(t)
-		setupMockSyscalls(t)
-
-		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
-		preMountedDev := filepath.Join(tmpDir, "dev")
-		if err := os.MkdirAll(preMountedDev, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		// Mock that /dev is already mounted
-		setupMockMountInfo(t, []*MountInfoEntry{
-			{Mountpoint: preMountedDev},
-		})
-
-		var mountingCalls, skippingCalls []string
-		mounter, err := NewCommonRootfsMounts(
-			CommonRootfsMountsOptions{
-				MountPoint:    tmpDir,
-				SkipIfMounted: true,
-				Mounting: func(tg string) {
-					mountingCalls = append(mountingCalls, tg)
-				},
-				Skipping: func(tg string) {
-					skippingCalls = append(skippingCalls, tg)
-				},
-			},
-		)
-		if err != nil {
-			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
-		}
-		defer mounter.Cleanup()
-
-		if err := mounter.Setup(); err != nil {
-			t.Errorf("Setup failed: %v", err)
-		}
-
-		if len(skippingCalls) != 1 {
-			t.Errorf("Expected 1 skipping call, got %d: %v", len(skippingCalls), skippingCalls)
-		}
-		if skippingCalls[0] != preMountedDev {
-			t.Errorf("Expected to skip %s, but skipped %s", preMountedDev, skippingCalls[0])
-		}
-
-		for _, mnt := range mountingCalls {
-			if mnt == preMountedDev {
-				t.Errorf("Should not have tried to mount %s", preMountedDev)
-			}
-		}
-	})
-
-	t.Run("Skips dev/shm if already mounted", func(t *testing.T) {
-		setupMockExec(t)
-		setupMockSyscalls(t)
-
-		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
-		preMountedDevShm := filepath.Join(tmpDir, "dev", "shm")
-		if err := os.MkdirAll(preMountedDevShm, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		setupMockMountInfo(t, []*MountInfoEntry{
-			{Mountpoint: preMountedDevShm},
-		})
-
-		var mountingCalls, skippingCalls []string
-		mounter, err := NewCommonRootfsMounts(
-			CommonRootfsMountsOptions{
-				MountPoint:    tmpDir,
-				SkipIfMounted: true,
-				Mounting: func(tg string) {
-					mountingCalls = append(mountingCalls, tg)
-				},
-				Skipping: func(tg string) {
-					skippingCalls = append(skippingCalls, tg)
-				},
-			},
-		)
-		if err != nil {
-			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
-		}
-		defer mounter.Cleanup()
-
-		if err := mounter.Setup(); err != nil {
-			t.Errorf("Setup failed: %v", err)
-		}
-
-		if len(skippingCalls) != 1 {
-			t.Errorf("Expected 1 skipping call for dev/shm, got %d: %v", len(skippingCalls), skippingCalls)
-		}
-		if len(skippingCalls) > 0 && skippingCalls[0] != preMountedDevShm {
-			t.Errorf("Expected to skip %s, but skipped %s", preMountedDevShm, skippingCalls[0])
-		}
-		for _, mnt := range mountingCalls {
-			if mnt == preMountedDevShm {
-				t.Errorf("Should not have tried to mount %s", preMountedDevShm)
-			}
-		}
-	})
-
-	t.Run("Skips proc if already mounted", func(t *testing.T) {
-		setupMockExec(t)
-		setupMockSyscalls(t)
-
-		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
-		preMountedProc := filepath.Join(tmpDir, "proc")
-		if err := os.MkdirAll(preMountedProc, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		setupMockMountInfo(t, []*MountInfoEntry{
-			{Mountpoint: preMountedProc},
-		})
-
-		var mountingCalls, skippingCalls []string
-		mounter, err := NewCommonRootfsMounts(
-			CommonRootfsMountsOptions{
-				MountPoint:    tmpDir,
-				MountProc:     true,
-				SkipIfMounted: true,
-				Mounting: func(tg string) {
-					mountingCalls = append(mountingCalls, tg)
-				},
-				Skipping: func(tg string) {
-					skippingCalls = append(skippingCalls, tg)
-				},
-			},
-		)
-		if err != nil {
-			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
-		}
-		defer mounter.Cleanup()
-
-		if err := mounter.Setup(); err != nil {
-			t.Errorf("Setup failed: %v", err)
-		}
-
-		if len(skippingCalls) != 1 {
-			t.Errorf("Expected 1 skipping call for proc, got %d: %v", len(skippingCalls), skippingCalls)
-		}
-		if len(skippingCalls) > 0 && skippingCalls[0] != preMountedProc {
-			t.Errorf("Expected to skip %s, but skipped %s", preMountedProc, skippingCalls[0])
-		}
-		for _, mnt := range mountingCalls {
-			if mnt == preMountedProc {
-				t.Errorf("Should not have tried to mount %s", preMountedProc)
-			}
-		}
-	})
-
-	t.Run("Skips run/lock if already mounted", func(t *testing.T) {
-		setupMockExec(t)
-		setupMockSyscalls(t)
-
-		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
-		preMountedRunLock := filepath.Join(tmpDir, "run", "lock")
-		if err := os.MkdirAll(preMountedRunLock, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		setupMockMountInfo(t, []*MountInfoEntry{
-			{Mountpoint: preMountedRunLock},
-		})
-
-		var mountingCalls, skippingCalls []string
-		mounter, err := NewCommonRootfsMounts(
-			CommonRootfsMountsOptions{
-				MountPoint:    tmpDir,
-				SkipIfMounted: true,
-				Mounting: func(tg string) {
-					mountingCalls = append(mountingCalls, tg)
-				},
-				Skipping: func(tg string) {
-					skippingCalls = append(skippingCalls, tg)
-				},
-			},
-		)
-		if err != nil {
-			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
-		}
-		defer mounter.Cleanup()
-
-		if err := mounter.Setup(); err != nil {
-			t.Errorf("Setup failed: %v", err)
-		}
-
-		if len(skippingCalls) != 1 {
-			t.Errorf("Expected 1 skipping call for run/lock, got %d: %v", len(skippingCalls), skippingCalls)
-		}
-		if len(skippingCalls) > 0 && skippingCalls[0] != preMountedRunLock {
-			t.Errorf("Expected to skip %s, but skipped %s", preMountedRunLock, skippingCalls[0])
-		}
-		for _, mnt := range mountingCalls {
-			if mnt == preMountedRunLock {
-				t.Errorf("Should not have tried to mount %s", preMountedRunLock)
-			}
-		}
-	})
-
-	t.Run("Skips all mounts if everything pre-mounted", func(t *testing.T) {
-		setupMockExec(t)
-		setupMockSyscalls(t)
-
-		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
-		allMounts := []string{
-			filepath.Join(tmpDir, "dev"),
-			filepath.Join(tmpDir, "dev", "pts"),
-			filepath.Join(tmpDir, "sys"),
-			filepath.Join(tmpDir, "dev", "shm"),
-			filepath.Join(tmpDir, "proc"),
-			filepath.Join(tmpDir, "run", "lock"),
-		}
-		var entries []*MountInfoEntry
-		for _, m := range allMounts {
-			if err := os.MkdirAll(m, 0755); err != nil {
-				t.Fatal(err)
-			}
-			entries = append(entries, &MountInfoEntry{Mountpoint: m})
-		}
-		setupMockMountInfo(t, entries)
-
-		var mountingCalls, skippingCalls []string
-		mounter, err := NewCommonRootfsMounts(
-			CommonRootfsMountsOptions{
-				MountPoint:    tmpDir,
-				MountProc:     true,
-				SkipIfMounted: true,
-				Mounting: func(tg string) {
-					mountingCalls = append(mountingCalls, tg)
-				},
-				Skipping: func(tg string) {
-					skippingCalls = append(skippingCalls, tg)
-				},
-			},
-		)
-		if err != nil {
-			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
-		}
-		defer mounter.Cleanup()
-
-		if err := mounter.Setup(); err != nil {
-			t.Errorf("Setup failed: %v", err)
-		}
-
-		if len(mountingCalls) != 0 {
-			t.Errorf("Expected 0 mounting calls when all pre-mounted, got %d: %v",
-				len(mountingCalls), mountingCalls)
-		}
-		if len(skippingCalls) != 6 {
-			t.Errorf("Expected 6 skipping calls, got %d: %v",
-				len(skippingCalls), skippingCalls)
-		}
-	})
-
-	t.Run("Fails if already mounted and not skipping", func(t *testing.T) {
-		setupMockExec(t)
-		// Don't use setupMockSyscalls, we need a custom Mount mock
-		origMount := Mount
-		t.Cleanup(func() { Mount = origMount })
-
-		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
-		preMountedDev := filepath.Join(tmpDir, "dev")
-		if err := os.MkdirAll(preMountedDev, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		// Mock that /dev is already mounted
-		setupMockMountInfo(t, []*MountInfoEntry{
-			{Mountpoint: preMountedDev},
-		})
-
-		Mount = func(source, target, fstype string, flags uintptr, data string) error {
-			if target == preMountedDev {
-				return fmt.Errorf("mock mount failed: already mounted")
-			}
-			return nil
-		}
-
-		mounter, err := NewCommonRootfsMounts(
-			CommonRootfsMountsOptions{
-				MountPoint:    tmpDir,
-				SkipIfMounted: false, // This is the default, but let's be explicit
-			},
-		)
-		if err != nil {
-			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
-		}
-		defer mounter.Cleanup()
-
-		err = mounter.Setup()
-		if err == nil {
-			t.Error("Setup should have failed, but it didn't")
-		}
-		if err != nil {
-			expectedError := "mock mount failed: already mounted"
-			if !strings.Contains(err.Error(), expectedError) {
-				t.Errorf("Setup() failed with wrong error: got %q, want something containing %q", err, expectedError)
-			}
-		}
-	})
 }
 
 func TestBindMount(t *testing.T) {
@@ -831,7 +479,7 @@ func TestCommonRootfsMountsCleanup(t *testing.T) {
 	setupMockSyscalls(t)
 
 	t.Run("Success", func(t *testing.T) {
-		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
+		tmpDir := t.TempDir()
 		// Mock that the mounts exist
 		setupMockMountInfo(t, []*MountInfoEntry{
 			{Mountpoint: filepath.Join(tmpDir, "dev")},
@@ -845,37 +493,6 @@ func TestCommonRootfsMountsCleanup(t *testing.T) {
 		mounter, err := NewCommonRootfsMounts(
 			CommonRootfsMountsOptions{
 				MountPoint: tmpDir,
-				MountProc:  true,
-				Mounting:   noop,
-				Mounted:    noop,
-			},
-		)
-		if err != nil {
-			t.Fatalf("NewCommonRootfsMounts failed: %v", err)
-		}
-		if err := mounter.Setup(); err != nil {
-			t.Fatalf("Setup failed: %v", err)
-		}
-		if err := mounter.Cleanup(); err != nil {
-			t.Errorf("Cleanup failed: %v", err)
-		}
-	})
-
-	t.Run("SuccessProcDisabled", func(t *testing.T) {
-		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
-		// Mock mounts without proc
-		setupMockMountInfo(t, []*MountInfoEntry{
-			{Mountpoint: filepath.Join(tmpDir, "dev")},
-			{Mountpoint: filepath.Join(tmpDir, "dev", "pts")},
-			{Mountpoint: filepath.Join(tmpDir, "sys")},
-			{Mountpoint: filepath.Join(tmpDir, "dev", "shm")},
-			{Mountpoint: filepath.Join(tmpDir, "run", "lock")},
-		})
-		noop := func(string) {}
-		mounter, err := NewCommonRootfsMounts(
-			CommonRootfsMountsOptions{
-				MountPoint: tmpDir,
-				MountProc:  false,
 				Mounting:   noop,
 				Mounted:    noop,
 			},
@@ -927,11 +544,11 @@ func TestBindUmount(t *testing.T) {
 	setupMockSyscalls(t)
 
 	t.Run("Success", func(t *testing.T) {
-		tmpDir, _ := filepath.EvalSymlinks(t.TempDir())
+		tmpDir := t.TempDir()
 		setupMockMountInfo(t, []*MountInfoEntry{
 			{Mountpoint: tmpDir},
 		})
-		src, _ := filepath.EvalSymlinks(t.TempDir())
+		src := t.TempDir()
 		bm, err := NewBindMount(BindMountOptions{
 			Src: src,
 			Dst: tmpDir,
@@ -1136,94 +753,5 @@ func TestCleanupCryptsetupDevices(t *testing.T) {
 
 		// Should not panic or error out, just log
 		CleanupCryptsetupDevices([]string{"mycrypt"})
-	})
-}
-
-func TestRemountReadWriteIntegration(t *testing.T) {
-	if os.Getuid() != 0 {
-		t.Skip("skipping integration test: requires root")
-	}
-
-	tmpDir := t.TempDir()
-
-	// Mount a tmpfs.
-	if err := unix.Mount("tmpfs", tmpDir, "tmpfs", 0, "size=1M"); err != nil {
-		t.Fatalf("mount tmpfs: %v", err)
-	}
-	t.Cleanup(func() { unix.Unmount(tmpDir, 0) })
-
-	// Remount read-only.
-	if err := unix.Mount("", tmpDir, "", unix.MS_REMOUNT|unix.MS_RDONLY, ""); err != nil {
-		t.Fatalf("remount ro: %v", err)
-	}
-
-	// Verify it's read-only.
-	testFile := filepath.Join(tmpDir, "probe")
-	if err := os.WriteFile(testFile, []byte("x"), 0644); err == nil {
-		t.Fatal("expected write to fail on read-only mount")
-	}
-
-	// Use the real RemountReadWrite.
-	if err := RemountReadWrite(tmpDir); err != nil {
-		t.Fatalf("RemountReadWrite: %v", err)
-	}
-
-	// Verify it's writable.
-	if err := os.WriteFile(testFile, []byte("x"), 0644); err != nil {
-		t.Fatalf("write after RemountReadWrite failed: %v", err)
-	}
-}
-
-func TestRemountReadWrite(t *testing.T) {
-	setupMockExec(t)
-
-	t.Run("EmptyMountpoint", func(t *testing.T) {
-		err := RemountReadWrite("")
-		if err == nil {
-			t.Fatal("expected error for empty mountpoint")
-		}
-		if !strings.Contains(err.Error(), "missing mnt parameter") {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("ExecFails", func(t *testing.T) {
-		origExecRun := execRun
-		t.Cleanup(func() { execRun = origExecRun })
-		execRun = func(c *runner.Cmd) error {
-			return fmt.Errorf("mount failed")
-		}
-
-		err := RemountReadWrite("/mnt")
-		if err == nil {
-			t.Fatal("expected error when mount command fails")
-		}
-		if !strings.Contains(err.Error(), "mount failed") {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("Success", func(t *testing.T) {
-		var capturedArgs []string
-		origExecRun := execRun
-		t.Cleanup(func() { execRun = origExecRun })
-		execRun = func(c *runner.Cmd) error {
-			capturedArgs = append([]string{c.Name}, c.Args...)
-			return nil
-		}
-
-		if err := RemountReadWrite("/mnt"); err != nil {
-			t.Fatalf("RemountReadWrite failed: %v", err)
-		}
-
-		expected := []string{"mount", "-o", "remount,rw", "--", "/mnt"}
-		if len(capturedArgs) != len(expected) {
-			t.Fatalf("expected args %v, got %v", expected, capturedArgs)
-		}
-		for i, arg := range expected {
-			if capturedArgs[i] != arg {
-				t.Errorf("arg[%d]: expected %q, got %q", i, arg, capturedArgs[i])
-			}
-		}
 	})
 }
