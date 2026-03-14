@@ -2,23 +2,17 @@ package releaser
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
-	"matrixos/vector/lib/ostree"
-	"matrixos/vector/lib/runner"
 )
 
+// SetupHostname configures the hostname inside the image directory.
 func (r *Releaser) SetupHostname() error {
-	if err := checkImageDir(r.imageDir); err != nil {
-		return err
-	}
 	hostname, err := r.Hostname()
 	if err != nil {
 		return err
@@ -27,22 +21,6 @@ func (r *Releaser) SetupHostname() error {
 	r.Print("Setting hostname to: %s\n", hostname)
 	data := []byte(hostname + "\n")
 	return os.WriteFile(filepath.Join(r.imageDir, "etc/hostname"), data, 0644)
-}
-
-func (r *Releaser) cleanAndStripRef() (string, error) {
-	if r.ref == "" {
-		return "", errors.New("missing ref, set Ref in Releaser")
-	}
-	stripped, err := r.ostree.RemoveFullFromBranch()
-	if err != nil {
-		return "", err
-	}
-
-	stripped = ostree.CleanRemoteFromRef(stripped)
-	if stripped == "" {
-		return "", errors.New("invalid ref parameter after cleaning")
-	}
-	return stripped, nil
 }
 
 // serviceAction represents a parsed line from a services configuration file.
@@ -80,16 +58,11 @@ func parseServicesFile(path string) ([]serviceAction, error) {
 	return actions, scanner.Err()
 }
 
+// SetupServices configures systemd services inside the image directory
+// based on the per-ref services configuration file.
 func (r *Releaser) SetupServices() error {
-	if err := checkImageDir(r.imageDir); err != nil {
-		return err
-	}
-
-	// Remove full from ref using the functions
-	ref, err := r.cleanAndStripRef()
-	if err != nil {
-		return err
-	}
+	imageDir := r.imageDir
+	ref := r.ref
 
 	hooksDir, err := r.HooksDir()
 	if err != nil {
@@ -103,25 +76,16 @@ func (r *Releaser) SetupServices() error {
 		if err != nil {
 			return err
 		}
-		r.PrintWarning(
-			"Services setup file %s does not exist. Trying to look harder ...\n",
-			servicesFile,
-		)
-
 		// Fallback: check in the services dir relative to the same parent.
 		parent := filepath.Dir(servicesDir)
 		altPath := filepath.Join(parent, "services", ref+".conf")
 		if !filesystems.FileExists(altPath) {
-			r.PrintError(
-				"Services setup file %s does not exist. Create an empty file at least ...\n",
-				servicesFile,
-			)
-			return fmt.Errorf("services setup file does not exist: %s", servicesFile)
+			r.PrintWarning("Services setup file %s does not exist. Skipping ...\n", servicesFile)
+			return nil
 		}
 		servicesFile = altPath
 	}
 
-	r.Print("Using services setup file: %s\n", servicesFile)
 	actions, err := parseServicesFile(servicesFile)
 	if err != nil {
 		return fmt.Errorf("failed to parse services file: %w", err)
@@ -130,7 +94,7 @@ func (r *Releaser) SetupServices() error {
 	// Set up chroot mounts for systemctl execution.
 	mounts, err := filesystems.NewCommonRootfsMounts(
 		filesystems.CommonRootfsMountsOptions{
-			MountPoint: r.imageDir,
+			MountPoint: imageDir,
 			Mounting: func(mnt string) {
 				r.Print("Mounting: %s ...\n", mnt)
 				r.trackMount(mnt)
@@ -138,8 +102,6 @@ func (r *Releaser) SetupServices() error {
 			Mounted: func(mnt string) {
 				r.Print("Mounted: %s\n", mnt)
 			},
-			Stdout: r.stdout,
-			Stderr: r.stderr,
 		},
 	)
 	if err != nil {
@@ -185,137 +147,63 @@ func (r *Releaser) SetupServices() error {
 		}
 	}
 
-	systemctl := func(args ...string) error {
-		systemctlCmd := strings.Join(args, " ")
-		r.Print("Running systemctl %s ...\n", systemctlCmd)
-		// Use "$@" to safely pass arguments without shell interpolation,
-		// preventing injection via malicious service names.
-		// bash -c 'cmd "$@"' -- <args...> passes args as positional params.
-		// The exit $? ensures we return the correct exit code from systemctl and
-		// prevent bash from optimizing the command, making systemctl run as PID 1
-		// and writing to /dev/kmsg instead of our captured stdout/stderr.
-		cmdArgs := []string{"-c", `systemctl "$@"; exit $?`, "--"}
-		cmdArgs = append(cmdArgs, args...)
-		cmd := runner.ChrootCmd{
-			Cmd: runner.Cmd{
-				Name:   "/bin/bash",
-				Args:   cmdArgs,
-				Stdin:  nil,
-				Stdout: r.stdout,
-				Stderr: r.stderr,
-			},
-			ChrootDir: r.imageDir,
-		}
-		return r.chrootRunner(&cmd)
+	systemctl := func(args ...string) {
+		cmd := strings.Join(args, " ")
+		// Use /bin/sh -c to prevent systemctl from acting as PID 1.
+		_ = filesystems.ChrootRun(imageDir, "/bin/sh", "-c", "systemctl "+cmd+"; exit $?")
 	}
 
 	for _, svc := range enable {
 		r.Print("Enabling service: %s\n", svc)
-		if err := systemctl("enable", svc); err != nil {
-			return err
-		}
+		systemctl("enable", svc)
 	}
 	for _, svc := range disable {
 		r.Print("Disabling service: %s\n", svc)
-		if err := systemctl("disable", svc); err != nil {
-			return err
-		}
+		systemctl("disable", svc)
 	}
 	for _, svc := range mask {
 		r.Print("Masking service: %s\n", svc)
-		if err := systemctl("mask", svc); err != nil {
-			return err
-		}
+		systemctl("mask", svc)
 	}
 	for _, svc := range presetEnable {
 		r.Print("Preset enabling for service: %s\n", svc)
-		if err := systemctl("--global", "enable", svc); err != nil {
-			return err
-		}
+		systemctl("--global", "enable", svc)
 	}
 	for _, svc := range presetDisable {
 		r.Print("Preset disabling for service: %s\n", svc)
-		if err := systemctl("--global", "disable", svc); err != nil {
-			return err
-		}
+		systemctl("--global", "disable", svc)
 	}
 	for _, svc := range presetMask {
 		r.Print("Preset masking for service: %s\n", svc)
-		if err := systemctl("--global", "mask", svc); err != nil {
-			return err
-		}
+		systemctl("--global", "mask", svc)
 	}
 
 	if defaultTarget != "" {
 		r.Print("Setting default target to: %s\n", defaultTarget)
-		if err := systemctl("set-default", defaultTarget); err != nil {
-			return err
-		}
+		systemctl("set-default", defaultTarget)
 	}
 
 	return nil
 }
 
+// ReleaseHook runs the per-ref release hook script, if one exists.
 func (r *Releaser) ReleaseHook() error {
-	if err := checkImageDir(r.imageDir); err != nil {
-		return err
-	}
-
-	// Remove full from ref using the functions
-	ref, err := r.cleanAndStripRef()
-	if err != nil {
-		return err
-	}
+	ref := r.ref
 
 	hooksDir, err := r.HooksDir()
 	if err != nil {
 		return err
 	}
 
-	devDir, err := r.DevDir()
-	if err != nil {
-		return err
-	}
-
-	defaultPrivPath, err := r.DefaultPrivateGitRepoPath()
-	if err != nil {
-		return err
-	}
-
-	defaultUsername, err := r.configItem("matrixOS.DefaultUsername")
-	if err != nil {
-		return err
-	}
-	OSName, err := r.configItem("matrixOS.OsName")
-	if err != nil {
-		return err
-	}
-
 	hookPath := filepath.Join(hooksDir, ref+".sh")
 	if !filesystems.FileExists(hookPath) {
-		r.PrintWarning(
-			"Release hook %s does not exist. Create an empty executable file at least ...\n",
-			hookPath,
-		)
-		return fmt.Errorf("release hook does not exist: %s", hookPath)
+		r.PrintWarning("Release hook %s does not exist. Skipping ...\n", hookPath)
+		return nil
 	}
 
 	r.Print("Running release hook %s ...\n", hookPath)
 	cmd := exec.Command(hookPath)
-
-	env := os.Environ()
-	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
-	env = config.FilterEnvKey(env, "REF")
-	env = config.FilterEnvKey(env, "MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH")
-	cmd.Env = append(
-		env,
-		"REF="+ref,
-		"CHROOT_DIR="+r.imageDir,
-		"MATRIXOS_DEV_DIR="+devDir,
-		"MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH="+defaultPrivPath,
-		"MATRIXOS_DEFAULT_USERNAME="+defaultUsername,
-		"MATRIXOS_OSNAME="+OSName,
-	)
+	cmd.Env = append(os.Environ(), "CHROOT_DIR="+r.imageDir)
 	cmd.Stdout = r.stdout
 	cmd.Stderr = r.stderr
 	return cmd.Run()

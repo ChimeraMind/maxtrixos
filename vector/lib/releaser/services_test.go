@@ -6,13 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
-	"matrixos/vector/lib/runner"
 	"matrixos/vector/lib/validation"
 )
 
@@ -178,12 +176,11 @@ func TestSetupHostname_HappyPath(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     imageDir,
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: imageDir,
 	}
 
 	if err := r.SetupHostname(); err != nil {
@@ -208,12 +205,11 @@ func TestSetupHostname_HostnameConfigError(t *testing.T) {
 	// Missing Releaser.Hostname key → error.
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
 	}
 
 	if err := r.SetupHostname(); err == nil {
@@ -225,12 +221,11 @@ func TestSetupHostname_ErrConfigPropagates(t *testing.T) {
 	wantErr := errors.New("cfg broken")
 	cfg := &config.ErrConfig{Err: wantErr}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
 	}
 
 	err := r.SetupHostname()
@@ -249,12 +244,11 @@ func TestSetupHostname_WriteFailsNoEtcDir(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     imageDir,
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: imageDir,
 	}
 
 	if err := r.SetupHostname(); err == nil {
@@ -274,12 +268,11 @@ func TestSetupHostname_OverwritesExistingFile(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     imageDir,
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: imageDir,
 	}
 
 	if err := r.SetupHostname(); err != nil {
@@ -299,13 +292,12 @@ func TestSetupServices_HooksDirError(t *testing.T) {
 	// Missing Releaser.HooksDir → error.
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "origin/matrixos"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "origin/matrixos",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
+		ref:      "origin/matrixos",
 	}
 
 	if err := r.SetupServices(); err == nil {
@@ -315,7 +307,7 @@ func TestSetupServices_HooksDirError(t *testing.T) {
 
 func TestSetupServices_NoServicesFile_SkipsGracefully(t *testing.T) {
 	hooksDir := t.TempDir()
-	// No .conf file exists → should return error.
+	// No .conf file exists → should print warning and return nil.
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
 			"Releaser.HooksDir": {hooksDir},
@@ -323,21 +315,21 @@ func TestSetupServices_NoServicesFile_SkipsGracefully(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
+		ref:      "myref",
 	}
 
-	err := r.SetupServices()
-	if err == nil {
-		t.Fatal("expected error when services file does not exist")
+	if err := r.SetupServices(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "does not exist") {
-		t.Errorf("unexpected error: %v", err)
+
+	warn := r.stderr.(*bytes.Buffer).String()
+	if warn == "" {
+		t.Error("expected a warning about missing services file")
 	}
 }
 
@@ -362,13 +354,12 @@ func TestSetupServices_FallbackToServicesSubdir(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
+		ref:      "myref",
 	}
 
 	// SetupServices will find the fallback file and parse it, then
@@ -378,11 +369,10 @@ func TestSetupServices_FallbackToServicesSubdir(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify that the specific "Create an empty" error message was NOT emitted
-	// (only the initial "Trying to look harder" warning should appear).
+	// Verify no "does not exist" warning was emitted.
 	warn := r.stderr.(*bytes.Buffer).String()
-	if bytes.Contains([]byte(warn), []byte("Create an empty")) {
-		t.Error("fallback path was not tried; got 'Create an empty' error")
+	if bytes.Contains([]byte(warn), []byte("does not exist")) {
+		t.Error("fallback path was not tried; got 'does not exist' warning")
 	}
 }
 
@@ -406,13 +396,12 @@ func TestSetupServices_ParseError(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
+		ref:      "myref",
 	}
 
 	err := r.SetupServices()
@@ -440,13 +429,12 @@ func TestSetupServices_MountSetupFailure(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
+		ref:      "myref",
 	}
 
 	err := r.SetupServices()
@@ -459,13 +447,12 @@ func TestSetupServices_ErrConfigPropagates(t *testing.T) {
 	wantErr := errors.New("cfg broken")
 	cfg := &config.ErrConfig{Err: wantErr}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "ref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "ref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
+		ref:      "ref",
 	}
 
 	err := r.SetupServices()
@@ -481,13 +468,12 @@ func TestSetupServices_ErrConfigPropagates(t *testing.T) {
 func TestReleaseHook_HooksDirError(t *testing.T) {
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "ref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "ref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
+		ref:      "ref",
 	}
 
 	if err := r.ReleaseHook(); err == nil {
@@ -496,43 +482,34 @@ func TestReleaseHook_HooksDirError(t *testing.T) {
 }
 
 func TestReleaseHook_NoHookFile_SkipsGracefully(t *testing.T) {
-	devDir := t.TempDir()
-	hooksDir := filepath.Join(devDir, "release", "hooks")
+	hooksDir := t.TempDir()
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Releaser.HooksDir":                  {hooksDir},
-			"matrixOS.Root":                      {devDir},
-			"matrixOS.DefaultPrivateGitRepoPath": {"/priv"},
-			"matrixOS.DefaultUsername":           {"user"},
-			"matrixOS.OsName":                    {"matrixos"},
+			"Releaser.HooksDir": {hooksDir},
 		},
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
+		ref:      "myref",
 	}
 
-	err := r.ReleaseHook()
-	if err == nil {
-		t.Fatal("expected error when hook file does not exist")
+	if err := r.ReleaseHook(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "does not exist") {
-		t.Errorf("unexpected error: %v", err)
+
+	warn := r.stderr.(*bytes.Buffer).String()
+	if warn == "" {
+		t.Error("expected a warning about missing hook file")
 	}
 }
 
 func TestReleaseHook_ExecutesHookScript(t *testing.T) {
-	devDir := t.TempDir()
-	hooksDir := filepath.Join(devDir, "release", "hooks")
-	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
-		t.Fatalf("failed to create hooks dir: %v", err)
-	}
+	hooksDir := t.TempDir()
 	imageDir := t.TempDir()
 	hookFile := filepath.Join(hooksDir, "myref.sh")
 	markerFile := filepath.Join(t.TempDir(), "marker")
@@ -543,22 +520,17 @@ func TestReleaseHook_ExecutesHookScript(t *testing.T) {
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Releaser.HooksDir":                  {hooksDir},
-			"matrixOS.Root":                      {devDir},
-			"matrixOS.DefaultPrivateGitRepoPath": {"/priv"},
-			"matrixOS.DefaultUsername":           {"user"},
-			"matrixOS.OsName":                    {"matrixos"},
+			"Releaser.HooksDir": {hooksDir},
 		},
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     imageDir,
-		ref:          "myref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: imageDir,
+		ref:      "myref",
 	}
 
 	if err := r.ReleaseHook(); err != nil {
@@ -582,32 +554,23 @@ func TestReleaseHook_ExecutesHookScript(t *testing.T) {
 }
 
 func TestReleaseHook_HookScriptFails(t *testing.T) {
-	devDir := t.TempDir()
-	hooksDir := filepath.Join(devDir, "release", "hooks")
-	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
-		t.Fatalf("failed to create hooks dir: %v", err)
-	}
+	hooksDir := t.TempDir()
 	hookFile := filepath.Join(hooksDir, "myref.sh")
 	os.WriteFile(hookFile, []byte("#!/bin/sh\nexit 1\n"), 0o755)
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Releaser.HooksDir":                  {hooksDir},
-			"matrixOS.Root":                      {devDir},
-			"matrixOS.DefaultPrivateGitRepoPath": {"/priv"},
-			"matrixOS.DefaultUsername":           {"user"},
-			"matrixOS.OsName":                    {"matrixos"},
+			"Releaser.HooksDir": {hooksDir},
 		},
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
+		ref:      "myref",
 	}
 
 	err := r.ReleaseHook()
@@ -617,33 +580,24 @@ func TestReleaseHook_HookScriptFails(t *testing.T) {
 }
 
 func TestReleaseHook_HookScriptStdout(t *testing.T) {
-	devDir := t.TempDir()
-	hooksDir := filepath.Join(devDir, "release", "hooks")
-	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
-		t.Fatalf("failed to create hooks dir: %v", err)
-	}
+	hooksDir := t.TempDir()
 	hookFile := filepath.Join(hooksDir, "myref.sh")
 	os.WriteFile(hookFile, []byte("#!/bin/sh\necho hello\n"), 0o755)
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Releaser.HooksDir":                  {hooksDir},
-			"matrixOS.Root":                      {devDir},
-			"matrixOS.DefaultPrivateGitRepoPath": {"/priv"},
-			"matrixOS.DefaultUsername":           {"user"},
-			"matrixOS.OsName":                    {"matrixos"},
+			"Releaser.HooksDir": {hooksDir},
 		},
 		Bools: map[string]bool{},
 	}
 	var stdout, stderr bytes.Buffer
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &stdout,
-		stderr:       &stderr,
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &stdout,
+		stderr:   &stderr,
+		imageDir: t.TempDir(),
+		ref:      "myref",
 	}
 
 	if err := r.ReleaseHook(); err != nil {
@@ -661,13 +615,12 @@ func TestReleaseHook_ErrConfigPropagates(t *testing.T) {
 	wantErr := errors.New("cfg broken")
 	cfg := &config.ErrConfig{Err: wantErr}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "ref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "ref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
+		ref:      "ref",
 	}
 
 	err := r.ReleaseHook()
@@ -677,33 +630,24 @@ func TestReleaseHook_ErrConfigPropagates(t *testing.T) {
 }
 
 func TestReleaseHook_NonExecutableFile(t *testing.T) {
-	devDir := t.TempDir()
-	hooksDir := filepath.Join(devDir, "release", "hooks")
-	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
-		t.Fatalf("failed to create hooks dir: %v", err)
-	}
+	hooksDir := t.TempDir()
 	hookFile := filepath.Join(hooksDir, "myref.sh")
 	// Write script without execute permission.
 	os.WriteFile(hookFile, []byte("#!/bin/sh\necho hi\n"), 0o644)
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Releaser.HooksDir":                  {hooksDir},
-			"matrixOS.Root":                      {devDir},
-			"matrixOS.DefaultPrivateGitRepoPath": {"/priv"},
-			"matrixOS.DefaultUsername":           {"user"},
-			"matrixOS.OsName":                    {"matrixos"},
+			"Releaser.HooksDir": {hooksDir},
 		},
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: t.TempDir(),
+		ref:      "myref",
 	}
 
 	// Even root cannot execute a file with zero execute bits (0o644).
@@ -744,13 +688,12 @@ func TestSetupHostname_WithQA(t *testing.T) {
 	}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:          cfg,
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:           qa,
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     imageDir,
+		cfg:      cfg,
+		ostree:   &ostree.MockOstree{},
+		qa:       qa,
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: imageDir,
 	}
 
 	if err := r.SetupHostname(); err != nil {
