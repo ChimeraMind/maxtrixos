@@ -662,11 +662,12 @@ func (b *BindMounter) Unmount() error {
 	if err := CheckDirNotFsRoot(b.dst); err != nil {
 		return err
 	}
-	CleanupMounts(CleanupMountsOptions{
+	opts := CleanupMountsOptions{
 		Mounts: []string{b.dst},
 		Stdout: b.stdout,
 		Stderr: b.stderr,
-	})
+	}
+	CleanupMounts(opts)
 	b.mounted = false
 	return nil
 }
