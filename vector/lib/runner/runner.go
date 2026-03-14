@@ -138,16 +138,22 @@ type ChrootOutputFunc func(cmd *ChrootCmd) ([]byte, error)
 
 // ChrootRun is the default ChrootRunFunc implementation.
 var ChrootRun ChrootRunFunc = func(c *ChrootCmd) error {
-	uArgs, err := chrootArgs(c.ChrootDir, c.Name, c.Args...)
+	uArgs, err := chrootArgs(c)
 	if err != nil {
 		return err
 	}
-	return Run(&Cmd{Name: "unshare", Args: uArgs, Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr})
+	return Run(&Cmd{
+		Name:   "unshare",
+		Args:   uArgs,
+		Stdin:  c.Stdin,
+		Stdout: c.Stdout,
+		Stderr: c.Stderr,
+	})
 }
 
 // ChrootOutput is the default ChrootOutputFunc implementation.
 var ChrootOutput ChrootOutputFunc = func(c *ChrootCmd) ([]byte, error) {
-	uArgs, err := chrootArgs(c.ChrootDir, c.Name, c.Args...)
+	uArgs, err := chrootArgs(c)
 	if err != nil {
 		return nil, err
 	}
