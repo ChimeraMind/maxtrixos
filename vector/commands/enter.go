@@ -249,6 +249,11 @@ func (c *EnterCommand) enterChrootWithLock(sd seeder.ISeeder, chrootDir string) 
 			seeder = &info
 			break
 		}
+		if params.PreferredChrootDir == chrootDir {
+			// Last ditch attempt.
+			seeder = &info
+			break
+		}
 	}
 	if seeder == nil {
 		return fmt.Errorf(
