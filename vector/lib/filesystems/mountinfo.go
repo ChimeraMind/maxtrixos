@@ -14,8 +14,8 @@ var (
 	// mountInfoPath is the path to the mountinfo file.
 	mountInfoPath = "/proc/self/mountinfo"
 
-	// readMountInfo reads and parses the system mount info. Replaceable for testing.
-	readMountInfo = defaultReadMountInfo
+	// ReadMountInfo reads and parses the system mount info. Replaceable for testing.
+	ReadMountInfo = defaultReadMountInfo
 
 	// blkidLookup queries a device attribute via blkid. Replaceable for testing.
 	blkidLookup = defaultBlkidLookup
