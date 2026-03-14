@@ -427,10 +427,6 @@ seeder_worker() {
     if [ -z "${chroot_dir}" ]; then
         chroot_dir="${PREFERRED_SEEDER_CHROOT_DIR}"
         echo "[${seeder_name}] --chroot-dir unset, using the chroot path from config: ${chroot_dir}" >&2
-    elif [ -n "${ARG_CLEAN_ARTIFACTS}" ]; then
-        # If the temp artifacts cleanup is active, this can erase the whole
-        # to-be-built chroot!
-        TEMPORARY_ARTIFACTS+=( "${chroot_dir}" )
     fi
 
     local chroot_done_flag_file=
