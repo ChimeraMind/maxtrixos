@@ -47,6 +47,8 @@ type MockSeeder struct {
 	LockDirErr                     error
 	LockWaitSeconds_               string
 	LockWaitSecondsErr             error
+	Stage3DownloadUrl_             string
+	Stage3DownloadUrlErr           error
 
 	// Execution
 	RetryableCmdErr               error
@@ -142,6 +144,9 @@ func (m *MockSeeder) LockDir() (string, error) {
 }
 func (m *MockSeeder) LockWaitSeconds() (string, error) {
 	return m.LockWaitSeconds_, m.LockWaitSecondsErr
+}
+func (m *MockSeeder) Stage3DownloadUrl() (string, error) {
+	return m.Stage3DownloadUrl_, m.Stage3DownloadUrlErr
 }
 
 func (m *MockSeeder) RetryableCmd(tries int, name string, args ...string) error {
