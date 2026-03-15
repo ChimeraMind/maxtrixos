@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"slices"
 	"sync"
+	"syscall"
 
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
@@ -361,8 +361,7 @@ func (im *Imager) Cleanup() {
 	}
 
 	// Sync buffers for image files after umount.
-	cmd := exec.Command("sync")
-	_ = cmd.Run()
+	syscall.Sync()
 
 	im.trackedTmpDirsMu.Lock()
 	tmpDirs := slices.Clone(im.trackedTmpDirs)
