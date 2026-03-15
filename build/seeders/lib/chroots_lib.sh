@@ -113,6 +113,36 @@ chroots_lib.validate_matrixos_private() {
     fi
 }
 
+chroots_lib._maybe_mount_sys() {
+    if ! mountpoint -q /sys; then
+        echo "Mounting sysfs on /sys inside chroot since it was not mounted by the host..." >&2
+        mkdir -p /sys
+        mount -t sysfs sys /sys
+    else
+        echo "/sys is already mounted on the host, skipping mounting it inside chroot." >&2
+    fi
+}
+
+chroots_lib._maybe_mount_dev() {
+    if ! mountpoint -q /dev; then
+        echo "Mounting devtmpfs on /dev inside chroot since it was not mounted by the host..." >&2
+        mkdir -p /dev
+        mount -t devtmpfs devtmpfs /dev
+
+        echo "Mounting devpts on /dev/pts inside chroot since it was not mounted by the host..." >&2
+        mount -t devpts devpts /dev/pts -o rw,nosuid,noexec,relatime,gid=5,mode=600,ptmxmode=000
+        echo "Mounting tmpfs on /dev/shm inside chroot since it was not mounted by the host..." >&2
+        mount -t devshm tmpfs /dev/shm -o rw,nosuid,nodev,mode=1777
+    else
+        echo "/dev is already mounted on the host, skipping mounting it inside chroot." >&2
+    fi
+}
+
+chroots_lib.maybe_mount_common_filesystems() {
+    chroots_lib._maybe_mount_sys
+    chroots_lib._maybe_mount_dev
+}
+
 chroots_lib.default_portage_bootstrap() {
     for repo in "${@}"; do
         eselect repository enable "${repo}"

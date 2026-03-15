@@ -62,6 +62,8 @@ gnome.tweak_resolved() {
 
 main() {
 
+    chroots_lib.maybe_mount_common_filesystems
+
     local phases=(
         gnome.buildenv_bootstrap
         gnome.portage_bootstrap
