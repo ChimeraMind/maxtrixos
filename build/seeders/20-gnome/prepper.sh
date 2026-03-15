@@ -76,7 +76,6 @@ _prepper_dir="$(dirname "${0}")"
 _seeders_dir="$(dirname "${_prepper_dir}")"
 _seeder_name="$(basename "${_prepper_dir}")"
 
-source "${MATRIXOS_DEV_DIR}"/headers/env.include.sh
 source "${MATRIXOS_DEV_DIR}"/build/seeders/lib/preppers_lib.sh
 
 
