@@ -138,13 +138,16 @@ type VMCommand struct {
 	fs          *flag.FlagSet
 	imagePath   string
 	memory      string
+	gpuMemory   string
 	port        string
 	waitBoot    time.Duration
 	waitTests   time.Duration
 	maxRunTime  time.Duration
-	noGraphic   bool
-	noGpuaccel  bool
-	noAudio     bool
+	display     string
+	venusAccel  bool
+	graphical   bool
+	gpuAccel    bool
+	audio       bool
 	interactive bool
 	audioDev    string
 	cpus        string
@@ -167,14 +170,13 @@ func NewVMCommand() *VMCommand {
 	c.fs.DurationVar(&c.waitBoot, "wait_boot", 120*time.Second, "Seconds to wait for boot login prompt")
 	c.fs.DurationVar(&c.waitTests, "wait_tests", 120*time.Second, "Seconds to wait for tests to complete")
 	c.fs.DurationVar(&c.maxRunTime, "max_run_time", 300*time.Second, "Maximum seconds to allow the entire VM run (including boot and tests), when running in non-interactive mode")
-	c.fs.BoolVar(&c.noGpuaccel, "nogpuaccel", false, "Disable GPU acceleration (use software rendering)")
-	c.fs.BoolVar(&c.noGraphic, "nographic", false, "Disable graphical output")
-	c.fs.BoolVar(&c.noAudio, "noaudio", false, "Disable audio devices")
+	c.fs.BoolVar(&c.venusAccel, "venus", false, "Enable Venus GPU acceleration (requires QEMU with Venus support)")
+	c.fs.BoolVar(&c.gpuAccel, "gpuaccel", true, "Enable GPU acceleration (requires QEMU with GPU support)")
+	c.fs.BoolVar(&c.graphical, "graphical", true, "Enable graphical output")
+	c.fs.BoolVar(&c.audio, "audio", true, "Enable audio devices")
 	c.fs.BoolVar(&c.interactive, "interactive", false, "Run VM interactively without testing")
 	c.fs.StringVar(&c.cpus, "cpus", "4", "Number of CPUs for the VM")
 	c.fs.StringVar(&c.display, "display", "sdl", "Display type for the VM (e.g., 'sdl', 'gtk', default: 'sdl')")
-	c.fs.BoolVar(&c.extraDisk, "extra_disk", false, "Attach an additional empty block device to the VM")
-	c.fs.StringVar(&c.extraDiskSize, "extra_disk_size", "64G", "Size of the extra block device (default '64G')")
 	return c
 }
 
@@ -298,18 +300,11 @@ func (c *VMCommand) Run() error {
 		"-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", testImageFile.Name()),
 	}
 
-	if c.noGraphic {
-		qemuArgs = append(qemuArgs, "-nographic")
+	if c.graphical {
+		qemuArgs = append(qemuArgs, "-serial", "stdio")
+		qemuArgs = append(qemuArgs, c.displayArgs()...)
 	} else {
-		gpuAccel := ",venus=on"
-		if c.noGpuaccel {
-			gpuAccel = ""
-		}
-		qemuArgs = append(qemuArgs,
-			"-serial", "stdio",
-			"-device", "virtio-vga-gl,hostmem=512M,blob=true"+gpuAccel,
-			"-display", "gtk,gl=on",
-		)
+		qemuArgs = append(qemuArgs, "-nographic")
 	}
 
 	if c.graphical {
