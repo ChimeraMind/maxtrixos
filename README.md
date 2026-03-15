@@ -329,7 +329,7 @@ The current focus is on **User Friendliness (Milestone 3)** and **New Technologi
 ### Milestone 4 (Future)
 
 - [x] Rewrite core tooling in Go (`vector`) — in progress, most user-facing commands migrated.
-- [ ] Implement proper CI/CD pipelines and testing.
+- [x] Implement proper CI/CD pipelines and testing.
 - [ ] Migrate to `bootc` or wrapper on top of `ostree` + UKI support, moving away from direct `ostree` usage.
 
 ## 🙏 Contributing
