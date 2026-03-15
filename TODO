@@ -3,17 +3,24 @@
 Golang migration:
     - [WAITING] Add delegated system mounts support for: imager, releaser.
     - [WAITING] Migrate vector_builder.sh to Golang.
-    - [sd-boot] Closely watch https://github.com/ostreedev/ostree/pull/3359
-        This will be our trampoline to support bootc in the future.
-        Step 1: support sd-boot alongside grub2, start building new images with sd-boot.
-        Step 2: switch to UKI.
-        Step 3: add bootc support.
     - add integration tests for vector usage inside VM to run manually first
       - [WAITING] vector setupOS
       - [WAITING] vector jailbreak
 
 Features:
-    - Test and consider migration to systemd-boot (while supporting GRUB).
+    - Add delegated mounts for the remaining bind mounts, by calling an
+      intermediary script before `exec chroot`. Example:
+      unshare --mount --pid --fork sh -c '
+        # 1. Perform the bind mount privately inside the namespace
+        mount --bind /path/to/external/dir /path/to/chroot/internal/dir
+        # 2. Pivot into the chroot and replace the shell with your executable
+        exec chroot /path/to/chroot /bin/your_executable
+      '
+    - [sd-boot] Closely watch https://github.com/ostreedev/ostree/pull/3359
+        This will be our trampoline to support bootc in the future.
+        Step 1: support sd-boot alongside grub2, start building new images with sd-boot.
+        Step 2: switch to UKI.
+        Step 3: add bootc support.
     - Add UKI building to kernel build (make USE flag optional).
     - Test bootc & migration to UKI.
     - Support Cloud Init (add VM tests).
