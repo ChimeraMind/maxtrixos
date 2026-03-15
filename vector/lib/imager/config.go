@@ -105,6 +105,10 @@ func (im *Imager) HooksDir() (string, error) {
 	return im.configItem("Imager.HooksDir")
 }
 
+func (im *Imager) TestsDir() (string, error) {
+	return im.configItem("Imager.TestsDir")
+}
+
 func (im *Imager) LockDir() (string, error) {
 	return im.configItem("Imager.LocksDir")
 }

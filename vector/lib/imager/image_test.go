@@ -41,6 +41,7 @@ func baseImageConfig() *config.MockConfig {
 			"Seeder.ChrootMetadataDirBuildFileName": {"build.txt"},
 			"matrixOS.LogsDir":                      {"/tmp/logs"},
 			"Imager.HooksDir":                       {"/tmp/image/hooks"},
+			"Imager.TestsDir":                       {"/tmp/image/tests"},
 		},
 	}
 }

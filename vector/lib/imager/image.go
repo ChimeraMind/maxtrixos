@@ -141,6 +141,8 @@ type IImager interface {
 	DevDir() (string, error)
 	// HooksDir returns the directory where image generation hooks are placed.
 	HooksDir() (string, error)
+	// TestsDir returns the directory where image generation tests are placed.
+	TestsDir() (string, error)
 	// LockDir returns the configured image lock directory.
 	LockDir() (string, error)
 	// LockWaitSeconds returns the configured lock wait timeout in seconds.

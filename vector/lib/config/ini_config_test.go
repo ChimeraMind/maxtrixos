@@ -57,6 +57,7 @@ LocksDir=locks/imager
 ImagesDir=out/images
 MountDir=out/mounts
 HooksDir=image/hooks
+TestsDir=image/tests
 
 [Ostree]
 RepoDir=ostree/repo
@@ -123,6 +124,7 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 	check("Imager.MountDir", filepath.Join(artifactsRootPath, "out/mounts"))
 	// Relative to matrixOS.ConfRoot
 	check("Imager.HooksDir", filepath.Join(confRootPath, "image/hooks"))
+	check("Imager.TestsDir", filepath.Join(confRootPath, "image/tests"))
 
 	check("Ostree.DevGpgHomeDir", filepath.Join(artifactsRootPath, "gpg-home"))
 	check("Ostree.GpgOfficialPublicKey", filepath.Join(confRootPath, "pubkeys/ostree.gpg"))
@@ -1225,6 +1227,7 @@ LocksDir=locks/imager
 ImagesDir=images
 MountDir=mounts
 HooksDir=image/hooks
+TestsDir=image/tests
 
 [Ostree]
 RepoDir=ostree/repo
@@ -1279,6 +1282,7 @@ HooksDir=release/hooks
 	// ConfRoot-dependent
 	check("Ostree.GpgOfficialPublicKey", "/the/confroot/pubkeys/ostree.gpg")
 	check("Imager.HooksDir", "/the/confroot/image/hooks")
+	check("Imager.TestsDir", "/the/confroot/image/tests")
 
 	// ArtifactsRoot-dependent
 	check("Seeder.DownloadsDir", "/the/artifacts/seeder/downloads")
