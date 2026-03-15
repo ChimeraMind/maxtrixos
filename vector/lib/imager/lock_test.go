@@ -20,7 +20,7 @@ func TestImageLockDir(t *testing.T) {
 		lockDir := filepath.Join(tmpDir, "locks")
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImager(cfg, &ostree.MockOstree{})
 
 		result, err := im.ImageLockDir()
 		if err != nil {
@@ -37,7 +37,7 @@ func TestImageLockDir(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		im, _ := NewImager(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		_, err := im.ImageLockDir()
 		if err == nil {
 			t.Error("should error from broken config")
@@ -54,7 +54,7 @@ func TestImageLockPath(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
 		mock := &ostree.MockOstree{Ref_: "matrixos/amd64/gnome"}
-		im := newTestImage(cfg, mock)
+		im := newTestImager(cfg, mock)
 		im.ref = "matrixos/amd64/gnome"
 
 		result, err := im.ImageLockPath()
@@ -68,7 +68,7 @@ func TestImageLockPath(t *testing.T) {
 	})
 
 	t.Run("EmptyRef", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		_, err := im.ImageLockPath()
 		if err == nil {
 			t.Error("should error for empty ref")
@@ -85,7 +85,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg.Items["Imager.LockWaitSeconds"] = []string{"5"}
-		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "test/ref"})
+		im := newTestImager(cfg, &ostree.MockOstree{Ref_: "test/ref"})
 		im.ref = "test/ref"
 
 		called := false
@@ -107,7 +107,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg.Items["Imager.LockWaitSeconds"] = []string{"5"}
-		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "test/ref"})
+		im := newTestImager(cfg, &ostree.MockOstree{Ref_: "test/ref"})
 		im.ref = "test/ref"
 
 		fnErr := errors.New("fn failed")
@@ -123,7 +123,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 	})
 
 	t.Run("EmptyRef", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		err := im.ExecuteWithImageLock(func() error { return nil })
 		if err == nil {
 			t.Error("should error for empty ref")
@@ -136,7 +136,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg.Items["Imager.LockWaitSeconds"] = []string{"notanumber"}
-		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "test/ref"})
+		im := newTestImager(cfg, &ostree.MockOstree{Ref_: "test/ref"})
 		im.ref = "test/ref"
 
 		err := im.ExecuteWithImageLock(func() error { return nil })
@@ -150,7 +150,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		im, _ := NewImager(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		im.ref = "test/ref"
 		err := im.ExecuteWithImageLock(func() error { return nil })
 		if err == nil {
@@ -164,7 +164,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg.Items["Imager.LockWaitSeconds"] = []string{"5"}
-		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "exclusive/ref"})
+		im := newTestImager(cfg, &ostree.MockOstree{Ref_: "exclusive/ref"})
 		im.ref = "exclusive/ref"
 
 		// Acquire the lock in the callback and verify a second goroutine blocks.
@@ -186,7 +186,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg2 := baseImageConfig()
 		cfg2.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg2.Items["Imager.LockWaitSeconds"] = []string{"1"}
-		im2 := newTestImage(cfg2, &ostree.MockOstree{Ref_: "exclusive/ref"})
+		im2 := newTestImager(cfg2, &ostree.MockOstree{Ref_: "exclusive/ref"})
 		im2.ref = "exclusive/ref"
 
 		err := im2.ExecuteWithImageLock(func() error {
@@ -211,7 +211,7 @@ func TestExecuteWithImageLock(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Imager.LocksDir"] = []string{lockDir}
 		cfg.Items["Imager.LockWaitSeconds"] = []string{"5"}
-		im := newTestImage(cfg, &ostree.MockOstree{Ref_: "release/ref"})
+		im := newTestImager(cfg, &ostree.MockOstree{Ref_: "release/ref"})
 		im.ref = "release/ref"
 
 		// First call acquires and releases the lock.

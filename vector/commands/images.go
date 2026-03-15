@@ -251,8 +251,8 @@ func (c *ImagesCommand) imageWorker(ref string) error {
 	}
 
 	// Initialize the imager for this ref.
-	opts := imager.NewImageOptions{}
-	im, err := imager.NewImage(c.cfg, c.ot, fsenc, &opts)
+	opts := imager.NewImagerOptions{}
+	im, err := imager.NewImager(c.cfg, c.ot, fsenc, &opts)
 	if err != nil {
 		return fmt.Errorf("failed to initialize imager: %w", err)
 	}
@@ -305,7 +305,7 @@ func (c *ImagesCommand) imageWorker(ref string) error {
 
 // initializeRemoteOstree sets up the ostree remote and pulls
 // the specified ref.  Mirrors image.go initializeRemoteOstree().
-func (c *ImagesCommand) initializeRemoteOstree(im imager.IImage) error {
+func (c *ImagesCommand) initializeRemoteOstree(im imager.IImager) error {
 	remote, err := c.ot.Remote()
 	if err != nil {
 		return err
@@ -324,7 +324,7 @@ func (c *ImagesCommand) initializeRemoteOstree(im imager.IImage) error {
 }
 
 // showLocalRefs prints the local ostree refs to the provided printf function.
-func (c *ImagesCommand) showLocalRefs(im imager.IImage) error {
+func (c *ImagesCommand) showLocalRefs(im imager.IImager) error {
 	refs, err := c.ot.LocalRefs()
 	if err != nil {
 		return fmt.Errorf("failed to list local refs: %w", err)
@@ -337,7 +337,7 @@ func (c *ImagesCommand) showLocalRefs(im imager.IImage) error {
 }
 
 // showRemoteRefs prints the remote ostree refs to the provided printf function.
-func (c *ImagesCommand) showRemoteRefs(im imager.IImage) error {
+func (c *ImagesCommand) showRemoteRefs(im imager.IImager) error {
 	refs, err := c.ot.RemoteRefs()
 	if err != nil {
 		return fmt.Errorf("failed to list remote refs: %w", err)

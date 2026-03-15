@@ -45,52 +45,52 @@ func baseImageConfig() *config.MockConfig {
 	}
 }
 
-func newTestImage(cfg *config.MockConfig, ostree *ostree.MockOstree) *Image {
-	im, _ := NewImage(cfg, ostree, filesystems.DefaultMockFsenc(), nil)
+func newTestImager(cfg *config.MockConfig, ostree *ostree.MockOstree) *Imager {
+	im, _ := NewImager(cfg, ostree, filesystems.DefaultMockFsenc(), nil)
 	return im
 }
 
-func newTestImageWithRunner(cfg *config.MockConfig, ostree *ostree.MockOstree, runner *runner.MockRunner) *Image {
-	im := newTestImage(cfg, ostree)
+func newTestImagerWithRunner(cfg *config.MockConfig, ostree *ostree.MockOstree, runner *runner.MockRunner) *Imager {
+	im := newTestImager(cfg, ostree)
 	im.runner = runner.Run
 	return im
 }
 
 // --- Interface compliance ---
 
-func TestImageImplementsIImage(t *testing.T) {
-	var _ IImage = (*Image)(nil)
+func TestImageImplementsIImager(t *testing.T) {
+	var _ IImager = (*Imager)(nil)
 }
 
-// --- NewImage Tests ---
+// --- NewImager Tests ---
 
-func TestNewImage(t *testing.T) {
+func TestNewImager(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		im, err := NewImage(baseImageConfig(), &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		im, err := NewImager(baseImageConfig(), &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		if err != nil {
-			t.Fatalf("NewImage() error: %v", err)
+			t.Fatalf("NewImager() error: %v", err)
 		}
 		if im == nil {
-			t.Fatal("NewImage() returned nil")
+			t.Fatal("NewImager() returned nil")
 		}
 	})
 
 	t.Run("NilConfig", func(t *testing.T) {
-		_, err := NewImage(nil, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		_, err := NewImager(nil, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		if err == nil {
 			t.Fatal("expected error for nil config")
 		}
 	})
 
 	t.Run("NilOstree", func(t *testing.T) {
-		_, err := NewImage(baseImageConfig(), nil, filesystems.DefaultMockFsenc(), nil)
+		_, err := NewImager(baseImageConfig(), nil, filesystems.DefaultMockFsenc(), nil)
 		if err == nil {
 			t.Fatal("expected error for nil ostree")
 		}
 	})
 
 	t.Run("NilFsenc", func(t *testing.T) {
-		_, err := NewImage(baseImageConfig(), &ostree.MockOstree{}, nil, nil)
+		_, err := NewImager(baseImageConfig(), &ostree.MockOstree{}, nil, nil)
 		if err == nil {
 			t.Fatal("expected error for nil fsenc")
 		}
@@ -100,7 +100,7 @@ func TestNewImage(t *testing.T) {
 // --- Stdout/Stderr Getter Tests ---
 
 func TestImageOutputGetters(t *testing.T) {
-	im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+	im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 
 	// Default writers are os.Stdout and os.Stderr.
 	if im.Stdout() == nil {
@@ -126,7 +126,7 @@ func TestImageOutputGetters(t *testing.T) {
 // --- Print Method Tests ---
 
 func TestImagePrintMethods(t *testing.T) {
-	im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+	im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 	var stdout, stderr bytes.Buffer
 	im.SetStdout(&stdout)
 	im.SetStderr(&stderr)
@@ -151,7 +151,7 @@ func TestImagePrintMethods(t *testing.T) {
 // --- trackMounts Tests ---
 
 func TestImageTrackMounts(t *testing.T) {
-	im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+	im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 	var stdout, stderr bytes.Buffer
 	im.SetStdout(&stdout)
 	im.SetStderr(&stderr)
@@ -171,7 +171,7 @@ func TestImageTrackMounts(t *testing.T) {
 
 func TestSetImageMode(t *testing.T) {
 	t.Run("FlashToDeviceSuccess", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.devicePath = "/dev/sda"
 		err := im.SetImageMode(ModeFlashToDevice)
 		if err != nil {
@@ -183,7 +183,7 @@ func TestSetImageMode(t *testing.T) {
 	})
 
 	t.Run("FlashToDeviceNoDevice", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		// devicePath is empty.
 		err := im.SetImageMode(ModeFlashToDevice)
 		if err == nil {
@@ -192,7 +192,7 @@ func TestSetImageMode(t *testing.T) {
 	})
 
 	t.Run("CreateImageFileSuccess", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		im.imagePath = "/tmp/test.img"
 		err := im.SetImageMode(ModeCreateImageFile)
 		if err != nil {
@@ -204,7 +204,7 @@ func TestSetImageMode(t *testing.T) {
 	})
 
 	t.Run("CreateImageFileNoPath", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		// imagePath is empty.
 		err := im.SetImageMode(ModeCreateImageFile)
 		if err == nil {
@@ -213,7 +213,7 @@ func TestSetImageMode(t *testing.T) {
 	})
 
 	t.Run("InvalidMode", func(t *testing.T) {
-		im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+		im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 		err := im.SetImageMode(ImageMode(99))
 		if err == nil {
 			t.Error("should error for invalid mode")
@@ -221,20 +221,20 @@ func TestSetImageMode(t *testing.T) {
 	})
 }
 
-// --- NewImage with Options Tests ---
+// --- NewImager with Options Tests ---
 
 func TestNewImageWithOptions(t *testing.T) {
 	t.Run("WithDeviceOpts", func(t *testing.T) {
-		opts := &NewImageOptions{
+		opts := &NewImagerOptions{
 			EfiDevice:  "/dev/sda1",
 			BootDevice: "/dev/sda2",
 			RootDevice: "/dev/sda3",
 			DevicePath: "/dev/sda",
 			Mode:       ModeFlashToDevice,
 		}
-		im, err := NewImage(baseImageConfig(), &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), opts)
+		im, err := NewImager(baseImageConfig(), &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), opts)
 		if err != nil {
-			t.Fatalf("NewImage() error: %v", err)
+			t.Fatalf("NewImager() error: %v", err)
 		}
 		if im.EfiDevice() != "/dev/sda1" {
 			t.Errorf("EfiDevice() = %q", im.EfiDevice())
@@ -255,10 +255,10 @@ func TestNewImageWithOptions(t *testing.T) {
 
 	t.Run("WithEncryption", func(t *testing.T) {
 		fsenc := &filesystems.MockFsenc{EncryptionEnabled_: true}
-		opts := &NewImageOptions{Mode: ModeCreateImageFile}
-		im, err := NewImage(baseImageConfig(), &ostree.MockOstree{}, fsenc, opts)
+		opts := &NewImagerOptions{Mode: ModeCreateImageFile}
+		im, err := NewImager(baseImageConfig(), &ostree.MockOstree{}, fsenc, opts)
 		if err != nil {
-			t.Fatalf("NewImage() error: %v", err)
+			t.Fatalf("NewImager() error: %v", err)
 		}
 		if !im.encrypted {
 			t.Error("expected encrypted = true")
@@ -267,8 +267,8 @@ func TestNewImageWithOptions(t *testing.T) {
 
 	t.Run("EncryptionCheckError", func(t *testing.T) {
 		fsenc := &filesystems.MockFsenc{EncryptionEnabledErr: errImageTest}
-		opts := &NewImageOptions{} // opts must be non-nil to trigger encryption check assignment
-		_, err := NewImage(baseImageConfig(), &ostree.MockOstree{}, fsenc, opts)
+		opts := &NewImagerOptions{} // opts must be non-nil to trigger encryption check assignment
+		_, err := NewImager(baseImageConfig(), &ostree.MockOstree{}, fsenc, opts)
 		if err == nil {
 			t.Error("expected error from EncryptionEnabled")
 		}
@@ -278,7 +278,7 @@ func TestNewImageWithOptions(t *testing.T) {
 // --- Device Setter/Getter Tests ---
 
 func TestImageDeviceSettersGetters(t *testing.T) {
-	im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+	im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 
 	im.SetEfiDevice("/dev/sda1")
 	if im.EfiDevice() != "/dev/sda1" {
@@ -319,7 +319,7 @@ func TestImageDeviceSettersGetters(t *testing.T) {
 // --- Mount Point Getter Tests ---
 
 func TestImageMountGetters(t *testing.T) {
-	im := newTestImage(baseImageConfig(), &ostree.MockOstree{})
+	im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
 
 	// Initially empty.
 	if im.EfifsMount() != "" {

@@ -13,16 +13,16 @@ import (
 	"matrixos/vector/lib/runner"
 )
 
-func (im *Image) SetupBootloaderConfig() error {
+func (im *Imager) SetupBootloaderConfig() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
 
 	if im.efiDevice == "" {
-		return errors.New("missing efiDevice, not set in NewImageOptions")
+		return errors.New("missing efiDevice, not set in NewImagerOptions")
 	}
 	if im.bootDevice == "" {
-		return errors.New("missing bootDevice, not set in NewImageOptions")
+		return errors.New("missing bootDevice, not set in NewImagerOptions")
 	}
 
 	if im.bootfsMount == "" {
@@ -157,7 +157,7 @@ func (im *Image) SetupBootloaderConfig() error {
 	return nil
 }
 
-func (im *Image) SetupVmtestConfig() error {
+func (im *Imager) SetupVmtestConfig() error {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
 	}
@@ -209,7 +209,7 @@ func (im *Image) SetupVmtestConfig() error {
 	return nil
 }
 
-func (im *Image) InstallSecurebootCerts() error {
+func (im *Imager) InstallSecurebootCerts() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -297,7 +297,7 @@ func (im *Image) InstallSecurebootCerts() error {
 	return filesystems.CopyDirPreserve(shimDir, efibootDir)
 }
 
-func (im *Image) InstallMemtest() error {
+func (im *Imager) InstallMemtest() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -314,7 +314,7 @@ func (im *Image) InstallMemtest() error {
 	return filesystems.CopyFile(memtestBin, filepath.Join(efibootDir, "memtest86plus.efi"))
 }
 
-func (im *Image) InstallBootloader() error {
+func (im *Imager) InstallBootloader() error {
 	if im.rootfs == "" {
 		return errors.New("rootfs not set, call SetRootfs first")
 	}
@@ -325,7 +325,7 @@ func (im *Image) InstallBootloader() error {
 		return errors.New("missing bootfsMount, call MountBootfs first")
 	}
 	if im.devicePath == "" {
-		return errors.New("missing devicePath, not set in NewImageOptions")
+		return errors.New("missing devicePath, not set in NewImagerOptions")
 	}
 	efibootDir, err := im.EfiBootDir()
 	if err != nil {
@@ -465,19 +465,19 @@ func (im *Image) InstallBootloader() error {
 	return nil
 }
 
-func (im *Image) GenerateKernelBootArgs() ([]string, error) {
+func (im *Imager) GenerateKernelBootArgs() ([]string, error) {
 	ref, err := im.cleanAndStripRef()
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean ref: %w", err)
 	}
 	if im.efiDevice == "" {
-		return nil, errors.New("missing efiDevice, not set in NewImageOptions")
+		return nil, errors.New("missing efiDevice, not set in NewImagerOptions")
 	}
 	if im.bootDevice == "" {
-		return nil, errors.New("missing bootDevice, not set in NewImageOptions")
+		return nil, errors.New("missing bootDevice, not set in NewImagerOptions")
 	}
 	if im.rootDevice == "" {
-		return nil, errors.New("missing rootDevice, not set in NewImageOptions")
+		return nil, errors.New("missing rootDevice, not set in NewImagerOptions")
 	}
 
 	// if we are encrypting, use the realRootDevice

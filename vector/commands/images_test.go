@@ -276,7 +276,7 @@ func TestImageWorkerBuildSuccess(t *testing.T) {
 		Remote_:    "origin",
 	}
 	cfg := defaultImagesTestConfig()
-	im := imager.DefaultMockImage()
+	im := imager.DefaultMockImager()
 	_ = im // We can't inject mock imager into imageWorker easily since it creates its own.
 	// This test verifies the plumbing without real builds.
 	cmd, err := newTestImagesCommand(mock, cfg, []string{"--local-ostree"})

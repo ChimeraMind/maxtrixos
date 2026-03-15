@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func (im *Image) ImageLockDir() (string, error) {
+func (im *Imager) ImageLockDir() (string, error) {
 	lockDir, err := im.LockDir()
 	if err != nil {
 		return "", err
@@ -21,9 +21,9 @@ func (im *Image) ImageLockDir() (string, error) {
 	return lockDir, nil
 }
 
-func (im *Image) ImageLockPath() (string, error) {
+func (im *Imager) ImageLockPath() (string, error) {
 	if im.ref == "" {
-		return "", errors.New("missing ref, set Ref in NewImageOptions")
+		return "", errors.New("missing ref, set Ref in NewImagerOptions")
 	}
 
 	ref, err := im.cleanAndStripRef()
@@ -44,7 +44,7 @@ func (im *Image) ImageLockPath() (string, error) {
 	return lockFile, nil
 }
 
-func (im *Image) ExecuteWithImageLock(fn func() error) error {
+func (im *Imager) ExecuteWithImageLock(fn func() error) error {
 	lockPath, err := im.ImageLockPath()
 	if err != nil {
 		return fmt.Errorf("failed to get image lock path: %w", err)

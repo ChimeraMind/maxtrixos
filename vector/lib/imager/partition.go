@@ -11,7 +11,7 @@ import (
 	"matrixos/vector/lib/runner"
 )
 
-func (im *Image) CreateImage(imageSize string) (retErr error) {
+func (im *Imager) CreateImage(imageSize string) (retErr error) {
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
 	}
@@ -56,9 +56,9 @@ func (im *Image) CreateImage(imageSize string) (retErr error) {
 	return nil
 }
 
-func (im *Image) ClearPartitionTable() error {
+func (im *Imager) ClearPartitionTable() error {
 	if im.devicePath == "" {
-		return errors.New("missing devicePath, not set in NewImageOptions")
+		return errors.New("missing devicePath, not set in NewImagerOptions")
 	}
 
 	im.Print("Clearing partition table on %s ...\n", im.devicePath)
@@ -78,11 +78,11 @@ func (im *Image) ClearPartitionTable() error {
 	})
 }
 
-func (im *Image) DatedFsLabel() string {
+func (im *Imager) DatedFsLabel() string {
 	return time.Now().Format("20060102")
 }
 
-func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
+func (im *Imager) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	if efiSize == "" {
 		return errors.New("missing efiSize parameter")
 	}
@@ -93,7 +93,7 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 		return errors.New("missing imageSize parameter")
 	}
 	if im.devicePath == "" {
-		return errors.New("missing devicePath, not set in NewImageOptions")
+		return errors.New("missing devicePath, not set in NewImagerOptions")
 	}
 
 	espPartType, err := im.EspPartitionType()
@@ -192,9 +192,9 @@ func (im *Image) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	return nil
 }
 
-func (im *Image) FormatEfifs() error {
+func (im *Imager) FormatEfifs() error {
 	if im.efiDevice == "" {
-		return errors.New("missing efiDevice, not set in NewImageOptions")
+		return errors.New("missing efiDevice, not set in NewImagerOptions")
 	}
 
 	im.Print("Creating EFI partition on %s\n", im.efiDevice)
@@ -213,9 +213,9 @@ func (im *Image) FormatEfifs() error {
 	})
 }
 
-func (im *Image) MountEfifs(mountEfifs string) error {
+func (im *Imager) MountEfifs(mountEfifs string) error {
 	if im.efiDevice == "" {
-		return errors.New("missing efiDevice, not set in NewImageOptions")
+		return errors.New("missing efiDevice, not set in NewImagerOptions")
 	}
 	if mountEfifs == "" {
 		return errors.New("missing mountEfifs parameter")
@@ -242,7 +242,7 @@ func (im *Image) MountEfifs(mountEfifs string) error {
 	return nil
 }
 
-func (im *Image) EfiBootDir() (string, error) {
+func (im *Imager) EfiBootDir() (string, error) {
 	if im.efifsMount == "" {
 		return "", errors.New("EFI filesystem not mounted")
 	}
@@ -254,9 +254,9 @@ func (im *Image) EfiBootDir() (string, error) {
 	return efibootDir, nil
 }
 
-func (im *Image) FormatBootfs() error {
+func (im *Imager) FormatBootfs() error {
 	if im.bootDevice == "" {
-		return errors.New("missing bootDevice, not set in NewImageOptions")
+		return errors.New("missing bootDevice, not set in NewImagerOptions")
 	}
 
 	label := "MB" + im.DatedFsLabel()
@@ -275,9 +275,9 @@ func (im *Image) FormatBootfs() error {
 	})
 }
 
-func (im *Image) MountBootfs(mountBootfs string) error {
+func (im *Imager) MountBootfs(mountBootfs string) error {
 	if im.bootDevice == "" {
-		return errors.New("missing bootDevice, not set in NewImageOptions")
+		return errors.New("missing bootDevice, not set in NewImagerOptions")
 	}
 	if mountBootfs == "" {
 		return errors.New("missing mountBootfs parameter")
@@ -304,7 +304,7 @@ func (im *Image) MountBootfs(mountBootfs string) error {
 	return nil
 }
 
-func (im *Image) MaybeEncryptRootfs() error {
+func (im *Imager) MaybeEncryptRootfs() error {
 	if !im.encrypted {
 		return nil
 	}
@@ -329,9 +329,9 @@ func (im *Image) MaybeEncryptRootfs() error {
 	return nil
 }
 
-func (im *Image) FormatRootfs() error {
+func (im *Imager) FormatRootfs() error {
 	if im.rootDevice == "" {
-		return errors.New("missing rootDevice, not set in NewImageOptions")
+		return errors.New("missing rootDevice, not set in NewImagerOptions")
 	}
 
 	label := "MR" + im.DatedFsLabel()
@@ -350,13 +350,13 @@ func (im *Image) FormatRootfs() error {
 	})
 }
 
-func (im *Image) RootfsKernelArgs() []string {
+func (im *Imager) RootfsKernelArgs() []string {
 	return []string{"rootflags=discard=async"}
 }
 
-func (im *Image) MountRootfs(mountRootfs string) error {
+func (im *Imager) MountRootfs(mountRootfs string) error {
 	if im.rootDevice == "" {
-		return errors.New("missing rootDevice, not set in NewImageOptions")
+		return errors.New("missing rootDevice, not set in NewImagerOptions")
 	}
 	if mountRootfs == "" {
 		return errors.New("missing mountRootfs parameter")
@@ -393,7 +393,7 @@ func (im *Image) MountRootfs(mountRootfs string) error {
 	return nil
 }
 
-func (im *Image) FinalizeFilesystems() error {
+func (im *Imager) FinalizeFilesystems() error {
 	if im.rootfsMount == "" {
 		return errors.New("missing rootfsMount, call MountRootfs first")
 	}

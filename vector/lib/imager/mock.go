@@ -7,10 +7,10 @@ import (
 	"os"
 )
 
-// MockImage implements IImage for testing.
+// MockImager implements IImager for testing.
 // Only the fields/methods relevant to each test need to be configured;
 // everything else returns safe zero values.
-type MockImage struct {
+type MockImager struct {
 	EfiDevice_  string
 	BootDevice_ string
 	RootDevice_ string
@@ -106,46 +106,46 @@ type MockImage struct {
 	stderr io.Writer
 }
 
-func (m *MockImage) SetStdout(w io.Writer) { m.stdout = w }
-func (m *MockImage) SetStderr(w io.Writer) { m.stderr = w }
-func (m *MockImage) Stdout() io.Writer {
+func (m *MockImager) SetStdout(w io.Writer) { m.stdout = w }
+func (m *MockImager) SetStderr(w io.Writer) { m.stderr = w }
+func (m *MockImager) Stdout() io.Writer {
 	if m.stdout == nil {
 		return os.Stdout
 	}
 	return m.stdout
 }
-func (m *MockImage) Stderr() io.Writer {
+func (m *MockImager) Stderr() io.Writer {
 	if m.stderr == nil {
 		return os.Stderr
 	}
 	return m.stderr
 }
-func (m *MockImage) Print(format string, a ...any) {
+func (m *MockImager) Print(format string, a ...any) {
 	fmt.Fprintf(m.Stdout(), format, a...)
 }
-func (m *MockImage) PrintWarning(format string, a ...any) {
+func (m *MockImager) PrintWarning(format string, a ...any) {
 	fmt.Fprintf(m.Stderr(), format, a...)
 }
-func (m *MockImage) PrintError(format string, a ...any) {
+func (m *MockImager) PrintError(format string, a ...any) {
 	fmt.Fprintf(m.Stderr(), format, a...)
 }
 
-func (m *MockImage) SetEfiDevice(device string)      { m.EfiDevice_ = device }
-func (m *MockImage) EfiDevice() string               { return m.EfiDevice_ }
-func (m *MockImage) SetBootDevice(device string)     { m.BootDevice_ = device }
-func (m *MockImage) BootDevice() string              { return m.BootDevice_ }
-func (m *MockImage) SetRootDevice(device string)     { m.RootDevice_ = device }
-func (m *MockImage) RootDevice() string              { return m.RootDevice_ }
-func (m *MockImage) SetDevicePath(devicePath string) { m.DevicePath_ = devicePath }
-func (m *MockImage) DevicePath() string              { return m.DevicePath_ }
-func (m *MockImage) SetImagePath(imagePath string)   { m.ImagePath_ = imagePath }
-func (m *MockImage) SetRootfs(rootfs string)         { m.Rootfs_ = rootfs }
-func (m *MockImage) Rootfs() string                  { return m.Rootfs_ }
-func (m *MockImage) Ref() string                     { return m.Ref_ }
-func (m *MockImage) SetRef(ref string)               { m.Ref_ = ref }
+func (m *MockImager) SetEfiDevice(device string)      { m.EfiDevice_ = device }
+func (m *MockImager) EfiDevice() string               { return m.EfiDevice_ }
+func (m *MockImager) SetBootDevice(device string)     { m.BootDevice_ = device }
+func (m *MockImager) BootDevice() string              { return m.BootDevice_ }
+func (m *MockImager) SetRootDevice(device string)     { m.RootDevice_ = device }
+func (m *MockImager) RootDevice() string              { return m.RootDevice_ }
+func (m *MockImager) SetDevicePath(devicePath string) { m.DevicePath_ = devicePath }
+func (m *MockImager) DevicePath() string              { return m.DevicePath_ }
+func (m *MockImager) SetImagePath(imagePath string)   { m.ImagePath_ = imagePath }
+func (m *MockImager) SetRootfs(rootfs string)         { m.Rootfs_ = rootfs }
+func (m *MockImager) Rootfs() string                  { return m.Rootfs_ }
+func (m *MockImager) Ref() string                     { return m.Ref_ }
+func (m *MockImager) SetRef(ref string)               { m.Ref_ = ref }
 
-func (m *MockImage) EfifsMount() string { return m.EfifsMount_ }
-func (m *MockImage) EfiBootDir() (string, error) {
+func (m *MockImager) EfifsMount() string { return m.EfifsMount_ }
+func (m *MockImager) EfiBootDir() (string, error) {
 	if m.EfifsMount_ == "" {
 		return "", errors.New("EFI filesystem not mounted")
 	}
@@ -154,186 +154,186 @@ func (m *MockImage) EfiBootDir() (string, error) {
 	}
 	return m.EfifsMount_ + "/" + m.RelativeEfiBootPath_, nil
 }
-func (m *MockImage) BootfsMount() string { return m.BootfsMount_ }
-func (m *MockImage) RootfsMount() string { return m.RootfsMount_ }
+func (m *MockImager) BootfsMount() string { return m.BootfsMount_ }
+func (m *MockImager) RootfsMount() string { return m.RootfsMount_ }
 
-func (m *MockImage) ImagesDir() (string, error) { return m.ImagesDir_, m.ImagesDirErr }
-func (m *MockImage) MountDir() (string, error)  { return m.MountDir_, m.MountDirErr }
-func (m *MockImage) ImageSize() (string, error) { return m.ImageSize_, m.ImageSizeErr }
-func (m *MockImage) EfiPartitionSize() (string, error) {
+func (m *MockImager) ImagesDir() (string, error) { return m.ImagesDir_, m.ImagesDirErr }
+func (m *MockImager) MountDir() (string, error)  { return m.MountDir_, m.MountDirErr }
+func (m *MockImager) ImageSize() (string, error) { return m.ImageSize_, m.ImageSizeErr }
+func (m *MockImager) EfiPartitionSize() (string, error) {
 	return m.EfiPartitionSize_, m.EfiPartitionSizeErr
 }
-func (m *MockImage) BootPartitionSize() (string, error) {
+func (m *MockImager) BootPartitionSize() (string, error) {
 	return m.BootPartitionSize_, m.BootPartitionSizeErr
 }
-func (m *MockImage) Compressor() (string, error)        { return m.Compressor_, m.CompressorErr }
-func (m *MockImage) EspPartitionType() (string, error)  { return "vfat", nil }
-func (m *MockImage) BootPartitionType() (string, error) { return "ext4", nil }
-func (m *MockImage) RootPartitionType() (string, error) { return "btrfs", nil }
-func (m *MockImage) OsName() (string, error)            { return m.OsName_, m.OsNameErr }
-func (m *MockImage) BootRoot() (string, error)          { return m.BootRoot_, m.BootRootErr }
-func (m *MockImage) EfiRoot() (string, error)           { return m.EfiRoot_, m.EfiRootErr }
-func (m *MockImage) RelativeEfiBootPath() (string, error) {
+func (m *MockImager) Compressor() (string, error)        { return m.Compressor_, m.CompressorErr }
+func (m *MockImager) EspPartitionType() (string, error)  { return "vfat", nil }
+func (m *MockImager) BootPartitionType() (string, error) { return "ext4", nil }
+func (m *MockImager) RootPartitionType() (string, error) { return "btrfs", nil }
+func (m *MockImager) OsName() (string, error)            { return m.OsName_, m.OsNameErr }
+func (m *MockImager) BootRoot() (string, error)          { return m.BootRoot_, m.BootRootErr }
+func (m *MockImager) EfiRoot() (string, error)           { return m.EfiRoot_, m.EfiRootErr }
+func (m *MockImager) RelativeEfiBootPath() (string, error) {
 	return m.RelativeEfiBootPath_, m.RelativeEfiBootErr
 }
-func (m *MockImage) EfiExecutable() (string, error)                { return "", nil }
-func (m *MockImage) EfiCertificateFileName() (string, error)       { return "", nil }
-func (m *MockImage) EfiCertificateFileNameDer() (string, error)    { return "", nil }
-func (m *MockImage) EfiCertificateFileNameKek() (string, error)    { return "", nil }
-func (m *MockImage) EfiCertificateFileNameKekDer() (string, error) { return "", nil }
-func (m *MockImage) ReadOnlyVdb() (string, error)                  { return "", nil }
-func (m *MockImage) DevDir() (string, error)                       { return "", nil }
-func (m *MockImage) HooksDir() (string, error)                     { return "", nil }
-func (m *MockImage) LockDir() (string, error)                      { return "", nil }
-func (m *MockImage) LockWaitSeconds() (string, error)              { return "", nil }
-func (m *MockImage) BuildMetadataFile() (string, error)            { return "", nil }
+func (m *MockImager) EfiExecutable() (string, error)                { return "", nil }
+func (m *MockImager) EfiCertificateFileName() (string, error)       { return "", nil }
+func (m *MockImager) EfiCertificateFileNameDer() (string, error)    { return "", nil }
+func (m *MockImager) EfiCertificateFileNameKek() (string, error)    { return "", nil }
+func (m *MockImager) EfiCertificateFileNameKekDer() (string, error) { return "", nil }
+func (m *MockImager) ReadOnlyVdb() (string, error)                  { return "", nil }
+func (m *MockImager) DevDir() (string, error)                       { return "", nil }
+func (m *MockImager) HooksDir() (string, error)                     { return "", nil }
+func (m *MockImager) LockDir() (string, error)                      { return "", nil }
+func (m *MockImager) LockWaitSeconds() (string, error)              { return "", nil }
+func (m *MockImager) BuildMetadataFile() (string, error)            { return "", nil }
 
-func (m *MockImage) ExtractReleaseVersion() (string, error) {
+func (m *MockImager) ExtractReleaseVersion() (string, error) {
 	return m.ReleaseVersion_, m.ReleaseVersionErr
 }
-func (m *MockImage) ImagePath() string {
+func (m *MockImager) ImagePath() string {
 	return m.ImagePath_
 }
-func (m *MockImage) BuildImagePath() (string, error) {
+func (m *MockImager) BuildImagePath() (string, error) {
 	return m.ImagePath_, m.ImagePathErr
 }
-func (m *MockImage) SetImageMode(mode ImageMode) error {
+func (m *MockImager) SetImageMode(mode ImageMode) error {
 	m.Mode_ = mode
 	return nil
 }
-func (m *MockImage) ImageMode() ImageMode {
+func (m *MockImager) ImageMode() ImageMode {
 	return m.Mode_
 }
-func (m *MockImage) BuildImagePathWithReleaseVersion(releaseVersion string) (string, error) {
+func (m *MockImager) BuildImagePathWithReleaseVersion(releaseVersion string) (string, error) {
 	return m.ImagePathWithReleaseVersion_, m.ImagePathWithReleaseVerErr
 }
-func (m *MockImage) CreateImage(imageSize string) error {
+func (m *MockImager) CreateImage(imageSize string) error {
 	m.CreateImageCalled = true
 	return nil
 }
-func (m *MockImage) CompressedImagePath() (string, error) {
+func (m *MockImager) CompressedImagePath() (string, error) {
 	return m.ImagePathWithCompExt_, m.ImagePathWithCompExtErr
 }
-func (m *MockImage) CompressImage() error {
+func (m *MockImager) CompressImage() error {
 	m.CompressImageCalled = true
 	return nil
 }
 
-func (m *MockImage) ClearPartitionTable() error {
+func (m *MockImager) ClearPartitionTable() error {
 	m.ClearPartitionTableCalled = true
 	return nil
 }
-func (m *MockImage) DatedFsLabel() string { return "IMG-20250101" }
-func (m *MockImage) PartitionDevices(efiSize, bootSize, imageSize string) error {
+func (m *MockImager) DatedFsLabel() string { return "IMG-20250101" }
+func (m *MockImager) PartitionDevices(efiSize, bootSize, imageSize string) error {
 	m.PartitionDevicesCalled = true
 	return nil
 }
-func (m *MockImage) FormatEfifs() error {
+func (m *MockImager) FormatEfifs() error {
 	m.FormatEfifsCalled = true
 	return nil
 }
-func (m *MockImage) MountEfifs(mountEfifs string) error {
+func (m *MockImager) MountEfifs(mountEfifs string) error {
 	m.MountEfifsCalled = true
 	m.EfifsMount_ = mountEfifs
 	return nil
 }
-func (m *MockImage) FormatBootfs() error {
+func (m *MockImager) FormatBootfs() error {
 	m.FormatBootfsCalled = true
 	return nil
 }
-func (m *MockImage) MountBootfs(mountBootfs string) error {
+func (m *MockImager) MountBootfs(mountBootfs string) error {
 	m.MountBootfsCalled = true
 	m.BootfsMount_ = mountBootfs
 	return nil
 }
-func (m *MockImage) MaybeEncryptRootfs() error {
+func (m *MockImager) MaybeEncryptRootfs() error {
 	m.MaybeEncryptRootfsCalled = true
 	return m.MaybeEncryptRootfsErr
 }
-func (m *MockImage) FormatRootfs() error {
+func (m *MockImager) FormatRootfs() error {
 	m.FormatRootfsCalled = true
 	return nil
 }
-func (m *MockImage) RootfsKernelArgs() []string { return nil }
-func (m *MockImage) MountRootfs(mountRootfs string) error {
+func (m *MockImager) RootfsKernelArgs() []string { return nil }
+func (m *MockImager) MountRootfs(mountRootfs string) error {
 	m.MountRootfsCalled = true
 	m.RootfsMount_ = mountRootfs
 	return nil
 }
-func (m *MockImage) GetKernelPath() (string, error) { return "", nil }
-func (m *MockImage) SetupPasswords() error {
+func (m *MockImager) GetKernelPath() (string, error) { return "", nil }
+func (m *MockImager) SetupPasswords() error {
 	m.SetupPasswordsCalled = true
 	return nil
 }
-func (m *MockImage) SetupBootloaderConfig() error {
+func (m *MockImager) SetupBootloaderConfig() error {
 	m.SetupBootloaderCfgCalled = true
 	return nil
 }
-func (m *MockImage) SetupVmtestConfig() error {
+func (m *MockImager) SetupVmtestConfig() error {
 	m.SetupVmtestConfigCalled = true
 	return nil
 }
-func (m *MockImage) InstallSecurebootCerts() error {
+func (m *MockImager) InstallSecurebootCerts() error {
 	m.InstallSecurebootCalled = true
 	return nil
 }
-func (m *MockImage) InstallMemtest() error {
+func (m *MockImager) InstallMemtest() error {
 	m.InstallMemtestCalled = true
 	return nil
 }
-func (m *MockImage) GenerateKernelBootArgs() ([]string, error) {
+func (m *MockImager) GenerateKernelBootArgs() ([]string, error) {
 	return []string{"arg1=val1"}, nil
 }
-func (m *MockImage) ExtractPackageList() ([]string, error) {
+func (m *MockImager) ExtractPackageList() ([]string, error) {
 	return m.PackageList_, m.PackageListErr
 }
-func (m *MockImage) SetupHooks() error {
+func (m *MockImager) SetupHooks() error {
 	m.SetupHooksCalled = true
 	return nil
 }
-func (m *MockImage) InstallBootloader() error {
+func (m *MockImager) InstallBootloader() error {
 	m.InstallBootloaderCalled = true
 	return m.InstallBootloaderErr
 }
-func (m *MockImage) Cleanup() {
+func (m *MockImager) Cleanup() {
 	m.CleanupCalled = true
 }
-func (m *MockImage) Build(opts *BuildOptions) error {
+func (m *MockImager) Build(opts *BuildOptions) error {
 	m.BuildCalled = true
 	return m.BuildErr
 }
-func (m *MockImage) TestImage() error {
+func (m *MockImager) TestImage() error {
 	m.TestImageCalled = true
 	return nil
 }
-func (m *MockImage) FinalizeFilesystems() error {
+func (m *MockImager) FinalizeFilesystems() error {
 	m.FinalizeFsCalled = true
 	return nil
 }
-func (m *MockImage) Qcow2ImagePath() (string, error) {
+func (m *MockImager) Qcow2ImagePath() (string, error) {
 	return m.Qcow2ImagePath_, m.Qcow2ImagePathErr
 }
-func (m *MockImage) CreateQcow2Image() error {
+func (m *MockImager) CreateQcow2Image() error {
 	m.CreateQcow2ImageCalled = true
 	return nil
 }
-func (m *MockImage) ShowFinalFilesystemInfo() error {
+func (m *MockImager) ShowFinalFilesystemInfo() error {
 	m.ShowFinalFsInfoCalled = true
 	return nil
 }
-func (m *MockImage) ShowImageTestInfo(artifacts []string) error {
+func (m *MockImager) ShowImageTestInfo(artifacts []string) error {
 	m.ShowTestInfoCalled = true
 	return nil
 }
-func (m *MockImage) RemoveImageFile() error         { return nil }
-func (m *MockImage) ImageLockDir() (string, error)  { return "", nil }
-func (m *MockImage) ImageLockPath() (string, error) { return "", nil }
-func (m *MockImage) CreateQcow2() (bool, error)     { return m.CreateQcow2_, m.CreateQcow2Err }
-func (m *MockImage) Productionize() (bool, error)   { return m.Productionize_, m.ProductionizeErr }
-func (m *MockImage) ImageTests() (bool, error)      { return m.ImageTests_, m.ImageTestsErr }
+func (m *MockImager) RemoveImageFile() error         { return nil }
+func (m *MockImager) ImageLockDir() (string, error)  { return "", nil }
+func (m *MockImager) ImageLockPath() (string, error) { return "", nil }
+func (m *MockImager) CreateQcow2() (bool, error)     { return m.CreateQcow2_, m.CreateQcow2Err }
+func (m *MockImager) Productionize() (bool, error)   { return m.Productionize_, m.ProductionizeErr }
+func (m *MockImager) ImageTests() (bool, error)      { return m.ImageTests_, m.ImageTestsErr }
 
 // ExecuteWithImageLock either calls fn directly or returns the configured error.
-func (m *MockImage) ExecuteWithImageLock(fn func() error) error {
+func (m *MockImager) ExecuteWithImageLock(fn func() error) error {
 	m.ExecuteWithImageLockCalled = true
 	if m.ExecuteWithImageLockErr != nil {
 		return m.ExecuteWithImageLockErr
@@ -341,9 +341,9 @@ func (m *MockImage) ExecuteWithImageLock(fn func() error) error {
 	return fn()
 }
 
-// DefaultMockImage returns a MockImage pre-configured with sensible defaults for testing.
-func DefaultMockImage() *MockImage {
-	return &MockImage{
+// DefaultMockImager returns a MockImager pre-configured with sensible defaults for testing.
+func DefaultMockImager() *MockImager {
+	return &MockImager{
 		MountDir_:            "/tmp/test-mount",
 		ImageSize_:           "8G",
 		EfiPartitionSize_:    "512M",

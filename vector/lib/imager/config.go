@@ -10,7 +10,7 @@ import (
 // Each method retrieves a single configuration value and validates it.
 
 // configItem retrieves a non-empty config string or returns an error.
-func (im *Image) configItem(key string) (string, error) {
+func (im *Imager) configItem(key string) (string, error) {
 	v, err := im.cfg.GetItem(key)
 	if err != nil {
 		return "", err
@@ -21,99 +21,99 @@ func (im *Image) configItem(key string) (string, error) {
 	return v, nil
 }
 
-func (im *Image) ImagesDir() (string, error) {
+func (im *Imager) ImagesDir() (string, error) {
 	return im.configItem("Imager.ImagesDir")
 }
 
-func (im *Image) MountDir() (string, error) {
+func (im *Imager) MountDir() (string, error) {
 	return im.configItem("Imager.MountDir")
 }
 
-func (im *Image) ImageSize() (string, error) {
+func (im *Imager) ImageSize() (string, error) {
 	return im.configItem("Imager.ImageSize")
 }
 
-func (im *Image) EfiPartitionSize() (string, error) {
+func (im *Imager) EfiPartitionSize() (string, error) {
 	return im.configItem("Imager.EfiPartitionSize")
 }
 
-func (im *Image) BootPartitionSize() (string, error) {
+func (im *Imager) BootPartitionSize() (string, error) {
 	return im.configItem("Imager.BootPartitionSize")
 }
 
-func (im *Image) Compressor() (string, error) {
+func (im *Imager) Compressor() (string, error) {
 	return im.configItem("Imager.Compressor")
 }
 
-func (im *Image) EspPartitionType() (string, error) {
+func (im *Imager) EspPartitionType() (string, error) {
 	return im.configItem("Imager.EspPartitionType")
 }
 
-func (im *Image) BootPartitionType() (string, error) {
+func (im *Imager) BootPartitionType() (string, error) {
 	return im.configItem("Imager.BootPartitionType")
 }
 
-func (im *Image) RootPartitionType() (string, error) {
+func (im *Imager) RootPartitionType() (string, error) {
 	return im.configItem("Imager.RootPartitionType")
 }
 
-func (im *Image) OsName() (string, error) {
+func (im *Imager) OsName() (string, error) {
 	return im.configItem("matrixOS.OsName")
 }
 
-func (im *Image) BootRoot() (string, error) {
+func (im *Imager) BootRoot() (string, error) {
 	return im.configItem("Imager.BootRoot")
 }
 
-func (im *Image) EfiRoot() (string, error) {
+func (im *Imager) EfiRoot() (string, error) {
 	return im.configItem("Imager.EfiRoot")
 }
 
-func (im *Image) RelativeEfiBootPath() (string, error) {
+func (im *Imager) RelativeEfiBootPath() (string, error) {
 	return im.configItem("Imager.RelativeEfiBootPath")
 }
 
-func (im *Image) EfiExecutable() (string, error) {
+func (im *Imager) EfiExecutable() (string, error) {
 	return im.configItem("Imager.EfiExecutable")
 }
 
-func (im *Image) EfiCertificateFileName() (string, error) {
+func (im *Imager) EfiCertificateFileName() (string, error) {
 	return im.configItem("Imager.EfiCertificateFileName")
 }
 
-func (im *Image) EfiCertificateFileNameDer() (string, error) {
+func (im *Imager) EfiCertificateFileNameDer() (string, error) {
 	return im.configItem("Imager.EfiCertificateFileNameDer")
 }
 
-func (im *Image) EfiCertificateFileNameKek() (string, error) {
+func (im *Imager) EfiCertificateFileNameKek() (string, error) {
 	return im.configItem("Imager.EfiCertificateFileNameKek")
 }
 
-func (im *Image) EfiCertificateFileNameKekDer() (string, error) {
+func (im *Imager) EfiCertificateFileNameKekDer() (string, error) {
 	return im.configItem("Imager.EfiCertificateFileNameKekDer")
 }
 
-func (im *Image) ReadOnlyVdb() (string, error) {
+func (im *Imager) ReadOnlyVdb() (string, error) {
 	return im.configItem("Releaser.ReadOnlyVdb")
 }
 
-func (im *Image) DevDir() (string, error) {
+func (im *Imager) DevDir() (string, error) {
 	return im.configItem("matrixOS.Root")
 }
 
-func (im *Image) HooksDir() (string, error) {
+func (im *Imager) HooksDir() (string, error) {
 	return im.configItem("Imager.HooksDir")
 }
 
-func (im *Image) LockDir() (string, error) {
+func (im *Imager) LockDir() (string, error) {
 	return im.configItem("Imager.LocksDir")
 }
 
-func (im *Image) LockWaitSeconds() (string, error) {
+func (im *Imager) LockWaitSeconds() (string, error) {
 	return im.configItem("Imager.LockWaitSeconds")
 }
 
-func (im *Image) BuildMetadataFile() (string, error) {
+func (im *Imager) BuildMetadataFile() (string, error) {
 	metadataDir, err := im.cfg.GetItem("Seeder.ChrootMetadataDir")
 	if err != nil {
 		return "", err
@@ -131,14 +131,14 @@ func (im *Image) BuildMetadataFile() (string, error) {
 	return filepath.Join(metadataDir, buildFileName), nil
 }
 
-func (im *Image) CreateQcow2() (bool, error) {
+func (im *Imager) CreateQcow2() (bool, error) {
 	return im.cfg.GetBool("Imager.CreateQcow2")
 }
 
-func (im *Image) Productionize() (bool, error) {
+func (im *Imager) Productionize() (bool, error) {
 	return im.cfg.GetBool("Imager.Productionize")
 }
 
-func (im *Image) ImageTests() (bool, error) {
+func (im *Imager) ImageTests() (bool, error) {
 	return im.cfg.GetBool("Imager.ImageTests")
 }

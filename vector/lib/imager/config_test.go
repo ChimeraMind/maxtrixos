@@ -15,7 +15,7 @@ import (
 
 func TestConfigAccessors(t *testing.T) {
 	cfg := baseImageConfig()
-	im := newTestImage(cfg, &ostree.MockOstree{})
+	im := newTestImager(cfg, &ostree.MockOstree{})
 
 	tests := []struct {
 		name     string
@@ -64,21 +64,21 @@ func TestConfigAccessorsEmptyValue(t *testing.T) {
 	accessors := []struct {
 		key  string
 		name string
-		fn   func(*Image) (string, error)
+		fn   func(*Imager) (string, error)
 	}{
-		{"Imager.ImagesDir", "ImagesDir", func(im *Image) (string, error) { return im.ImagesDir() }},
-		{"Imager.MountDir", "MountDir", func(im *Image) (string, error) { return im.MountDir() }},
-		{"Imager.ImageSize", "ImageSize", func(im *Image) (string, error) { return im.ImageSize() }},
-		{"matrixOS.OsName", "OsName", func(im *Image) (string, error) { return im.OsName() }},
-		{"Imager.LocksDir", "LockDir", func(im *Image) (string, error) { return im.LockDir() }},
-		{"Imager.HooksDir", "HooksDir", func(im *Image) (string, error) { return im.HooksDir() }},
+		{"Imager.ImagesDir", "ImagesDir", func(im *Imager) (string, error) { return im.ImagesDir() }},
+		{"Imager.MountDir", "MountDir", func(im *Imager) (string, error) { return im.MountDir() }},
+		{"Imager.ImageSize", "ImageSize", func(im *Imager) (string, error) { return im.ImageSize() }},
+		{"matrixOS.OsName", "OsName", func(im *Imager) (string, error) { return im.OsName() }},
+		{"Imager.LocksDir", "LockDir", func(im *Imager) (string, error) { return im.LockDir() }},
+		{"Imager.HooksDir", "HooksDir", func(im *Imager) (string, error) { return im.HooksDir() }},
 	}
 
 	for _, tt := range accessors {
 		t.Run(tt.name+"_Empty", func(t *testing.T) {
 			cfg := baseImageConfig()
 			cfg.Items[tt.key] = []string{""}
-			im := newTestImage(cfg, &ostree.MockOstree{})
+			im := newTestImager(cfg, &ostree.MockOstree{})
 			_, err := tt.fn(im)
 			if err == nil {
 				t.Errorf("%s() should return error for empty value", tt.name)
@@ -89,7 +89,7 @@ func TestConfigAccessorsEmptyValue(t *testing.T) {
 
 func TestConfigAccessorsConfigError(t *testing.T) {
 	ec := &config.ErrConfig{Err: errors.New("cfg error")}
-	im, _ := NewImage(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+	im, _ := NewImager(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 	im.runner = runner.NewMockRunner().Run
 
 	accessors := []struct {
@@ -121,7 +121,7 @@ func TestConfigAccessorsConfigError(t *testing.T) {
 func TestBuildMetadataFile(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		cfg := baseImageConfig()
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImager(cfg, &ostree.MockOstree{})
 		result, err := im.BuildMetadataFile()
 		if err != nil {
 			t.Fatalf("BuildMetadataFile() error: %v", err)
@@ -135,7 +135,7 @@ func TestBuildMetadataFile(t *testing.T) {
 	t.Run("EmptyDir", func(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Seeder.ChrootMetadataDir"] = []string{""}
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImager(cfg, &ostree.MockOstree{})
 		_, err := im.BuildMetadataFile()
 		if err == nil {
 			t.Error("should error for empty metadata dir")
@@ -145,7 +145,7 @@ func TestBuildMetadataFile(t *testing.T) {
 	t.Run("EmptyFileName", func(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Items["Seeder.ChrootMetadataDirBuildFileName"] = []string{""}
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImager(cfg, &ostree.MockOstree{})
 		_, err := im.BuildMetadataFile()
 		if err == nil {
 			t.Error("should error for empty build file name")
@@ -154,7 +154,7 @@ func TestBuildMetadataFile(t *testing.T) {
 
 	t.Run("ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		im, _ := NewImager(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		_, err := im.BuildMetadataFile()
 		if err == nil {
 			t.Error("should error from broken config")
@@ -168,7 +168,7 @@ func TestBoolConfigAccessors(t *testing.T) {
 	t.Run("CreateQcow2_True", func(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Bools = map[string]bool{"Imager.CreateQcow2": true}
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImager(cfg, &ostree.MockOstree{})
 		v, err := im.CreateQcow2()
 		if err != nil {
 			t.Fatalf("CreateQcow2() error: %v", err)
@@ -181,7 +181,7 @@ func TestBoolConfigAccessors(t *testing.T) {
 	t.Run("CreateQcow2_False", func(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Bools = map[string]bool{"Imager.CreateQcow2": false}
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImager(cfg, &ostree.MockOstree{})
 		v, err := im.CreateQcow2()
 		if err != nil {
 			t.Fatalf("CreateQcow2() error: %v", err)
@@ -193,7 +193,7 @@ func TestBoolConfigAccessors(t *testing.T) {
 
 	t.Run("CreateQcow2_ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		im, _ := NewImager(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		_, err := im.CreateQcow2()
 		if err == nil {
 			t.Error("should error from broken config")
@@ -203,7 +203,7 @@ func TestBoolConfigAccessors(t *testing.T) {
 	t.Run("Productionize_True", func(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Bools = map[string]bool{"Imager.Productionize": true}
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImager(cfg, &ostree.MockOstree{})
 		v, err := im.Productionize()
 		if err != nil {
 			t.Fatalf("Productionize() error: %v", err)
@@ -215,7 +215,7 @@ func TestBoolConfigAccessors(t *testing.T) {
 
 	t.Run("Productionize_ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		im, _ := NewImager(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		_, err := im.Productionize()
 		if err == nil {
 			t.Error("should error from broken config")
@@ -225,7 +225,7 @@ func TestBoolConfigAccessors(t *testing.T) {
 	t.Run("ImageTests_True", func(t *testing.T) {
 		cfg := baseImageConfig()
 		cfg.Bools = map[string]bool{"Imager.ImageTests": true}
-		im := newTestImage(cfg, &ostree.MockOstree{})
+		im := newTestImager(cfg, &ostree.MockOstree{})
 		v, err := im.ImageTests()
 		if err != nil {
 			t.Fatalf("ImageTests() error: %v", err)
@@ -237,7 +237,7 @@ func TestBoolConfigAccessors(t *testing.T) {
 
 	t.Run("ImageTests_ConfigError", func(t *testing.T) {
 		ec := &config.ErrConfig{Err: errors.New("cfg error")}
-		im, _ := NewImage(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+		im, _ := NewImager(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 		_, err := im.ImageTests()
 		if err == nil {
 			t.Error("should error from broken config")
@@ -251,32 +251,32 @@ func TestConfigAccessorsEmptyValueExtended(t *testing.T) {
 	accessors := []struct {
 		key  string
 		name string
-		fn   func(*Image) (string, error)
+		fn   func(*Imager) (string, error)
 	}{
-		{"Imager.EfiPartitionSize", "EfiPartitionSize", func(im *Image) (string, error) { return im.EfiPartitionSize() }},
-		{"Imager.BootPartitionSize", "BootPartitionSize", func(im *Image) (string, error) { return im.BootPartitionSize() }},
-		{"Imager.Compressor", "Compressor", func(im *Image) (string, error) { return im.Compressor() }},
-		{"Imager.EspPartitionType", "EspPartitionType", func(im *Image) (string, error) { return im.EspPartitionType() }},
-		{"Imager.BootPartitionType", "BootPartitionType", func(im *Image) (string, error) { return im.BootPartitionType() }},
-		{"Imager.RootPartitionType", "RootPartitionType", func(im *Image) (string, error) { return im.RootPartitionType() }},
-		{"Imager.BootRoot", "BootRoot", func(im *Image) (string, error) { return im.BootRoot() }},
-		{"Imager.EfiRoot", "EfiRoot", func(im *Image) (string, error) { return im.EfiRoot() }},
-		{"Imager.RelativeEfiBootPath", "RelativeEfiBootPath", func(im *Image) (string, error) { return im.RelativeEfiBootPath() }},
-		{"Imager.EfiExecutable", "EfiExecutable", func(im *Image) (string, error) { return im.EfiExecutable() }},
-		{"Imager.EfiCertificateFileName", "EfiCertificateFileName", func(im *Image) (string, error) { return im.EfiCertificateFileName() }},
-		{"Imager.EfiCertificateFileNameDer", "EfiCertificateFileNameDer", func(im *Image) (string, error) { return im.EfiCertificateFileNameDer() }},
-		{"Imager.EfiCertificateFileNameKek", "EfiCertificateFileNameKek", func(im *Image) (string, error) { return im.EfiCertificateFileNameKek() }},
-		{"Imager.EfiCertificateFileNameKekDer", "EfiCertificateFileNameKekDer", func(im *Image) (string, error) { return im.EfiCertificateFileNameKekDer() }},
-		{"Releaser.ReadOnlyVdb", "ReadOnlyVdb", func(im *Image) (string, error) { return im.ReadOnlyVdb() }},
-		{"matrixOS.Root", "DevDir", func(im *Image) (string, error) { return im.DevDir() }},
-		{"Imager.LockWaitSeconds", "LockWaitSeconds", func(im *Image) (string, error) { return im.LockWaitSeconds() }},
+		{"Imager.EfiPartitionSize", "EfiPartitionSize", func(im *Imager) (string, error) { return im.EfiPartitionSize() }},
+		{"Imager.BootPartitionSize", "BootPartitionSize", func(im *Imager) (string, error) { return im.BootPartitionSize() }},
+		{"Imager.Compressor", "Compressor", func(im *Imager) (string, error) { return im.Compressor() }},
+		{"Imager.EspPartitionType", "EspPartitionType", func(im *Imager) (string, error) { return im.EspPartitionType() }},
+		{"Imager.BootPartitionType", "BootPartitionType", func(im *Imager) (string, error) { return im.BootPartitionType() }},
+		{"Imager.RootPartitionType", "RootPartitionType", func(im *Imager) (string, error) { return im.RootPartitionType() }},
+		{"Imager.BootRoot", "BootRoot", func(im *Imager) (string, error) { return im.BootRoot() }},
+		{"Imager.EfiRoot", "EfiRoot", func(im *Imager) (string, error) { return im.EfiRoot() }},
+		{"Imager.RelativeEfiBootPath", "RelativeEfiBootPath", func(im *Imager) (string, error) { return im.RelativeEfiBootPath() }},
+		{"Imager.EfiExecutable", "EfiExecutable", func(im *Imager) (string, error) { return im.EfiExecutable() }},
+		{"Imager.EfiCertificateFileName", "EfiCertificateFileName", func(im *Imager) (string, error) { return im.EfiCertificateFileName() }},
+		{"Imager.EfiCertificateFileNameDer", "EfiCertificateFileNameDer", func(im *Imager) (string, error) { return im.EfiCertificateFileNameDer() }},
+		{"Imager.EfiCertificateFileNameKek", "EfiCertificateFileNameKek", func(im *Imager) (string, error) { return im.EfiCertificateFileNameKek() }},
+		{"Imager.EfiCertificateFileNameKekDer", "EfiCertificateFileNameKekDer", func(im *Imager) (string, error) { return im.EfiCertificateFileNameKekDer() }},
+		{"Releaser.ReadOnlyVdb", "ReadOnlyVdb", func(im *Imager) (string, error) { return im.ReadOnlyVdb() }},
+		{"matrixOS.Root", "DevDir", func(im *Imager) (string, error) { return im.DevDir() }},
+		{"Imager.LockWaitSeconds", "LockWaitSeconds", func(im *Imager) (string, error) { return im.LockWaitSeconds() }},
 	}
 
 	for _, tt := range accessors {
 		t.Run(tt.name+"_Empty", func(t *testing.T) {
 			cfg := baseImageConfig()
 			cfg.Items[tt.key] = []string{""}
-			im := newTestImage(cfg, &ostree.MockOstree{})
+			im := newTestImager(cfg, &ostree.MockOstree{})
 			_, err := tt.fn(im)
 			if err == nil {
 				t.Errorf("%s() should return error for empty value", tt.name)
@@ -289,7 +289,7 @@ func TestConfigAccessorsEmptyValueExtended(t *testing.T) {
 
 func TestConfigAccessorsConfigErrorExtended(t *testing.T) {
 	ec := &config.ErrConfig{Err: errors.New("cfg error")}
-	im, _ := NewImage(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
+	im, _ := NewImager(ec, &ostree.MockOstree{}, filesystems.DefaultMockFsenc(), nil)
 	im.runner = runner.NewMockRunner().Run
 
 	accessors := []struct {
