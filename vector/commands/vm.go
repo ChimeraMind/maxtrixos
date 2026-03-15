@@ -142,7 +142,8 @@ type VMCommand struct {
 	waitBoot    time.Duration
 	waitTests   time.Duration
 	maxRunTime  time.Duration
-	nographic   bool
+	noGraphic   bool
+	noGpuaccel  bool
 	noAudio     bool
 	interactive bool
 	audioDev    string
@@ -166,10 +167,9 @@ func NewVMCommand() *VMCommand {
 	c.fs.DurationVar(&c.waitBoot, "wait_boot", 120*time.Second, "Seconds to wait for boot login prompt")
 	c.fs.DurationVar(&c.waitTests, "wait_tests", 120*time.Second, "Seconds to wait for tests to complete")
 	c.fs.DurationVar(&c.maxRunTime, "max_run_time", 300*time.Second, "Maximum seconds to allow the entire VM run (including boot and tests), when running in non-interactive mode")
-	c.fs.BoolVar(&c.venusAccel, "venus", false, "Enable Venus GPU acceleration (requires QEMU with Venus support)")
-	c.fs.BoolVar(&c.gpuAccel, "gpuaccel", true, "Enable GPU acceleration (requires QEMU with GPU support)")
-	c.fs.BoolVar(&c.graphical, "graphical", true, "Enable graphical output")
-	c.fs.BoolVar(&c.audio, "audio", true, "Enable audio devices")
+	c.fs.BoolVar(&c.noGpuaccel, "nogpuaccel", false, "Disable GPU acceleration (use software rendering)")
+	c.fs.BoolVar(&c.noGraphic, "nographic", false, "Disable graphical output")
+	c.fs.BoolVar(&c.noAudio, "noaudio", false, "Disable audio devices")
 	c.fs.BoolVar(&c.interactive, "interactive", false, "Run VM interactively without testing")
 	c.fs.StringVar(&c.cpus, "cpus", "4", "Number of CPUs for the VM")
 	c.fs.StringVar(&c.display, "display", "sdl", "Display type for the VM (e.g., 'sdl', 'gtk', default: 'sdl')")
@@ -298,9 +298,17 @@ func (c *VMCommand) Run() error {
 		"-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", testImageFile.Name()),
 	}
 
-	if extraDiskFile != nil {
+	if c.noGraphic {
+		qemuArgs = append(qemuArgs, "-nographic")
+	} else {
+		gpuAccel := ",venus=on"
+		if c.noGpuaccel {
+			gpuAccel = ""
+		}
 		qemuArgs = append(qemuArgs,
-			"-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", extraDiskFile.Name()),
+			"-serial", "stdio",
+			"-device", "virtio-vga-gl,hostmem=512M,blob=true"+gpuAccel,
+			"-display", "gtk,gl=on",
 		)
 	}
 
