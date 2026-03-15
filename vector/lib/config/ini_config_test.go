@@ -18,6 +18,7 @@ func TestIniConfig_Load_Expansion(t *testing.T) {
 	rootPath := "/tmp/matrixos-root"
 	defaultRootPath := "/tmp/matrixos-default-root"
 	confRootPath := "/tmp/matrixos-conf-root"
+	artifactsRootPath := "/tmp/matrixos-artifacts"
 	privateRepoPath := "/tmp/matrixos-private"
 	defaultPrivateRepoPath := "/tmp/matrixos-default-private"
 
@@ -26,6 +27,7 @@ func TestIniConfig_Load_Expansion(t *testing.T) {
 Root=` + rootPath + `
 DefaultRoot=` + defaultRootPath + `
 ConfRoot=` + confRootPath + `
+ArtifactsRoot=` + artifactsRootPath + `
 PrivateGitRepoPath=` + privateRepoPath + `
 DefaultPrivateGitRepoPath=` + defaultPrivateRepoPath + `
 LogsDir=/var/log/matrixos
@@ -96,6 +98,7 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 
 	check("matrixOS.Root", rootPath)
 	check("matrixOS.ConfRoot", confRootPath)
+	check("matrixOS.ArtifactsRoot", artifactsRootPath)
 
 	// Relative to matrixOS.Root
 	check("matrixOS.PrivateGitRepoPath", privateRepoPath)
@@ -105,10 +108,11 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 
 	check("Seeder.SeedersDir", filepath.Join(rootPath, "build/seeders"))
 	check("Seeder.LocksDir", filepath.Join(rootPath, "locks/seeder"))
-	check("Seeder.DownloadsDir", filepath.Join(rootPath, "out/seeder/downloads"))
-	check("Seeder.DistfilesDir", filepath.Join(rootPath, "out/seeder/distfiles"))
-	check("Seeder.BinpkgsDir", filepath.Join(rootPath, "out/seeder/binpkgs"))
-	check("Seeder.PortageReposDir", filepath.Join(rootPath, "out/seeder/repos"))
+	// Relative to matrixOS.ArtifactsRoot
+	check("Seeder.DownloadsDir", filepath.Join(artifactsRootPath, "out/seeder/downloads"))
+	check("Seeder.DistfilesDir", filepath.Join(artifactsRootPath, "out/seeder/distfiles"))
+	check("Seeder.BinpkgsDir", filepath.Join(artifactsRootPath, "out/seeder/binpkgs"))
+	check("Seeder.PortageReposDir", filepath.Join(artifactsRootPath, "out/seeder/repos"))
 	check("Seeder.GpgKeysDir", filepath.Join(confRootPath, "out/seeder/gpg-keys"))
 
 	check("Releaser.LocksDir", filepath.Join(rootPath, "locks/releaser"))
@@ -117,8 +121,6 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 	check("Imager.LocksDir", filepath.Join(rootPath, "locks/imager"))
 	check("Imager.ImagesDir", filepath.Join(artifactsRootPath, "out/images"))
 	check("Imager.MountDir", filepath.Join(artifactsRootPath, "out/mounts"))
-	// Relative to matrixOS.ConfRoot
-	check("Imager.HooksDir", filepath.Join(confRootPath, "image/hooks"))
 
 	check("Ostree.DevGpgHomeDir", filepath.Join(confRootPath, "gpg-home"))
 	check("Ostree.GpgOfficialPublicKey", filepath.Join(confRootPath, "pubkeys/ostree.gpg"))
@@ -690,6 +692,11 @@ func TestSearchPaths(t *testing.T) {
 			evalConfRoot, _ := filepath.EvalSymlinks(sp.confRoot)
 			if evalConfRoot != evalTmp {
 				t.Errorf("Expected confRoot %q, got %q", evalTmp, evalConfRoot)
+			}
+
+			evalArtifactsRoot, _ := filepath.EvalSymlinks(sp.artifactsRoot)
+			if evalArtifactsRoot != evalTmp {
+				t.Errorf("Expected artifactsRoot %q, got %q", evalTmp, evalArtifactsRoot)
 			}
 			break
 		}

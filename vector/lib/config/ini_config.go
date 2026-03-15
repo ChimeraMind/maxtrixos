@@ -11,10 +11,11 @@ import (
 )
 
 type searchPath struct {
-	fileName    string
-	dirPath     string
-	confRoot    string
-	defaultRoot string
+	fileName      string
+	dirPath       string
+	confRoot      string
+	artifactsRoot string
+	defaultRoot   string
 }
 
 // ConfigPath returns the full path to the config file for this search path.
@@ -93,10 +94,11 @@ func searchPaths(cfgName string) []searchPath {
 	markerDir, err := findMarkerDir()
 	if err == nil && markerDir != "" {
 		sps = append(sps, searchPath{
-			fileName:    cfgName,
-			dirPath:     filepath.Join(markerDir, "conf"),
-			confRoot:    markerDir,
-			defaultRoot: markerDir,
+			fileName:      cfgName,
+			dirPath:       filepath.Join(markerDir, "conf"),
+			confRoot:      markerDir,
+			artifactsRoot: markerDir,
+			defaultRoot:   markerDir,
 		})
 	}
 
@@ -104,10 +106,11 @@ func searchPaths(cfgName string) []searchPath {
 	sps = append(sps, searchPath{
 		// Setup for when vector runs from an installed location,
 		// with config in /etc/matrixos/conf.
-		fileName:    cfgName,
-		dirPath:     "/etc/matrixos/conf",
-		confRoot:    "/etc/matrixos",
-		defaultRoot: "/usr/lib/matrixos",
+		fileName:      cfgName,
+		dirPath:       "/etc/matrixos/conf",
+		confRoot:      "/etc/matrixos",
+		artifactsRoot: "/var/cache/matrixos",
+		defaultRoot:   "/usr/lib/matrixos",
 	})
 
 	return sps
@@ -341,16 +344,10 @@ func (c *IniConfig) loadRootConfigs(fullPath string) error {
 		"matrixOS.LogsDir",
 		"matrixOS.LocksDir",
 		"Seeder.LocksDir",
-		"Seeder.DownloadsDir",
-		"Seeder.DistfilesDir",
-		"Seeder.BinpkgsDir",
-		"Seeder.PortageReposDir",
 		"Releaser.HooksDir",
 		"Seeder.SeedersDir",
 		"Releaser.LocksDir",
-		"Imager.ImagesDir",
 		"Imager.LocksDir",
-		"Imager.MountDir",
 		"Ostree.RepoDir",
 	}
 
@@ -450,6 +447,44 @@ func (c *IniConfig) loadConfRootConfigs(fullPath string) error {
 	return nil
 }
 
+func (c *IniConfig) loadArtifactsRootConfigs(fullPath string) error {
+	artifactsRootDependents := []string{
+		"Seeder.DownloadsDir",
+		"Seeder.DistfilesDir",
+		"Seeder.BinpkgsDir",
+		"Seeder.PortageReposDir",
+		"Imager.ImagesDir",
+		"Imager.MountDir",
+	}
+
+	artifactsRootVal, foundArtifactsRoot := c.getVal("matrixOS.ArtifactsRoot")
+	if !foundArtifactsRoot {
+		log.Printf(
+			`WARNING WARNING WARNING:
+- matrixOS.ArtifactsRoot is not set in %s.
+- Relative paths depending on it will be expanded using %s.
+- Those paths are:
+  - %s`,
+			fullPath,
+			c.sp.defaultRoot,
+			strings.Join(artifactsRootDependents, "\n  - "),
+		)
+		c.setVal("matrixOS.ArtifactsRoot", c.sp.defaultRoot)
+	} else {
+		artifactsRootVal, err := smartRootify(artifactsRootVal, c.sp.defaultRoot)
+		if err != nil {
+			return err
+		}
+		c.setVal("matrixOS.ArtifactsRoot", artifactsRootVal)
+	}
+
+	// Expand paths depending on base paths.
+	for _, key := range artifactsRootDependents {
+		c.expand(key, "matrixOS.ArtifactsRoot")
+	}
+	return nil
+}
+
 func (c *IniConfig) loadPrivateRepoConfigs() error {
 	privateRepoDependents := []string{
 		"Seeder.SecureBootPrivateKey",
@@ -496,6 +531,10 @@ func (c *IniConfig) Load() error {
 	}
 
 	if err := c.loadConfRootConfigs(fullPath); err != nil {
+		return err
+	}
+
+	if err := c.loadArtifactsRootConfigs(fullPath); err != nil {
 		return err
 	}
 
