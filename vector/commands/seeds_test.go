@@ -15,6 +15,39 @@ import (
 
 // --- Test helpers ---
 
+// fakeMissingTools creates stub executables for any tools required by
+// VerifySeederEnvironmentSetup that are not present on the host, and
+// prepends the temp directory to PATH so exec.LookPath finds them.
+// It restores PATH when the test finishes.
+func fakeMissingTools(t *testing.T) {
+	t.Helper()
+	tools := []string{
+		"chroot", "git", "gpg", "openssl",
+		"ostree", "unshare", "wget",
+	}
+	var missing []string
+	for _, tool := range tools {
+		if _, err := exec.LookPath(tool); err != nil {
+			missing = append(missing, tool)
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	binDir := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	for _, tool := range missing {
+		p := filepath.Join(binDir, tool)
+		if err := os.WriteFile(p, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+			t.Fatalf("WriteFile %s: %v", tool, err)
+		}
+	}
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", binDir+":"+origPath)
+}
+
 // newTestSeedsCommand creates a SeedsCommand with injected mocks,
 // bypassing Init() which requires real config files and root.
 // sd may be nil, in which case a DefaultMockSeeder is used.
@@ -92,21 +125,12 @@ func setupSeedsTestDir(t *testing.T) (string, string) {
 	return baseDir, chrootDir
 }
 
-// requireSeedsTools skips the test if the host does not have
-// the executables that VerifySeederEnvironmentSetup checks for.
+// requireSeedsTools ensures all executables needed by
+// VerifySeederEnvironmentSetup are available, creating stubs for any
+// that are missing.
 func requireSeedsTools(t *testing.T) {
 	t.Helper()
-	tools := []string{
-		"chroot", "gpg", "openssl",
-		"ostree", "unshare", "wget",
-	}
-	for _, tool := range tools {
-		if _, err := exec.LookPath(tool); err != nil {
-			t.Skipf(
-				"skipping: required tool %q not found", tool,
-			)
-		}
-	}
+	fakeMissingTools(t)
 }
 
 // --- Tests ---
@@ -560,5 +584,574 @@ func TestSeedsOutputFiles(t *testing.T) {
 			"seeders file should contain seeder name, got: %s",
 			string(seedersData),
 		)
+	}
+}
+
+// --- skipFilter / onlyFilter ---
+
+func TestSeedsSkipFilterNil(t *testing.T) {
+	cmd := &SeedsCommand{}
+	if f := cmd.skipFilter(); f != nil {
+		t.Error("Expected nil filter when skipSeeders is empty")
+	}
+}
+
+func TestSeedsSkipFilterMatch(t *testing.T) {
+	cmd := &SeedsCommand{skipSeeders: []string{"a", "b"}}
+	f := cmd.skipFilter()
+	if f == nil {
+		t.Fatal("Expected non-nil filter")
+	}
+	if !f("a") {
+		t.Error("Expected 'a' to match skip filter")
+	}
+	if f("c") {
+		t.Error("Expected 'c' not to match skip filter")
+	}
+}
+
+func TestSeedsOnlyFilterNil(t *testing.T) {
+	cmd := &SeedsCommand{}
+	if f := cmd.onlyFilter(); f != nil {
+		t.Error("Expected nil filter when onlySeeders is empty")
+	}
+}
+
+func TestSeedsOnlyFilterMatch(t *testing.T) {
+	cmd := &SeedsCommand{onlySeeders: []string{"x", "y"}}
+	f := cmd.onlyFilter()
+	if f == nil {
+		t.Fatal("Expected non-nil filter")
+	}
+	if !f("x") {
+		t.Error("Expected 'x' to match only filter")
+	}
+	if f("z") {
+		t.Error("Expected 'z' not to match only filter")
+	}
+}
+
+// --- initOutputFiles ---
+
+func TestSeedsInitOutputFilesCreatesFiles(t *testing.T) {
+	tmp := t.TempDir()
+	rootfs := filepath.Join(tmp, "rootfs.txt")
+	seeders := filepath.Join(tmp, "seeders.txt")
+
+	cmd := &SeedsCommand{}
+	cmd.StartUI()
+	cmd.builtRootfsFile = rootfs
+	cmd.builtSeedersFile = seeders
+
+	if err := cmd.initOutputFiles(); err != nil {
+		t.Fatalf("initOutputFiles: %v", err)
+	}
+
+	for _, f := range []string{rootfs, seeders} {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("ReadFile %s: %v", f, err)
+		}
+		if len(data) != 0 {
+			t.Errorf("Expected empty file %s, got %d bytes", f, len(data))
+		}
+	}
+}
+
+func TestSeedsInitOutputFilesNoop(t *testing.T) {
+	cmd := &SeedsCommand{}
+	cmd.StartUI()
+	// No flags set — should succeed without creating anything.
+	if err := cmd.initOutputFiles(); err != nil {
+		t.Fatalf("initOutputFiles: %v", err)
+	}
+}
+
+func TestSeedsInitOutputFilesError(t *testing.T) {
+	cmd := &SeedsCommand{}
+	cmd.StartUI()
+	cmd.builtRootfsFile = "/nonexistent-dir-xyz/file.txt"
+	if err := cmd.initOutputFiles(); err == nil {
+		t.Error("Expected error for bad path")
+	}
+}
+
+func TestSeedsInitOutputFilesSeedersError(t *testing.T) {
+	tmp := t.TempDir()
+	cmd := &SeedsCommand{}
+	cmd.StartUI()
+	cmd.builtRootfsFile = filepath.Join(tmp, "rootfs.txt")
+	cmd.builtSeedersFile = "/nonexistent-dir-xyz/seeders.txt"
+	if err := cmd.initOutputFiles(); err == nil {
+		t.Error("Expected error for bad seeders path")
+	}
+}
+
+// --- recordBuiltRootfsFile / recordBuiltSeedersFile / recordResults ---
+
+func TestSeedsRecordBuiltRootfsFile(t *testing.T) {
+	tmp := t.TempDir()
+	f := filepath.Join(tmp, "rootfs.txt")
+	if err := os.WriteFile(f, []byte{}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := &SeedsCommand{}
+	cmd.builtRootfsFile = f
+
+	if err := cmd.recordBuiltRootfsFile("/chroot/a"); err != nil {
+		t.Fatalf("recordBuiltRootfsFile: %v", err)
+	}
+	if err := cmd.recordBuiltRootfsFile("/chroot/b"); err != nil {
+		t.Fatalf("recordBuiltRootfsFile: %v", err)
+	}
+
+	data, _ := os.ReadFile(f)
+	lines := strings.TrimSpace(string(data))
+	if lines != "/chroot/a\n/chroot/b" {
+		t.Errorf("Unexpected content: %q", lines)
+	}
+}
+
+func TestSeedsRecordBuiltRootfsFileNoFlag(t *testing.T) {
+	cmd := &SeedsCommand{}
+	if err := cmd.recordBuiltRootfsFile("/chroot/a"); err != nil {
+		t.Fatalf("Expected nil error when flag empty, got: %v", err)
+	}
+}
+
+func TestSeedsRecordBuiltSeedersFile(t *testing.T) {
+	tmp := t.TempDir()
+	f := filepath.Join(tmp, "seeders.txt")
+	if err := os.WriteFile(f, []byte{}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := &SeedsCommand{}
+	cmd.builtSeedersFile = f
+
+	if err := cmd.recordBuiltSeedersFile("00-bedrock"); err != nil {
+		t.Fatalf("recordBuiltSeedersFile: %v", err)
+	}
+
+	data, _ := os.ReadFile(f)
+	if !strings.Contains(string(data), "00-bedrock") {
+		t.Errorf("Expected seeder name in file, got: %s", data)
+	}
+}
+
+func TestSeedsRecordBuiltSeedersFileNoFlag(t *testing.T) {
+	cmd := &SeedsCommand{}
+	if err := cmd.recordBuiltSeedersFile("x"); err != nil {
+		t.Fatalf("Expected nil error when flag empty, got: %v", err)
+	}
+}
+
+func TestSeedsRecordResults(t *testing.T) {
+	tmp := t.TempDir()
+	rootfsFile := filepath.Join(tmp, "rootfs.txt")
+	seedersFile := filepath.Join(tmp, "seeders.txt")
+	for _, f := range []string{rootfsFile, seedersFile} {
+		if err := os.WriteFile(f, []byte{}, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cmd := &SeedsCommand{}
+	cmd.builtRootfsFile = rootfsFile
+	cmd.builtSeedersFile = seedersFile
+
+	if err := cmd.recordResults("00-bedrock", "/chroot/bed"); err != nil {
+		t.Fatalf("recordResults: %v", err)
+	}
+
+	rootfsData, _ := os.ReadFile(rootfsFile)
+	if !strings.Contains(string(rootfsData), "/chroot/bed") {
+		t.Error("rootfs file missing chroot dir")
+	}
+	seedersData, _ := os.ReadFile(seedersFile)
+	if !strings.Contains(string(seedersData), "00-bedrock") {
+		t.Error("seeders file missing seeder name")
+	}
+}
+
+func TestSeedsRecordResultsRootfsError(t *testing.T) {
+	cmd := &SeedsCommand{}
+	cmd.builtRootfsFile = "/nonexistent-xyz/rootfs.txt"
+	if err := cmd.recordResults("s", "/c"); err == nil {
+		t.Error("Expected error for bad rootfs path")
+	}
+}
+
+func TestSeedsRecordResultsSeedersError(t *testing.T) {
+	tmp := t.TempDir()
+	rootfsFile := filepath.Join(tmp, "rootfs.txt")
+	if err := os.WriteFile(rootfsFile, []byte{}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := &SeedsCommand{}
+	cmd.builtRootfsFile = rootfsFile
+	cmd.builtSeedersFile = "/nonexistent-xyz/seeders.txt"
+	if err := cmd.recordResults("s", "/c"); err == nil {
+		t.Error("Expected error for bad seeders path")
+	}
+}
+
+// --- updateStdWriters ---
+
+func TestSeedsUpdateStdWriters(t *testing.T) {
+	sd := seeder.DefaultMockSeeder()
+	det := &seeder.MockSeederDetector{}
+	cmd := &SeedsCommand{}
+	cmd.det = det
+	cmd.StartUI()
+	cmd.updateStdWriters(sd, "test-seeder")
+
+	if cmd.StdoutWriter() == nil {
+		t.Error("StdoutWriter should be set")
+	}
+	if cmd.StderrWriter() == nil {
+		t.Error("StderrWriter should be set")
+	}
+}
+
+// --- Run ---
+
+func TestSeedsRunDelegates(t *testing.T) {
+	requireSeedsTools(t)
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableName_ = "params.sh"
+	baseDir, chrootDir := setupSeedsTestDir(t)
+	sd.ParseSeederParams_ = &seeder.SeederParams{
+		ChrootName:         "bedrock-20260228",
+		ChrootsDir:         filepath.Dir(chrootDir),
+		PreferredChrootDir: chrootDir,
+	}
+	det := &seeder.MockSeederDetector{
+		Detect_: defaultSeedsTestSeeders(baseDir),
+	}
+	cfg := defaultSeedsTestConfig(t)
+
+	cmd, cleanup, err := newTestSeedsCommand(sd, det, cfg, []string{})
+	if err != nil {
+		t.Fatalf("newTestSeedsCommand: %v", err)
+	}
+	defer cleanup()
+
+	// Run() wraps runSeeds via RunWithGuard — verify it completes.
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !sd.SeedCalled {
+		t.Error("Seed should be called via Run()")
+	}
+}
+
+// --- runSeeds error paths ---
+
+func TestSeedsRunSeedsNewSeederError(t *testing.T) {
+	requireSeedsTools(t)
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	cfg := defaultSeedsTestConfig(t)
+	det := &seeder.MockSeederDetector{}
+
+	origNewSeeder := newSeeder
+	newSeeder = func(_ config.IConfig, _ *seeder.NewSeederOptions) (seeder.ISeeder, error) {
+		return nil, fmt.Errorf("seeder init boom")
+	}
+	defer func() { newSeeder = origNewSeeder }()
+
+	cmd := NewSeedsCommand()
+	cmd.det = det
+	cmd.cfg = cfg
+	qa, _ := validation.New(cfg)
+	cmd.qa = qa
+	cmd.StartUI()
+
+	err := cmd.runSeeds()
+	if err == nil || !strings.Contains(err.Error(), "seeder init boom") {
+		t.Fatalf("Expected seeder init error, got: %v", err)
+	}
+}
+
+func TestSeedsRunSeedsEnvironmentError(t *testing.T) {
+	// Use a config that makes VerifySeederEnvironmentSetup fail
+	// by pointing PrivateGitRepoPath to a non-existent directory.
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"matrixOS.PrivateGitRepoPath": {"/nonexistent-dir-xyz-abc"},
+		},
+	}
+	det := &seeder.MockSeederDetector{}
+
+	cmd, cleanup, err := newTestSeedsCommand(nil, det, cfg, []string{})
+	if err != nil {
+		t.Fatalf("newTestSeedsCommand: %v", err)
+	}
+	defer cleanup()
+
+	err = cmd.runSeeds()
+	if err == nil || !strings.Contains(err.Error(), "environment verification failed") {
+		t.Fatalf("Expected environment error, got: %v", err)
+	}
+}
+
+// --- seederWorker error paths (called directly, no QA check) ---
+
+func seedsWorkerSetup(t *testing.T) (*SeedsCommand, *seeder.MockSeeder, seeder.SeederInfo) {
+	t.Helper()
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableName_ = "params.sh"
+	baseDir, chrootDir := setupSeedsTestDir(t)
+	sd.ParseSeederParams_ = &seeder.SeederParams{
+		ChrootName:         "bedrock-20260228",
+		ChrootsDir:         filepath.Dir(chrootDir),
+		PreferredChrootDir: chrootDir,
+	}
+	info := defaultSeedsTestSeeders(baseDir)[0]
+	cmd := &SeedsCommand{}
+	cmd.det = &seeder.MockSeederDetector{}
+	cmd.StartUI()
+	return cmd, sd, info
+}
+
+func TestSeedsWorkerParamsFileNotFound(t *testing.T) {
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableName_ = "params.sh"
+	info := seeder.SeederInfo{
+		Name: "bogus",
+		Dir:  t.TempDir(), // No params.sh inside
+	}
+	cmd := &SeedsCommand{}
+	cmd.det = &seeder.MockSeederDetector{}
+	cmd.StartUI()
+
+	err := cmd.seederWorker(sd, info)
+	if err == nil || !strings.Contains(err.Error(), "unable to find") {
+		t.Fatalf("Expected 'unable to find' error, got: %v", err)
+	}
+}
+
+func TestSeedsWorkerParseParamsError(t *testing.T) {
+	cmd, sd, info := seedsWorkerSetup(t)
+	sd.ParseSeederParamsErr = fmt.Errorf("bad params")
+	sd.ParseSeederParams_ = nil
+
+	err := cmd.seederWorker(sd, info)
+	if err == nil || !strings.Contains(err.Error(), "failed to parse params") {
+		t.Fatalf("Expected parse params error, got: %v", err)
+	}
+}
+
+func TestSeedsWorkerNoChrootDir(t *testing.T) {
+	cmd, sd, info := seedsWorkerSetup(t)
+	sd.ParseSeederParams_ = &seeder.SeederParams{
+		PreferredChrootDir: "", // empty
+	}
+
+	err := cmd.seederWorker(sd, info)
+	if err == nil || !strings.Contains(err.Error(), "no chroot dir specified") {
+		t.Fatalf("Expected 'no chroot dir' error, got: %v", err)
+	}
+}
+
+func TestSeedsWorkerChrootDirOverride(t *testing.T) {
+	cmd, sd, info := seedsWorkerSetup(t)
+	overrideDir := t.TempDir()
+	cmd.chrootDir = overrideDir
+
+	if err := cmd.seederWorker(sd, info); err != nil {
+		t.Fatalf("seederWorker: %v", err)
+	}
+	if !sd.SeedCalled {
+		t.Error("Seed should be called")
+	}
+}
+
+func TestSeedsWorkerDoneFlagError(t *testing.T) {
+	cmd, sd, info := seedsWorkerSetup(t)
+	sd.SeederDoneFlagFileErr = fmt.Errorf("flag file err")
+
+	err := cmd.seederWorker(sd, info)
+	if err == nil || !strings.Contains(err.Error(), "flag file err") {
+		t.Fatalf("Expected flag file error, got: %v", err)
+	}
+}
+
+func TestSeedsWorkerIsSeederDoneError(t *testing.T) {
+	cmd, sd, info := seedsWorkerSetup(t)
+	sd.IsSeederDoneErr = fmt.Errorf("done check err")
+
+	err := cmd.seederWorker(sd, info)
+	if err == nil || !strings.Contains(err.Error(), "done check err") {
+		t.Fatalf("Expected done check error, got: %v", err)
+	}
+}
+
+func TestSeedsWorkerDNSError(t *testing.T) {
+	cmd, sd, info := seedsWorkerSetup(t)
+	sd.SetupChrootDNSErr = fmt.Errorf("dns boom")
+
+	err := cmd.seederWorker(sd, info)
+	if err == nil || !strings.Contains(err.Error(), "DNS setup failed") {
+		t.Fatalf("Expected DNS error, got: %v", err)
+	}
+}
+
+func TestSeedsWorkerDirsError(t *testing.T) {
+	cmd, sd, info := seedsWorkerSetup(t)
+	sd.SetupChrootDirsErr = fmt.Errorf("dirs boom")
+
+	err := cmd.seederWorker(sd, info)
+	if err == nil || !strings.Contains(err.Error(), "dir setup failed") {
+		t.Fatalf("Expected dirs error, got: %v", err)
+	}
+}
+
+func TestSeedsWorkerSeedError(t *testing.T) {
+	cmd, sd, info := seedsWorkerSetup(t)
+	sd.SeedErr = fmt.Errorf("chroot exploded")
+
+	err := cmd.seederWorker(sd, info)
+	if err == nil || !strings.Contains(err.Error(), "chroot execution failed") {
+		t.Fatalf("Expected seed error, got: %v", err)
+	}
+}
+
+func TestSeedsWorkerMarkDoneError(t *testing.T) {
+	cmd, sd, info := seedsWorkerSetup(t)
+	sd.MarkSeederDoneErr = fmt.Errorf("mark boom")
+
+	err := cmd.seederWorker(sd, info)
+	if err == nil || !strings.Contains(err.Error(), "mark boom") {
+		t.Fatalf("Expected mark done error, got: %v", err)
+	}
+}
+
+func TestSeedsWorkerRecordResultsError(t *testing.T) {
+	cmd, sd, info := seedsWorkerSetup(t)
+	cmd.builtRootfsFile = "/nonexistent-xyz/rootfs.txt"
+
+	err := cmd.seederWorker(sd, info)
+	if err == nil || !strings.Contains(err.Error(), "failed to record results") {
+		t.Fatalf("Expected record results error, got: %v", err)
+	}
+}
+
+func TestSeedsWorkerParamsExecutableNameError(t *testing.T) {
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableNameErr = fmt.Errorf("no params name")
+	info := seeder.SeederInfo{Name: "test", Dir: t.TempDir()}
+	cmd := &SeedsCommand{}
+	cmd.det = &seeder.MockSeederDetector{}
+	cmd.StartUI()
+
+	err := cmd.seederWorker(sd, info)
+	if err == nil || !strings.Contains(err.Error(), "no params name") {
+		t.Fatalf("Expected params name error, got: %v", err)
+	}
+}
+
+func TestSeedsWorkerResumeAndStage3Flags(t *testing.T) {
+	cmd, sd, info := seedsWorkerSetup(t)
+	cmd.resume = true
+	cmd.stage3File = "/tmp/stage3.tar.xz"
+
+	if err := cmd.seederWorker(sd, info); err != nil {
+		t.Fatalf("seederWorker: %v", err)
+	}
+	if !sd.ExecutePrepperCalled {
+		t.Error("ExecutePrepper should be called")
+	}
+}
+
+// --- Init via real newTestSeedsCommand ---
+
+func TestSeedsParseArgsInvalidFlag(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	cmd := NewSeedsCommand()
+	cmd.StartUI()
+
+	err := cmd.parseArgs([]string{"--invalid-flag"})
+	if err == nil {
+		t.Error("Expected error for invalid flag")
+	}
+}
+
+// --- Verify full pipeline with verbose flag ---
+
+func TestSeedsFullPipelineVerbose(t *testing.T) {
+	requireSeedsTools(t)
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableName_ = "params.sh"
+	baseDir, chrootDir := setupSeedsTestDir(t)
+	sd.ParseSeederParams_ = &seeder.SeederParams{
+		ChrootName:         "bedrock-20260228",
+		ChrootsDir:         filepath.Dir(chrootDir),
+		PreferredChrootDir: chrootDir,
+	}
+	det := &seeder.MockSeederDetector{
+		Detect_: defaultSeedsTestSeeders(baseDir),
+	}
+	cfg := defaultSeedsTestConfig(t)
+
+	cmd, cleanup, err := newTestSeedsCommand(sd, det, cfg, []string{
+		"--verbose",
+	})
+	if err != nil {
+		t.Fatalf("newTestSeedsCommand: %v", err)
+	}
+	defer cleanup()
+
+	if !cmd.verbose {
+		t.Error("Expected verbose=true")
+	}
+	if err := cmd.runSeeds(); err != nil {
+		t.Fatalf("runSeeds: %v", err)
+	}
+}
+
+func TestSeedsExecuteWithSeederLockError(t *testing.T) {
+	requireSeedsTools(t)
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	sd := seeder.DefaultMockSeeder()
+	sd.ExecuteWithSeederLockErr = fmt.Errorf("lock failed")
+	baseDir := t.TempDir()
+	det := &seeder.MockSeederDetector{
+		Detect_: defaultSeedsTestSeeders(baseDir),
+	}
+	cfg := defaultSeedsTestConfig(t)
+
+	cmd, cleanup, err := newTestSeedsCommand(sd, det, cfg, []string{})
+	if err != nil {
+		t.Fatalf("newTestSeedsCommand: %v", err)
+	}
+	defer cleanup()
+
+	err = cmd.runSeeds()
+	if err == nil || !strings.Contains(err.Error(), "lock failed") {
+		t.Fatalf("Expected lock error, got: %v", err)
 	}
 }
