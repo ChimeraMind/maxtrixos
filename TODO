@@ -12,6 +12,8 @@ Golang migration:
           -> no chance of leaking mounts when SIGKILL is sent.
     - Consider if possible to implement unshare in code.
     - Add support of ostree admin post-copy in imager (right before umounting)
+    - move all distro flavor specific business logic out of vector (once bash
+      scripts are gone)
 
 Features:
     - Test and consider migration to systemd-boot (while supporting GRUB).
