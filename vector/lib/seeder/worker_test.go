@@ -212,8 +212,9 @@ func writeParamsScript(t *testing.T, dir, seedName, chrootName, chrootsDir, pref
 func newRealSeeder(devDir string) *Seeder {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"matrixOS.Root":                      {devDir},
-			"Seeder.ChrootSeedersPhasesStateDir": {"/build/.seeders_phases"},
+			"matrixOS.Root":                              {devDir},
+			"Seeder.ChrootSeedersPhasesStateDir":         {"/build/.seeders_phases"},
+			"Seeder.ChrootSeederDoneFlagFileNamePrefix":  {"seeder.complete"},
 		},
 		Bools: map[string]bool{},
 	}
@@ -692,8 +693,9 @@ func newPrepperSeeder(devDir, downloadsDir, stage3URL string) *Seeder {
 			"Seeder.ChrootMetadataDirBuildFileName": {"build.json"},
 			"Seeder.LocksDir":                       {"/locks/seeder"},
 			"Seeder.LockWaitSeconds":                {"86400"},
-			"Seeder.ChrootPreppersPhasesStateDir":   {"/build/preppers/.preppers_phases"},
-			"Seeder.ChrootSeedersPhasesStateDir":    {"/build/.seeders_phases"},
+			"Seeder.ChrootPreppersPhasesStateDir":       {"/build/preppers/.preppers_phases"},
+			"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
+			"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
 		},
 		Bools: map[string]bool{},
 	}
@@ -965,6 +967,7 @@ func TestSeed_Success(t *testing.T) {
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
 	cfg.Items["matrixOS.Root"] = []string{"/sr/build/daily"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
+	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
 
 	sd := &Seeder{
 		cfg:          cfg,
@@ -1060,6 +1063,7 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	cfg := workerTestConfig()
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
+	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
 
 	sd := &Seeder{
 		cfg:          cfg,
@@ -1116,6 +1120,7 @@ func TestSeed_ChrootRunnerError(t *testing.T) {
 	cfg := workerTestConfig()
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
+	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
 
 	sd := &Seeder{
 		cfg:          cfg,

@@ -252,9 +252,15 @@ func (s *Seeder) generateSharedEnvVars(env []string) ([]string, error) {
 		return nil, err
 	}
 
+	seederDoneFlagFilePrefix, err := s.SeederDoneFlagFilePrefix()
+	if err != nil {
+		return nil, err
+	}
+
 	env = config.FilterEnvKey(env, "SEEDERS_PHASES_STATE_DIR")
 	env = append(env,
 		"SEEDERS_PHASES_STATE_DIR="+seederPhasesStateDir,
+		"SEEDER_DONE_FLAG_FILE_PREFIX="+seederDoneFlagFilePrefix,
 	)
 	return env, nil
 }

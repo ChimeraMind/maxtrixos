@@ -8,8 +8,7 @@ if [ -z "${__MATRIXOS_SEEDERS_ENV_PARSED:-}" ]; then
 source "${MATRIXOS_DEV_DIR}"/lib/env_lib.sh
 
 # See conf/matrixos.conf for documentation on these variables.
-_seeder_flag_prefix=$(env_lib.get_simple_var "Seeder" "ChrootSeederDoneFlagFileNamePrefix")
-MATRIXOS_SEEDER_DONE_FLAG_FILE="${SEEDERS_PHASES_STATE_DIR}/${_seeder_flag_prefix}"
+MATRIXOS_SEEDER_DONE_FLAG_FILE="${SEEDERS_PHASES_STATE_DIR}/${SEEDER_DONE_FLAG_FILE_PREFIX}"
 
 # MATRIXOS_SEEDER_CHROOT_DATE=
 # Overrides the default dating scheme used below "YYYYMMDD" anchored to the
