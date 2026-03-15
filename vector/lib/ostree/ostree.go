@@ -160,6 +160,10 @@ type IOstree interface {
 	// the new pristine /usr/etc, and the user's live /etc, and returns a list of
 	// changes with their classification (add/update/remove/conflict/user-only).
 	ListEtcChanges(aCommit, bCommit string) ([]EtcChange, error)
+	// Readwrite unlocks the filesystem for writing using `ostree admin unlock`.
+	// If permanent is true, it uses --hotfix (persistent across reboots).
+	// If permanent is false, it uses --transient (lost on reboot).
+	Readwrite(permanent bool) error
 }
 
 // runCommand runs a generic binary with args and stdout/stderr handling.

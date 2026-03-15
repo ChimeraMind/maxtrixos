@@ -94,6 +94,10 @@ type MockOstree struct {
 
 	GpgBestPubKeyPath_   string
 	GpgBestPubKeyPathErr error
+
+	ReadwriteErr       error
+	ReadwriteCalled    bool
+	ReadwritePermanent bool
 }
 
 func (m *MockOstree) CloneForRef(ref string) (IOstree, error) {
@@ -209,6 +213,11 @@ func (m *MockOstree) BootedRef() (string, error)                         { retur
 func (m *MockOstree) BootedHash() (string, error)                        { return "", nil }
 func (m *MockOstree) Deploy(string, []string) error                      { return nil }
 func (m *MockOstree) ConfigDiff() (map[string][]string, error)           { return nil, nil }
+func (m *MockOstree) Readwrite(permanent bool) error {
+	m.ReadwriteCalled = true
+	m.ReadwritePermanent = permanent
+	return m.ReadwriteErr
+}
 
 // Methods with configurable behavior for tests.
 func (m *MockOstree) Root() (string, error) {
