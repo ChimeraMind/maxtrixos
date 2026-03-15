@@ -206,7 +206,7 @@ A quick reference of all user-facing `vector` commands:
 Update to the latest image:
 
 ```shell
-vector upgrade
+sudo vector upgrade
 ```
 
 ### Rollbacks
@@ -214,9 +214,9 @@ vector upgrade
 If an update fails, simply boot into the previous entry (`ostree:1`). To manage deployments:
 
 ```shell
-vector branch deployment  # to show which deployments are available.
-vector branch pin 1       # to pin deployment 1.
-vector branch unpin 1     # in case you want to clean up the pinning of deployment 1.
+sudo vector branch deployment  # to show which deployments are available.
+sudo vector branch pin 1       # to pin deployment 1.
+sudo vector branch unpin 1     # in case you want to clean up the pinning of deployment 1.
 ```
 
 ### Branch Switching
@@ -224,17 +224,17 @@ vector branch unpin 1     # in case you want to clean up the pinning of deployme
 List available branches and switch between them (e.g., from `gnome` to `cosmic`):
 
 ```shell
-vector branch switch
+sudo vector branch switch
 reboot
 ```
 
 ### Mutability & Jailbreaking
 
-- **Temporary Mutability**: `vector readwrite` (resets on upgrade). So that you can run `emerge` as much as you like (important: switch to a `*-full` OSTree branch before doing this).
+- **Temporary Mutability**: `sudo vector readwrite` (resets on upgrade). So that you can run `emerge` as much as you like (important: switch to a `*-full` OSTree branch before doing this).
 - **Permanent Jailbreak**: matrixOS is immutable by default. However, if you want full control to modify system files, compile custom kernels, or use Portage directly, you can "jailbreak" the system. This converts your immutable OSTree installation into a standard, mutable Gentoo Linux installation.
   - **Warning:** This is a **one-way process**. Once you jailbreak, you cannot go back to automatic OSTree updates. You are responsible for maintaining the system yourself.
-  - List available branches: `vector branch list`
-  - Switch to the `-full` branch: `vector branch switch <branch>-full`
+  - List available branches: `sudo vector branch list`
+  - Switch to the `-full` branch: `sudo vector branch switch <branch>-full`
   - Run the jailbreak script: `sudo vector jailbreak`
 
 ## 🛠️ Build Your Own Distro
@@ -255,7 +255,7 @@ You can build custom versions of matrixOS using the provided `dev/build.sh` scri
 ### Configuration Rules
 
 The base configuration is centralized in `conf/matrixos.conf`. Vector client-side tooling
-also read from `conf/client.conf` (e.g. the upgrade command).
+also reads from `conf/client.conf` (e.g. the upgrade command).
 
 - **Project Info**: OS name, architecture, git repositories.
 - **Paths**: Directories for logs, downloads, and output artifacts.
@@ -274,8 +274,22 @@ Run the build script as root. It handles the entire pipeline.
 
 - **Resume**: `./dev/build.sh --resume`
 - **Force specific steps**: `--force-release`, `--force-images`, `--only-images`
-- **Enter a chroot**: `./vector/vector dev enter <name>-<date>`
-- **Clean artifacts**: `./vector/vector dev janitor`
+
+### Vector Build Commands
+
+The `vector` CLI also provides direct access to individual build stages:
+
+| Command | Description |
+|---------|-------------|
+| `vector build seeds` | Run the seeding stage. |
+| `vector build release` | Run a single release. |
+| `vector build releases` | Run all releases. |
+| `vector build image` | Build a single image. |
+| `vector build images` | Build all images. |
+| `vector dev enter <name>` | Enter a build chroot. |
+| `vector dev janitor` | Clean up build artifacts. |
+| `vector dev check` | Verify host has required tools/data. |
+| `vector dev vm` | Test a generated image with QEMU. |
 
 **Resource Requirements**: x86-64-v3 CPU, 32GB+ RAM, ~70GB Disk.
 
