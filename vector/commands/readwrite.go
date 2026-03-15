@@ -55,6 +55,9 @@ func (c *ReadWriteCommand) parseArgs(args []string) error {
 }
 
 func (c *ReadWriteCommand) Run() error {
+	c.SetupPlainPrinters()
+	defer c.FlushPrinters()
+
 	// Check if we are running as root. If running as user, exit with error.
 	if getEuid() != 0 {
 		return fmt.Errorf("this command must be run as root")
@@ -65,21 +68,21 @@ func (c *ReadWriteCommand) Run() error {
 		mode = "permanent (hotfix)"
 	}
 
-	fmt.Printf("%s%sUnlocking filesystem in %s mode...%s\n",
+	c.Printf("%s%sUnlocking filesystem in %s mode...%s\n",
 		c.cBold, c.iconGear, mode, c.cReset)
 
 	if err := c.ot.Readwrite(c.permanent); err != nil {
 		return fmt.Errorf("failed to unlock filesystem: %w", err)
 	}
 
-	fmt.Printf("%s%sFilesystem unlocked successfully.%s\n",
+	c.Printf("%s%sFilesystem unlocked successfully.%s\n",
 		c.cGreen, c.iconCheck, c.cReset)
 
 	if !c.permanent {
-		fmt.Printf("%s%sNote: changes will be lost on reboot. Use --permanent for hotfix mode.%s\n",
+		c.Printf("%s%sNote: changes will be lost on reboot. Use --permanent for hotfix mode.%s\n",
 			c.cYellow, c.iconWarn, c.cReset)
 	} else {
-		fmt.Printf("%s%sWarning: hotfix mode is active. Changes persist across reboots until the next upgrade.%s\n",
+		c.Printf("%s%sWarning: hotfix mode is active. Changes persist across reboots until the next upgrade.%s\n",
 			c.cYellow, c.iconWarn, c.cReset)
 	}
 

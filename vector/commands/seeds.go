@@ -31,10 +31,6 @@ type SeedsCommand struct {
 	det seeder.ISeederDetector
 	qa  *validation.QA
 
-	// Styled I/O writers
-	stdout *styledWriter
-	stderr *styledWriter
-
 	// Flags
 	chrootDir        string
 	skipSeedersRaw   string
@@ -83,22 +79,6 @@ func (c *SeedsCommand) Init(args []string) error {
 
 	c.StartUI()
 	return nil
-}
-
-// SetStdout creates a styled stdout writer for the seeds command.
-func (c *SeedsCommand) SetStdout(label string) *styledWriter {
-	c.stdout = c.NewStdoutWriter(
-		fmt.Sprintf("seeds:%s", label),
-	)
-	return c.stdout
-}
-
-// SetStderr creates a styled stderr writer for the seeds command.
-func (c *SeedsCommand) SetStderr(label string) *styledWriter {
-	c.stderr = c.NewStderrWriter(
-		fmt.Sprintf("seeds:%s", label),
-	)
-	return c.stderr
 }
 
 // parseArgs parses command-line arguments without initializing config.
@@ -152,13 +132,11 @@ func (c *SeedsCommand) Run() error {
 
 // updateStdWriters updates the stdout and stderr writers with the given label
 // and propagates them to the seeder library.
-func (c *SeedsCommand) updateStdWriters(sd seeder.ISeeder, name string) (*styledWriter, *styledWriter) {
-	stdoutWriter := c.SetStdout(name)
-	stderrWriter := c.SetStderr(name)
-	sd.SetStdout(stdoutWriter)
-	sd.SetStderr(stderrWriter)
-	c.det.SetStderr(stderrWriter)
-	return stdoutWriter, stderrWriter
+func (c *SeedsCommand) updateStdWriters(sd seeder.ISeeder, name string) {
+	c.SetupPrinters(fmt.Sprintf("seeds:%s", name))
+	sd.SetStdout(c.StdoutWriter())
+	sd.SetStderr(c.StderrWriter())
+	c.det.SetStderr(c.StderrWriter())
 }
 
 // runSeeds implements the seeder workflow, mirroring the bash seeder
@@ -173,11 +151,8 @@ func (c *SeedsCommand) runSeeds() error {
 	}
 
 	writerSetup := func(tsd seeder.ISeeder) {
-		stdoutWriter, stderrWriter := c.updateStdWriters(tsd, "main")
-		c.PushCleanup(func() {
-			stdoutWriter.Flush()
-			stderrWriter.Flush()
-		})
+		c.updateStdWriters(tsd, "main")
+		c.PushCleanup(c.FlushPrinters)
 	}
 	writerSetup(sd)
 
@@ -252,11 +227,10 @@ func (c *SeedsCommand) seederWorker(sd seeder.ISeeder, info seeder.SeederInfo) e
 		"[%s] Accepted seeder for execution\n", info.Name,
 	)
 
-	stdoutWriter, stderrWriter := c.updateStdWriters(sd, info.Name)
+	c.updateStdWriters(sd, info.Name)
 	c.PushCleanup(func() {
 		sd.Cleanup()
-		stdoutWriter.Flush()
-		stderrWriter.Flush()
+		c.FlushPrinters()
 	})
 	// To umount all the mount points.
 	defer sd.Cleanup()

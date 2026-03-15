@@ -4,12 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"matrixos/vector/commands/cleaners"
-	"os"
 )
 
 // JanitorCommand is a command for cleaning up development toolkit artifacts
 type JanitorCommand struct {
 	BaseCommand
+	UI
 	fs *flag.FlagSet
 }
 
@@ -33,6 +33,10 @@ func (c *JanitorCommand) Init(args []string) error {
 }
 
 func (c *JanitorCommand) Run() error {
+	c.StartUI()
+	c.SetupPrinters(c.Name())
+	defer c.FlushPrinters()
+
 	// Check if we are running as root. If running as user, exit with error.
 	if getEuid() != 0 {
 		return fmt.Errorf("this command must be run as root")
@@ -43,31 +47,31 @@ func (c *JanitorCommand) Run() error {
 		return fmt.Errorf("error reading config: %w", err)
 	}
 
-	fmt.Println("Initializing seeds cleaner ...")
+	c.Println("Initializing seeds cleaner ...")
 	scln := &cleaners.SeedsCleaner{}
 	if err := scln.Init(c.cfg); err != nil {
 		return fmt.Errorf("error initializing seeds cleaner: %w", err)
 	}
 
-	fmt.Println("Initializing images cleaner ...")
+	c.Println("Initializing images cleaner ...")
 	icln := &cleaners.ImagesCleaner{}
 	if err := icln.Init(c.cfg); err != nil {
 		return fmt.Errorf("error initializing images cleaner: %w", err)
 	}
 
-	fmt.Println("Initializing downloads cleaner ...")
+	c.Println("Initializing downloads cleaner ...")
 	dcln := &cleaners.DownloadsCleaner{}
 	if err := dcln.Init(c.cfg); err != nil {
 		return fmt.Errorf("error initializing downloads cleaner: %w", err)
 	}
 
-	fmt.Println("Initializing logs cleaner ...")
+	c.Println("Initializing logs cleaner ...")
 	lcln := &cleaners.LogsCleaner{}
 	if err := lcln.Init(c.cfg); err != nil {
 		return fmt.Errorf("error initializing logs cleaner: %w", err)
 	}
 
-	fmt.Println("Initializing all cleaners ...")
+	c.Println("Initializing all cleaners ...")
 	clnrs := []cleaners.ICleaner{
 		scln,
 		icln,
@@ -77,9 +81,9 @@ func (c *JanitorCommand) Run() error {
 
 	var errors []error
 	for _, cln := range clnrs {
-		fmt.Printf("Starting cleaner: %s\n", cln.Name())
+		c.Printf("Starting cleaner: %s\n", cln.Name())
 		if err := cln.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error executing cleaner %s: %v\n", cln.Name(), err)
+			c.PrintErrf("Error executing cleaner %s: %v\n", cln.Name(), err)
 			errors = append(errors, err)
 		}
 	}

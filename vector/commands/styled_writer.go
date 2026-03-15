@@ -128,6 +128,13 @@ func (w *styledWriter) writeCompleteLine(line string) error {
 		_, err := fmt.Fprintln(w.dest)
 		return err
 	}
+
+	// Plain mode: no prefix/style decoration.
+	if w.prefix == "" {
+		_, err := fmt.Fprintf(w.dest, "%s\n", line)
+		return err
+	}
+
 	formatted := fmt.Sprintf("%s%s %s%s\n", w.style, w.prefix, line, w.reset)
 	_, err := io.WriteString(w.dest, formatted)
 	return err
@@ -137,7 +144,12 @@ func (w *styledWriter) writeCompleteLine(line string) error {
 // terminal that will be overwritten by the next \r segment or completed by
 // the next \n.  Only called when isTTY is true.
 func (w *styledWriter) writeOverwriteLine(line string) error {
-	formatted := fmt.Sprintf("\r\033[2K%s%s %s%s", w.style, w.prefix, line, w.reset)
+	var formatted string
+	if w.prefix == "" {
+		formatted = fmt.Sprintf("\r\033[2K%s", line)
+	} else {
+		formatted = fmt.Sprintf("\r\033[2K%s%s %s%s", w.style, w.prefix, line, w.reset)
+	}
 	_, err := io.WriteString(w.dest, formatted)
 	w.hasOverwrite = true
 	return err
@@ -147,7 +159,22 @@ func (w *styledWriter) writeOverwriteLine(line string) error {
 func (w *styledWriter) Flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	w.flushLocked(true)
+}
 
+// FlushInline writes any remaining buffered content without appending a
+// trailing newline.  Use this before reading interactive input so the
+// cursor stays on the same line as the prompt.
+func (w *styledWriter) FlushInline() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.flushLocked(false)
+}
+
+// flushLocked is the shared implementation for Flush / FlushInline.
+// When addNewline is true the output ends with \n; otherwise the cursor
+// stays at the end of the line.
+func (w *styledWriter) flushLocked(addNewline bool) {
 	if w.isTTY && w.hasOverwrite {
 		_, _ = io.WriteString(w.dest, "\r\033[2K")
 		w.hasOverwrite = false
@@ -162,7 +189,18 @@ func (w *styledWriter) Flush() {
 	if strings.TrimSpace(line) == "" {
 		return
 	}
-	formatted := fmt.Sprintf("%s%s %s%s\n", w.style, w.prefix, line, w.reset)
+
+	nl := ""
+	if addNewline {
+		nl = "\n"
+	}
+
+	if w.prefix == "" {
+		_, _ = fmt.Fprintf(w.dest, "%s%s", line, nl)
+		return
+	}
+
+	formatted := fmt.Sprintf("%s%s %s%s%s", w.style, w.prefix, line, w.reset, nl)
 	_, _ = io.WriteString(w.dest, formatted)
 }
 

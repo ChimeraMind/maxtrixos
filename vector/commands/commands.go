@@ -203,6 +203,29 @@ func (ui *UI) SetupPrinters(name string) {
 	ui.errPrinter = ui.NewStderrWriter(name)
 }
 
+// SetupPlainPrinters creates stdout/stderr writers that show the
+// command icon but omit the [name] label.  Use this for short,
+// informational commands where a repeated [name] prefix would be
+// noisy.
+func (ui *UI) SetupPlainPrinters() {
+	prefix := fmt.Sprintf("%s%s%s%s", ui.cBold, ui.cGreen, ui.iconGear, ui.cReset)
+	ui.printer = newStyledWriter(os.Stdout, prefix, "", "", ui.isTTY)
+	errPrefix := fmt.Sprintf("%s%s%s%s", ui.cBold, ui.cRed, ui.iconWarn, ui.cReset)
+	ui.errPrinter = newStyledWriter(os.Stderr, errPrefix, "", "", ui.isTTY)
+}
+
+// StdoutWriter returns the current stdout styled writer, or nil if
+// SetupPrinters has not been called.
+func (ui *UI) StdoutWriter() *styledWriter {
+	return ui.printer
+}
+
+// StderrWriter returns the current stderr styled writer, or nil if
+// SetupPrinters has not been called.
+func (ui *UI) StderrWriter() *styledWriter {
+	return ui.errPrinter
+}
+
 // Println prints a styled line to the command's stdout writer.
 // If SetupPrinters has not been called it falls back to fmt.Println.
 func (ui *UI) Println(args ...interface{}) {

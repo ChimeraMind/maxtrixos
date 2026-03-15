@@ -19,6 +19,35 @@ type Prompter struct {
 	UI      *UI
 }
 
+// flusher is implemented by writers that buffer partial lines (e.g. styledWriter).
+type flusher interface {
+	Flush()
+}
+
+// inlineFlusher is implemented by writers that can flush without
+// appending a trailing newline (for interactive prompts).
+type inlineFlusher interface {
+	FlushInline()
+}
+
+// flushWriter flushes w if it implements the flusher interface.
+func flushWriter(w io.Writer) {
+	if f, ok := w.(flusher); ok {
+		f.Flush()
+	}
+}
+
+// flushWriterInline flushes w without a trailing newline so the cursor
+// stays on the prompt line.  Falls back to a regular Flush if the
+// writer does not support inline flushing.
+func flushWriterInline(w io.Writer) {
+	if f, ok := w.(inlineFlusher); ok {
+		f.FlushInline()
+		return
+	}
+	flushWriter(w)
+}
+
 // NewPrompter creates a Prompter from a reader and writers.
 func NewPrompter(stdin io.Reader, stdout, stderr io.Writer, ui *UI) *Prompter {
 	return &Prompter{
@@ -40,6 +69,7 @@ func (p *Prompter) AskInput(prompt, defaultVal string, pattern *regexp.Regexp) (
 		}
 		fmt.Fprintf(p.Stdout, "   %s%s%s (default: %s): %s",
 			p.UI.cYellow, p.UI.iconQuestion, prompt, defDisplay, p.UI.cReset)
+		flushWriterInline(p.Stdout)
 
 		if !p.Scanner.Scan() {
 			if err := p.Scanner.Err(); err != nil {
@@ -61,6 +91,19 @@ func (p *Prompter) AskInput(prompt, defaultVal string, pattern *regexp.Regexp) (
 		}
 		return input, nil
 	}
+}
+
+// AskConfirm displays a prompt and returns true if the user answers
+// y/yes (case-insensitive).  Returns false on any other input or EOF.
+func (p *Prompter) AskConfirm(prompt string) bool {
+	fmt.Fprintf(p.Stdout, "%s", prompt)
+	flushWriterInline(p.Stdout)
+
+	if !p.Scanner.Scan() {
+		return false
+	}
+	response := strings.ToLower(strings.TrimSpace(p.Scanner.Text()))
+	return response == "y" || response == "yes"
 }
 
 type BaseCommand struct {
