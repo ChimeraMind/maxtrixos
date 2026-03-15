@@ -658,6 +658,7 @@ STAGE3_FILE=${STAGE3_FILE}
 STAGE3_URL=${STAGE3_URL}
 SEEDER_DATE_CADENCE=${SEEDER_DATE_CADENCE}
 DEFAULT_MATRIXOS_DEV_DIR=${DEFAULT_MATRIXOS_DEV_DIR}
+SEEDER_GPG_KEYS_DIR=${SEEDER_GPG_KEYS_DIR}
 EOF
 `, outputFile)
 	p := filepath.Join(dir, "prepper.sh")
@@ -682,6 +683,7 @@ func newPrepperSeeder(devDir, downloadsDir, stage3URL string) *Seeder {
 			"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
 			"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
 			"Seeder.SeedsVersioningCadence":             {"weekly"},
+			"Seeder.GpgKeysDir":                         {"/gpg-keys"},
 		},
 		Bools: map[string]bool{},
 	}
@@ -760,6 +762,7 @@ func TestExecutePrepper_Success(t *testing.T) {
 		"STAGE3_URL":                           "https://example.com/stage3.tar.xz",
 		"SEEDER_DATE_CADENCE":                  "weekly",
 		"DEFAULT_MATRIXOS_DEV_DIR":             "/matrixos",
+		"SEEDER_GPG_KEYS_DIR":                  "/gpg-keys",
 	}
 	for k, want := range checks {
 		got := env[k]
