@@ -469,6 +469,8 @@ func buildSeedsCleanerConfig(
 		"Seeder.SeedsVersioningCadence":             {"weekly"},
 		"matrixOS.Root":                             {devDir},
 		"matrixOS.DefaultRoot":                      {"/matrixos"},
+		"matrixOS.OverlayGitRepo":                   {"https://example.com/overlay.git"},
+		"matrixOS.DefaultPrivateGitRepoPath":         {"/matrixos/private"},
 		"SeedsCleaner.DryRun":                       {dryRun},
 		"SeedsCleaner.MinAmountOfSeeds":             {minSeeds},
 	}}

@@ -214,6 +214,8 @@ func newRealSeeder(devDir string) *Seeder {
 		Items: map[string][]string{
 			"matrixOS.Root":                             {devDir},
 			"matrixOS.DefaultRoot":                      {"/matrixos"},
+			"matrixOS.OverlayGitRepo":                   {"https://example.com/overlay.git"},
+			"matrixOS.DefaultPrivateGitRepoPath":        {"/matrixos/private"},
 			"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
 			"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
 			"Seeder.SeedsVersioningCadence":             {"weekly"},
@@ -228,7 +230,6 @@ func newRealSeeder(devDir string) *Seeder {
 		stderr:       &bytes.Buffer{},
 	}
 }
-
 
 func TestParseSeederParams_Success(t *testing.T) {
 	tmp := t.TempDir()
@@ -659,6 +660,8 @@ STAGE3_URL=${STAGE3_URL}
 SEEDER_DATE_CADENCE=${SEEDER_DATE_CADENCE}
 DEFAULT_MATRIXOS_DEV_DIR=${DEFAULT_MATRIXOS_DEV_DIR}
 SEEDER_GPG_KEYS_DIR=${SEEDER_GPG_KEYS_DIR}
+SEEDER_OVERLAY_GIT_REPO=${SEEDER_OVERLAY_GIT_REPO}
+DEFAULT_PRIVATE_GIT_REPO_PATH=${DEFAULT_PRIVATE_GIT_REPO_PATH}
 EOF
 `, outputFile)
 	p := filepath.Join(dir, "prepper.sh")
@@ -673,6 +676,8 @@ func newPrepperSeeder(devDir, downloadsDir, stage3URL string) *Seeder {
 		Items: map[string][]string{
 			"matrixOS.Root":                             {devDir},
 			"matrixOS.DefaultRoot":                      {"/matrixos"},
+			"matrixOS.OverlayGitRepo":                   {"https://example.com/overlay.git"},
+			"matrixOS.DefaultPrivateGitRepoPath":        {"/matrixos/private"},
 			"Seeder.DownloadsDir":                       {downloadsDir},
 			"Seeder.Stage3DownloadUrl":                  {stage3URL},
 			"Seeder.ChrootMetadataDir":                  {"/build/.metadata"},
@@ -763,6 +768,8 @@ func TestExecutePrepper_Success(t *testing.T) {
 		"SEEDER_DATE_CADENCE":                  "weekly",
 		"DEFAULT_MATRIXOS_DEV_DIR":             "/matrixos",
 		"SEEDER_GPG_KEYS_DIR":                  "/gpg-keys",
+		"SEEDER_OVERLAY_GIT_REPO":              "https://example.com/overlay.git",
+		"DEFAULT_PRIVATE_GIT_REPO_PATH":        "/matrixos/private",
 	}
 	for k, want := range checks {
 		got := env[k]
@@ -902,6 +909,8 @@ func TestExecutePrepper_DownloadsDirError(t *testing.T) {
 			"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
 			"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
 			"Seeder.SeedsVersioningCadence":             {"weekly"},
+			"matrixOS.OverlayGitRepo":                   {"https://example.com/overlay.git"},
+			"matrixOS.DefaultPrivateGitRepoPath":        {"/matrixos/private"},
 		},
 		Bools: map[string]bool{},
 	}
@@ -933,6 +942,8 @@ func TestExecutePrepper_Stage3URLError(t *testing.T) {
 			"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
 			"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
 			"Seeder.SeedsVersioningCadence":             {"weekly"},
+			"matrixOS.OverlayGitRepo":                   {"https://example.com/overlay.git"},
+			"matrixOS.DefaultPrivateGitRepoPath":        {"/matrixos/private"},
 		},
 		Bools: map[string]bool{},
 	}
@@ -960,6 +971,8 @@ func TestSeed_Success(t *testing.T) {
 	mr := runner.NewMockRunner()
 	cfg := workerTestConfig()
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["matrixOS.OverlayGitRepo"] = []string{"https://example.com/overlay.git"}
+	cfg.Items["matrixOS.DefaultPrivateGitRepoPath"] = []string{"/matrixos/private"}
 	cfg.Items["matrixOS.Root"] = []string{"/sr/build/daily"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
@@ -995,10 +1008,12 @@ func TestSeed_Success(t *testing.T) {
 
 	// Verify expected env vars are present.
 	wantEnv := map[string]bool{
-		"MATRIXOS_DEV_DIR=/matrixos":                      false,
-		"SEEDERS_PHASES_STATE_DIR=/build/.seeders_phases": false,
-		"SEEDER_DATE_CADENCE=weekly":                      false,
-		"DEFAULT_MATRIXOS_DEV_DIR=/matrixos":              false,
+		"MATRIXOS_DEV_DIR=/matrixos":                              false,
+		"SEEDERS_PHASES_STATE_DIR=/build/.seeders_phases":         false,
+		"SEEDER_DATE_CADENCE=weekly":                              false,
+		"DEFAULT_MATRIXOS_DEV_DIR=/matrixos":                      false,
+		"SEEDER_OVERLAY_GIT_REPO=https://example.com/overlay.git": false,
+		"DEFAULT_PRIVATE_GIT_REPO_PATH=/matrixos/private":         false,
 	}
 	for _, e := range call.Env {
 		if _, ok := wantEnv[e]; ok {
@@ -1080,10 +1095,14 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	t.Setenv("SEEDERS_PHASES_STATE_DIR", "/should/also/be/overridden")
 	t.Setenv("SEEDER_DATE_CADENCE", "should-be-overridden")
 	t.Setenv("DEFAULT_MATRIXOS_DEV_DIR", "/should/be/overridden")
+	t.Setenv("SEEDER_OVERLAY_GIT_REPO", "should-be-overridden")
+	t.Setenv("DEFAULT_PRIVATE_GIT_REPO_PATH", "/should/be/overridden")
 
 	mr := runner.NewMockRunner()
 	cfg := workerTestConfig()
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["matrixOS.OverlayGitRepo"] = []string{"https://example.com/overlay.git"}
+	cfg.Items["matrixOS.DefaultPrivateGitRepoPath"] = []string{"/matrixos/private"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
 	cfg.Items["Seeder.SeedsVersioningCadence"] = []string{"daily"}
@@ -1108,6 +1127,8 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	phasesCount := 0
 	cadenceCount := 0
 	defaultDevDirCount := 0
+	overlayCount := 0
+	privatePathCount := 0
 	for _, e := range call.Env {
 		if strings.HasPrefix(e, "MATRIXOS_DEV_DIR=") {
 			devDirCount++
@@ -1120,6 +1141,12 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 		}
 		if strings.HasPrefix(e, "DEFAULT_MATRIXOS_DEV_DIR=") {
 			defaultDevDirCount++
+		}
+		if strings.HasPrefix(e, "SEEDER_OVERLAY_GIT_REPO=") {
+			overlayCount++
+		}
+		if strings.HasPrefix(e, "DEFAULT_PRIVATE_GIT_REPO_PATH=") {
+			privatePathCount++
 		}
 	}
 	if devDirCount != 1 {
@@ -1134,13 +1161,21 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	if defaultDevDirCount != 1 {
 		t.Errorf("DEFAULT_MATRIXOS_DEV_DIR appears %d times, want 1", defaultDevDirCount)
 	}
+	if overlayCount != 1 {
+		t.Errorf("SEEDER_OVERLAY_GIT_REPO appears %d times, want 1", overlayCount)
+	}
+	if privatePathCount != 1 {
+		t.Errorf("DEFAULT_PRIVATE_GIT_REPO_PATH appears %d times, want 1", privatePathCount)
+	}
 
 	// Verify the correct values won.
 	wantEnv := map[string]bool{
-		"MATRIXOS_DEV_DIR=/matrixos":                      false,
-		"SEEDERS_PHASES_STATE_DIR=/build/.seeders_phases": false,
-		"SEEDER_DATE_CADENCE=daily":                       false,
-		"DEFAULT_MATRIXOS_DEV_DIR=/matrixos":              false,
+		"MATRIXOS_DEV_DIR=/matrixos":                              false,
+		"SEEDERS_PHASES_STATE_DIR=/build/.seeders_phases":         false,
+		"SEEDER_DATE_CADENCE=daily":                               false,
+		"DEFAULT_MATRIXOS_DEV_DIR=/matrixos":                      false,
+		"SEEDER_OVERLAY_GIT_REPO=https://example.com/overlay.git": false,
+		"DEFAULT_PRIVATE_GIT_REPO_PATH=/matrixos/private":         false,
 	}
 	for _, e := range call.Env {
 		if _, ok := wantEnv[e]; ok {
@@ -1158,6 +1193,8 @@ func TestSeed_ChrootRunnerError(t *testing.T) {
 	mr := runner.NewMockRunnerFailOnCall(0, fmt.Errorf("chroot boom"))
 	cfg := workerTestConfig()
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["matrixOS.OverlayGitRepo"] = []string{"https://example.com/overlay.git"}
+	cfg.Items["matrixOS.DefaultPrivateGitRepoPath"] = []string{"/matrixos/private"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
 	cfg.Items["Seeder.SeedsVersioningCadence"] = []string{"weekly"}

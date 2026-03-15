@@ -26,6 +26,15 @@
 # It can be also a URL pointing to a file name (in its content) that should be downloaded
 # afterwards.
 #
+# SEEDER_OVERLAY_GIT_REPO
+# The Git repository URL for the seeder overlay, which is a repository containing the ebuilds
+# and configs for the seeder. This is used by the chroot scripts to setup the
+# Portage overlay for the seeder.
+#
+# DEFAULT_PRIVATE_GIT_REPO_PATH
+# The directory path to the private git repository. This directory is expected to
+# be already empty at this stage.
+#
 # SEEDER_BUILD_METADATA_FILE=/usr/share/matrixos/metadata/build
 # The file path to the build metadata file. This file is used to store important metadata
 # about the build, such as the stage3 file used, the release version of the seed, and more.

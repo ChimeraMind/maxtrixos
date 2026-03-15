@@ -16,6 +16,7 @@ if [ -z "${MATRIXOS_DEV_DIR:-}" ]; then
     MATRIXOS_DEV_DIR="$(realpath $(dirname "${0}")/../)"
 fi
 source "${MATRIXOS_DEV_DIR}"/headers/env.include.sh
+source "${MATRIXOS_DEV_DIR}"/lib/env_lib.sh
 
 export MATRIXOS_DEV_DIR
 
@@ -64,12 +65,21 @@ _root_privs() {
 }
 
 _maybe_initialize_matrixos_private_example() {
-    local private_repo_path="${1}"
+    local private_repo_path=
+    private_repo_path=$(env_lib.get_root_var "${MATRIXOS_DEV_DIR}" "matrixOS" "PrivateGitRepoPath")
+
     if [ -z "${private_repo_path}" ]; then
-        echo "matrixOS private repo path is not set." >&2
+        echo "matrixOS.PrivateGitRepoPath is not set in conf/." >&2
         return 1
     fi
-    local private_git_url="${MATRIXOS_PRIVATE_EXAMPLE_GIT_REPO}"
+
+    local private_git_url=
+    private_git_url=$(env_lib.get_simple_var "matrixOS" "PrivateExampleGitRepo")
+    if [ -z "${private_git_url}" ]; then
+        echo "matrixOS.PrivateExampleGitRepo is not set in conf/." >&2
+        return 1
+    fi
+
     local git_clone_args=(
         --depth=1
     )
@@ -96,13 +106,11 @@ _maybe_initialize_matrixos_private_example() {
 }
 
 main() {
-
     if ! _is_help_in_args "${@}"; then
         _root_privs
         _print_build_warning
     fi
-
-    _maybe_initialize_matrixos_private_example "${MATRIXOS_PRIVATE_GIT_REPO_PATH}"
+    _maybe_initialize_matrixos_private_example
 
     exec "${MATRIXOS_DEV_DIR}/dev/vector_builder.sh" --on-build-server --disable-send-mail "${@}"
 }

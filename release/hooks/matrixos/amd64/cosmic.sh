@@ -14,7 +14,7 @@
 # The directory path to the matrixos-toolkit repository. This is useful for sourcing
 # common functions and utilities.
 #
-# MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH=/path/to/private-git-repo
+# PRIVATE_GIT_REPO_PATH=/path/to/private-git-repo
 # The directory path to the private git repository. This directory is expected to
 # be already empty at this stage.
 #
