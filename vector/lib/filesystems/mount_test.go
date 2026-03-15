@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"golang.org/x/sys/unix"
+
+	"matrixos/vector/lib/runner"
 )
 
 func TestMountpointToDevice(t *testing.T) {
@@ -1134,5 +1136,94 @@ func TestCleanupCryptsetupDevices(t *testing.T) {
 
 		// Should not panic or error out, just log
 		CleanupCryptsetupDevices([]string{"mycrypt"})
+	})
+}
+
+func TestRemountReadWriteIntegration(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("skipping integration test: requires root")
+	}
+
+	tmpDir := t.TempDir()
+
+	// Mount a tmpfs.
+	if err := unix.Mount("tmpfs", tmpDir, "tmpfs", 0, "size=1M"); err != nil {
+		t.Fatalf("mount tmpfs: %v", err)
+	}
+	t.Cleanup(func() { unix.Unmount(tmpDir, 0) })
+
+	// Remount read-only.
+	if err := unix.Mount("", tmpDir, "", unix.MS_REMOUNT|unix.MS_RDONLY, ""); err != nil {
+		t.Fatalf("remount ro: %v", err)
+	}
+
+	// Verify it's read-only.
+	testFile := filepath.Join(tmpDir, "probe")
+	if err := os.WriteFile(testFile, []byte("x"), 0644); err == nil {
+		t.Fatal("expected write to fail on read-only mount")
+	}
+
+	// Use the real RemountReadWrite.
+	if err := RemountReadWrite(tmpDir); err != nil {
+		t.Fatalf("RemountReadWrite: %v", err)
+	}
+
+	// Verify it's writable.
+	if err := os.WriteFile(testFile, []byte("x"), 0644); err != nil {
+		t.Fatalf("write after RemountReadWrite failed: %v", err)
+	}
+}
+
+func TestRemountReadWrite(t *testing.T) {
+	setupMockExec(t)
+
+	t.Run("EmptyMountpoint", func(t *testing.T) {
+		err := RemountReadWrite("")
+		if err == nil {
+			t.Fatal("expected error for empty mountpoint")
+		}
+		if !strings.Contains(err.Error(), "missing mnt parameter") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("ExecFails", func(t *testing.T) {
+		origExecRun := execRun
+		t.Cleanup(func() { execRun = origExecRun })
+		execRun = func(c *runner.Cmd) error {
+			return fmt.Errorf("mount failed")
+		}
+
+		err := RemountReadWrite("/mnt")
+		if err == nil {
+			t.Fatal("expected error when mount command fails")
+		}
+		if !strings.Contains(err.Error(), "mount failed") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		var capturedArgs []string
+		origExecRun := execRun
+		t.Cleanup(func() { execRun = origExecRun })
+		execRun = func(c *runner.Cmd) error {
+			capturedArgs = append([]string{c.Name}, c.Args...)
+			return nil
+		}
+
+		if err := RemountReadWrite("/mnt"); err != nil {
+			t.Fatalf("RemountReadWrite failed: %v", err)
+		}
+
+		expected := []string{"mount", "-o", "remount,rw", "--", "/mnt"}
+		if len(capturedArgs) != len(expected) {
+			t.Fatalf("expected args %v, got %v", expected, capturedArgs)
+		}
+		for i, arg := range expected {
+			if capturedArgs[i] != arg {
+				t.Errorf("arg[%d]: expected %q, got %q", i, arg, capturedArgs[i])
+			}
+		}
 	})
 }

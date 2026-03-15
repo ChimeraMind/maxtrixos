@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
@@ -139,10 +138,9 @@ func getMountInfoFromSystem(mnt string) (*mountInfo, error) {
 type JailbreakCommand struct {
 	BaseCommand
 	UI
-	fs                    *flag.FlagSet
-	run                   *jailbreakRunner
-	prompt                *Prompter
-	yoloSkipFullBranchChk bool
+	fs     *flag.FlagSet
+	run    *jailbreakRunner
+	prompt *Prompter
 }
 
 // NewJailbreakCommand creates a new JailbreakCommand.
@@ -169,6 +167,7 @@ func (c *JailbreakCommand) Init(args []string) error {
 	}
 	c.StartUI()
 	c.run = defaultRunner()
+	c.prompt = NewPrompter(c.run.stdin, c.run.stdout, c.run.stderr, &c.UI)
 	return nil
 }
 
@@ -238,6 +237,9 @@ func (c *JailbreakCommand) Run() error {
 	if err := c.cleanConfig(sysroot, bootRoot, efiRoot); err != nil {
 		return err
 	}
+	if err := c.syncPortage(sysroot); err != nil {
+		return err
+	}
 	if err := c.cleanPackages(sysroot); err != nil {
 		return err
 	}
@@ -290,10 +292,8 @@ func (c *JailbreakCommand) sanityChecks(sysroot, bootRoot, efiRoot, fullSuffix s
 	if err := c.checkSysrootExists(sysroot); err != nil {
 		return err
 	}
-	if !c.yoloSkipFullBranchChk {
-		if err := c.checkOnFullBranch(fullSuffix); err != nil {
-			return err
-		}
+	if err := c.checkOnFullBranch(fullSuffix); err != nil {
+		return err
 	}
 	if err := c.checkVdbExists(fullSuffix); err != nil {
 		return err
@@ -315,7 +315,8 @@ func (c *JailbreakCommand) checkSysrootExists(sysroot string) error {
 	return nil
 }
 
-	// Check we're on a -full branch.
+// checkOnFullBranch verifies that the booted deployment is on a -full branch.
+func (c *JailbreakCommand) checkOnFullBranch(fullSuffix string) error {
 	deployments, err := c.ot.ListDeployments()
 	if err != nil {
 		return fmt.Errorf("failed to list deployments: %w", err)
@@ -324,22 +325,6 @@ func (c *JailbreakCommand) checkSysrootExists(sysroot string) error {
 		if dep.Booted && strings.Contains(dep.Refspec, fullSuffix) {
 			return nil
 		}
-	}
-	if !onFull {
-		fmt.Fprintf(c.run.stderr,
-			"You have not switched to a -%s ostree branch. Please read the instructions above.\n",
-			fullSuffix)
-		// Show available full branches.
-		fmt.Fprintln(c.run.stderr, "Showing available full ostree branches:")
-		refs, err := c.ot.RemoteRefs()
-		if err == nil {
-			for _, ref := range refs {
-				if strings.HasSuffix(ref, "-"+fullSuffix) {
-					fmt.Fprintln(c.run.stderr, ref)
-				}
-			}
-		}
-		return fmt.Errorf("not on a -%s ostree branch", fullSuffix)
 	}
 
 	fmt.Fprintf(c.run.stderr,
@@ -568,7 +553,7 @@ func (c *JailbreakCommand) bootloaderSetup(bootRoot string) error {
 		return err
 	}
 
-	bootKernelPath, initramfsBootPath, err := c.copyKernelAndInitramfs(bootedKernel)
+	bootKernelPath, initramfsBootPath, err := c.copyKernelAndInitramfs(bootedKernel, bootRoot)
 	if err != nil {
 		return err
 	}
@@ -619,7 +604,7 @@ func (c *JailbreakCommand) resolveKernelPath(bootedKernel string) (string, error
 
 // copyKernelAndInitramfs copies the kernel and (if found) the matching
 // initramfs to /boot, returning the destination paths.
-func (c *JailbreakCommand) copyKernelAndInitramfs(bootedKernel string) (bootKernelPath, initramfsBootPath string, err error) {
+func (c *JailbreakCommand) copyKernelAndInitramfs(bootedKernel, bootRoot string) (bootKernelPath, initramfsBootPath string, err error) {
 	fmt.Fprintf(c.run.stdout, "%s%sCopying booted kernel ...%s\n",
 		c.cBold, c.iconGear, c.cReset)
 
@@ -810,7 +795,8 @@ func (c *JailbreakCommand) cleanConfigSetupSecurebootKeys(efiRoot string) error 
 }
 
 func (c *JailbreakCommand) syncPortage(sysroot string) error {
-	fmt.Fprintln(c.run.stdout, "Let me prep the Portage tree for ya... Downloading Portage ...")
+	fmt.Fprintf(c.run.stdout, "%s%sLet me prep the Portage tree for ya... Downloading Portage ...%s\n",
+		c.cBold, c.iconDownload, c.cReset)
 
 	// emerge-webrsync (best effort).
 	webrsyncCmd := c.run.execCommand("emerge-webrsync")
@@ -822,13 +808,15 @@ func (c *JailbreakCommand) syncPortage(sysroot string) error {
 	reposConfPath := filepath.Join(sysroot, "etc", "portage", "repos.conf", "eselect-repo.conf")
 	reposData, err := c.run.readFile(reposConfPath)
 	if err != nil {
-		fmt.Fprintf(c.run.stderr, "WARNING: cannot read repos config: %v\n", err)
+		fmt.Fprintf(c.run.stderr, "%s%sCannot read repos config: %v%s\n",
+			c.cYellow, c.iconWarn, err, c.cReset)
 		return nil
 	}
 
 	ini, err := config.ParseIni(bytes.NewReader(reposData))
 	if err != nil {
-		fmt.Fprintf(c.run.stderr, "WARNING: cannot parse repos config: %v\n", err)
+		fmt.Fprintf(c.run.stderr, "%s%sCannot parse repos config: %v%s\n",
+			c.cYellow, c.iconWarn, err, c.cReset)
 		return nil
 	}
 
@@ -837,7 +825,8 @@ func (c *JailbreakCommand) syncPortage(sysroot string) error {
 			continue
 		}
 		if items["sync-type"] != "git" {
-			fmt.Fprintf(c.run.stderr, "Repository %s does not use git. Not supported...\n", section)
+			fmt.Fprintf(c.run.stderr, "%s%sRepository %s does not use git. Not supported...%s\n",
+				c.cYellow, c.iconWarn, section, c.cReset)
 			continue
 		}
 		repoDir := items["location"]
@@ -846,9 +835,12 @@ func (c *JailbreakCommand) syncPortage(sysroot string) error {
 			continue
 		}
 
-		fmt.Fprintf(c.run.stdout, "Cloning %s into %s for %s ...\n", gitURL, repoDir, section)
-		gitCmd := c.run.execCommand("git", "clone", "--depth", "1", gitURL,
-			filepath.Join(sysroot, repoDir))
+		fmt.Fprintf(c.run.stdout, "%s%sCloning %s into %s for %s ...%s\n",
+			c.cBlue, c.iconDownload, gitURL, repoDir, section, c.cReset)
+		gitCmd := c.run.execCommand(
+			"git", "clone", "--depth", "1", gitURL,
+			filepath.Join(sysroot, repoDir),
+		)
 		gitCmd.SetStdout(c.run.stdout)
 		gitCmd.SetStderr(c.run.stderr)
 		gitCmd.Run() // best effort
@@ -857,8 +849,9 @@ func (c *JailbreakCommand) syncPortage(sysroot string) error {
 	return nil
 }
 
-func (c *JailbreakCommand) cleanPackages() error {
-	fmt.Fprintln(c.run.stdout, "Cleaning live/ostree packages ...")
+func (c *JailbreakCommand) cleanPackages(sysroot string) error {
+	fmt.Fprintf(c.run.stdout, "%s%sCleaning packages ...%s\n",
+		c.cBold, c.iconPackage, c.cReset)
 
 	defaultUsername, _ := c.cfg.GetItem("matrixOS.DefaultUsername")
 
