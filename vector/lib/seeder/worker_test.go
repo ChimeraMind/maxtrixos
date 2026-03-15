@@ -663,6 +663,7 @@ SEEDER_BUILD_METADATA_FILE=${SEEDER_BUILD_METADATA_FILE}
 MATRIXOS_SEEDER_LOCK_DIR=${MATRIXOS_SEEDER_LOCK_DIR}
 MATRIXOS_SEEDER_LOCK_WAIT_SECS=${MATRIXOS_SEEDER_LOCK_WAIT_SECS}
 MATRIXOS_PREPPERS_PHASES_STATE_DIR=${MATRIXOS_PREPPERS_PHASES_STATE_DIR}
+USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC=${USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC}
 SEEDER_CHROOT_NAME=${SEEDER_CHROOT_NAME}
 SEEDER_CHROOTS_DIR=${SEEDER_CHROOTS_DIR}
 PREFERRED_SEEDER_CHROOT_DIR=${PREFERRED_SEEDER_CHROOT_DIR}
@@ -754,19 +755,20 @@ func TestExecutePrepper_Success(t *testing.T) {
 	env := readEnvFile(t, outputFile)
 
 	checks := map[string]string{
-		"MATRIXOS_DEV_DIR":                   "/my/dev",
-		"SEEDER_BUILD_METADATA_FILE":         "/build/.metadata/build.json",
-		"MATRIXOS_SEEDER_LOCK_DIR":           "/locks/seeder",
-		"MATRIXOS_SEEDER_LOCK_WAIT_SECS":     "86400",
-		"MATRIXOS_PREPPERS_PHASES_STATE_DIR": "/build/preppers/.preppers_phases",
-		"SEEDER_CHROOT_NAME":                 "bedrock-20260228",
-		"SEEDER_CHROOTS_DIR":                 "/mnt/chroots",
-		"PREFERRED_SEEDER_CHROOT_DIR":        "/mnt/chroots/bedrock-20260228",
-		"CHROOT_DIR":                         "/mnt/chroots/bedrock-20260228",
-		"DOWNLOAD_DIR":                       "/my/downloads",
-		"CHROOT_RESUME":                      "",
-		"STAGE3_FILE":                        "stage3-amd64-latest.tar.xz",
-		"STAGE3_URL":                         "https://example.com/stage3.tar.xz",
+		"MATRIXOS_DEV_DIR":                     "/my/dev",
+		"SEEDER_BUILD_METADATA_FILE":           "/build/.metadata/build.json",
+		"MATRIXOS_SEEDER_LOCK_DIR":             "/locks/seeder",
+		"MATRIXOS_SEEDER_LOCK_WAIT_SECS":       "86400",
+		"MATRIXOS_PREPPERS_PHASES_STATE_DIR":   "/build/preppers/.preppers_phases",
+		"USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC": "",
+		"SEEDER_CHROOT_NAME":                   "bedrock-20260228",
+		"SEEDER_CHROOTS_DIR":                   "/mnt/chroots",
+		"PREFERRED_SEEDER_CHROOT_DIR":          "/mnt/chroots/bedrock-20260228",
+		"CHROOT_DIR":                           "/mnt/chroots/bedrock-20260228",
+		"DOWNLOAD_DIR":                         "/my/downloads",
+		"CHROOT_RESUME":                        "",
+		"STAGE3_FILE":                          "stage3-amd64-latest.tar.xz",
+		"STAGE3_URL":                           "https://example.com/stage3.tar.xz",
 	}
 	for k, want := range checks {
 		got := env[k]
@@ -807,6 +809,41 @@ func TestExecutePrepper_Resume(t *testing.T) {
 	if env["CHROOT_RESUME"] != "1" {
 		t.Errorf("CHROOT_RESUME: got %q, want %q",
 			env["CHROOT_RESUME"], "1")
+	}
+}
+
+func TestExecutePrepper_UseCpReflink(t *testing.T) {
+	requireBash(t)
+	tmp := t.TempDir()
+	outputFile := filepath.Join(tmp, "env-output.txt")
+	prepperScript := writePrepperScript(t, tmp, outputFile)
+
+	sd := newPrepperSeeder(
+		"/dev/dir",
+		"/downloads",
+		"https://example.com/stage3.tar.xz",
+	)
+	// Enable the reflink flag.
+	sd.cfg.(*config.MockConfig).Bools["Seeder.UseCpReflinkModeInsteadOfRsync"] = true
+
+	info := SeederInfo{PrepperExec: prepperScript}
+	params := &SeederParams{
+		ChrootName:         "bedrock",
+		ChrootsDir:         "/chroots",
+		PreferredChrootDir: "/chroots/bedrock",
+	}
+	opts := &PrepperOptions{
+		ChrootDir: "/chroots/bedrock",
+	}
+
+	if err := sd.ExecutePrepper(info, params, opts); err != nil {
+		t.Fatalf("ExecutePrepper: %v", err)
+	}
+
+	env := readEnvFile(t, outputFile)
+	if env["USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC"] != "1" {
+		t.Errorf("USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC: got %q, want %q",
+			env["USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC"], "1")
 	}
 }
 
