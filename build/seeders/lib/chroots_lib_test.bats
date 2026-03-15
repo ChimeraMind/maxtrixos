@@ -302,22 +302,26 @@ exit 0' > "${STUB_BIN}/env-update"
 
 # --- setup_zombie_reaper ---
 
-@test "setup_zombie_reaper skips install when not PID 1" {
-    # In tests we are never PID 1.
-    _ZOMBIE_REAPER_INSTALLED=0
+@test "setup_zombie_reaper installs CHLD trap" {
     run chroots_lib.setup_zombie_reaper
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Not PID 1"* ]]
-    [[ "$output" == *"skipping zombie reaper"* ]]
+    [[ "$output" == *"Installing SIGCHLD zombie reaper"* ]]
 }
 
-@test "setup_zombie_reaper is idempotent" {
-    # Simulate already installed.
-    _ZOMBIE_REAPER_INSTALLED=1
-    run chroots_lib.setup_zombie_reaper
+# --- setup_cleanup ---
+
+@test "setup_cleanup installs EXIT trap" {
+    run chroots_lib.setup_cleanup
     [ "$status" -eq 0 ]
-    # Should produce no output when already installed.
-    [ -z "$output" ]
+    [[ "$output" == *"Setting up EXIT trap"* ]]
+}
+
+# --- setup_cancellation ---
+
+@test "setup_cancellation installs TERM/INT trap" {
+    run chroots_lib.setup_cancellation
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Installing SIGTERM/SIGINT cancellation trap"* ]]
 }
 
 # --- _reap_zombies ---
@@ -329,7 +333,7 @@ exit 0' > "${STUB_BIN}/env-update"
 
 # --- setup ---
 
-@test "setup calls setup_zombie_reaper" {
+@test "setup skips namespace traps when not PID 1" {
     # Stub mount-related commands to avoid real mounts.
     cat > "${STUB_BIN}/mountpoint" << 'EOF'
 #!/bin/bash
@@ -347,8 +351,9 @@ EOF
     run chroots_lib.setup
     [ "$status" -eq 0 ]
     # Since we're not PID 1, it should mention skipping.
-    [[ "$output" == *"skipping zombie reaper"* ]]
-    # Should also do the mount checks (all report already mounted).
+    [[ "$output" == *"Not PID 1"* ]]
+    [[ "$output" == *"Skipping namespace traps"* ]]
+    # Should still do the mount checks (all report already mounted).
     [[ "$output" == *"already mounted"* ]]
 }
 

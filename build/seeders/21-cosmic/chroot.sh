@@ -99,7 +99,6 @@ cosmic.tweak_resolved() {
 main() {
     cd /
 
-    trap chroots_lib.cleanup EXIT
     chroots_lib.setup
 
     local phases=(

@@ -168,7 +168,6 @@ bedrock.tweak_nsswitch() {
 main() {
     cd /
 
-    trap chroots_lib.cleanup EXIT
     chroots_lib.setup
     setup_portage_counter
 
