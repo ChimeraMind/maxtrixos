@@ -115,7 +115,7 @@ func (c *ReleaseCommand) Run() error {
 	return c.RunWithGuard(c.runRelease)
 }
 
-// runRelease implements the release workflow, mirroring release_main.sh.
+// runRelease implements the release workflow.
 func (c *ReleaseCommand) runRelease() error {
 	ref := c.ref
 	if ostree.IsBranchShortName(ref) {
