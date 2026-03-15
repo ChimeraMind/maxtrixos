@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"matrixos/vector/lib/config"
-	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/imager"
 	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/validation"
@@ -21,14 +20,12 @@ import (
 func newTestFlashCommand(
 	ot ostree.IOstree,
 	im *imager.MockImager,
-	fsenc *filesystems.MockFsenc,
 	cfg *config.MockConfig,
 	args []string,
 ) (*FlashCommand, error) {
 	cmd := NewFlashCommand()
 	cmd.ot = ot
 	cmd.im = im
-	cmd.fsenc = fsenc
 	cmd.cfg = cfg
 
 	qa, err := validation.New(cfg)
@@ -178,7 +175,7 @@ func TestFlashResolveRefMissingPair(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg,
 		[]string{"--ref", "matrixos/x86_64/dev/gnome"})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -199,7 +196,7 @@ func TestFlashResolveBootedRefEmpty(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
 	}
@@ -223,7 +220,7 @@ func TestFlashResolveExplicitRefNotFound(t *testing.T) {
 	}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg,
 		[]string{"--ref", "matrixos/x86_64/dev/gnome", "--ostree-repo", repoDir})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -247,7 +244,7 @@ func TestFlashResolveExplicitRefFound(t *testing.T) {
 	}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg,
 		[]string{"--ref", "matrixos/x86_64/dev/gnome", "--ostree-repo", repoDir})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -377,7 +374,7 @@ func TestResolveDevicesBatchSummary(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg,
 		[]string{"--batch", "--dry-run", "--install-device", "/dev/null"})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -402,7 +399,7 @@ func TestShowSummaryWholeDevice(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
 	}
@@ -419,7 +416,7 @@ func TestShowSummaryPartitions(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
 	}
@@ -450,7 +447,7 @@ func TestResolveDevicesBatchWholeDevice(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg,
 		[]string{"--batch", "--install-device", tmpFile.Name()})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -483,7 +480,7 @@ func TestResolveDevicesBatchAllPartitions(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg,
 		[]string{
 			"--batch",
 			"--efi-device-path", efiFile.Name(),
@@ -510,7 +507,7 @@ func TestResolveDevicesNonExistent(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg,
 		[]string{"--batch", "--install-device", "/dev/nonexistent-flash-test-xyz"})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -539,7 +536,7 @@ func TestFlashResolveExplicitRefShortname(t *testing.T) {
 	}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg,
 		[]string{"--ref", "gnome", "--ostree-repo", repoDir})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -564,7 +561,7 @@ func TestResolveDevicesInteractiveCancelled(t *testing.T) {
 	ot := &ostree.MockOstree{}
 	cfg := defaultFlashTestConfig()
 
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg,
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg,
 		[]string{})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
@@ -597,7 +594,7 @@ func TestFlashDetectRemotedAndPlainRefs_Clean(t *testing.T) {
 		},
 	}
 	cfg := defaultFlashTestConfig()
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
 	}
@@ -619,7 +616,7 @@ func TestFlashDetectRemotedAndPlainRefs_Ambiguous(t *testing.T) {
 		},
 	}
 	cfg := defaultFlashTestConfig()
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
 	}
@@ -641,7 +638,7 @@ func TestFlashDetectRemotedAndPlainRefs_LocalRefsError(t *testing.T) {
 		LocalRefsErr: fmt.Errorf("localrefs failed"),
 	}
 	cfg := defaultFlashTestConfig()
-	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), cfg, []string{})
 	if err != nil {
 		t.Fatalf("newTestFlashCommand failed: %v", err)
 	}
@@ -653,5 +650,182 @@ func TestFlashDetectRemotedAndPlainRefs_LocalRefsError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to list local refs") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// --- Comprehensive Run() integration tests ---
+
+// withFakeInstallRoot creates a temporary directory tree that satisfies
+// QA.VerifyImagerEnvironmentSetup: executable stubs in usr/bin/ and
+// the required /usr/share/shim directory.
+func withFakeInstallRoot(t *testing.T) {
+	t.Helper()
+	root := t.TempDir()
+
+	binDir := root + "/usr/bin"
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(root+"/usr/share/shim", 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, exe := range []string{
+		"blockdev", "btrfs", "chroot", "cryptsetup", "efibootmgr",
+		"findmnt", "fstrim", "gpg", "grub-install", "losetup",
+		"mkfs.vfat", "mkfs.btrfs", "openssl", "ostree", "partprobe",
+		"qemu-img", "qemu-system-x86_64", "sgdisk", "unshare",
+		"udevadm", "xz",
+	} {
+		if err := os.WriteFile(binDir+"/"+exe, nil, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	origRoot := installRoot
+	installRoot = root
+	t.Cleanup(func() { installRoot = origRoot })
+}
+
+// newRunTestFlashCommand builds a FlashCommand pre-wired with mock factories
+// so that Run() can execute end-to-end without real filesystems/system tools.
+func newRunTestFlashCommand(
+	t *testing.T,
+	ot *ostree.MockOstree,
+	im *imager.MockImager,
+	cfg *config.MockConfig,
+	args []string,
+) *FlashCommand {
+	t.Helper()
+	withRootEuid(t)
+	withNoSleep(t)
+	withFakeInstallRoot(t)
+
+	// newTestFlashCommand pre-injects ot, im, cfg and qa.
+	// runFlash() creates a real Fsenc from cfg (encryption disabled in test config).
+	cmd, err := newTestFlashCommand(ot, im, cfg, args)
+	if err != nil {
+		t.Fatalf("newTestFlashCommand: %v", err)
+	}
+	return cmd
+}
+
+func TestFlashRunBlockDevice(t *testing.T) {
+	// Create a temp file to act as the "whole block device".
+	devFile, err := os.CreateTemp("", "flash-blkdev-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(devFile.Name())
+	devFile.Close()
+
+	repoDir := t.TempDir()
+	ref := "matrixos/x86_64/dev/gnome"
+
+	ot := &ostree.MockOstree{
+		LocalRefs_: []string{ref},
+		Remote_:    "origin",
+		OsName_:    "matrixos",
+		Arch_:      "x86_64",
+	}
+	im := imager.DefaultMockImager()
+	cfg := defaultFlashTestConfig()
+
+	cmd := newRunTestFlashCommand(t, ot, im, cfg, []string{
+		"--batch",
+		"--ref", ref,
+		"--ostree-repo", repoDir,
+		"--install-device", devFile.Name(),
+	})
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Run() returned error: %v", err)
+	}
+
+	// Verify Build() was called.
+	if !im.BuildCalled {
+		t.Error("expected Build() to be called")
+	}
+
+	// Verify the ref was propagated to the mock imager.
+	if im.Ref_ != ref {
+		t.Errorf("imager ref: got %q, want %q", im.Ref_, ref)
+	}
+
+	// Verify the ref was propagated to the mock ostree.
+	if ot.Ref_ != ref {
+		t.Errorf("ostree ref: got %q, want %q", ot.Ref_, ref)
+	}
+
+	// Verify cleanup was invoked.
+	if !im.CleanupCalled {
+		t.Error("expected imager Cleanup() to be called")
+	}
+}
+
+func TestFlashRunImageFile(t *testing.T) {
+	// Create temp files to act as individual partition devices.
+	efiFile, err := os.CreateTemp("", "flash-efi-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(efiFile.Name())
+	efiFile.Close()
+
+	bootFile, err := os.CreateTemp("", "flash-boot-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(bootFile.Name())
+	bootFile.Close()
+
+	rootFile, err := os.CreateTemp("", "flash-root-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(rootFile.Name())
+	rootFile.Close()
+
+	repoDir := t.TempDir()
+	ref := "matrixos/x86_64/dev/cosmic"
+
+	ot := &ostree.MockOstree{
+		LocalRefs_: []string{ref},
+		Remote_:    "origin",
+		OsName_:    "matrixos",
+		Arch_:      "x86_64",
+	}
+	im := imager.DefaultMockImager()
+	cfg := defaultFlashTestConfig()
+
+	cmd := newRunTestFlashCommand(t, ot, im, cfg, []string{
+		"--batch",
+		"--ref", ref,
+		"--ostree-repo", repoDir,
+		"--efi-device-path", efiFile.Name(),
+		"--boot-device-path", bootFile.Name(),
+		"--root-device-path", rootFile.Name(),
+	})
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Run() returned error: %v", err)
+	}
+
+	// Verify Build() was called.
+	if !im.BuildCalled {
+		t.Error("expected Build() to be called")
+	}
+
+	// Verify the ref was propagated.
+	if im.Ref_ != ref {
+		t.Errorf("imager ref: got %q, want %q", im.Ref_, ref)
+	}
+	if ot.Ref_ != ref {
+		t.Errorf("ostree ref: got %q, want %q", ot.Ref_, ref)
+	}
+
+	// Verify cleanup was invoked.
+	if !im.CleanupCalled {
+		t.Error("expected imager Cleanup() to be called")
 	}
 }

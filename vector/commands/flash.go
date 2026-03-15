@@ -13,9 +13,18 @@ import (
 	"matrixos/vector/lib/validation"
 )
 
-var devPathPattern = regexp.MustCompile(`^/dev/`)
-var confirmPattern = regexp.MustCompile(`(?i)^(ack|lgtm|yes|y|no)$`)
-var confirmAcceptPattern = regexp.MustCompile(`(?i)^(ack|lgtm|yes|y)$`)
+var (
+	devPathPattern       = regexp.MustCompile(`^/dev/`)
+	confirmPattern       = regexp.MustCompile(`(?i)^(ack|lgtm|yes|y|no)$`)
+	confirmAcceptPattern = regexp.MustCompile(`(?i)^(ack|lgtm|yes|y)$`)
+	// sleepFn is the sleep function used for countdown delays.
+	// Overridable in tests.
+	sleepFn = time.Sleep
+
+	// installRoot is the root path passed to VerifyImagerEnvironmentSetup.
+	// Overridable in tests.
+	installRoot = "/"
+)
 
 // FlashCommand installs the currently running (or specified) matrixOS system
 // to a block device or set of partitions — the Go equivalent of install.device.
@@ -146,7 +155,7 @@ func (c *FlashCommand) runFlash() error {
 	c.ot.SetStderr(c.StderrWriter())
 	c.ot.SetVerbose(false)
 
-	if err := c.qa.VerifyImagerEnvironmentSetup("/"); err != nil {
+	if err := c.qa.VerifyImagerEnvironmentSetup(installRoot); err != nil {
 		return fmt.Errorf("environment verification failed: %w", err)
 	}
 
@@ -164,11 +173,13 @@ func (c *FlashCommand) runFlash() error {
 		return fmt.Errorf("LUKS validation failed: %w", err)
 	}
 
-	im, err := imager.NewImager(c.cfg, c.ot, c.fsenc, nil)
-	if err != nil {
-		return fmt.Errorf("failed to initialize imager: %w", err)
+	if c.im == nil {
+		im, err := imager.NewImager(c.cfg, c.ot, c.fsenc, nil)
+		if err != nil {
+			return fmt.Errorf("failed to initialize imager: %w", err)
+		}
+		c.im = im
 	}
-	c.im = im
 	c.im.SetStdout(c.StdoutWriter())
 	c.im.SetStderr(c.StderrWriter())
 
@@ -561,7 +572,3 @@ func (c *FlashCommand) getPrompter() *Prompter {
 	c.prompter = NewPrompter(os.Stdin, c.StdoutWriter(), c.StderrWriter(), &c.UI)
 	return c.prompter
 }
-
-// sleepFn is the sleep function used for countdown delays.
-// Overridable in tests.
-var sleepFn = time.Sleep

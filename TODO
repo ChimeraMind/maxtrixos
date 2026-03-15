@@ -11,10 +11,8 @@ Golang migration:
         Step 2: switch to UKI.
         Step 3: add bootc support.
     - add integration tests for vector usage inside VM to run manually first
-      - vector upgrade
-      - vector flash
-      - vector setupOS
-      - vector jailbreak
+      - [WAITING] vector setupOS
+      - [WAITING] vector jailbreak
 
 Features:
     - Test and consider migration to systemd-boot (while supporting GRUB).
