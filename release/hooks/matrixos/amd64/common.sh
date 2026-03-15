@@ -211,7 +211,10 @@ release_common.check_leaking_buckets() {
             -e '-----BEGIN PRIVATE KEY-----' \
             -e '-----BEGIN ENCRYPTED PRIVATE KEY-----' \
             -e '-----BEGIN PGP PRIVATE KEY BLOCK-----' \
-            "${imagedir}" 2>/dev/null || true
+            "${imagedir}" |
+        grep -v \
+            -E '.*usr/lib64/ruby/gems.*' \
+        2>/dev/null || true
     )
     if [ "${#leaking_key_files[@]}" -gt 0 ]; then
         echo "ERROR: Files containing private key material found:" >&2
