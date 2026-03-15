@@ -17,8 +17,6 @@ if [ -z "${MATRIXOS_DEV_DIR:-}" ]; then
 fi
 export MATRIXOS_DEV_DIR
 
-VECTOR_EXEC="${MATRIXOS_DEV_DIR}/vector/vector"
-
 
 _is_help_arg() {
     local arg="${1:-}"
@@ -42,20 +40,8 @@ _is_help_in_args() {
 }
 
 _print_build_warning() {
-    local git_repo_url_out
-    git_repo_url_out=$("${VECTOR_EXEC}" cfg get "matrixOS.GitRepo")
-    if [ -z "${git_repo_url_out}" ]; then
-        echo "matrixOS.GitRepo is not set in conf/ or cannot run vector." >&2
-        return 1
-    fi
-    # remove anything before the first "=".
-    local git_repo_url="${git_repo_url_out#*=}"
-    if [ -z "${git_repo_url}" ]; then
-        echo "matrixOS.GitRepo is not set in conf/." >&2
-        return 1
-    fi
     echo "ATTENTION PLEASE"
-    echo "Using Git repo: ${git_repo_url} from conf/matrixos.conf."
+    echo "Using matrixOS.GitRepo from conf/matrixos.conf."
     echo "If you want to make changes to the build configs, it's preferred to fork the official repo"
     echo "and > edit conf/matrixos.conf GitRepo parameter, setting the URL to your git repo fork."
     echo
@@ -76,75 +62,11 @@ _root_privs() {
     fi
 }
 
-_maybe_initialize_matrixos_private_example() {
-    local private_repo_path_out
-    private_repo_path_out=$("${VECTOR_EXEC}" cfg get "matrixOS.PrivateGitRepoPath")
-    if [ -z "${private_repo_path_out}" ]; then
-        echo "matrixOS.PrivateGitRepoPath is not set in conf/ or cannot run vector." >&2
-        return 1
-    fi
-
-    # remove anything before the first "=".
-    local private_repo_path="${private_repo_path_out#*=}"
-    if [ -z "${private_repo_path}" ]; then
-        echo "matrixOS.PrivateGitRepoPath is not set in conf/." >&2
-        return 1
-    fi
-
-    local private_git_url_out=
-    private_git_url_out=$("${VECTOR_EXEC}" cfg get "matrixOS.PrivateExampleGitRepo")
-    if [ -z "${private_git_url_out}" ]; then
-        echo "matrixOS.PrivateExampleGitRepo is not set in conf/ or cannot run vector." >&2
-        return 1
-    fi
-
-    # remove anything before the first "=".
-    local private_git_url="${private_git_url_out#*=}"
-    if [ -z "${private_git_url}" ]; then
-        echo "matrixOS.PrivateExampleGitRepo is not set in conf/." >&2
-        return 1
-    fi
-
-    echo "Using private repo URL and path data (containing your private keys): " >&2
-    echo " - ${private_git_url} (url)" >&2
-    echo " - ${private_repo_path} (path)" >&2
-    echo "To bootstrap the build." >&2
-    echo >&2
-    echo "If you want to change this, edit conf/matrixos.conf or conf/matrixos.conf.d/* and set:" >&2
-    echo " - matrixOS.PrivateGitRepoPath" >&2
-    echo " - matrixOS.PrivateExampleGitRepo parameters." >&2
-
-    local git_clone_args=(
-        --depth=1
-    )
-    if [ ! -d "${private_repo_path}" ] || [ -z "$(ls -A "${private_repo_path}")" ]; then
-        echo "${private_repo_path} does not exist or is empty. Pulling it from: ${private_git_url} ..." >&2
-        mkdir -p "${private_repo_path}"
-        git clone "${git_clone_args[@]}" "${private_git_url}" "${private_repo_path}"
-        (
-            cd "${private_repo_path}"
-            ./make.sh
-        )
-    elif [ ! -d "${private_repo_path}/.git" ]; then
-        echo "${private_repo_path} must be a git repo" >&2
-        return 1
-    else
-        (
-            cd "${private_repo_path}"
-            if [ ! -e .built ]; then
-                echo "Updating ${private_repo_path} ..."
-                ./make.sh
-            fi
-        )
-    fi
-}
-
 main() {
     if ! _is_help_in_args "${@}"; then
         _root_privs
         _print_build_warning
     fi
-    _maybe_initialize_matrixos_private_example
 
     exec "${MATRIXOS_DEV_DIR}/dev/vector_builder.sh" --on-build-server --disable-send-mail "${@}"
 }
