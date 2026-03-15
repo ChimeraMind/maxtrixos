@@ -343,7 +343,6 @@ preppers_lib.sanity_check_chroot_dir() {
         _move_chroot_dir_away "${chroot_dir}"
 
     elif [ -n "${chroot_resume}" ] && [ -d "${chroot_dir}" ]; then
-        echo "[${_seeder_name}] Skipping stage3 unpacking ..."
         echo "[${_seeder_name}] Attempting to resume seeder in chroot: ${chroot_dir} ..."
         return 0
     elif [ -n "${chroot_resume}" ] && [ ! -d "${chroot_dir}" ]; then
