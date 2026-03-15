@@ -73,7 +73,7 @@ bedrock_params._find_select_chroot_dirs_for_derived_seeder() {
 
             # check for "done" seeder flag.
             local seeder_done_flag=
-            seeder_done_flag="$(seeders_env.get_chroot_seeder_done_flag_file "${seeder_name}" "${d}")"
+            seeder_done_flag="$(params_lib.get_chroot_seeder_done_flag_file "${seeder_name}" "${d}")"
             if [ ! -f "${seeder_done_flag}" ]; then
                 echo "${seeder_done_flag} does not exist. Skipping ${d} as valid ${chroot_name_prefix} rootfs." >&2
                 continue
