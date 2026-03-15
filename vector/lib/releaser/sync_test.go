@@ -28,11 +28,11 @@ func TestSyncExcludedPaths_HappyPath(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	paths, err := r.syncExcludedPaths("/image")
@@ -66,11 +66,11 @@ func TestSyncExcludedPaths_ArtifactsDirError(t *testing.T) {
 	wantErr := errors.New("cfg broken")
 	cfg := &config.ErrConfig{Err: wantErr}
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	_, err := r.syncExcludedPaths("/image")
@@ -91,11 +91,11 @@ func TestSyncExcludedPaths_PreppersDirError(t *testing.T) {
 	// To specifically fail on the second GetItem call, we need a custom mock.
 	// Instead, verify that missing key still returns valid paths (empty string joined).
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	paths, err := r.syncExcludedPaths("/image")
@@ -117,11 +117,11 @@ func TestSyncExcludedPaths_EmptyDst(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	paths, err := r.syncExcludedPaths("")
@@ -142,11 +142,11 @@ func TestCpReflinkCopy_ExcludedPathsError(t *testing.T) {
 	wantErr := errors.New("cfg broken")
 	cfg := &config.ErrConfig{Err: wantErr}
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	err := r.cpReflinkCopy("/src", "/dst")
@@ -167,11 +167,11 @@ func TestCpReflinkCopy_RemoveAllFails(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	// CopyFileReflink will fail because /nonexistent/src doesn't exist.
@@ -191,11 +191,11 @@ func TestCpReflinkCopy_PrintsMessages(t *testing.T) {
 	}
 	var stdout bytes.Buffer
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &stdout,
-		stderr: &bytes.Buffer{},
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
 	}
 
 	_ = r.cpReflinkCopy("/nonexistent/src", "/some/dst")
@@ -206,27 +206,6 @@ func TestCpReflinkCopy_PrintsMessages(t *testing.T) {
 	}
 	if !strings.Contains(out, "cp --preserve=links --reflink=auto") {
 		t.Errorf("stdout %q missing reflink message", out)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// rsyncCopy – unit tests
-// ---------------------------------------------------------------------------
-
-func TestRsyncCopy_ExcludedPathsError(t *testing.T) {
-	wantErr := errors.New("cfg broken")
-	cfg := &config.ErrConfig{Err: wantErr}
-	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
-	}
-
-	err := r.rsyncCopy("/src", "/dst")
-	if !errors.Is(err, wantErr) {
-		t.Errorf("got %v, want %v", err, wantErr)
 	}
 }
 
@@ -282,7 +261,9 @@ func TestSyncFilesystem_ImageDirCreatedIfNotExists(t *testing.T) {
 	// With MockConfig, UseCpReflink returns false → rsync path is taken.
 	// rsync will fail because the excludes list is empty (no config keys).
 	// That's fine — we're testing that dst was created.
-	_ = r.SyncFilesystem()
+	if err := r.SyncFilesystem(); err != nil {
+		t.Fatalf("SyncFilesystem failed: %v", err)
+	}
 
 	if _, err := os.Stat(dst); os.IsNotExist(err) {
 		t.Fatal("imageDir should have been created")
@@ -295,13 +276,13 @@ func TestSyncFilesystem_UseCpReflinkConfigError(t *testing.T) {
 
 	wantErr := errors.New("bool cfg broken")
 	r := &Releaser{
-		cfg:       &config.ErrConfig{Err: wantErr},
-		ostree:    &ostree.MockOstree{},
+		cfg:          &config.ErrConfig{Err: wantErr},
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:    &bytes.Buffer{},
-		stderr:    &bytes.Buffer{},
-		chrootDir: src,
-		imageDir:  dst,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		chrootDir:    src,
+		imageDir:     dst,
 	}
 
 	err := r.SyncFilesystem()
@@ -411,116 +392,6 @@ func verifyTreeCopy(t *testing.T, src, dst string) {
 	}
 }
 
-// TestIntegrationRsyncCopy exercises the rsyncCopy method with real rsync.
-func TestIntegrationRsyncCopy(t *testing.T) {
-	requireCommand(t, "rsync")
-
-	src := t.TempDir()
-	dst := t.TempDir()
-	populateTestTree(t, src)
-
-	cfg := &config.MockConfig{
-		Items: map[string][]string{
-			"Seeder.ChrootBuildArtifactsDir":      {"/build-artifacts"},
-			"Seeder.ChrootPreppersPhasesStateDir": {"/preppers-state"},
-		},
-		Bools: map[string]bool{},
-	}
-	var stdout, stderr bytes.Buffer
-	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &stdout,
-		stderr: &stderr,
-	}
-
-	if err := r.rsyncCopy(src, dst); err != nil {
-		t.Fatalf("rsyncCopy failed: %v", err)
-	}
-
-	verifyTreeCopy(t, src, dst)
-
-	// Verify rsync command was logged.
-	if !strings.Contains(stdout.String(), "Running: rsync") {
-		t.Error("expected rsync command in stdout")
-	}
-}
-
-// TestIntegrationRsyncCopy_Verbose verifies verbose flags are passed.
-func TestIntegrationRsyncCopy_Verbose(t *testing.T) {
-	requireCommand(t, "rsync")
-
-	src := t.TempDir()
-	dst := t.TempDir()
-	populateTestTree(t, src)
-
-	cfg := &config.MockConfig{
-		Items: map[string][]string{
-			"Seeder.ChrootBuildArtifactsDir":      {"/build"},
-			"Seeder.ChrootPreppersPhasesStateDir": {"/prep"},
-		},
-		Bools: map[string]bool{},
-	}
-	var stdout, stderr bytes.Buffer
-	r := &Releaser{
-		cfg:     cfg,
-		ostree:  &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:  &stdout,
-		stderr:  &stderr,
-		verbose: true,
-	}
-
-	if err := r.rsyncCopy(src, dst); err != nil {
-		t.Fatalf("rsyncCopy verbose failed: %v", err)
-	}
-
-	out := stdout.String()
-	if !strings.Contains(out, "--verbose") {
-		t.Error("expected --verbose in rsync args")
-	}
-}
-
-// TestIntegrationRsyncCopy_ExcludesAreApplied verifies that excluded paths
-// are not synced.
-func TestIntegrationRsyncCopy_ExcludesAreApplied(t *testing.T) {
-	requireCommand(t, "rsync")
-
-	src := t.TempDir()
-	dst := t.TempDir()
-	populateTestTree(t, src)
-
-	// Create a file in /tmp/ which should be excluded.
-	os.WriteFile(filepath.Join(src, "tmp/junk"), []byte("junk"), 0o644)
-
-	cfg := &config.MockConfig{
-		Items: map[string][]string{
-			"Seeder.ChrootBuildArtifactsDir":      {"/build-artifacts"},
-			"Seeder.ChrootPreppersPhasesStateDir": {"/preppers-state"},
-		},
-		Bools: map[string]bool{},
-	}
-	var stdout bytes.Buffer
-	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &stdout,
-		stderr: &bytes.Buffer{},
-	}
-
-	if err := r.rsyncCopy(src, dst); err != nil {
-		t.Fatalf("rsyncCopy failed: %v", err)
-	}
-
-	// The exclude path is filepath.Join(dst, "/tmp/*"), and rsync uses
-	// --exclude= with the full path. Verify the non-excluded files exist.
-	if _, err := os.Stat(filepath.Join(dst, "etc/hostname")); err != nil {
-		t.Error("etc/hostname should exist in dst")
-	}
-}
-
 // TestIntegrationCpReflinkCopy exercises the cpReflinkCopy method with real cp.
 func TestIntegrationCpReflinkCopy(t *testing.T) {
 	requireCommand(t, "cp")
@@ -538,11 +409,11 @@ func TestIntegrationCpReflinkCopy(t *testing.T) {
 	}
 	var stdout bytes.Buffer
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &stdout,
-		stderr: &bytes.Buffer{},
+		stdout:       &stdout,
+		stderr:       &bytes.Buffer{},
 	}
 
 	if err := r.cpReflinkCopy(src, dst); err != nil {
@@ -580,11 +451,11 @@ func TestIntegrationCpReflinkCopy_RemovesExcludedPaths(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	if err := r.cpReflinkCopy(src, dst); err != nil {
@@ -625,11 +496,11 @@ func TestIntegrationCpReflinkCopy_DestinationClearedBeforeCopy(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	if err := r.cpReflinkCopy(src, dst); err != nil {
@@ -644,85 +515,6 @@ func TestIntegrationCpReflinkCopy_DestinationClearedBeforeCopy(t *testing.T) {
 	// Fresh content should exist.
 	if _, err := os.Stat(filepath.Join(dst, "etc/hostname")); err != nil {
 		t.Error("etc/hostname should exist after copy")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// SyncFilesystem – integration (rsync path, default UseCpReflink=false)
-// ---------------------------------------------------------------------------
-
-func TestIntegrationSyncFilesystem_RsyncPath(t *testing.T) {
-	requireCommand(t, "rsync")
-
-	src := t.TempDir()
-	dst := filepath.Join(t.TempDir(), "image")
-	populateTestTree(t, src)
-
-	cfg := &config.MockConfig{
-		Items: map[string][]string{
-			"Seeder.ChrootBuildArtifactsDir":      {"/build-artifacts"},
-			"Seeder.ChrootPreppersPhasesStateDir": {"/preppers-state"},
-		},
-		Bools: map[string]bool{
-			// UseCpReflink = false → rsync path.
-			"Releaser.UseCpReflinkModeInsteadOfRsync": false,
-		},
-	}
-	var stdout bytes.Buffer
-	r := &Releaser{
-		cfg:       cfg,
-		ostree:    &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:    &stdout,
-		stderr:    &bytes.Buffer{},
-		chrootDir: src,
-		imageDir:  dst,
-	}
-
-	if err := r.SyncFilesystem(); err != nil {
-		t.Fatalf("SyncFilesystem (rsync) failed: %v", err)
-	}
-
-	verifyTreeCopy(t, src, dst)
-
-	out := stdout.String()
-	if !strings.Contains(out, "rsync copy mode") {
-		t.Error("expected 'rsync copy mode' in stdout")
-	}
-}
-
-func TestIntegrationSyncFilesystem_RsyncPathVerbose(t *testing.T) {
-	requireCommand(t, "rsync")
-
-	src := t.TempDir()
-	dst := filepath.Join(t.TempDir(), "image")
-	populateTestTree(t, src)
-
-	cfg := &config.MockConfig{
-		Items: map[string][]string{
-			"Seeder.ChrootBuildArtifactsDir":      {"/build"},
-			"Seeder.ChrootPreppersPhasesStateDir": {"/prep"},
-		},
-		Bools: map[string]bool{},
-	}
-	var stdout bytes.Buffer
-	r := &Releaser{
-		cfg:       cfg,
-		ostree:    &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:    &stdout,
-		stderr:    &bytes.Buffer{},
-		chrootDir: src,
-		imageDir:  dst,
-		verbose:   true,
-	}
-
-	if err := r.SyncFilesystem(); err != nil {
-		t.Fatalf("SyncFilesystem verbose failed: %v", err)
-	}
-
-	if !strings.Contains(stdout.String(), "--verbose") {
-		t.Error("expected --verbose in output")
 	}
 }
 
@@ -748,11 +540,11 @@ func TestCpReflinkCopy_ExcludeOutsideDst(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	// With properly joined paths, all excludes should be inside dst.
@@ -779,11 +571,11 @@ func TestSyncExcludedPaths_TrailingSlashOnPortage(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		cfg:    cfg,
-		ostree: &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
 	}
 
 	paths, err := r.syncExcludedPaths("/img")

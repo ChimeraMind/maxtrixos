@@ -15,7 +15,10 @@ import (
 // It bypasses NewReleaser to avoid validation side-effects.
 func newTestReleaser() *Releaser {
 	return &Releaser{
-		cfg:          &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+		cfg: &config.MockConfig{Items: map[string][]string{
+			"Seeder.ChrootBuildArtifactsDir":      {"/build-artifacts"},
+			"Seeder.ChrootPreppersPhasesStateDir": {"/preppers-state"},
+		}, Bools: map[string]bool{}},
 		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:       &bytes.Buffer{},

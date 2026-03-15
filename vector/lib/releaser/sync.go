@@ -59,31 +59,18 @@ func (r *Releaser) cpReflinkCopy(src, dst string) error {
 		r.Print("  %s\n", d)
 	}
 
+	cleanDst := filepath.Clean(dst)
 	for _, d := range excludes {
 		// Glob-safe removal (handles patterns like /tmp/*).
 		matches, _ := filepath.Glob(d)
 		for _, m := range matches {
+			if filepath.Clean(m) == cleanDst {
+				continue // never remove the destination root
+			}
 			os.RemoveAll(m)
 		}
 	}
 	return nil
-}
-
-// rsyncCopy copies src to dst using rsync.
-func (r *Releaser) rsyncCopy(src, dst string) error {
-	excludes, err := r.syncExcludedPaths(dst)
-	if err != nil {
-		return err
-	}
-
-	return filesystems.RsyncCopy(filesystems.RsyncCopyOptions{
-		Src:      src,
-		Dst:      dst,
-		Excludes: excludes,
-		Verbose:  r.verbose,
-		Stdout:   r.stdout,
-		Stderr:   r.stderr,
-	})
 }
 
 func (r *Releaser) SyncFilesystem() error {
@@ -107,26 +94,9 @@ func (r *Releaser) SyncFilesystem() error {
 		return err
 	}
 
-	useCp, err := r.UseCpReflink()
-	if err != nil {
+	r.Print("Using cp --reflink=auto copy mode ...\n")
+	if err := r.cpReflinkCopy(r.chrootDir, r.imageDir); err != nil {
 		return err
-	}
-
-	allowed, err := filesystems.CpReflinkCopyAllowed(r.chrootDir, r.imageDir, useCp)
-	if err != nil {
-		return err
-	}
-
-	if allowed {
-		r.Print("Using cp --reflink=auto copy mode ...\n")
-		if err := r.cpReflinkCopy(r.chrootDir, r.imageDir); err != nil {
-			return err
-		}
-	} else {
-		r.Print("Using rsync copy mode ...\n")
-		if err := r.rsyncCopy(r.chrootDir, r.imageDir); err != nil {
-			return err
-		}
 	}
 
 	opts := filesystems.CheckHardlinkPreservationOptions{
