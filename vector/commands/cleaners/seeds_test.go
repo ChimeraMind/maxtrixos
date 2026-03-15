@@ -458,15 +458,19 @@ func buildSeedsCleanerConfig(
 	seedersDir, chrootSeedersDir, devDir, dryRun, minSeeds string,
 ) *config.MockConfig {
 	return &config.MockConfig{Items: map[string][]string{
-		"Seeder.SeedersDir":             {seedersDir},
-		"Seeder.ChrootSeedersDir":       {chrootSeedersDir},
-		"Seeder.SeederDisabledFileName": {".disabled"},
-		"Seeder.ChrootExecutableName":   {"chroot.sh"},
-		"Seeder.PrepperExecutableName":  {"prepper.sh"},
-		"Seeder.ParamsExecutableName":   {"params.sh"},
-		"matrixOS.Root":                 {devDir},
-		"SeedsCleaner.DryRun":           {dryRun},
-		"SeedsCleaner.MinAmountOfSeeds": {minSeeds},
+		"Seeder.SeedersDir":                         {seedersDir},
+		"Seeder.ChrootSeedersDir":                   {chrootSeedersDir},
+		"Seeder.SeederDisabledFileName":             {".disabled"},
+		"Seeder.ChrootExecutableName":               {"chroot.sh"},
+		"Seeder.PrepperExecutableName":              {"prepper.sh"},
+		"Seeder.ParamsExecutableName":               {"params.sh"},
+		"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
+		"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
+		"Seeder.SeedsVersioningCadence":             {"weekly"},
+		"matrixOS.Root":                             {devDir},
+		"matrixOS.DefaultRoot":                      {"/matrixos"},
+		"SeedsCleaner.DryRun":                       {dryRun},
+		"SeedsCleaner.MinAmountOfSeeds":             {minSeeds},
 	}}
 }
 

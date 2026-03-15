@@ -3,14 +3,8 @@ set -eu
 
 if [ -z "${__MATRIXOS_ENV_PARSED:-}" ]; then
 
-# The "special var".
-DEFAULT_MATRIXOS_DEV_DIR=/matrixos
-MATRIXOS_DEV_DIR=${MATRIXOS_DEV_DIR:-"${DEFAULT_MATRIXOS_DEV_DIR}"}
-
 source "${MATRIXOS_DEV_DIR}"/lib/env_lib.sh
 
-# Re-initialize MATRIXOS_DEV_DIR from config.
-MATRIXOS_DEV_DIR=$(env_lib.get_root "${MATRIXOS_DEV_DIR}")
 MATRIXOS_ARTIFACTS_DIR=$(env_lib.get_artifactsroot "${MATRIXOS_DEV_DIR}")
 
 # matrixOS Git repos URLs and paths.
