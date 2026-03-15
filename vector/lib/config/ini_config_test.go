@@ -17,6 +17,7 @@ func TestIniConfig_Load_Expansion(t *testing.T) {
 	// Define absolute paths for roots to ensure deterministic tests
 	rootPath := "/tmp/matrixos-root"
 	defaultRootPath := "/tmp/matrixos-default-root"
+	confRootPath := "/tmp/matrixos-conf-root"
 	privateRepoPath := "/tmp/matrixos-private"
 	defaultPrivateRepoPath := "/tmp/matrixos-default-private"
 
@@ -24,6 +25,7 @@ func TestIniConfig_Load_Expansion(t *testing.T) {
 [matrixOS]
 Root=` + rootPath + `
 DefaultRoot=` + defaultRootPath + `
+ConfRoot=` + confRootPath + `
 PrivateGitRepoPath=` + privateRepoPath + `
 DefaultPrivateGitRepoPath=` + defaultPrivateRepoPath + `
 LogsDir=/var/log/matrixos
@@ -94,7 +96,6 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 
 	check("matrixOS.Root", rootPath)
 	check("matrixOS.ConfRoot", confRootPath)
-	check("matrixOS.ArtifactsRoot", artifactsRootPath)
 
 	// Relative to matrixOS.Root
 	check("matrixOS.PrivateGitRepoPath", privateRepoPath)
@@ -120,7 +121,7 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 	// Relative to matrixOS.ConfRoot
 	check("Imager.HooksDir", filepath.Join(confRootPath, "image/hooks"))
 
-	check("Ostree.DevGpgHomeDir", filepath.Join(artifactsRootPath, "gpg-home"))
+	check("Ostree.DevGpgHomeDir", filepath.Join(confRootPath, "gpg-home"))
 	check("Ostree.GpgOfficialPublicKey", filepath.Join(confRootPath, "pubkeys/ostree.gpg"))
 	check("Ostree.RepoDir", filepath.Join(rootPath, "ostree/repo"))
 
@@ -690,11 +691,6 @@ func TestSearchPaths(t *testing.T) {
 			evalConfRoot, _ := filepath.EvalSymlinks(sp.confRoot)
 			if evalConfRoot != evalTmp {
 				t.Errorf("Expected confRoot %q, got %q", evalTmp, evalConfRoot)
-			}
-
-			evalArtifactsRoot, _ := filepath.EvalSymlinks(sp.artifactsRoot)
-			if evalArtifactsRoot != evalTmp {
-				t.Errorf("Expected artifactsRoot %q, got %q", evalTmp, evalArtifactsRoot)
 			}
 			break
 		}
