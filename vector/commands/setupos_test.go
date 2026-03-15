@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -84,7 +85,7 @@ func newTestSetupOSCommand(
 	cmd.cfg = cfg
 	cmd.StartUI()
 	cmd.run = runner
-	cmd.prompt = NewPrompter(runner.stdin, runner.stdout, runner.stderr, &cmd.UI)
+	cmd.scanner = bufio.NewScanner(runner.stdin)
 	if err := cmd.parseArgs(nil); err != nil {
 		return nil, err
 	}
@@ -97,7 +98,7 @@ func initSetupOSCmd(runner *setupOSRunner) *SetupOSCommand {
 	cmd := &SetupOSCommand{}
 	cmd.StartUI()
 	cmd.run = runner
-	cmd.prompt = NewPrompter(runner.stdin, runner.stdout, runner.stderr, &cmd.UI)
+	cmd.scanner = bufio.NewScanner(runner.stdin)
 	return cmd
 }
 
@@ -212,14 +213,13 @@ func TestSetupOSChangeUsernameSkip(t *testing.T) {
 
 	var stdout bytes.Buffer
 	cmd.run.stdout = &stdout
-	cmd.prompt.Stdout = &stdout
 
-	result, err := cmd.changeUsername("matrix")
+	err := cmd.changeUsername("matrix")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != "matrix" {
-		t.Errorf("expected username='matrix', got %q", result)
+	if cmd.usernameAfterChange != "matrix" {
+		t.Errorf("expected usernameAfterChange='matrix', got %q", cmd.usernameAfterChange)
 	}
 	if !strings.Contains(stdout.String(), "Skipping username change") {
 		t.Errorf("expected skip message, got: %s", stdout.String())
@@ -250,14 +250,13 @@ func TestSetupOSChangeUsernameRename(t *testing.T) {
 
 	var stdout bytes.Buffer
 	cmd.run.stdout = &stdout
-	cmd.prompt.Stdout = &stdout
 
-	result, err := cmd.changeUsername("matrix")
+	err := cmd.changeUsername("matrix")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != "alice" {
-		t.Errorf("expected username='alice', got %q", result)
+	if cmd.usernameAfterChange != "alice" {
+		t.Errorf("expected usernameAfterChange='alice', got %q", cmd.usernameAfterChange)
 	}
 
 	// Check groupmod was called.
@@ -302,12 +301,12 @@ func TestSetupOSChangeUsernameNonExistent(t *testing.T) {
 	var stdout bytes.Buffer
 	cmd.run.stdout = &stdout
 
-	result, err := cmd.changeUsername("matrix")
+	err := cmd.changeUsername("matrix")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != "matrix" {
-		t.Errorf("expected fallback to default username, got %q", result)
+	if cmd.usernameAfterChange != "matrix" {
+		t.Errorf("expected fallback to default username, got %q", cmd.usernameAfterChange)
 	}
 }
 
@@ -337,33 +336,19 @@ func TestSetupOSChangeUserPassword(t *testing.T) {
 }
 
 func TestSetupOSSetupLocalization(t *testing.T) {
+	writtenFiles := make(map[string][]byte)
 	runner := testSetupOSRunner()
 	runner.execCommand = func(name string, args ...string) cmdRunner {
 		return &mockCmdRunner{}
 	}
-
-	cmd := initSetupOSCmd(runner)
-
-	var stdout bytes.Buffer
-	cmd.run.stdout = &stdout
-
-	err := cmd.setupLocalization()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !strings.Contains(stdout.String(), "Localization configured") {
-		t.Errorf("expected localization message, got: %s", stdout.String())
-	}
-}
-
-func TestSetupOSSetupAccountsService(t *testing.T) {
-	writtenFiles := make(map[string][]byte)
-	runner := testSetupOSRunner()
 	runner.readFile = func(path string) ([]byte, error) {
 		switch path {
 		case "/etc/locale.conf":
 			return []byte("LANG=en_US.UTF-8\n"), nil
+		case "/etc/vconsole.conf":
+			return []byte("KEYMAP=us\n"), nil
+		case "/proc/cmdline":
+			return []byte("root=UUID=abc ostree=/ostree/boot rw"), nil
 		}
 		return nil, fmt.Errorf("not mocked: %s", path)
 	}
@@ -382,11 +367,12 @@ func TestSetupOSSetupAccountsService(t *testing.T) {
 	}
 
 	cmd := initSetupOSCmd(runner)
+	cmd.usernameAfterChange = "alice"
 
 	var stdout bytes.Buffer
 	cmd.run.stdout = &stdout
 
-	err := cmd.setupAccountsService("alice")
+	err := cmd.setupLocalization("/efi", "matrixos-jailbroken.conf")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -401,8 +387,8 @@ func TestSetupOSSetupAccountsService(t *testing.T) {
 		}
 	}
 
-	if !strings.Contains(stdout.String(), "AccountsService configured") {
-		t.Errorf("expected AccountsService message, got: %s", stdout.String())
+	if !strings.Contains(stdout.String(), "Localization configured") {
+		t.Errorf("expected localization message, got: %s", stdout.String())
 	}
 }
 
@@ -432,7 +418,7 @@ func TestSetupOSKeymapOstree(t *testing.T) {
 
 	cmd := initSetupOSCmd(runner)
 
-	err := cmd.setupLocalizationKeymap("matrixos-jailbroken.conf")
+	err := cmd.setupLocalizationKeymap("/efi", "matrixos-jailbroken.conf")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -468,7 +454,7 @@ func TestSetupOSKeymapJailbroken(t *testing.T) {
 
 	cmd := initSetupOSCmd(runner)
 
-	err := cmd.setupLocalizationKeymap("matrixos-jailbroken.conf")
+	err := cmd.setupLocalizationKeymap("/efi", "matrixos-jailbroken.conf")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -555,7 +541,7 @@ func TestSetupOSDetectWindowsFound(t *testing.T) {
 	}
 }
 
-func TestSetupOSAddOSBoot(t *testing.T) {
+func TestSetupOSAddMatrixOSBoot(t *testing.T) {
 	var efibootmgrCalled bool
 	var efiArgs string
 	runner := testSetupOSRunner()
@@ -576,7 +562,7 @@ func TestSetupOSAddOSBoot(t *testing.T) {
 	var stdout bytes.Buffer
 	cmd.run.stdout = &stdout
 
-	err := cmd.addOSBoot("/efi", "matrixOS", `\EFI\BOOT\BOOTX64.EFI`)
+	err := cmd.addMatrixOSBoot("/efi", "matrixOS", `\EFI\BOOT\BOOTX64.EFI`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -591,7 +577,7 @@ func TestSetupOSAddOSBoot(t *testing.T) {
 	}
 }
 
-func TestSetupOSAddOSBootNoLabel(t *testing.T) {
+func TestSetupOSAddMatrixOSBootNoLabel(t *testing.T) {
 	runner := testSetupOSRunner()
 	runner.getMountDevice = func(mnt string) (string, error) { return "/dev/sda1", nil }
 	runner.getPartitionNumber = func(device string) (string, error) { return "1", nil }
@@ -599,7 +585,7 @@ func TestSetupOSAddOSBootNoLabel(t *testing.T) {
 
 	cmd := initSetupOSCmd(runner)
 
-	err := cmd.addOSBoot("/efi", "matrixOS", `\EFI\BOOT\BOOTX64.EFI`)
+	err := cmd.addMatrixOSBoot("/efi", "matrixOS", `\EFI\BOOT\BOOTX64.EFI`)
 	if err == nil || !strings.Contains(err.Error(), "unable to get partition label") {
 		t.Fatalf("expected partition label error, got: %v", err)
 	}
@@ -613,9 +599,8 @@ func TestSetupOSAskInputDefault(t *testing.T) {
 
 	var stdout bytes.Buffer
 	cmd.run.stdout = &stdout
-	cmd.prompt.Stdout = &stdout
 
-	result, err := cmd.prompt.AskInput("Enter name", "default_val", nil)
+	result, err := cmd.askInput("Enter name", "default_val", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -635,10 +620,8 @@ func TestSetupOSAskInputRegexValidation(t *testing.T) {
 	var stderr bytes.Buffer
 	cmd.run.stdout = &stdout
 	cmd.run.stderr = &stderr
-	cmd.prompt.Stdout = &stdout
-	cmd.prompt.Stderr = &stderr
 
-	result, err := cmd.prompt.AskInput("Enter username", "default", userRegex)
+	result, err := cmd.askInput("Enter username", "default", userRegex)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -658,67 +641,13 @@ func TestSetupOSAskInputEOF(t *testing.T) {
 
 	var stdout bytes.Buffer
 	cmd.run.stdout = &stdout
-	cmd.prompt.Stdout = &stdout
 
-	result, err := cmd.prompt.AskInput("Enter name", "fallback", nil)
+	result, err := cmd.askInput("Enter name", "fallback", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result != "fallback" {
 		t.Errorf("expected 'fallback', got %q", result)
-	}
-}
-
-func TestSetupOSSkipEncryption(t *testing.T) {
-	runner := testSetupOSRunner()
-	runner.readFile = func(path string) ([]byte, error) {
-		// changeLuksPassword should NOT be called, so any readFile
-		// for /proc/cmdline here means it leaked through.
-		switch path {
-		case "/proc/cmdline":
-			return []byte("root=UUID=abc rd.luks.uuid=my-luks-uuid rw"), nil
-		case "/etc/locale.conf":
-			return []byte("LANG=en_US.UTF-8\n"), nil
-		case "/etc/vconsole.conf":
-			return []byte(""), nil
-		}
-		return nil, fmt.Errorf("not mocked: %s", path)
-	}
-	runner.execCommand = func(name string, args ...string) cmdRunner {
-		if name == "id" {
-			return &mockCmdRunner{outputVal: []byte("1000")}
-		}
-		return &mockCmdRunner{}
-	}
-	runner.stat = func(path string) (os.FileInfo, error) {
-		if path == "/var/lib/AccountsService/users" {
-			return fakeFileInfo{}, nil
-		}
-		return nil, fmt.Errorf("not found")
-	}
-	runner.fileExists = func(path string) bool { return false }
-	runner.listBlockDevices = func(fields string) ([]string, error) { return nil, nil }
-	runner.stdin = strings.NewReader("\n\n\n\n\n")
-
-	cfg := setupOSTestConfig()
-	cmd, err := newTestSetupOSCommand(cfg, runner)
-	if err != nil {
-		t.Fatalf("newTestSetupOSCommand failed: %v", err)
-	}
-	cmd.skipEncryption = true
-
-	var stdout bytes.Buffer
-	cmd.run.stdout = &stdout
-
-	err = cmd.Run()
-	if err != nil {
-		t.Fatalf("Run() unexpected error: %v", err)
-	}
-	if !strings.Contains(stdout.String(), "Skipping disk encryption") {
-		t.Errorf("expected skip-encryption message, got: %s", stdout.String())
-	}
-	if !strings.Contains(stdout.String(), "Setup complete") {
-		t.Errorf("expected completion message, got: %s", stdout.String())
 	}
 }
 

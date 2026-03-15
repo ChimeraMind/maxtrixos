@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -63,15 +64,98 @@ type setupOSRunner struct {
 	stderr io.Writer
 }
 
-// NewSetupOSCommand creates a new SetupOSCommand
-func NewSetupOSCommand() *SetupOSCommand {
-	return &SetupOSCommand{
-		fs: flag.NewFlagSet("setupOS", flag.ExitOnError),
+func defaultSetupOSRunner() *setupOSRunner {
+	return &setupOSRunner{
+		execCommand: func(name string, args ...string) cmdRunner {
+			cmd := execCommand(name, args...)
+			return &realCmdRunner{
+				cmd:    cmd,
+				stdout: &cmd.Stdout,
+				stderr: &cmd.Stderr,
+			}
+		},
+		readFile:  os.ReadFile,
+		writeFile: os.WriteFile,
+		appendFile: func(path string, data []byte) error {
+			f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			_, err = f.Write(data)
+			return err
+		},
+		mkdirAll:   os.MkdirAll,
+		stat:       os.Stat,
+		removeFile: os.Remove,
+		fileExists: func(path string) bool {
+			_, err := os.Stat(path)
+			return err == nil
+		},
+		copyFile: filesystems.CopyFile,
+		chmod: func(path string, mode os.FileMode) error {
+			return os.Chmod(path, mode)
+		},
+		chown: func(path string, uid, gid int) error {
+			return os.Chown(path, uid, gid)
+		},
+		getMountDevice:     filesystems.MountpointToDevice,
+		getPartitionNumber: filesystems.PartitionNumber,
+		getPartitionLabel:  filesystems.PartitionLabel,
+		getBlockDevice:     filesystems.BlockDeviceForPartition,
+		listBlockDevices: func(fields string) ([]string, error) {
+			cmd := execCommand("lsblk", "-no", fields)
+			out, err := cmd.Output()
+			if err != nil {
+				return nil, err
+			}
+			var lines []string
+			for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+				line = strings.TrimSpace(line)
+				if line != "" {
+					lines = append(lines, line)
+				}
+			}
+			return lines, nil
+		},
+		getBlkidValue: func(device, tag string) (string, error) {
+			cmd := execCommand("blkid", "-s", tag, "-o", "value", device)
+			out, err := cmd.Output()
+			if err != nil {
+				return "", err
+			}
+			return strings.TrimSpace(string(out)), nil
+		},
+		getEuid:        getEuid,
+		getCurrentUser: func() string { return os.Getenv("USER") },
+		stdin:          os.Stdin,
+		stdout:         os.Stdout,
+		stderr:         os.Stderr,
 	}
 }
 
+// SetupOSCommand is a command for setting up matrixOS (username, passwords, locale, etc.)
+type SetupOSCommand struct {
+	BaseCommand
+	UI
+	fs  *flag.FlagSet
+	run *setupOSRunner
+
+	// State carried between steps.
+	usernameAfterChange string
+
+	// scanner is shared across all askInput calls so that buffered
+	// input from stdin is not lost between prompts.
+	scanner *bufio.Scanner
+}
+
+// NewSetupOSCommand creates a new SetupOSCommand
+func NewSetupOSCommand() *SetupOSCommand {
+	return &SetupOSCommand{}
+}
+
 func (c *SetupOSCommand) Name() string {
-	return c.fs.Name()
+	return "setupOS"
 }
 
 func (c *SetupOSCommand) Init(args []string) error {
@@ -85,21 +169,29 @@ func (c *SetupOSCommand) Init(args []string) error {
 
 	c.StartUI()
 	c.run = defaultSetupOSRunner()
-	c.prompt = NewPrompter(c.run.stdin, c.run.stdout, c.run.stderr, &c.UI)
+	c.scanner = bufio.NewScanner(c.run.stdin)
 	return nil
 }
 
 func (c *SetupOSCommand) parseArgs(args []string) error {
 	c.fs = flag.NewFlagSet("setupOS", flag.ContinueOnError)
-	c.fs.BoolVar(&c.skipEncryption, "skip-encryption", false, "Skip disk encryption password change step")
-	c.fs.BoolVar(&c.skipPasswords, "skip-passwords", false, "Skip username change, user password and root password steps")
-	c.fs.StringVar(&c.usernameFlag, "username", "", "Set the username directly without prompting (useful with --skip-passwords)")
 	c.fs.Usage = func() {
-		fmt.Printf("Usage: vector %s [flags]\n", c.Name())
+		fmt.Printf("Usage: vector %s\n", c.Name())
 		fmt.Println("  Setup matrixOS: configure username, passwords, locale, disk encryption and boot entries.")
 		c.fs.PrintDefaults()
 	}
 	return c.fs.Parse(args)
+}
+
+func (c *SetupOSCommand) configStr(key string) (string, error) {
+	val, err := c.cfg.GetItem(key)
+	if err != nil {
+		return "", fmt.Errorf("config key %s: %w", key, err)
+	}
+	if val == "" {
+		return "", fmt.Errorf("config key %s is empty", key)
+	}
+	return val, nil
 }
 
 func (c *SetupOSCommand) Run() error {
@@ -146,98 +238,91 @@ func (c *SetupOSCommand) Run() error {
 
 	// Step 1: LUKS password
 	fmt.Fprintf(c.run.stdout, "%s%sStep 1: Disk Encryption%s\n", c.cBold, c.iconGear, c.cReset)
-	if c.skipEncryption {
-		fmt.Fprintf(c.run.stdout, "   %s%sSkipping disk encryption (--skip-encryption).%s\n",
-			c.cBlue, c.iconCheck, c.cReset)
-	} else {
-		if err := c.changeLuksPassword(); err != nil {
-			return fmt.Errorf("LUKS password change failed: %w", err)
-		}
+	if err := c.changeLuksPassword(); err != nil {
+		return fmt.Errorf("LUKS password change failed: %w", err)
 	}
 	fmt.Fprintln(c.run.stdout)
 
-	// Resolve the effective username for later steps.
-	username := defaultUsername
-	if c.usernameFlag != "" {
-		username = c.usernameFlag
+	// Step 2: Username change
+	fmt.Fprintf(c.run.stdout, "%s%sStep 2: User Account%s\n", c.cBold, c.iconGear, c.cReset)
+	if err := c.changeUsername(defaultUsername); err != nil {
+		return fmt.Errorf("username change failed: %w", err)
 	}
+	fmt.Fprintln(c.run.stdout)
 
-	if c.skipPasswords {
-		fmt.Fprintf(c.run.stdout, "   %s%sSkipping steps 2-4 (--skip-passwords), username=%s.%s\n\n",
-			c.cBlue, c.iconCheck, username, c.cReset)
-	} else {
-		// Step 2: Username change
-		if c.usernameFlag == "" {
-			fmt.Fprintf(c.run.stdout, "%s%sStep 2: User Account%s\n", c.cBold, c.iconGear, c.cReset)
-			newName, err := c.changeUsername(defaultUsername)
-			if err != nil {
-				return fmt.Errorf("username change failed: %w", err)
-			}
-			username = newName
-		} else {
-			fmt.Fprintf(c.run.stdout, "%s%sStep 2: User Account (--username=%s)%s\n", c.cBold, c.iconGear, c.usernameFlag, c.cReset)
-			fmt.Fprintf(c.run.stdout, "   %s%sUsing provided username: %s%s\n",
-				c.cBlue, c.iconCheck, username, c.cReset)
-		}
-		fmt.Fprintln(c.run.stdout)
-
-		// Step 3: User password
-		fmt.Fprintf(c.run.stdout, "%s%sStep 3: User Password%s\n", c.cBold, c.iconGear, c.cReset)
-		if err := c.changeUserPassword(username); err != nil {
-			return fmt.Errorf("user password change failed: %w", err)
-		}
-		fmt.Fprintln(c.run.stdout)
-
-		// Step 4: Root password
-		fmt.Fprintf(c.run.stdout, "%s%sStep 4: Root Password%s\n", c.cBold, c.iconGear, c.cReset)
-		if err := c.changeUserPassword("root"); err != nil {
-			return fmt.Errorf("root password change failed: %w", err)
-		}
-		fmt.Fprintln(c.run.stdout)
+	// Step 3: User password
+	fmt.Fprintf(c.run.stdout, "%s%sStep 3: User Password%s\n", c.cBold, c.iconGear, c.cReset)
+	if err := c.changeUserPassword(c.usernameAfterChange); err != nil {
+		return fmt.Errorf("user password change failed: %w", err)
 	}
+	fmt.Fprintln(c.run.stdout)
+
+	// Step 4: Root password
+	fmt.Fprintf(c.run.stdout, "%s%sStep 4: Root Password%s\n", c.cBold, c.iconGear, c.cReset)
+	if err := c.changeUserPassword("root"); err != nil {
+		return fmt.Errorf("root password change failed: %w", err)
+	}
+	fmt.Fprintln(c.run.stdout)
 
 	// Step 5: Localization
 	fmt.Fprintf(c.run.stdout, "%s%sStep 5: Localization%s\n", c.cBold, c.iconGear, c.cReset)
-	if err := c.setupLocalization(); err != nil {
+	if err := c.setupLocalization(efiRoot, jailbrokenEntry); err != nil {
 		return fmt.Errorf("localization setup failed: %w", err)
 	}
 	fmt.Fprintln(c.run.stdout)
 
-	// Step 6: AccountsService
-	fmt.Fprintf(c.run.stdout, "%s%sStep 6: AccountsService%s\n", c.cBold, c.iconGear, c.cReset)
-	if err := c.setupAccountsService(username); err != nil {
-		fmt.Fprintf(c.run.stderr, "   %s%sAccountsService setup warning: %v%s\n",
-			c.cYellow, c.iconWarn, err, c.cReset)
-	}
-	fmt.Fprintln(c.run.stdout)
-
-	// Step 7: Keymap
-	fmt.Fprintf(c.run.stdout, "%s%sStep 7: Keyboard Mapping%s\n", c.cBold, c.iconGear, c.cReset)
-	if err := c.setupLocalizationKeymap(jailbrokenEntry); err != nil {
-		fmt.Fprintf(c.run.stderr, "   %s%sKeymap setup warning: %v%s\n",
-			c.cYellow, c.iconWarn, err, c.cReset)
-	}
-	fmt.Fprintln(c.run.stdout)
-
-	// Step 8: Windows detection
-	fmt.Fprintf(c.run.stdout, "%s%sStep 8: Windows Detection%s\n", c.cBold, c.iconSearch, c.cReset)
+	// Step 6: Windows detection
+	fmt.Fprintf(c.run.stdout, "%s%sStep 6: Windows Detection%s\n", c.cBold, c.iconSearch, c.cReset)
 	if err := c.detectWindows(efiRoot, relativeEfiBoot); err != nil {
 		fmt.Fprintf(c.run.stderr, "   %s%sWindows detection warning: %v%s\n",
 			c.cYellow, c.iconWarn, err, c.cReset)
 	}
 	fmt.Fprintln(c.run.stdout)
 
-	// Step 9: EFI boot entry
-	fmt.Fprintf(c.run.stdout, "%s%sStep 9: EFI Boot Entry%s\n", c.cBold, c.iconRocket, c.cReset)
-	if err := c.addOSBoot(efiRoot, fancyOsName, efiExecPath); err != nil {
+	// Step 7: EFI boot entry
+	fmt.Fprintf(c.run.stdout, "%s%sStep 7: EFI Boot Entry%s\n", c.cBold, c.iconRocket, c.cReset)
+	if err := c.addMatrixOSBoot(efiRoot, fancyOsName, efiExecPath); err != nil {
 		fmt.Fprintf(c.run.stderr, "   %s%sEFI boot entry warning: %v%s\n",
 			c.cYellow, c.iconWarn, err, c.cReset)
 	}
 
 	fmt.Fprintf(c.run.stdout, "\n%s\n", c.separator)
-	fmt.Fprintf(c.run.stdout, "%s%sSetup complete! Please reboot and enjoy the OS.%s\n",
+	fmt.Fprintf(c.run.stdout, "%s%sSetup complete! Please reboot and enjoy matrixOS.%s\n",
 		c.cGreen, c.iconCheck, c.cReset)
 	return nil
+}
+
+// askInput prompts the user for input with a default value and optional regex validation.
+// Returns the user's input or the default value if empty input is given.
+func (c *SetupOSCommand) askInput(prompt, defaultVal string, pattern *regexp.Regexp) (string, error) {
+	for {
+		defDisplay := defaultVal
+		if defDisplay == "" {
+			defDisplay = "none"
+		}
+		fmt.Fprintf(c.run.stdout, "   %s%s%s (default: %s): %s",
+			c.cYellow, c.iconQuestion, prompt, defDisplay, c.cReset)
+
+		if !c.scanner.Scan() {
+			if err := c.scanner.Err(); err != nil {
+				return "", fmt.Errorf("failed to read input: %w", err)
+			}
+			// EOF — use default.
+			return defaultVal, nil
+		}
+		input := strings.TrimSpace(c.scanner.Text())
+
+		if input == "" {
+			return defaultVal, nil
+		}
+
+		if pattern != nil && !pattern.MatchString(input) {
+			fmt.Fprintf(c.run.stderr, "   %s%sInvalid input format. Please try again.%s\n",
+				c.cRed, c.iconError, c.cReset)
+			continue
+		}
+		return input, nil
+	}
 }
 
 // checkUsername verifies that the given username exists on the system.
@@ -245,45 +330,36 @@ func (c *SetupOSCommand) checkUsername(username string) error {
 	cmd := c.run.execCommand("id", "-u", username)
 	out, err := cmd.Output()
 	if err != nil || strings.TrimSpace(string(out)) == "" {
-		fmt.Fprintf(
-			c.run.stderr,
-			"   %s%sUser %s does not exist (removed or already migrated).%s\n",
-			c.cYellow, c.iconWarn, username, c.cReset,
-		)
-		fmt.Fprintf(
-			c.run.stderr,
-			"   %s%sTo re-run this step, use the --skip-passwords and --username flags.%s\n",
-			c.cYellow, c.iconWarn, c.cReset,
-		)
 		return fmt.Errorf("user %q does not exist (removed or already migrated)", username)
 	}
 	return nil
 }
 
 // changeUsername handles renaming the default user account.
-// Returns the final username (either the new name or the original if skipped).
-func (c *SetupOSCommand) changeUsername(defaultUsername string) (string, error) {
+func (c *SetupOSCommand) changeUsername(defaultUsername string) error {
 	if err := c.checkUsername(defaultUsername); err != nil {
 		fmt.Fprintf(c.run.stdout, "   %s%s%v%s\n", c.cYellow, c.iconWarn, err, c.cReset)
-		return defaultUsername, nil
+		c.usernameAfterChange = defaultUsername
+		return nil
 	}
 
-	selectedUsername, err := c.prompt.AskInput(
+	selectedUsername, err := c.askInput(
 		fmt.Sprintf("Enter desired username replacing %s, hit enter to skip", defaultUsername),
 		defaultUsername, userRegex)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	if selectedUsername == defaultUsername {
 		fmt.Fprintf(c.run.stdout, "   %s%sSkipping username change.%s\n",
 			c.cBlue, c.iconCheck, c.cReset)
-		return defaultUsername, nil
+		c.usernameAfterChange = defaultUsername
+		return nil
 	}
 
-	selectedFullname, err := c.prompt.AskInput("Enter desired full name, hit enter to skip", "", nil)
+	selectedFullname, err := c.askInput("Enter desired full name, hit enter to skip", "", nil)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// Rename group if it exists.
@@ -295,7 +371,7 @@ func (c *SetupOSCommand) changeUsername(defaultUsername string) (string, error) 
 		groupmodCmd.SetStdout(c.run.stdout)
 		groupmodCmd.SetStderr(c.run.stderr)
 		if err := groupmodCmd.Run(); err != nil {
-			return "", fmt.Errorf("failed to rename group: %w", err)
+			return fmt.Errorf("failed to rename group: %w", err)
 		}
 	}
 
@@ -314,7 +390,7 @@ func (c *SetupOSCommand) changeUsername(defaultUsername string) (string, error) 
 	usermodCmd.SetStdout(c.run.stdout)
 	usermodCmd.SetStderr(c.run.stderr)
 	if err := usermodCmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to rename user: %w", err)
+		return fmt.Errorf("failed to rename user: %w", err)
 	}
 
 	// Clean up stock user config files.
@@ -334,7 +410,8 @@ func (c *SetupOSCommand) changeUsername(defaultUsername string) (string, error) 
 
 	fmt.Fprintf(c.run.stdout, "   %s%sUser renamed successfully.%s\n",
 		c.cGreen, c.iconCheck, c.cReset)
-	return selectedUsername, nil
+	c.usernameAfterChange = selectedUsername
+	return nil
 }
 
 // changeUserPassword runs passwd for the given user.
@@ -379,8 +456,8 @@ func (c *SetupOSCommand) changeLuksPassword() error {
 
 	uuid := ""
 	for _, field := range strings.Fields(string(cmdlineData)) {
-		if v, found := strings.CutPrefix(field, "rd.luks.uuid="); found {
-			uuid = v
+		if strings.HasPrefix(field, "rd.luks.uuid=") {
+			uuid = strings.TrimPrefix(field, "rd.luks.uuid=")
 			break
 		}
 	}
@@ -425,8 +502,8 @@ func (c *SetupOSCommand) changeLuksPassword() error {
 	return nil
 }
 
-// setupLocalization runs systemd-firstboot and configures locale settings.
-func (c *SetupOSCommand) setupLocalization() error {
+// setupLocalization runs systemd-firstboot and configures AccountsService + keymap.
+func (c *SetupOSCommand) setupLocalization(efiRoot, jailbrokenEntry string) error {
 	fmt.Fprintf(c.run.stdout, "   %s%sConfiguring system locale and timezone...%s\n",
 		c.cBold, c.iconGear, c.cReset)
 
@@ -442,19 +519,6 @@ func (c *SetupOSCommand) setupLocalization() error {
 		return fmt.Errorf("systemd-firstboot failed: %w", err)
 	}
 
-	// env-update for Gentoo locale fix.
-	fmt.Fprintf(c.run.stdout, "   %s%sRunning env-update for locale configuration...%s\n",
-		c.cGreen, c.iconGear, c.cReset)
-	envUpdateCmd := c.run.execCommand("env-update")
-	envUpdateCmd.Run() // best effort
-
-	fmt.Fprintf(c.run.stdout, "   %s%sLocalization configured.%s\n",
-		c.cGreen, c.iconCheck, c.cReset)
-	return nil
-}
-
-// setupAccountsService configures AccountsService for the given user.
-func (c *SetupOSCommand) setupAccountsService(username string) error {
 	// Setup AccountsService directories.
 	asDir := "/var/lib/AccountsService"
 	asUsersDir := filepath.Join(asDir, "users")
@@ -468,55 +532,60 @@ func (c *SetupOSCommand) setupAccountsService(username string) error {
 	lang := ""
 	if localeData, err := c.run.readFile("/etc/locale.conf"); err == nil {
 		for _, line := range strings.Split(string(localeData), "\n") {
-			if v, found := strings.CutPrefix(line, "LANG="); found {
-				lang = strings.TrimSpace(v)
+			if strings.HasPrefix(line, "LANG=") {
+				lang = strings.TrimPrefix(line, "LANG=")
+				lang = strings.TrimSpace(lang)
 				break
 			}
 		}
 	}
 
-	if lang == "" || username == "" {
-		fmt.Fprintf(c.run.stdout, "   %s%sSkipping AccountsService (no locale or username).%s\n",
-			c.cYellow, c.iconWarn, c.cReset)
-		return nil
-	}
+	if lang != "" && c.usernameAfterChange != "" {
+		if _, err := c.run.stat(asUsersDir); err == nil {
+			userCfg := filepath.Join(asUsersDir, c.usernameAfterChange)
 
-	fmt.Fprintf(
-		c.run.stdout,
-		"   %s%sConfiguring AccountsService for user %s with LANG=%s...%s\n",
-		c.cBold, c.iconGear, username, lang, c.cReset,
-	)
-	if _, err := c.run.stat(asUsersDir); err == nil {
-		userCfg := filepath.Join(asUsersDir, username)
+			// Determine icon path.
+			srcIconPath := "/usr/share/pixmaps/faces/tree.jpg"
+			dstIconPath := "/home/" + c.usernameAfterChange + "/.face"
+			if c.run.fileExists(srcIconPath) {
+				dstIconPath = filepath.Join(asIconsDir, c.usernameAfterChange)
+				c.run.copyFile(srcIconPath, dstIconPath)
+				c.run.chmod(dstIconPath, 0644)
+			}
 
-		// Determine icon path.
-		srcIconPath := "/usr/share/pixmaps/faces/tree.jpg"
-		dstIconPath := "/home/" + username + "/.face"
-		if c.run.fileExists(srcIconPath) {
-			dstIconPath = filepath.Join(asIconsDir, username)
-			c.run.copyFile(srcIconPath, dstIconPath)
-			c.run.chmod(dstIconPath, 0644)
+			content := fmt.Sprintf("[User]\nLanguages=%s;\nSession=\nIcon=%s\nSystemAccount=false\n",
+				lang, dstIconPath)
+			c.run.writeFile(userCfg, []byte(content), 0600)
+			c.run.chown(userCfg, 0, 0)
+
+			fmt.Fprintf(c.run.stdout, "   %s%sAccountsService configured for %s (lang=%s).%s\n",
+				c.cGreen, c.iconCheck, c.usernameAfterChange, lang, c.cReset)
 		}
-
-		content := fmt.Sprintf("[User]\nLanguages=%s;\nSession=\nIcon=%s\nSystemAccount=false\n",
-			lang, dstIconPath)
-		c.run.writeFile(userCfg, []byte(content), 0600)
-		c.run.chown(userCfg, 0, 0)
-
-		fmt.Fprintf(c.run.stdout, "   %s%sAccountsService configured for %s (lang=%s).%s\n",
-			c.cGreen, c.iconCheck, username, lang, c.cReset)
 	}
 
+	// env-update for Gentoo locale fix.
+	envUpdateCmd := c.run.execCommand("env-update")
+	envUpdateCmd.Run() // best effort
+
+	// Configure keymap in boot args.
+	if err := c.setupLocalizationKeymap(efiRoot, jailbrokenEntry); err != nil {
+		fmt.Fprintf(c.run.stderr, "   %s%sKeymap setup warning: %v%s\n",
+			c.cYellow, c.iconWarn, err, c.cReset)
+	}
+
+	fmt.Fprintf(c.run.stdout, "   %s%sLocalization configured.%s\n",
+		c.cGreen, c.iconCheck, c.cReset)
 	return nil
 }
 
 // setupLocalizationKeymap configures the vconsole keymap in kernel boot args.
-func (c *SetupOSCommand) setupLocalizationKeymap(jailbrokenEntry string) error {
+func (c *SetupOSCommand) setupLocalizationKeymap(efiRoot, jailbrokenEntry string) error {
 	keymap := ""
 	if vconsoleData, err := c.run.readFile("/etc/vconsole.conf"); err == nil {
 		for _, line := range strings.Split(string(vconsoleData), "\n") {
-			if v, found := strings.CutPrefix(line, "KEYMAP="); found {
-				keymap = strings.TrimSpace(v)
+			if strings.HasPrefix(line, "KEYMAP=") {
+				keymap = strings.TrimPrefix(line, "KEYMAP=")
+				keymap = strings.TrimSpace(keymap)
 				break
 			}
 		}
@@ -536,11 +605,8 @@ func (c *SetupOSCommand) setupLocalizationKeymap(jailbrokenEntry string) error {
 	jailbrokenConfig := filepath.Join("/boot/loader/entries", jailbrokenEntry)
 
 	if isOstree {
-		fmt.Fprintf(
-			c.run.stdout,
-			"   %sConfiguring early boot keyboard mapping via ostree kargs...%s\n",
-			c.iconGear, c.cReset,
-		)
+		fmt.Fprintf(c.run.stdout, "   %sConfiguring early boot keyboard mapping via ostree kargs...%s\n",
+			c.iconGear, c.cReset)
 		kargsCmd := c.run.execCommand("ostree", "admin", "kargs", "edit-in-place",
 			"--append-if-missing=vconsole.keymap="+keymap)
 		kargsCmd.SetStdout(c.run.stdout)
@@ -549,11 +615,8 @@ func (c *SetupOSCommand) setupLocalizationKeymap(jailbrokenEntry string) error {
 			return fmt.Errorf("ostree kargs failed: %w", err)
 		}
 	} else if c.run.fileExists(jailbrokenConfig) {
-		fmt.Fprintf(
-			c.run.stdout,
-			"   %sConfiguring early boot keyboard mapping via BLS config...%s\n",
-			c.iconGear, c.cReset,
-		)
+		fmt.Fprintf(c.run.stdout, "   %sConfiguring early boot keyboard mapping via BLS config...%s\n",
+			c.iconGear, c.cReset)
 		data, err := c.run.readFile(jailbrokenConfig)
 		if err != nil {
 			return fmt.Errorf("failed to read %s: %w", jailbrokenConfig, err)
@@ -698,8 +761,8 @@ menuentry "%s" --class windows {
 	return nil
 }
 
-// addOSBoot adds a OS UEFI boot entry via efibootmgr.
-func (c *SetupOSCommand) addOSBoot(efiRoot, fancyOsName, efiExecPath string) error {
+// addMatrixOSBoot adds a matrixOS UEFI boot entry via efibootmgr.
+func (c *SetupOSCommand) addMatrixOSBoot(efiRoot, fancyOsName, efiExecPath string) error {
 	efiDevice, err := c.run.getMountDevice(efiRoot)
 	if err != nil {
 		return fmt.Errorf("unable to find device for %s: %w", efiRoot, err)
