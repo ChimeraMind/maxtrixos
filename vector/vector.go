@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	helpMessage = `matrixos' vector - Your OS handy tool (in the future...).
+	helpMessage = `matrixos' vector - Your OS handy tool.
 Usage:
 
   PROTOTYPE! Some features are not fully tested yet!
@@ -33,6 +33,7 @@ Usage:
     check           checks that the host has all the required binaries/data to run the build workflow.
     janitor         cleans up development toolkit artifacts, such as old images and downloads.
     vm              runs generated image tests using QEMU.
+  flash       - install (flash) the running matrixOS system to a block device or partitions.
   build       - build toolkit command, orchestrates building OS artifacts.
     seeds           builds chroot filesystems using the configured seeders.
     release         generates a single OS release (ostree commit).
