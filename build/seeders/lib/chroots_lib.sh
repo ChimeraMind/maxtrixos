@@ -3,6 +3,10 @@
 #                  state between chroot.sh scripts and only executed inside seeding chroots.
 set -eu
 
+# Used by maybe_mount_common_filesystems.
+MOUNTS=()
+
+
 _get_phase_path() {
     echo "${SEEDERS_PHASES_STATE_DIR}/${1}.done"
 }
@@ -110,10 +114,15 @@ chroots_lib.validate_matrixos_private() {
     fi
 }
 
+chroots_lib.cleanup() {
+    chroots_lib.maybe_umount_common_filesystems
+}
+
 chroots_lib._maybe_mount_sys() {
     if ! mountpoint -q /sys; then
         echo "Mounting sysfs on /sys inside chroot since it was not mounted by the host..." >&2
         mkdir -p /sys
+        MOUNTS+=( "/sys" )
         mount -t sysfs sys /sys
     else
         echo "/sys is already mounted on the host, skipping mounting it inside chroot." >&2
@@ -124,11 +133,16 @@ chroots_lib._maybe_mount_dev() {
     if ! mountpoint -q /dev; then
         echo "Mounting devtmpfs on /dev inside chroot since it was not mounted by the host..." >&2
         mkdir -p /dev
+
+        MOUNTS+=( "/dev" )
         mount -t devtmpfs devtmpfs /dev
 
         echo "Mounting devpts on /dev/pts inside chroot since it was not mounted by the host..." >&2
+        MOUNTS+=( "/dev/pts" )
         mount -t devpts devpts /dev/pts -o rw,nosuid,noexec,relatime,gid=5,mode=600,ptmxmode=000
+
         echo "Mounting tmpfs on /dev/shm inside chroot since it was not mounted by the host..." >&2
+        MOUNTS+=( "/dev/shm" )
         mount -t devshm tmpfs /dev/shm -o rw,nosuid,nodev,mode=1777
     else
         echo "/dev is already mounted on the host, skipping mounting it inside chroot." >&2
@@ -138,6 +152,20 @@ chroots_lib._maybe_mount_dev() {
 chroots_lib.maybe_mount_common_filesystems() {
     chroots_lib._maybe_mount_sys
     chroots_lib._maybe_mount_dev
+}
+
+chroots_lib.maybe_umount_common_filesystems() {
+    local m=
+    # Umount in reverse order.
+    for (( idx=${#MOUNTS[@]}-1 ; idx>=0 ; idx-- )) ; do
+        m="${MOUNTS[idx]}"
+        if mountpoint -q "${m}"; then
+            echo "Unmounting ${m} inside chroot..." >&2
+            umount -l "${m}"
+        else
+            echo "${m} is not mounted, skipping unmount." >&2
+        fi
+    done
 }
 
 chroots_lib.default_portage_bootstrap() {
