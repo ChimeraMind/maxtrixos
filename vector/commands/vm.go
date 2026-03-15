@@ -135,22 +135,24 @@ func (vm *VMDriver) Wait() error {
 type VMCommand struct {
 	BaseCommand
 	UI
-	fs          *flag.FlagSet
-	imagePath   string
-	memory      string
-	gpuMemory   string
-	port        string
-	waitBoot    time.Duration
-	waitTests   time.Duration
-	maxRunTime  time.Duration
-	display     string
-	venusAccel  bool
-	graphical   bool
-	gpuAccel    bool
-	audio       bool
-	interactive bool
-	audioDev    string
-	cpus        string
+	fs            *flag.FlagSet
+	imagePath     string
+	memory        string
+	gpuMemory     string
+	port          string
+	waitBoot      time.Duration
+	waitTests     time.Duration
+	maxRunTime    time.Duration
+	display       string
+	venusAccel    bool
+	graphical     bool
+	gpuAccel      bool
+	audio         bool
+	interactive   bool
+	audioDev      string
+	cpus          string
+	extraDisk     bool
+	extraDiskSize string
 
 	// Styled I/O writers
 	stdout *styledWriter
@@ -177,6 +179,8 @@ func NewVMCommand() *VMCommand {
 	c.fs.BoolVar(&c.interactive, "interactive", false, "Run VM interactively without testing")
 	c.fs.StringVar(&c.cpus, "cpus", "4", "Number of CPUs for the VM")
 	c.fs.StringVar(&c.display, "display", "sdl", "Display type for the VM (e.g., 'sdl', 'gtk', default: 'sdl')")
+	c.fs.BoolVar(&c.extraDisk, "extra_disk", false, "Attach an additional empty block device to the VM")
+	c.fs.StringVar(&c.extraDiskSize, "extra_disk_size", "64G", "Size of the extra block device (default '64G')")
 	return c
 }
 
@@ -298,6 +302,12 @@ func (c *VMCommand) Run() error {
 		"-drive", "if=pflash,format=raw,file=" + varsDst,
 		"-drive", fmt.Sprintf("file=%s,format=%s,if=virtio", c.imagePath, format),
 		"-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", testImageFile.Name()),
+	}
+
+	if extraDiskFile != nil {
+		qemuArgs = append(qemuArgs,
+			"-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", extraDiskFile.Name()),
+		)
 	}
 
 	if c.graphical {
