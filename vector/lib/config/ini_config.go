@@ -503,9 +503,15 @@ func (c *IniConfig) loadPrivateRepoConfigs() error {
 		"Ostree.GpgPrivateKey",
 		"Ostree.GpgPublicKey",
 	}
-
-	if err := c.loadPrivateRepoConfigs(); err != nil {
-		return err
+	for _, key := range privateRepoDependents {
+		c.expand(key, "matrixOS.PrivateGitRepoPath")
+	}
+	defaultPrivateRepoDependents := []string{
+		"Seeder.DefaultSecureBootPrivateKey",
+		"Seeder.DefaultSecureBootPublicKey",
+	}
+	for _, key := range defaultPrivateRepoDependents {
+		c.expand(key, "matrixOS.DefaultPrivateGitRepoPath")
 	}
 	return nil
 }
