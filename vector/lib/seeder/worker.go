@@ -555,34 +555,37 @@ func (s *Seeder) SetupChrootMounts(opts SetupChrootMountsOptions) error {
 	}
 
 	if delegated {
-		s.Print("Delegating mounting of system filesystems inside chroot ...\n")
-	} else {
-		s.Print("Mounting common rootfs mounts (dev, sys, proc, shm, run/lock) ...\n")
-		// Common rootfs mounts (dev, sys, proc, shm, run/lock).
-		common, err := filesystems.NewCommonRootfsMounts(
-			filesystems.CommonRootfsMountsOptions{
-				MountPoint:    opts.ChrootDir,
-				SkipIfMounted: opts.SkipIfMounted,
-				Mounting: func(mnt string) {
-					s.Print("Mounting: %s ...\n", mnt)
-					s.trackMount(mnt)
-				},
-				Skipping: func(mnt string) {
-					s.Print("Skipping (already mounted): %s ...\n", mnt)
-				},
-				Mounted: func(mnt string) {
-					s.Print("Mounted: %s ...\n", mnt)
-				},
-				Stdout: s.stdout,
-				Stderr: s.stderr,
+		// TODO: make this the default after April 2026, remove the old mounting code
+		// and config entry.
+		s.Print("Delegating mounting of system mounts inside chroot ...\n")
+		return nil
+	}
+
+	s.Print("Mounting common rootfs mounts (dev, sys, proc, shm, run/lock) ...\n")
+	// Common rootfs mounts (dev, sys, proc, shm, run/lock).
+	common, err := filesystems.NewCommonRootfsMounts(
+		filesystems.CommonRootfsMountsOptions{
+			MountPoint:    opts.ChrootDir,
+			SkipIfMounted: opts.SkipIfMounted,
+			Mounting: func(mnt string) {
+				s.Print("Mounting: %s ...\n", mnt)
+				s.trackMount(mnt)
 			},
-		)
-		if err != nil {
-			return fmt.Errorf("error creating common mounts init: %w", err)
-		}
-		if err := common.Setup(); err != nil {
-			return fmt.Errorf("error setting up common mounts setup: %w", err)
-		}
+			Skipping: func(mnt string) {
+				s.Print("Skipping (already mounted): %s ...\n", mnt)
+			},
+			Mounted: func(mnt string) {
+				s.Print("Mounted: %s ...\n", mnt)
+			},
+			Stdout: s.stdout,
+			Stderr: s.stderr,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("error creating common mounts init: %w", err)
+	}
+	if err := common.Setup(); err != nil {
+		return fmt.Errorf("error setting up common mounts setup: %w", err)
 	}
 
 	if err := s.mountPrivateGitRepo(&opts); err != nil {
@@ -732,26 +735,65 @@ func (s *Seeder) SetupChrootDirs(chrootDir string) error {
 	return nil
 }
 
+func (s *Seeder) generateSeederEnvVars(env []string) ([]string, error) {
+	defaultDevDir, err := s.DefaultDevDir()
+	if err != nil {
+		return nil, fmt.Errorf("error getting default dev dir: %w", err)
+	}
+
+	privatePath, err := s.PrivateGitRepoPath()
+	if err != nil {
+		return nil, fmt.Errorf("error getting private repo path: %w", err)
+	}
+
+	distDir, err := s.DistfilesDir()
+	if err != nil {
+		return nil, fmt.Errorf("error getting distfiles dir: %w", err)
+	}
+
+	binpkgsDir, err := s.BinpkgsDir()
+	if err != nil {
+		return nil, fmt.Errorf("error getting binpkgs dir: %w", err)
+	}
+
+	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
+	env = config.FilterEnvKey(env, "SEEDER_PRIVATE_GIT_REPO_PATH")
+	env = config.FilterEnvKey(env, "SEEDER_DISTFILES_DIR")
+	env = config.FilterEnvKey(env, "SEEDER_BINPKGS_DIR")
+	env = append(env,
+		// Inside chroots, we always want /matrixos.
+		"MATRIXOS_DEV_DIR="+defaultDevDir,
+		// These 3 env vars are path outside of chroot, that can be
+		// used to bind mount them inside the chroot. These variables
+		// are not meant to be used within the chroot.sh, but by the
+		// intermediate pre-chroot() init script.
+		"SEEDER_PRIVATE_GIT_REPO_PATH="+privatePath,
+		"SEEDER_DISTFILES_DIR="+distDir,
+		"SEEDER_BINPKGS_DIR="+binpkgsDir,
+	)
+	return env, nil
+}
+
 // --- Chroot execution ---
 
 // Seed runs the seeder's chroot script inside the chroot
 // using unshare for namespace isolation.
 func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
-	defaultDevDir, err := s.DefaultDevDir()
+	env := os.Environ()
+	env, err := s.generateSharedEnvVars(env)
+	if err != nil {
+		return err
+	}
+	env, err = s.generateSeederEnvVars(env)
 	if err != nil {
 		return err
 	}
 
-	env := os.Environ()
-	env, err = s.generateSharedEnvVars(env)
+	seedersDir, err := s.SeedersDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting seeders dir: %w", err)
 	}
-	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
-	// Inside the chroot, we always want /matrixos.
-	env = append(env,
-		"MATRIXOS_DEV_DIR="+defaultDevDir,
-	)
+	initScript := filepath.Join(seedersDir, "init.sh")
 
 	return s.chrootRunner(&runner.ChrootCmd{
 		Cmd: runner.Cmd{
@@ -761,6 +803,7 @@ func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
 			Stdout: s.stdout,
 			Stderr: s.stderr,
 		},
-		ChrootDir: chrootDir,
+		ChrootExec: initScript,
+		ChrootDir:  chrootDir,
 	})
 }

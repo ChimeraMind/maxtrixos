@@ -8,14 +8,6 @@ Golang migration:
       - [WAITING] vector jailbreak
 
 Features:
-    - Add delegated mounts for the remaining bind mounts, by calling an
-      intermediary script before `exec chroot`. Example:
-      unshare --mount --pid --fork sh -c '
-        # 1. Perform the bind mount privately inside the namespace
-        mount --bind /path/to/external/dir /path/to/chroot/internal/dir
-        # 2. Pivot into the chroot and replace the shell with your executable
-        exec chroot /path/to/chroot /bin/your_executable
-      '
     - [sd-boot] Closely watch https://github.com/ostreedev/ostree/pull/3359
         This will be our trampoline to support bootc in the future.
         Step 1: support sd-boot alongside grub2, start building new images with sd-boot.

@@ -750,24 +750,24 @@ func TestExecutePrepper_Success(t *testing.T) {
 	env := readEnvFile(t, outputFile)
 
 	checks := map[string]string{
-		"MATRIXOS_DEV_DIR":                     "/my/dev",
-		"SEEDER_BUILD_METADATA_FILE":           "/build/.metadata/build.json",
-		"SEEDER_LOCK_DIR":                      "/locks/seeder",
-		"SEEDER_LOCK_WAIT_SECS":                "86400",
-		"PREPPERS_PHASES_STATE_DIR":            "/build/preppers/.preppers_phases",
-		"SEEDER_CHROOT_NAME":                   "bedrock-20260228",
-		"SEEDER_CHROOTS_DIR":                   "/mnt/chroots",
-		"PREFERRED_SEEDER_CHROOT_DIR":          "/mnt/chroots/bedrock-20260228",
-		"CHROOT_DIR":                           "/mnt/chroots/bedrock-20260228",
-		"DOWNLOAD_DIR":                         "/my/downloads",
-		"CHROOT_RESUME":                        "",
-		"STAGE3_FILE":                          "stage3-amd64-latest.tar.xz",
-		"STAGE3_URL":                           "https://example.com/stage3.tar.xz",
-		"SEEDER_DATE_CADENCE":                  "weekly",
-		"DEFAULT_MATRIXOS_DEV_DIR":             "/matrixos",
-		"SEEDER_GPG_KEYS_DIR":                  "/gpg-keys",
-		"SEEDER_OVERLAY_GIT_REPO":              "https://example.com/overlay.git",
-		"DEFAULT_PRIVATE_GIT_REPO_PATH":        "/matrixos/private",
+		"MATRIXOS_DEV_DIR":              "/my/dev",
+		"SEEDER_BUILD_METADATA_FILE":    "/build/.metadata/build.json",
+		"SEEDER_LOCK_DIR":               "/locks/seeder",
+		"SEEDER_LOCK_WAIT_SECS":         "86400",
+		"PREPPERS_PHASES_STATE_DIR":     "/build/preppers/.preppers_phases",
+		"SEEDER_CHROOT_NAME":            "bedrock-20260228",
+		"SEEDER_CHROOTS_DIR":            "/mnt/chroots",
+		"PREFERRED_SEEDER_CHROOT_DIR":   "/mnt/chroots/bedrock-20260228",
+		"CHROOT_DIR":                    "/mnt/chroots/bedrock-20260228",
+		"DOWNLOAD_DIR":                  "/my/downloads",
+		"CHROOT_RESUME":                 "",
+		"STAGE3_FILE":                   "stage3-amd64-latest.tar.xz",
+		"STAGE3_URL":                    "https://example.com/stage3.tar.xz",
+		"SEEDER_DATE_CADENCE":           "weekly",
+		"DEFAULT_MATRIXOS_DEV_DIR":      "/matrixos",
+		"SEEDER_GPG_KEYS_DIR":           "/gpg-keys",
+		"SEEDER_OVERLAY_GIT_REPO":       "https://example.com/overlay.git",
+		"DEFAULT_PRIVATE_GIT_REPO_PATH": "/matrixos/private",
 	}
 	for k, want := range checks {
 		got := env[k]
@@ -937,10 +937,14 @@ func TestSeed_Success(t *testing.T) {
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
 	cfg.Items["matrixOS.OverlayGitRepo"] = []string{"https://example.com/overlay.git"}
 	cfg.Items["matrixOS.DefaultPrivateGitRepoPath"] = []string{"/matrixos/private"}
+	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{"/srv/private"}
 	cfg.Items["matrixOS.Root"] = []string{"/sr/build/daily"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
 	cfg.Items["Seeder.SeedsVersioningCadence"] = []string{"weekly"}
+	cfg.Items["Seeder.DistfilesDir"] = []string{"/srv/distfiles"}
+	cfg.Items["Seeder.BinpkgsDir"] = []string{"/srv/binpkgs"}
+	cfg.Items["Seeder.SeedersDir"] = []string{"/matrixos/build/seeders"}
 
 	sd := &Seeder{
 		cfg:          cfg,
@@ -978,6 +982,9 @@ func TestSeed_Success(t *testing.T) {
 		"DEFAULT_MATRIXOS_DEV_DIR=/matrixos":                      false,
 		"SEEDER_OVERLAY_GIT_REPO=https://example.com/overlay.git": false,
 		"DEFAULT_PRIVATE_GIT_REPO_PATH=/matrixos/private":         false,
+		"SEEDER_PRIVATE_GIT_REPO_PATH=/srv/private":               false,
+		"SEEDER_DISTFILES_DIR=/srv/distfiles":                     false,
+		"SEEDER_BINPKGS_DIR=/srv/binpkgs":                         false,
 	}
 	for _, e := range call.Env {
 		if _, ok := wantEnv[e]; ok {
@@ -1061,15 +1068,22 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	t.Setenv("DEFAULT_MATRIXOS_DEV_DIR", "/should/be/overridden")
 	t.Setenv("SEEDER_OVERLAY_GIT_REPO", "should-be-overridden")
 	t.Setenv("DEFAULT_PRIVATE_GIT_REPO_PATH", "/should/be/overridden")
+	t.Setenv("SEEDER_PRIVATE_GIT_REPO_PATH", "/should/be/overridden")
+	t.Setenv("SEEDER_DISTFILES_DIR", "/should/be/overridden")
+	t.Setenv("SEEDER_BINPKGS_DIR", "/should/be/overridden")
 
 	mr := runner.NewMockRunner()
 	cfg := workerTestConfig()
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
 	cfg.Items["matrixOS.OverlayGitRepo"] = []string{"https://example.com/overlay.git"}
 	cfg.Items["matrixOS.DefaultPrivateGitRepoPath"] = []string{"/matrixos/private"}
+	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{"/srv/private"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
 	cfg.Items["Seeder.SeedsVersioningCadence"] = []string{"daily"}
+	cfg.Items["Seeder.DistfilesDir"] = []string{"/srv/distfiles"}
+	cfg.Items["Seeder.BinpkgsDir"] = []string{"/srv/binpkgs"}
+	cfg.Items["Seeder.SeedersDir"] = []string{"/matrixos/build/seeders"}
 
 	sd := &Seeder{
 		cfg:          cfg,
@@ -1093,6 +1107,9 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	defaultDevDirCount := 0
 	overlayCount := 0
 	privatePathCount := 0
+	seederPrivateCount := 0
+	seederDistfilesCount := 0
+	seederBinpkgsCount := 0
 	for _, e := range call.Env {
 		if strings.HasPrefix(e, "MATRIXOS_DEV_DIR=") {
 			devDirCount++
@@ -1111,6 +1128,15 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 		}
 		if strings.HasPrefix(e, "DEFAULT_PRIVATE_GIT_REPO_PATH=") {
 			privatePathCount++
+		}
+		if strings.HasPrefix(e, "SEEDER_PRIVATE_GIT_REPO_PATH=") {
+			seederPrivateCount++
+		}
+		if strings.HasPrefix(e, "SEEDER_DISTFILES_DIR=") {
+			seederDistfilesCount++
+		}
+		if strings.HasPrefix(e, "SEEDER_BINPKGS_DIR=") {
+			seederBinpkgsCount++
 		}
 	}
 	if devDirCount != 1 {
@@ -1131,6 +1157,15 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	if privatePathCount != 1 {
 		t.Errorf("DEFAULT_PRIVATE_GIT_REPO_PATH appears %d times, want 1", privatePathCount)
 	}
+	if seederPrivateCount != 1 {
+		t.Errorf("SEEDER_PRIVATE_GIT_REPO_PATH appears %d times, want 1", seederPrivateCount)
+	}
+	if seederDistfilesCount != 1 {
+		t.Errorf("SEEDER_DISTFILES_DIR appears %d times, want 1", seederDistfilesCount)
+	}
+	if seederBinpkgsCount != 1 {
+		t.Errorf("SEEDER_BINPKGS_DIR appears %d times, want 1", seederBinpkgsCount)
+	}
 
 	// Verify the correct values won.
 	wantEnv := map[string]bool{
@@ -1140,6 +1175,9 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 		"DEFAULT_MATRIXOS_DEV_DIR=/matrixos":                      false,
 		"SEEDER_OVERLAY_GIT_REPO=https://example.com/overlay.git": false,
 		"DEFAULT_PRIVATE_GIT_REPO_PATH=/matrixos/private":         false,
+		"SEEDER_PRIVATE_GIT_REPO_PATH=/srv/private":               false,
+		"SEEDER_DISTFILES_DIR=/srv/distfiles":                     false,
+		"SEEDER_BINPKGS_DIR=/srv/binpkgs":                         false,
 	}
 	for _, e := range call.Env {
 		if _, ok := wantEnv[e]; ok {
@@ -1159,9 +1197,13 @@ func TestSeed_ChrootRunnerError(t *testing.T) {
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
 	cfg.Items["matrixOS.OverlayGitRepo"] = []string{"https://example.com/overlay.git"}
 	cfg.Items["matrixOS.DefaultPrivateGitRepoPath"] = []string{"/matrixos/private"}
+	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{"/srv/private"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
 	cfg.Items["Seeder.SeedsVersioningCadence"] = []string{"weekly"}
+	cfg.Items["Seeder.DistfilesDir"] = []string{"/srv/distfiles"}
+	cfg.Items["Seeder.BinpkgsDir"] = []string{"/srv/binpkgs"}
+	cfg.Items["Seeder.SeedersDir"] = []string{"/matrixos/build/seeders"}
 
 	sd := &Seeder{
 		cfg:          cfg,
@@ -1177,6 +1219,187 @@ func TestSeed_ChrootRunnerError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "chroot boom") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// --- generateSeederEnvVars tests ---
+
+func TestGenerateSeederEnvVars_Success(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{"/srv/private"}
+	cfg.Items["Seeder.DistfilesDir"] = []string{"/srv/distfiles"}
+	cfg.Items["Seeder.BinpkgsDir"] = []string{"/srv/binpkgs"}
+
+	sd := newTestSeederWithConfig(cfg)
+
+	env, err := sd.generateSeederEnvVars(os.Environ())
+	if err != nil {
+		t.Fatalf("generateSeederEnvVars: unexpected error: %v", err)
+	}
+
+	wantEnv := map[string]bool{
+		"MATRIXOS_DEV_DIR=/matrixos":                false,
+		"SEEDER_PRIVATE_GIT_REPO_PATH=/srv/private": false,
+		"SEEDER_DISTFILES_DIR=/srv/distfiles":       false,
+		"SEEDER_BINPKGS_DIR=/srv/binpkgs":           false,
+	}
+	for _, e := range env {
+		if _, ok := wantEnv[e]; ok {
+			wantEnv[e] = true
+		}
+	}
+	for entry, found := range wantEnv {
+		if !found {
+			t.Errorf("%s not found in env", entry)
+		}
+	}
+}
+
+func TestGenerateSeederEnvVars_FiltersExistingKeys(t *testing.T) {
+	t.Setenv("MATRIXOS_DEV_DIR", "/old/devdir")
+	t.Setenv("SEEDER_PRIVATE_GIT_REPO_PATH", "/old/private")
+	t.Setenv("SEEDER_DISTFILES_DIR", "/old/distfiles")
+	t.Setenv("SEEDER_BINPKGS_DIR", "/old/binpkgs")
+
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{"/srv/private"}
+	cfg.Items["Seeder.DistfilesDir"] = []string{"/srv/distfiles"}
+	cfg.Items["Seeder.BinpkgsDir"] = []string{"/srv/binpkgs"}
+
+	sd := newTestSeederWithConfig(cfg)
+
+	env, err := sd.generateSeederEnvVars(os.Environ())
+	if err != nil {
+		t.Fatalf("generateSeederEnvVars: %v", err)
+	}
+
+	counts := map[string]int{
+		"MATRIXOS_DEV_DIR=":             0,
+		"SEEDER_PRIVATE_GIT_REPO_PATH=": 0,
+		"SEEDER_DISTFILES_DIR=":         0,
+		"SEEDER_BINPKGS_DIR=":           0,
+	}
+	for _, e := range env {
+		for prefix := range counts {
+			if strings.HasPrefix(e, prefix) {
+				counts[prefix]++
+			}
+		}
+	}
+	for prefix, count := range counts {
+		if count != 1 {
+			t.Errorf("%s appears %d times, want 1", prefix, count)
+		}
+	}
+
+	// Verify values are the new ones, not the old ones.
+	wantEnv := map[string]bool{
+		"MATRIXOS_DEV_DIR=/matrixos":                false,
+		"SEEDER_PRIVATE_GIT_REPO_PATH=/srv/private": false,
+		"SEEDER_DISTFILES_DIR=/srv/distfiles":       false,
+		"SEEDER_BINPKGS_DIR=/srv/binpkgs":           false,
+	}
+	for _, e := range env {
+		if _, ok := wantEnv[e]; ok {
+			wantEnv[e] = true
+		}
+	}
+	for entry, found := range wantEnv {
+		if !found {
+			t.Errorf("%s not found in env", entry)
+		}
+	}
+}
+
+func TestGenerateSeederEnvVars_DefaultDevDirError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{""} // empty → error
+
+	sd := newTestSeederWithConfig(cfg)
+
+	_, err := sd.generateSeederEnvVars(os.Environ())
+	if err == nil {
+		t.Fatal("expected error for empty DefaultDevDir")
+	}
+}
+
+func TestGenerateSeederEnvVars_PrivateGitRepoPathError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{""} // empty → error
+
+	sd := newTestSeederWithConfig(cfg)
+
+	_, err := sd.generateSeederEnvVars(os.Environ())
+	if err == nil {
+		t.Fatal("expected error for empty PrivateGitRepoPath")
+	}
+}
+
+func TestGenerateSeederEnvVars_DistfilesDirError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{"/srv/private"}
+	cfg.Items["Seeder.DistfilesDir"] = []string{""} // empty → error
+
+	sd := newTestSeederWithConfig(cfg)
+
+	_, err := sd.generateSeederEnvVars(os.Environ())
+	if err == nil {
+		t.Fatal("expected error for empty DistfilesDir")
+	}
+}
+
+func TestGenerateSeederEnvVars_BinpkgsDirError(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{"/srv/private"}
+	cfg.Items["Seeder.DistfilesDir"] = []string{"/srv/distfiles"}
+	cfg.Items["Seeder.BinpkgsDir"] = []string{""} // empty → error
+
+	sd := newTestSeederWithConfig(cfg)
+
+	_, err := sd.generateSeederEnvVars(os.Environ())
+	if err == nil {
+		t.Fatal("expected error for empty BinpkgsDir")
+	}
+}
+
+func TestGenerateSeederEnvVars_EmptyInputEnv(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{"/srv/private"}
+	cfg.Items["Seeder.DistfilesDir"] = []string{"/srv/distfiles"}
+	cfg.Items["Seeder.BinpkgsDir"] = []string{"/srv/binpkgs"}
+
+	sd := newTestSeederWithConfig(cfg)
+
+	env, err := sd.generateSeederEnvVars(nil)
+	if err != nil {
+		t.Fatalf("generateSeederEnvVars: unexpected error: %v", err)
+	}
+
+	if len(env) != 4 {
+		t.Fatalf("expected exactly 4 env vars, got %d: %v", len(env), env)
+	}
+
+	wantEnv := map[string]bool{
+		"MATRIXOS_DEV_DIR=/matrixos":                false,
+		"SEEDER_PRIVATE_GIT_REPO_PATH=/srv/private": false,
+		"SEEDER_DISTFILES_DIR=/srv/distfiles":       false,
+		"SEEDER_BINPKGS_DIR=/srv/binpkgs":           false,
+	}
+	for _, e := range env {
+		if _, ok := wantEnv[e]; ok {
+			wantEnv[e] = true
+		}
+	}
+	for entry, found := range wantEnv {
+		if !found {
+			t.Errorf("%s not found in env", entry)
+		}
 	}
 }
 
@@ -2461,7 +2684,7 @@ func TestSetupChrootMounts_Delegated_SkipsSystemMounts(t *testing.T) {
 	output := stdout.String()
 
 	// The delegation message must appear.
-	if !strings.Contains(output, "Delegating mounting of system filesystems inside chroot") {
+	if !strings.Contains(output, "Delegating mounting of system mounts inside chroot") {
 		t.Errorf("expected delegation message in output, got:\n%s", output)
 	}
 
@@ -2470,25 +2693,14 @@ func TestSetupChrootMounts_Delegated_SkipsSystemMounts(t *testing.T) {
 		t.Errorf("did not expect common rootfs message with delegation, got:\n%s", output)
 	}
 
-	// System dirs (dev, dev/pts, sys, dev/shm, proc, run/lock) should NOT
-	// appear in tracked mounts; only private repo, distfiles, binpkgs.
-	systemSuffixes := []string{"/dev", "/dev/pts", "/sys", "/dev/shm", "/proc", "/run/lock"}
-	for _, mnt := range sd.trackedMounts {
-		for _, suffix := range systemSuffixes {
-			if strings.HasSuffix(mnt, suffix) {
-				t.Errorf("system mount %s should not be tracked when delegated", mnt)
-			}
-		}
-	}
-
-	// The three non-system mounts (private repo, distfiles, binpkgs) should be tracked.
-	if len(sd.trackedMounts) != 3 {
-		t.Errorf("expected 3 tracked mounts (private repo, distfiles, binpkgs), got %d: %v",
+	// All mounts are delegated, nothing should be tracked.
+	if len(sd.trackedMounts) != 0 {
+		t.Errorf("expected 0 tracked mounts (all delegated), got %d: %v",
 			len(sd.trackedMounts), sd.trackedMounts)
 	}
 }
 
-func TestSetupChrootMounts_Delegated_StillMountsDistfiles(t *testing.T) {
+func TestSetupChrootMounts_Delegated_DelegatesDistfilesAndBinpkgs(t *testing.T) {
 	mockMountSyscalls(t)
 	tmp := t.TempDir()
 	chrootDir := filepath.Join(tmp, "chroot")
@@ -2513,16 +2725,17 @@ func TestSetupChrootMounts_Delegated_StillMountsDistfiles(t *testing.T) {
 		t.Fatalf("SetupChrootMounts: %v", err)
 	}
 
-	// Ensure distfiles and binpkgs dirs exist inside the chroot.
+	// Distfiles and binpkgs mounts are delegated, so their dirs should
+	// NOT be created inside the chroot by SetupChrootMounts.
 	for _, sub := range []string{"var/cache/distfiles", "var/cache/binpkgs"} {
 		p := filepath.Join(chrootDir, sub)
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			t.Errorf("expected %s to exist inside chroot", p)
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("expected %s to NOT exist inside chroot (delegated), but it does", p)
 		}
 	}
 }
 
-func TestSetupChrootMounts_Delegated_StillMountsPrivateRepo(t *testing.T) {
+func TestSetupChrootMounts_Delegated_DelegatesPrivateRepo(t *testing.T) {
 	mockMountSyscalls(t)
 	tmp := t.TempDir()
 	chrootDir := filepath.Join(tmp, "chroot")
@@ -2547,18 +2760,13 @@ func TestSetupChrootMounts_Delegated_StillMountsPrivateRepo(t *testing.T) {
 		t.Fatalf("SetupChrootMounts: %v", err)
 	}
 
-	// The private git repo mount destination must be tracked.
+	// The private git repo mount is now delegated, so it must NOT be tracked.
 	privateDst := filepath.Join(chrootDir, "matrixos", "private")
-	found := false
 	for _, mnt := range sd.trackedMounts {
 		if mnt == privateDst {
-			found = true
-			break
+			t.Errorf("private repo mount %s should not be tracked (delegated), tracked: %v",
+				privateDst, sd.trackedMounts)
 		}
-	}
-	if !found {
-		t.Errorf("expected private repo mount %s to be tracked, tracked: %v",
-			privateDst, sd.trackedMounts)
 	}
 }
 
@@ -2596,7 +2804,7 @@ func TestSetupChrootMounts_NotDelegated_MountsSystemFilesystems(t *testing.T) {
 	}
 
 	// The delegation message must NOT appear.
-	if strings.Contains(output, "Delegating mounting of system filesystems inside chroot") {
+	if strings.Contains(output, "Delegating mounting of system mounts inside chroot") {
 		t.Errorf("did not expect delegation message when not delegated, got:\n%s", output)
 	}
 
@@ -2675,11 +2883,17 @@ func TestSetupChrootMounts_Delegated_SkipIfMounted(t *testing.T) {
 
 	// Delegation message should appear, common rootfs should not.
 	output := stdout.String()
-	if !strings.Contains(output, "Delegating mounting of system filesystems inside chroot") {
+	if !strings.Contains(output, "Delegating mounting of system mounts inside chroot") {
 		t.Errorf("expected delegation message, got:\n%s", output)
 	}
 	if strings.Contains(output, "Mounting common rootfs mounts") {
 		t.Errorf("did not expect common rootfs message with delegation, got:\n%s", output)
+	}
+
+	// All mounts are delegated, so nothing should be tracked at all.
+	if len(sd.trackedMounts) != 0 {
+		t.Errorf("expected 0 tracked mounts (all delegated), got %d: %v",
+			len(sd.trackedMounts), sd.trackedMounts)
 	}
 }
 
