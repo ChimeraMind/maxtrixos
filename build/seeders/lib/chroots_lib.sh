@@ -167,6 +167,8 @@ chroots_lib.maybe_mount_common_filesystems() {
     echo "Mounted common filesystems inside chroot: ${MOUNTS[*]}" >&2
     echo "Dump of /proc/self/mountinfo:" >&2
     cat /proc/self/mountinfo >&2
+    echo "PID 1 is:" >&2
+    readlink /proc/1/exe >&2
 }
 
 chroots_lib.maybe_umount_common_filesystems() {
