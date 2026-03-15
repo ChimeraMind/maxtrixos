@@ -392,6 +392,13 @@ func (im *Imager) finalizeBuild(releaseVersion string, pkgList []string) error {
 		return fmt.Errorf("failed to show filesystem info: %w", err)
 	}
 
+	im.Print("Running ostree post-copy phase ...\n")
+	if err := im.ostree.PostCopy(); err != nil {
+		return fmt.Errorf("ostree post-copy phase failed: %w", err)
+	}
+
+	// This unmounts everything, after this point we cannot touch the filesystems
+	// anymore.
 	im.Cleanup()
 
 	switch im.ImageMode() {
