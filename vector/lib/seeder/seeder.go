@@ -80,6 +80,12 @@ type ISeeder interface {
 	ParamsExecutableName() (string, error)
 	// PrepperExecName returns the name of the prepper executable inside each seeder directory.
 	PrepperExecName() (string, error)
+	// ChrootMetadataDir returns the chroot-side directory for build metadata.
+	ChrootMetadataDir() (string, error)
+	// ChrootMetadataDirBuildFileName returns the file name for build metadata inside the chroot metadata directory.
+	ChrootMetadataDirBuildFileName() (string, error)
+	// BuildMetadataFile returns the full path to the build metadata file.
+	BuildMetadataFile() (string, error)
 	// PhasesStateDir returns the chroot-side directory for seeder phase checkpoints.
 	PhasesStateDir() (string, error)
 	// SeederDoneFlagFilePrefix returns the prefix for done-flag files.

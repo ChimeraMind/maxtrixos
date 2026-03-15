@@ -4,12 +4,10 @@
 #
 # These are the env variables that are made available to this prepper executable.
 #
-#
 # CHROOT_DIR=/path/to/chroot
 # The directory path to a chroot. Path can even be non-existent. Each prepper is
 # tasked to decide what to do with it. The goal is to do whatever is necessary to
 # prep CHROOT_DIR for chrooting and executing chroot.sh (the in-chroot seeder script).
-#
 #
 # DOWNLOAD_DIR=
 # The directory path in which files should be downloaded (e.g. stage3 files).
@@ -27,6 +25,11 @@
 # If set, defines the Gentoo stage3 URL that must be used to download a stage3 file.
 # It can be also a URL pointing to a file name (in its content) that should be downloaded
 # afterwards.
+#
+# SEEDER_BUILD_METADATA_FILE=/usr/share/matrixos/metadata/build
+# The file path to the build metadata file. This file is used to store important metadata
+# about the build, such as the stage3 file used, the release version of the seed, and more.
+#
 set -eu
 
 _prepper_dir="$(dirname "${0}")"

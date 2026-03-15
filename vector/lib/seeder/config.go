@@ -1,6 +1,9 @@
 package seeder
 
-import "fmt"
+import (
+	"fmt"
+	"path/filepath"
+)
 
 // configItem retrieves a non-empty config string or returns an error.
 func (s *Seeder) configItem(key string) (string, error) {
@@ -52,6 +55,26 @@ func (s *Seeder) ParamsExecutableName() (string, error) {
 
 func (s *Seeder) PrepperExecName() (string, error) {
 	return s.configItem("Seeder.PrepperExecutableName")
+}
+
+func (s *Seeder) ChrootMetadataDir() (string, error) {
+	return s.configItem("Seeder.ChrootMetadataDir")
+}
+
+func (s *Seeder) ChrootMetadataDirBuildFileName() (string, error) {
+	return s.configItem("Seeder.ChrootMetadataDirBuildFileName")
+}
+
+func (s *Seeder) BuildMetadataFile() (string, error) {
+	dir, err := s.ChrootMetadataDir()
+	if err != nil {
+		return "", err
+	}
+	fileName, err := s.ChrootMetadataDirBuildFileName()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, fileName), nil
 }
 
 func (s *Seeder) PhasesStateDir() (string, error) {

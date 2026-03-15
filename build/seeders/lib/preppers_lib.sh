@@ -447,7 +447,7 @@ preppers_lib.create_build_metadata_file() {
     local bedrock_name
     bedrock_name=$(basename "${bedrock_chroot_dir}")
 
-    local build_metadata="${chroot_dir}/${MATRIXOS_SEEDER_BUILD_METADATA_FILE}"
+    local build_metadata="${chroot_dir}/${SEEDER_BUILD_METADATA_FILE}"
     local build_metadata_dir
     build_metadata_dir=$(dirname "${build_metadata}")
 
@@ -460,6 +460,11 @@ preppers_lib.create_build_metadata_file() {
     else
         echo "WARNING: SEEDER_CHROOT_NAME not set!" >&2
     fi
+
+    # Persist the stage3 file info if available.
+    echo "STAGE3_URL=${STAGE3_URL}" >> "${build_metadata}"
+    echo "STAGE3_FILE=${STAGE3_FILE}" >> "${build_metadata}"
+
     cat "${build_metadata}"
 }
 
@@ -496,7 +501,7 @@ preppers_lib._rsync_from_bedrock() {
     local chroot_dir="${1}"
     local latest_bedrock="${2}"
     if [ -z "${latest_bedrock}" ]; then
-        echo "preppers_lib.rsync_from_bedrock missing parameter." >&2
+        echo "preppers_lib._rsync_from_bedrock missing parameter." >&2
         return 1
     fi
     if [ -z "${chroot_dir}" ]; then
