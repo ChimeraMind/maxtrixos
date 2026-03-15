@@ -159,7 +159,7 @@ If you are partitioning manually, **strict adherence** to the following layout i
 After your first boot, run the setup wizard to configure your system. Run this from a VT or Desktop terminal.
 
 ```shell
-sudo vector setupOS
+vector setupOS
 ```
 
 This will:
