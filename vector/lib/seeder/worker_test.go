@@ -227,15 +227,8 @@ func newRealSeeder(devDir string) *Seeder {
 	}
 }
 
-func requireBash(t *testing.T) {
-	t.Helper()
-	if _, err := os.Stat("/bin/bash"); os.IsNotExist(err) {
-		t.Skip("skipping: /bin/bash not found")
-	}
-}
 
 func TestParseSeederParams_Success(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 	latestDir := filepath.Join(tmp, "chroots", "bedrock-20260228")
 	os.MkdirAll(latestDir, 0755)
@@ -292,7 +285,6 @@ func TestParseSeederParams_Success(t *testing.T) {
 }
 
 func TestParseSeederParams_SpaceSeparatedAllChrootDirs(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 	latestDir := filepath.Join(tmp, "chroots", "bedrock-20260228")
 	os.MkdirAll(latestDir, 0755)
@@ -336,7 +328,6 @@ func TestParseSeederParams_SpaceSeparatedAllChrootDirs(t *testing.T) {
 }
 
 func TestParseSeederParams_UsesDevDir(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 	latestDir := filepath.Join(tmp, "latest-chroot")
 	os.MkdirAll(latestDir, 0755)
@@ -365,7 +356,6 @@ func TestParseSeederParams_UsesDevDir(t *testing.T) {
 }
 
 func TestParseSeederParams_EmptyChrootName(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 	latestDir := filepath.Join(tmp, "latest-chroot")
 	os.MkdirAll(latestDir, 0755)
@@ -386,7 +376,6 @@ func TestParseSeederParams_EmptyChrootName(t *testing.T) {
 }
 
 func TestParseSeederParams_EmptyChrootsDir(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 	latestDir := filepath.Join(tmp, "latest-chroot")
 	os.MkdirAll(latestDir, 0755)
@@ -408,7 +397,6 @@ func TestParseSeederParams_EmptyChrootsDir(t *testing.T) {
 }
 
 func TestParseSeederParams_EmptyPreferredChrootDir(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 	latestDir := filepath.Join(tmp, "latest-chroot")
 	os.MkdirAll(latestDir, 0755)
@@ -430,7 +418,6 @@ func TestParseSeederParams_EmptyPreferredChrootDir(t *testing.T) {
 }
 
 func TestParseSeederParams_EmptyLatestChrootDir(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 
 	// The find_latest_chroot_dir function returns empty string.
@@ -453,7 +440,6 @@ func TestParseSeederParams_EmptyLatestChrootDir(t *testing.T) {
 }
 
 func TestParseSeederParams_FunctionMissing(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 
 	// params.sh does NOT define bedrock_params.find_latest_chroot_dir.
@@ -479,7 +465,6 @@ func TestParseSeederParams_FunctionMissing(t *testing.T) {
 }
 
 func TestParseSeederParams_LatestChrootDirNotExist(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 
 	// Point to a directory that does not exist.
@@ -508,7 +493,6 @@ func TestParseSeederParams_LatestChrootDirNotExist(t *testing.T) {
 }
 
 func TestParseParamsVariables_LatestAvailableChrootDir(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 	latestDir := filepath.Join(tmp, "chroots", "bedrock-latest")
 	os.MkdirAll(latestDir, 0755)
@@ -538,7 +522,6 @@ func TestParseParamsVariables_LatestAvailableChrootDir(t *testing.T) {
 }
 
 func TestParseParamsVariables_DifferentSeedNames(t *testing.T) {
-	requireBash(t)
 
 	tests := []struct {
 		seederName string // e.g. "10-server"
@@ -577,7 +560,6 @@ func TestParseParamsVariables_DifferentSeedNames(t *testing.T) {
 }
 
 func TestParseSeederParams_MissingVariable(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 
 	// Script only sets one of the three required variables.
@@ -593,7 +575,6 @@ func TestParseSeederParams_MissingVariable(t *testing.T) {
 }
 
 func TestParseSeederParams_BadScript(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 
 	// Write a script with a syntax error.
@@ -611,7 +592,6 @@ func TestParseSeederParams_BadScript(t *testing.T) {
 }
 
 func TestParseSeederParams_NonexistentFile(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 
 	sd := newRealSeeder(tmp)
@@ -726,7 +706,6 @@ func readEnvFile(t *testing.T, path string) map[string]string {
 }
 
 func TestExecutePrepper_Success(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 	outputFile := filepath.Join(tmp, "env-output.txt")
 	prepperScript := writePrepperScript(t, tmp, outputFile)
@@ -783,7 +762,6 @@ func TestExecutePrepper_Success(t *testing.T) {
 }
 
 func TestExecutePrepper_Resume(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 	outputFile := filepath.Join(tmp, "env-output.txt")
 	prepperScript := writePrepperScript(t, tmp, outputFile)
@@ -817,7 +795,6 @@ func TestExecutePrepper_Resume(t *testing.T) {
 }
 
 func TestExecutePrepper_UseCpReflink(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 	outputFile := filepath.Join(tmp, "env-output.txt")
 	prepperScript := writePrepperScript(t, tmp, outputFile)
@@ -852,7 +829,6 @@ func TestExecutePrepper_UseCpReflink(t *testing.T) {
 }
 
 func TestExecutePrepper_ScriptFailure(t *testing.T) {
-	requireBash(t)
 	tmp := t.TempDir()
 
 	// Write a script that exits with an error.
@@ -2394,7 +2370,6 @@ func TestSetupChrootMounts_SkipIfMountedFalse_MountsAll(t *testing.T) {
 // --- ParseSeederParams integration test with real seeders ---
 
 func TestParseSeederParams_RealSeeders(t *testing.T) {
-	requireBash(t)
 
 	cfg, err := config.NewBaseConfig()
 	if err != nil {
