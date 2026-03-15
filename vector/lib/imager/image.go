@@ -139,6 +139,8 @@ type IImage interface {
 	ReadOnlyVdb() (string, error)
 	// DevDir returns the matrixOS dev directory (Root).
 	DevDir() (string, error)
+	// HooksDir returns the directory where image generation hooks are placed.
+	HooksDir() (string, error)
 	// LockDir returns the configured image lock directory.
 	LockDir() (string, error)
 	// LockWaitSeconds returns the configured lock wait timeout in seconds.
