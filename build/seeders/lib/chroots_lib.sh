@@ -143,7 +143,7 @@ chroots_lib._maybe_mount_dev() {
 
         echo "Mounting tmpfs on /dev/shm inside chroot since it was not mounted by the host..." >&2
         MOUNTS+=( "/dev/shm" )
-        mount -t devshm tmpfs /dev/shm -o rw,nosuid,nodev,mode=1777
+        mount -t tmpfs devshm /dev/shm -o rw,nosuid,nodev,mode=1777
     else
         echo "/dev is already mounted on the host, skipping mounting it inside chroot." >&2
     fi
