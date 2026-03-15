@@ -193,6 +193,7 @@ release_common.check_leaking_buckets() {
 
     # Scan for PEM-encoded private keys (SSH, GPG, X.509/secureboot, EC, etc.)
     # -I skips binary files (ELF, .so, firmware) that embed PEM strings in code.
+    local self_basename="${BASH_SOURCE[0]##*/}"
     local leaking_key_files=()
     mapfile -t leaking_key_files < <(
         grep -rlFI \
@@ -200,6 +201,7 @@ release_common.check_leaking_buckets() {
             --exclude='*.go' \
             --exclude='*.pem' \
             --exclude='*.html' \
+            --exclude="${self_basename}" \
             --exclude-dir='firmware' \
             --exclude-dir='doc' \
             -e '-----BEGIN OPENSSH PRIVATE KEY-----' \
