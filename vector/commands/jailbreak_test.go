@@ -32,13 +32,22 @@ func newTestJailbreakCommand(
 	cfg *config.MockConfig,
 	runner *jailbreakRunner,
 ) (*JailbreakCommand, error) {
+	return newTestJailbreakCommandWithArgs(ot, cfg, runner, nil)
+}
+
+func newTestJailbreakCommandWithArgs(
+	ot ostree.IOstree,
+	cfg *config.MockConfig,
+	runner *jailbreakRunner,
+	args []string,
+) (*JailbreakCommand, error) {
 	cmd := &JailbreakCommand{}
 	cmd.ot = ot
 	cmd.cfg = cfg
 	cmd.StartUI()
 	cmd.run = runner
 	cmd.prompt = NewPrompter(runner.stdin, runner.stdout, runner.stderr, &cmd.UI)
-	if err := cmd.parseArgs(nil); err != nil {
+	if err := cmd.parseArgs(args); err != nil {
 		return nil, err
 	}
 	return cmd, nil
@@ -592,6 +601,109 @@ func TestJailbreakPrintTitle(t *testing.T) {
 	}
 	if !strings.Contains(output, "vector branch switch matrixos/<your branch>-full") {
 		t.Errorf("expected switch instruction in title, got: %s", output)
+	}
+}
+
+func TestJailbreakSkipDestroyConfirmationFlag(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	tmpDir := t.TempDir()
+
+	runner := testRunner()
+	runner.stat = statAllowAll
+	// Provide empty stdin — if confirmDestroy is called it will fail.
+	runner.stdin = strings.NewReader("")
+	runner.readFile = func(path string) ([]byte, error) {
+		if path == "/proc/cmdline" {
+			return []byte("BOOT_IMAGE=/vmlinuz-6.12.0 root=UUID=abc rw quiet"), nil
+		}
+		return nil, fmt.Errorf("not mocked: %s", path)
+	}
+	runner.writeFile = func(path string, data []byte, perm os.FileMode) error {
+		dir := filepath.Dir(path)
+		os.MkdirAll(filepath.Join(tmpDir, dir), 0755)
+		return os.WriteFile(filepath.Join(tmpDir, path), data, perm)
+	}
+	runner.appendFile = func(path string, data []byte) error {
+		dir := filepath.Dir(path)
+		os.MkdirAll(filepath.Join(tmpDir, dir), 0755)
+		f, err := os.OpenFile(filepath.Join(tmpDir, path), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = f.Write(data)
+		return err
+	}
+	runner.getMountInfo = func(mnt string) (*mountInfo, error) {
+		return &mountInfo{UUID: "test-uuid-" + mnt, FSType: "ext4"}, nil
+	}
+
+	var stdout bytes.Buffer
+	runner.stdout = &stdout
+
+	cmd, err := newTestJailbreakCommandWithArgs(
+		defaultTestMockOstree(), defaultTestConfig(), runner,
+		[]string{"--yolo-skip-destroy-confirmation"},
+	)
+	if err != nil {
+		t.Fatalf("newTestJailbreakCommandWithArgs failed: %v", err)
+	}
+
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("Run should succeed with --yolo-skip-destroy-confirmation, got: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "All done") {
+		t.Errorf("expected 'All done' in output, got: %s", output)
+	}
+}
+
+func TestJailbreakSkipDestroyConfirmationFlagNotSet(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	runner := testRunner()
+	runner.stat = statAllowAll
+	// Provide wrong input so confirmDestroy rejects.
+	runner.stdin = strings.NewReader("NO\n")
+
+	cmd, err := newTestJailbreakCommandWithArgs(
+		defaultTestMockOstree(), defaultTestConfig(), runner,
+		nil, // no flags
+	)
+	if err != nil {
+		t.Fatalf("newTestJailbreakCommandWithArgs failed: %v", err)
+	}
+
+	err = cmd.Run()
+	if err == nil || !strings.Contains(err.Error(), "aborted") {
+		t.Fatalf("expected aborted error without skip flag, got: %v", err)
+	}
+}
+
+func TestJailbreakParseArgsSkipDestroyConfirmation(t *testing.T) {
+	cmd := &JailbreakCommand{}
+	if err := cmd.parseArgs([]string{"--yolo-skip-destroy-confirmation"}); err != nil {
+		t.Fatalf("parseArgs failed: %v", err)
+	}
+	if !cmd.yoloSkipDestroyConfirm {
+		t.Error("expected yoloSkipDestroyConfirm to be true")
+	}
+}
+
+func TestJailbreakParseArgsSkipDestroyConfirmationDefault(t *testing.T) {
+	cmd := &JailbreakCommand{}
+	if err := cmd.parseArgs(nil); err != nil {
+		t.Fatalf("parseArgs failed: %v", err)
+	}
+	if cmd.yoloSkipDestroyConfirm {
+		t.Error("expected yoloSkipDestroyConfirm to be false by default")
 	}
 }
 
