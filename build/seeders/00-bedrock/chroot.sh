@@ -169,7 +169,7 @@ main() {
     cd /
 
     trap chroots_lib.cleanup EXIT
-    chroots_lib.maybe_mount_common_filesystems
+    chroots_lib.setup
     setup_portage_counter
 
     local phases=(
