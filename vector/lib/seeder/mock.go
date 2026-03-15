@@ -45,6 +45,8 @@ type MockSeeder struct {
 	BuildMetadataFileErr              error
 	PhasesStateDir_                   string
 	PhasesStateDirErr                 error
+	PreppersPhasesStateDir_           string
+	PreppersPhasesStateDirErr         error
 	SeederDoneFlagFilePrefix_         string
 	SeederDoneFlagFilePrefixErr       error
 	PrivateExampleGitRepo_            string
@@ -191,6 +193,9 @@ func (m *MockSeeder) BuildMetadataFile() (string, error) {
 }
 func (m *MockSeeder) PhasesStateDir() (string, error) {
 	return m.PhasesStateDir_, m.PhasesStateDirErr
+}
+func (m *MockSeeder) PreppersPhasesStateDir() (string, error) {
+	return m.PreppersPhasesStateDir_, m.PreppersPhasesStateDirErr
 }
 func (m *MockSeeder) SeederDoneFlagFilePrefix() (string, error) {
 	return m.SeederDoneFlagFilePrefix_, m.SeederDoneFlagFilePrefixErr

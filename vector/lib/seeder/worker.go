@@ -248,6 +248,20 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 		return err
 	}
 
+	lockDir, err := s.LockDir()
+	if err != nil {
+		return err
+	}
+	lockWaitSeconds, err := s.LockWaitSeconds()
+	if err != nil {
+		return err
+	}
+
+	preppersPhasesStateDir, err := s.PreppersPhasesStateDir()
+	if err != nil {
+		return err
+	}
+
 	metadataFile, err := s.BuildMetadataFile()
 	if err != nil {
 		return err
@@ -261,6 +275,9 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 	env := os.Environ()
 	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
 	env = config.FilterEnvKey(env, "SEEDER_BUILD_METADATA_FILE")
+	env = config.FilterEnvKey(env, "MATRIXOS_SEEDER_LOCK_DIR")
+	env = config.FilterEnvKey(env, "MATRIXOS_SEEDER_LOCK_WAIT_SECS")
+	env = config.FilterEnvKey(env, "MATRIXOS_PREPPERS_PHASES_STATE_DIR")
 	env = config.FilterEnvKey(env, "SEEDER_CHROOT_NAME")
 	env = config.FilterEnvKey(env, "SEEDER_CHROOTS_DIR")
 	env = config.FilterEnvKey(env, "PREFERRED_SEEDER_CHROOT_DIR")
@@ -273,6 +290,9 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 	env = append(env,
 		"MATRIXOS_DEV_DIR="+devDir,
 		"SEEDER_BUILD_METADATA_FILE="+metadataFile,
+		"MATRIXOS_SEEDER_LOCK_DIR="+lockDir,
+		"MATRIXOS_SEEDER_LOCK_WAIT_SECS="+lockWaitSeconds,
+		"MATRIXOS_PREPPERS_PHASES_STATE_DIR="+preppersPhasesStateDir,
 		"SEEDER_CHROOT_NAME="+params.ChrootName,
 		"SEEDER_CHROOTS_DIR="+params.ChrootsDir,
 		"PREFERRED_SEEDER_CHROOT_DIR="+params.PreferredChrootDir,

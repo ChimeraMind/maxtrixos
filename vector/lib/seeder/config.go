@@ -81,6 +81,10 @@ func (s *Seeder) PhasesStateDir() (string, error) {
 	return s.configItem("Seeder.ChrootSeedersPhasesStateDir")
 }
 
+func (s *Seeder) PreppersPhasesStateDir() (string, error) {
+	return s.configItem("Seeder.ChrootPreppersPhasesStateDir")
+}
+
 func (s *Seeder) SeederDoneFlagFilePrefix() (string, error) {
 	return s.configItem("Seeder.ChrootSeederDoneFlagFileNamePrefix")
 }
