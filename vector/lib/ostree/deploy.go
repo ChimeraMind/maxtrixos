@@ -282,6 +282,10 @@ func (o *Ostree) Deploy(sysroot string, bootArgs []string) error {
 	if err != nil {
 		return fmt.Errorf("cannot get last ostree commit: %w", err)
 	}
+	o.Print(
+		"Last ostree commit for ref %s in %s is %s.\n",
+		ref, repoDir, ostreeCommit,
+	)
 
 	o.Print("Initializing ostree dir structure into %s ...\n", sysroot)
 	if err := o.ostreeRun("admin", "init-fs", sysroot); err != nil {
