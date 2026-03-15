@@ -317,13 +317,6 @@ func (c *VMCommand) Run() error {
 		qemuArgs = append(qemuArgs, "-nographic")
 	}
 
-	if c.graphical {
-		qemuArgs = append(qemuArgs, "-serial", "stdio")
-		qemuArgs = append(qemuArgs, c.displayArgs()...)
-	} else {
-		qemuArgs = append(qemuArgs, "-nographic")
-	}
-
 	if !c.interactive {
 		// Inject a custom SMBIOS serial number to trigger serial console in GRUB
 		// See image/boot/*/*/*/grub.cfg
