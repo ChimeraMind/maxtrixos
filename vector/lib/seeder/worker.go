@@ -347,7 +347,6 @@ func (s *Seeder) generatePrepperEnvVars(env []string, params *SeederParams, opts
 	env = config.FilterEnvKey(env, "SEEDER_CHROOTS_DIR")
 	env = config.FilterEnvKey(env, "SEEDER_BUILD_METADATA_FILE")
 	env = config.FilterEnvKey(env, "PREFERRED_SEEDER_CHROOT_DIR")
-	env = config.FilterEnvKey(env, "USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC")
 	env = config.FilterEnvKey(env, "PREPPERS_PHASES_STATE_DIR")
 	env = config.FilterEnvKey(env, "SEEDER_GPG_KEYS_DIR")
 	env = append(env,
