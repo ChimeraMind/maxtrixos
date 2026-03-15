@@ -72,7 +72,7 @@ _maybe_initialize_matrixos_private_example() {
     fi
     local private_git_url="${MATRIXOS_PRIVATE_EXAMPLE_GIT_REPO}"
     local git_clone_args=(
-        ${MATRIXOS_SEEDER_GIT_CLONE_ARGS}
+        --depth=1
     )
     if [ ! -d "${private_repo_path}" ] || [ -z "$(ls -A "${private_repo_path}")" ]; then
         echo "${private_repo_path} does not exist or is empty. Pulling it from: ${private_git_url} ..." >&2
