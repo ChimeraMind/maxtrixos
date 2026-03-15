@@ -6,8 +6,197 @@ set -eu
 source "${MATRIXOS_DEV_DIR:-/matrixos}"/headers/env.include.sh
 source "${MATRIXOS_DEV_DIR}"/build/seeders/headers/preppersenv.include.sh
 
-source "${MATRIXOS_DEV_DIR}"/lib/fs_lib.sh
 source "${MATRIXOS_DEV_DIR}"/build/seeders/lib/seeders_lib.sh
+
+# START: Vectorized functions. These functions are now living in vector.
+# We may want to add small helper commands to vector to execute the checks
+# and not have to duplicate their logic here. Preppers library is still executed
+# outside of chroots, so we do not have a bootstrapping problem to use them here.
+
+preppers_lib.check_dir_is_root() {
+    local chroot_dir="${1}"
+    if [ -z "${chroot_dir}" ]; then
+        echo "preppers_lib.check_dir_is_root missing parameter." >&2
+        return 1
+    fi
+
+    # Safety check: Is the inode of the chroot the same as the host root?
+    if [[ $(stat -c %i "${chroot_dir}") -eq $(stat -c %i /) ]]; then
+        echo "CRITICAL ERROR: CHROOT IS MAPPED TO HOST ROOT. ABORTING." >&2
+        exit 1
+    fi
+}
+
+preppers_lib.check_active_mounts() {
+    local chroot_dir="${1}"
+    if [ -z "${chroot_dir}" ]; then
+        echo "preppers_lib.check_active_mounts missing parameter." >&2
+        return 1
+    fi
+
+    local active_mounts=
+    active_mounts=$(findmnt -rn -o TARGET --submounts --target "${chroot_dir}" \
+        | grep "^${chroot_dir}" || true)
+    if [ -n "${active_mounts}" ]; then
+        echo "[${_seeder_name}] Cannot operate sync to ${chroot_dir}. Active mounts detected:" >&2
+        echo "${active_mounts}" >&2
+        echo "Please umount them manually." >&2
+        return 1
+    fi
+}
+
+preppers_lib.check_dirs_same_filesystem() {
+    local src="${1}"
+    local dst="${2}"
+    if [ -z "${src}" ] || [ -z "${dst}" ]; then
+        echo "preppers_lib.check_dirs_same_filesystem missing parameter." >&2
+        return 1
+    fi
+
+    local dev1=
+    local dev2=
+    dev1=$(stat -c '%d' "${src}")
+    dev2=$(stat -c '%d' "${dst}")
+    [[ "${dev1}" == "${dev2}" ]]
+}
+
+preppers_lib.check_fs_capability_support() {
+    local test_dir="${1}"
+    if [ -z "${test_dir}" ]; then
+        echo "preppers_lib.check_fs_capability_support missing parameter." >&2
+        return 1
+    fi
+
+    local tmp_bin="${test_dir}/.cap_test.$$.bin"
+    local tmp_copy="${test_dir}/.cap_test.$$.copy"
+    local ret=0
+
+    # Ensure we start clean.
+    touch "${tmp_bin}"
+
+    # Try to set the capability.
+    if ! setcap 'cap_net_raw+ep' "${tmp_bin}" 2>/dev/null; then
+        echo "WARNING: System/FS does not allow setting capabilities." >&2
+        rm -f "${tmp_bin}"
+        return 1
+    fi
+
+    # Copy with archive flags.
+    cp -a "${tmp_bin}" "${tmp_copy}" 2>/dev/null
+
+    # Flexible check for the capability string.
+    if ! getcap "${tmp_copy}" | grep -q "cap_net_raw[=+]ep"; then
+        ret=1
+    fi
+
+    rm -f "${tmp_bin}" "${tmp_copy}"
+    return "${ret}"
+}
+
+preppers_lib.cp_reflink_copy_allowed() {
+    local src="${1}"
+    local dst="${2}"
+    local use_cp_flag="${3}"
+    if [ -z "${src}" ] || [ -z "${dst}" ] || [ -z "${use_cp_flag}" ]; then
+        echo "preppers_lib.cp_reflink_copy_allowed missing parameters." >&2
+        return 1
+    fi
+
+    if [ -z "${use_cp_flag}" ] || [ "${src}" = "/" ]; then
+        return 1
+    fi
+
+    preppers_lib.check_dirs_same_filesystem "${src}" "${dst}"
+    preppers_lib.check_fs_capability_support "${src}"
+    preppers_lib.check_fs_capability_support "${dst}"
+}
+
+# Verify that hardlinks are preserved between source and destination.
+# Returns 0 if hardlinks are intact, 1 if they were duplicated/broken.
+preppers_lib.check_hardlink_preservation() {
+    local src="${1}"
+    local dst="${2}"
+    if [ -z "${src}" ] || [ -z "${dst}" ]; then
+        echo "preppers_lib.check_hardlink_preservation missing parameter." >&2
+        return 1
+    fi
+
+    echo "Checking hardlink preservation from ${src} to ${dst}..."
+
+    # 1. Find files with multiple links.
+    # 2. Print Inode and Path.
+    # 3. Sort numerically by Inode so identical inodes are adjacent.
+    # 4. Use awk to find the first pair of lines where the Inode ($1) matches the previous line.
+    local test_pair
+    test_pair=$(find "${src}" -type f -links +1 -printf '%i %p\n' | sort -k1,1n | awk '
+        $1 == last_inode {
+            print last_line
+            print $0
+            exit
+        }
+        { last_inode = $1; last_line = $0 }
+    ')
+
+    if [[ -z "${test_pair}" ]]; then
+        echo "WARNING: no hardlinked files found in source. Cannot verify." >&2
+        return 0
+    fi
+
+    # Extract the paths from the pair
+    local file1_src=
+    local file2_src=
+    file1_src=$(echo "${test_pair}" | sed -n '1p' | cut -d' ' -f2-)
+    file2_src=$(echo "${test_pair}" | sed -n '2p' | cut -d' ' -f2-)
+
+    echo "  Verifying pair:"
+    echo "    Src 1: ${file1_src}"
+    echo "    Src 2: ${file2_src}"
+
+    # Map those paths to the destination
+    local rel_path1="${file1_src#$src}"
+    local rel_path2="${file2_src#$src}"
+
+    local file1_dst="${dst%/}/${rel_path1#/}"
+    local file2_dst="${dst%/}/${rel_path2#/}"
+
+    # Compare Inode numbers in the destination
+    local inode1_dst=
+    local inode2_dst=
+    inode1_dst=$(stat -c '%i' "${file1_dst}" 2>/dev/null)
+    inode2_dst=$(stat -c '%i' "${file2_dst}" 2>/dev/null)
+
+    if [[ -z "${inode1_dst}" ]] || [[ -z "${inode2_dst}" ]]; then
+        echo "ERROR: unable to determine inode information." >&2
+        return 1
+    fi
+
+    if [[ "${inode1_dst}" == "${inode2_dst}" ]]; then
+        echo "SUCCESS: hardlinks preserved (Inode: ${inode1_dst})."
+        return 0
+    else
+        echo "CRITICAL: hardlinks BROKEN! Files were duplicated." >&2
+        echo "  File 1. inode: ${inode1_dst}, file: ${file1_dst}" >&2
+        echo "  File 2. inode: ${inode2_dst}, file: ${file2_dst}" >&2
+        return 1
+    fi
+}
+
+preppers_lib.create_temp_file() {
+    local parent_dir="${1}"
+    local prefix="${2:-tmp}"
+
+    mkdir -p "${parent_dir}"
+    local new_path=
+    new_path=$(mktemp -p "${parent_dir}" "${prefix}.XXXXXXXXXX")
+
+    if [[ $? -ne 0 || -z "${new_path}" ]]; then
+        echo "${0}: failed to create temporary file" >&2
+        return 1
+    fi
+    echo "${new_path}"
+}
+
+# END: Vectorized functions.
 
 preppers_lib.get_gpg_keychain_dir() {
     local kc_dir="${MATRIXOS_SEEDER_GPG_KEYS_DIR}"
@@ -86,8 +275,8 @@ preppers_lib.sanity_check_chroot_dir() {
         mkdir -p "${chroot_dir}"
     fi
 
-    fs_lib.check_dir_is_root "${chroot_dir}"
-    fs_lib.check_active_mounts "${chroot_dir}"
+    preppers_lib.check_dir_is_root "${chroot_dir}"
+    preppers_lib.check_active_mounts "${chroot_dir}"
 
     if [ -n "${chroot_resume}" ] && ! _is_rootfs_functional "${chroot_dir}"; then
         echo "[${_seeder_name}] Root filesystem at ${chroot_dir} is NOT functional ..." >&2
@@ -266,13 +455,13 @@ preppers_lib._rsync_from_bedrock() {
 
     local use_cp="${MATRIXOS_PREPPERS_USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC}"
 
-    if fs_lib.cp_reflink_copy_allowed "${latest_bedrock}" "${chroot_dir}" "${use_cp}"; then
+    if preppers_lib.cp_reflink_copy_allowed "${latest_bedrock}" "${chroot_dir}" "${use_cp}"; then
         echo "Using experimental cp --reflink=auto copy mode ..."
         preppers_lib._cp_reflink_copy "${latest_bedrock}" "${chroot_dir}"
     else
         preppers_lib._rsync_copy "${latest_bedrock}" "${chroot_dir}"
     fi
-    fs_lib.check_hardlink_preservation "${latest_bedrock}" "${chroot_dir}"
+    preppers_lib.check_hardlink_preservation "${latest_bedrock}" "${chroot_dir}"
 
     preppers_lib.create_build_metadata_file "${chroot_dir}" "${latest_bedrock}"
 }
