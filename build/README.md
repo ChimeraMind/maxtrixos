@@ -40,7 +40,6 @@ The build process is defined by "seeders" located in `build/seeders/`. Each seed
 
 To avoid code duplication and ensure consistency, the build logic is heavily abstracted into libraries located in `build/seeders/lib/`:
 
-* **`seeders_lib.sh`**: Contains logic for the orchestrator, such as seeder detection, locking mechanisms, and execution wrappers.
 * **`preppers_lib.sh`**: Provides functions for the `prepper.sh` scripts, including GPG verification of Stage3 tarballs and safe directory handling.
 * **`chroots_lib.sh`**: The most extensive library, used by `chroot.sh`. It manages:
   * **Portage Configuration:** Setting up `make.conf`, repos, and overlays.
@@ -58,7 +57,7 @@ The build system is designed for rapid iteration:
 ## Directory Structure
 
 * `seeders/`: Contains the layer definitions (e.g., `00-bedrock`, `10-server`, `20-gnome`).
-* `seeders/lib/`: Shell libraries for seeders, preppers, and chroot operations.
+* `seeders/lib/`: Shell libraries for preppers and chroot operations.
 * `seeders/headers/`: Environment variable definitions and constants.
 
 ## Seeder Layers
@@ -66,3 +65,4 @@ The build system is designed for rapid iteration:
 * **00-bedrock**: The foundation. Starts from a Gentoo Stage3. Builds the kernel, bootloader (GRUB), and essential filesystem tools.
 * **10-server**: Adds virtualization support (libvirt), hardware drivers (NVIDIA), and system services.
 * **20-gnome**: The desktop layer. Installs GNOME Shell, GUI applications, and desktop-specific configurations.
+* **21-cosmic**: The COSMIC Desktop layer. Installs System76 COSMIC Desktop.
