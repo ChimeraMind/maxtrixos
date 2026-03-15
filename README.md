@@ -101,10 +101,10 @@ matrixOS is a hobby project created for homelab setups. It is **not** intended f
 
 matrixOS ships the following desktop environments as separate OSTree branches:
 
-| Desktop | Branch example | Notes |
-|---------|---------------|-------|
-| **GNOME** | `matrixos/amd64/gnome` | Default and most tested. |
-| **Cosmic** | `matrixos/amd64/cosmic` | [System76 COSMIC](https://system76.com/cosmic) desktop. |
+| Desktop | Branch | Notes |
+| --------- | --------------- | ------- |
+| **GNOME** | `matrixos/amd64/dev/gnome` | Default and most tested. |
+| **Cosmic** | `matrixos/amd64/dev/cosmic` | [System76 COSMIC](https://system76.com/cosmic) desktop. |
 
 Switch between desktops with `sudo vector branch switch` and reboot.
 
