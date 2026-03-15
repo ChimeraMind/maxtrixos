@@ -61,10 +61,6 @@
 # keep track of which prepper phases have been completed, to allow resuming the prepper execution.
 # This path is relative to the seed chroot dir.
 #
-# USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC=<*/1>
-# If set to 1, it tells preppers to clone parent chroots using cp --reflink=auto instead of rsync,
-# if allowed by the system and the chroots.
-#
 # SEEDER_DATE_CADENCE
 # The cadence at which seeder chroots are versioned. This is used to determine the
 # name of the chroot directory for the seeder, and to determine when to create a new
