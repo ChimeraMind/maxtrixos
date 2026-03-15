@@ -314,7 +314,7 @@ func (r *Releaser) ReleaseHook() error {
 		"MATRIXOS_DEV_DIR="+devDir,
 		"DEFAULT_PRIVATE_GIT_REPO_PATH="+defaultPrivPath,
 		"RELEASER_DEFAULT_USERNAME="+defaultUsername,
-		"MATRIXOS_OSNAME="+OSName,
+		"RELEASER_OSNAME="+OSName,
 	)
 	cmd.Stdout = r.stdout
 	cmd.Stderr = r.stderr
