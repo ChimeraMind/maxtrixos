@@ -41,6 +41,10 @@ func (s *Seeder) DeleteDotGitFromGitRepo() (bool, error) {
 	return s.cfg.GetBool("Seeder.DeleteDotGitFromGitRepo")
 }
 
+func (s *Seeder) DelegatedChrootSystemMounts() (bool, error) {
+	return s.cfg.GetBool("Seeder.DelegatedChrootSystemMounts")
+}
+
 func (s *Seeder) GitCloneArgs() (string, error) {
 	return s.configItem("Seeder.GitCloneArgs")
 }

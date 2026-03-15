@@ -74,6 +74,9 @@ type ISeeder interface {
 	// DeleteDotGitFromGitRepo returns whether to delete the .git directory from the git repository
 	// when copying it into the chroot.
 	DeleteDotGitFromGitRepo() (bool, error)
+	// DelegatedChrootSystemMounts returns whether the seeding process delegates system mounts inside chroots
+	// to the chroot.sh scripts or not.
+	DelegatedChrootSystemMounts() (bool, error)
 	// ChrootExecName returns the name of the chroot executable inside each seeder directory.
 	ChrootExecName() (string, error)
 	// ParamsExecutableName returns the name of the params executable inside each seeder directory.

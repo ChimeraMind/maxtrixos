@@ -3,7 +3,8 @@
 Golang migration:
     - [WAITING] Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
         chroot.sh code implemented. Now wait for deployment before
-        changing code vector side.
+        changing code vector side. If successful, do this also for releaser
+        and imager.
     - [WAITING] Migrate vector_builder.sh to Golang.
     - [sd-boot] Closely watch https://github.com/ostreedev/ostree/pull/3359
         This will be our trampoline to support bootc in the future.
