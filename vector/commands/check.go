@@ -7,6 +7,14 @@ import (
 	"matrixos/vector/lib/validation"
 )
 
+// environmentChecker abstracts the environment verification methods used by
+// CheckCommand.  *validation.QA satisfies this interface.
+type environmentChecker interface {
+	VerifySeederEnvironmentSetup(imageDir string) error
+	VerifyReleaserEnvironmentSetup(imageDir string) error
+	VerifyImagerEnvironmentSetup(imageDir string) error
+}
+
 // CheckCommand verifies that the host has all the required binaries
 // and directories to run the matrixOS build, release and image
 // workflows.
@@ -15,7 +23,7 @@ type CheckCommand struct {
 	UI
 	fs *flag.FlagSet
 
-	qa *validation.QA
+	qa environmentChecker
 }
 
 // NewCheckCommand creates a new CheckCommand.
