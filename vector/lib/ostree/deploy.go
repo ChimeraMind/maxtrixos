@@ -247,7 +247,7 @@ func (o *Ostree) BootedHash() (string, error) {
 }
 
 func (o *Ostree) Switch() error {
-	sysroot, err := o.Sysroot()
+	sysroot, err := o.Root()
 	if err != nil {
 		return err
 	}
