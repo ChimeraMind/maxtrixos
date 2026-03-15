@@ -2,9 +2,9 @@
 
 This directory contains the core build system for matrixOS, specifically the "seeders". Seeders are the architectural layers of the operating system, built sequentially to form the final distribution images.
 
-## The Orchestrator: `seeder`
+## The Orchestrator: `vector seeds`
 
-The heart of this directory is the `seeder` script (located at `build/seeder`). This script is responsible for orchestrating the entire build process. It is not just a simple runner; it handles:
+The heart of the build system is the `vector seeds` command (located at `vector/commands/seeds.go`). This command is responsible for orchestrating the entire build process. It is not just a simple runner; it handles:
 
 * **Dependency Management:** It detects available seeders in `build/seeders/` and executes them in the correct order (lexicographically, e.g., `00-bedrock` -> `10-server`).
 * **Environment Setup:** It prepares the build environment, ensuring necessary directories exist and permissions are correct.
@@ -14,17 +14,17 @@ The heart of this directory is the `seeder` script (located at `build/seeder`). 
 
 ### Usage
 
-While typically invoked by the high-level `dev/build.sh` or `dev/vector_builder.sh` wrappers, `seeder` can be run manually for debugging or specific build tasks:
+While typically invoked by the high-level `dev/build.sh` or `dev/vector_builder.sh` wrappers, `vector seeds` can be run manually for debugging or specific build tasks:
 
 ```bash
 # Build all seeders
-./build/seeder --verbose
+vector seeds --verbose
 
 # Build only the bedrock layer, resuming if it failed previously
-./build/seeder --only-seeders=00-bedrock --resume --verbose
+vector seeds --only-seeders=00-bedrock --resume --verbose
 
 # Skip the bedrock layer
-./build/seeder --skip-seeders=00-bedrock
+vector seeds --skip-seeders=00-bedrock
 ```
 
 ## Seeder Architecture
@@ -57,7 +57,6 @@ The build system is designed for rapid iteration:
 
 ## Directory Structure
 
-* `seeder`: The main executable script.
 * `seeders/`: Contains the layer definitions (e.g., `00-bedrock`, `10-server`, `20-gnome`).
 * `seeders/lib/`: Shell libraries for seeders, preppers, and chroot operations.
 * `seeders/headers/`: Environment variable definitions and constants.
