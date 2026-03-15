@@ -259,6 +259,10 @@ func (c *ImagesCommand) imageWorker(ref string) error {
 	im.SetStdout(stdoutWriter)
 	im.SetStderr(stderrWriter)
 
+	if err := c.detectRemotedAndPlainRefs(im.PrintError); err != nil {
+		return err
+	}
+
 	// Handle refs that contain the remote prefix (e.g. "origin:matrixos/...").
 	rr, err := c.resolveRefRemote(ref, im.PrintWarning)
 	if err != nil {

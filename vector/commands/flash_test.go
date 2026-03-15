@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -581,5 +582,76 @@ func TestResolveDevicesInteractiveCancelled(t *testing.T) {
 	// This will fail because we can't provide valid partitions via EOF.
 	if err == nil {
 		t.Fatal("Expected error from interactive with insufficient input")
+	}
+}
+
+// --- detectRemotedAndPlainRefs call-site tests ---
+
+func TestFlashDetectRemotedAndPlainRefs_Clean(t *testing.T) {
+	withRootEuid(t)
+
+	ot := &ostree.MockOstree{
+		LocalRefs_: []string{
+			"matrixos/x86_64/dev/gnome",
+			"matrixos/x86_64/dev/cosmic",
+		},
+	}
+	cfg := defaultFlashTestConfig()
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	if err != nil {
+		t.Fatalf("newTestFlashCommand failed: %v", err)
+	}
+	cmd.SetupPrinters("flash")
+
+	// No duplicates — should pass.
+	if err := cmd.detectRemotedAndPlainRefs(cmd.im.PrintError); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestFlashDetectRemotedAndPlainRefs_Ambiguous(t *testing.T) {
+	withRootEuid(t)
+
+	ot := &ostree.MockOstree{
+		LocalRefs_: []string{
+			"origin:matrixos/x86_64/dev/gnome",
+			"matrixos/x86_64/dev/gnome",
+		},
+	}
+	cfg := defaultFlashTestConfig()
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	if err != nil {
+		t.Fatalf("newTestFlashCommand failed: %v", err)
+	}
+	cmd.SetupPrinters("flash")
+
+	err = cmd.detectRemotedAndPlainRefs(cmd.im.PrintError)
+	if err == nil {
+		t.Fatal("expected error for ambiguous refs, got nil")
+	}
+	if !strings.Contains(err.Error(), "ambiguous refs detected") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestFlashDetectRemotedAndPlainRefs_LocalRefsError(t *testing.T) {
+	withRootEuid(t)
+
+	ot := &ostree.MockOstree{
+		LocalRefsErr: fmt.Errorf("localrefs failed"),
+	}
+	cfg := defaultFlashTestConfig()
+	cmd, err := newTestFlashCommand(ot, imager.DefaultMockImager(), filesystems.DefaultMockFsenc(), cfg, []string{})
+	if err != nil {
+		t.Fatalf("newTestFlashCommand failed: %v", err)
+	}
+	cmd.SetupPrinters("flash")
+
+	err = cmd.detectRemotedAndPlainRefs(cmd.im.PrintError)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to list local refs") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }

@@ -165,6 +165,36 @@ type resolveRefRemoteResult struct {
 	Remote string // resolved remote name
 }
 
+func (c *BaseCommand) detectRemotedAndPlainRefs(errf func(format string, args ...any)) error {
+	localRefs, err := c.ot.LocalRefs()
+	if err != nil {
+		return fmt.Errorf("failed to list local refs: %w", err)
+	}
+
+	duplicates := make(map[string][]string)
+	for _, r := range localRefs {
+		ref := ostree.CleanRemoteFromRef(r)
+		duplicates[ref] = append(duplicates[ref], r)
+	}
+
+	problems := false
+	for _, variants := range duplicates {
+		if len(variants) == 1 {
+			continue
+		}
+		errf(
+			"ERROR: %s exist at the same time in the local repo; this can lead to unexpected behavior.\n",
+			strings.Join(variants, ", "))
+		errf("Please remove one of these refs to avoid ambiguity using `ostree refs --delete <ref>`.\n")
+		problems = true
+	}
+
+	if problems {
+		return fmt.Errorf("ambiguous refs detected")
+	}
+	return nil
+}
+
 // resolveRefRemote checks whether ref contains a remote prefix
 // (e.g. "origin:matrixos/...").  When it does the remote is extracted,
 // a warning is emitted to warnf, and the Ostree.Remote config key is

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -316,4 +317,91 @@ func createTempFileE() (string, error) {
 
 func removeTempFile(path string) {
 	os.Remove(path)
+}
+
+// --- detectRemotedAndPlainRefs call-site tests ---
+
+func TestImagesDetectRemotedAndPlainRefs_Clean(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	ot := &ostree.MockOstree{
+		LocalRefs_: []string{
+			"matrixos/x86_64/dev/gnome",
+			"matrixos/x86_64/dev/cosmic",
+		},
+	}
+	cfg := defaultImagesTestConfig()
+	cmd, err := newTestImagesCommand(ot, cfg, []string{})
+	if err != nil {
+		t.Fatalf("newTestImagesCommand failed: %v", err)
+	}
+	cmd.SetupPrinters("images")
+
+	// No duplicates — should pass.
+	errf := func(format string, args ...any) {
+		t.Errorf("errf should not be called, got: %s", fmt.Sprintf(format, args...))
+	}
+	if err := cmd.detectRemotedAndPlainRefs(errf); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestImagesDetectRemotedAndPlainRefs_Ambiguous(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	ot := &ostree.MockOstree{
+		LocalRefs_: []string{
+			"origin:matrixos/x86_64/dev/gnome",
+			"matrixos/x86_64/dev/gnome",
+		},
+	}
+	cfg := defaultImagesTestConfig()
+	cmd, err := newTestImagesCommand(ot, cfg, []string{})
+	if err != nil {
+		t.Fatalf("newTestImagesCommand failed: %v", err)
+	}
+
+	var errMsgs []string
+	errf := func(format string, args ...any) {
+		errMsgs = append(errMsgs, fmt.Sprintf(format, args...))
+	}
+
+	err = cmd.detectRemotedAndPlainRefs(errf)
+	if err == nil {
+		t.Fatal("expected error for ambiguous refs, got nil")
+	}
+	if !strings.Contains(err.Error(), "ambiguous refs detected") {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(errMsgs) == 0 {
+		t.Error("expected error messages from errf callback")
+	}
+}
+
+func TestImagesDetectRemotedAndPlainRefs_LocalRefsError(t *testing.T) {
+	origEuid := getEuid
+	getEuid = func() int { return 0 }
+	defer func() { getEuid = origEuid }()
+
+	ot := &ostree.MockOstree{
+		LocalRefsErr: fmt.Errorf("localrefs failed"),
+	}
+	cfg := defaultImagesTestConfig()
+	cmd, err := newTestImagesCommand(ot, cfg, []string{})
+	if err != nil {
+		t.Fatalf("newTestImagesCommand failed: %v", err)
+	}
+
+	errf := func(format string, args ...any) {}
+	err = cmd.detectRemotedAndPlainRefs(errf)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to list local refs") {
+		t.Errorf("unexpected error: %v", err)
+	}
 }
