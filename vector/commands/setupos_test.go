@@ -407,7 +407,7 @@ func TestSetupOSSetupAccountsService(t *testing.T) {
 }
 
 func TestSetupOSKeymapOstree(t *testing.T) {
-	var kargsExecuted bool
+	writtenFiles := make(map[string][]byte)
 	runner := testSetupOSRunner()
 	runner.readFile = func(path string) ([]byte, error) {
 		switch path {
@@ -415,19 +415,23 @@ func TestSetupOSKeymapOstree(t *testing.T) {
 			return []byte("KEYMAP=de-latin1\n"), nil
 		case "/proc/cmdline":
 			return []byte("root=UUID=abc ostree=/ostree/boot rw"), nil
+		case "/boot/loader/entries/matrixos-boot.conf":
+			return []byte(
+				"title matrixOS\noptions root=UUID=abc rw\n",
+			), nil
 		}
 		return nil, fmt.Errorf("not mocked: %s", path)
 	}
-	runner.execCommand = func(name string, args ...string) cmdRunner {
-		if name == "ostree" && len(args) > 0 && args[0] == "admin" {
-			kargsExecuted = true
-			// Verify the args contain the keymap.
-			joined := strings.Join(args, " ")
-			if !strings.Contains(joined, "vconsole.keymap=de-latin1") {
-				t.Errorf("ostree kargs missing keymap, got: %s", joined)
-			}
-		}
-		return &mockCmdRunner{}
+	runner.writeFile = func(
+		path string, data []byte, perm os.FileMode,
+	) error {
+		writtenFiles[path] = data
+		return nil
+	}
+	runner.glob = func(pattern string) ([]string, error) {
+		return []string{
+			"/boot/loader/entries/matrixos-boot.conf",
+		}, nil
 	}
 
 	cmd := initSetupOSCmd(runner)
@@ -436,8 +440,17 @@ func TestSetupOSKeymapOstree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !kargsExecuted {
-		t.Error("expected ostree admin kargs to be executed")
+
+	blsPath := "/boot/loader/entries/matrixos-boot.conf"
+	written, ok := writtenFiles[blsPath]
+	if !ok {
+		t.Fatal("expected BLS config to be written")
+	}
+	if !strings.Contains(string(written), "vconsole.keymap=de-latin1") {
+		t.Errorf(
+			"expected keymap in BLS config, got: %s",
+			string(written),
+		)
 	}
 }
 

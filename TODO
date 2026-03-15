@@ -1,8 +1,6 @@
 # Overall TODO
 
 Golang migration:
-    - Required vector commands:
-        - Wrap ostree admin kargs edit-in-place ...
     - Fix hooks.go: testDir := filepath.Join(devDir, "image", "tests", ref)
         - create Imager.TestsDir like we created Imager.HooksDir.
     - Integrate readwrite command into ostree lib.

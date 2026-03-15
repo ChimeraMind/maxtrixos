@@ -314,8 +314,8 @@ gsettings set org.gnome.mutter experimental-features "['scale-monitor-framebuffe
 If nouveau loads despite NVIDIA drivers being present:
 
 ```shell
-ostree admin kargs edit-in-place --append-if-missing=modprobe.blacklist=nouveau
-ostree admin kargs edit-in-place --append-if-missing=rd.driver.blacklist=nouveau
+sudo vector kargs add modprobe.blacklist=nouveau
+sudo vector kargs add rd.driver.blacklist=nouveau
 ```
 
 ## 🚀 Roadmap Milestones
