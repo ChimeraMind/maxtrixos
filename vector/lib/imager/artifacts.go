@@ -288,6 +288,6 @@ func (im *Imager) ShowImageTestInfo(artifacts []string) error {
 	im.Print("How to test:\n")
 	im.Print("    # vector dev vm -image %s -memory 8G -interactive\n", im.imagePath)
 	im.Print("To move to a USB stick:\n")
-	im.Print("    xz -dc %s | dd of=/dev/sdX bs=4M conv=sparse,sync status=progress\n", im.imagePath)
+	im.Print("    xz -dc %s | dd of=/dev/sdX bs=4M conv=sparse,fsync status=progress\n", im.imagePath)
 	return nil
 }
