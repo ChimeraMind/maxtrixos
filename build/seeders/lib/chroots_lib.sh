@@ -6,6 +6,12 @@ set -eu
 # Used by maybe_mount_common_filesystems.
 MOUNTS=()
 
+chroots_lib.cleanup() {
+    # Final reap of any remaining zombies before exit.
+    wait 2>/dev/null || true
+    chroots_lib.maybe_umount_common_filesystems
+}
+
 # When running as PID 1 in a PID namespace (via unshare --pid --fork),
 # orphaned child processes (e.g. grandchildren of emerge) get re-parented
 # to us. We must reap them to prevent zombie accumulation.
@@ -23,19 +29,45 @@ chroots_lib._reap_zombies() {
     wait 2>/dev/null || true
 }
 
-chroots_lib.setup_zombie_reaper() {
-    if [ "${_ZOMBIE_REAPER_INSTALLED}" = "1" ]; then
-        return
-    fi
-    if [ "$$" = "1" ]; then
-        echo "PID 1 detected, installing SIGCHLD zombie reaper." >&2
-        trap chroots_lib._reap_zombies CHLD
-        _ZOMBIE_REAPER_INSTALLED=1
-    else
-        echo "Not PID 1 (PID=$$), skipping zombie reaper installation." >&2
-    fi
+chroots_lib.setup_cleanup() {
+    echo "Setting up EXIT trap for cleanup." >&2
+    trap chroots_lib.cleanup EXIT
 }
 
+chroots_lib.setup_zombie_reaper() {
+    echo "Installing SIGCHLD zombie reaper." >&2
+    trap chroots_lib._reap_zombies CHLD
+}
+
+chroots_lib.setup_cancellation() {
+    echo "Installing SIGTERM/SIGINT cancellation trap." >&2
+    trap 'trap - TERM INT; echo "[!] External cancellation!"; kill -TERM 0 2>/dev/null; exit 130' TERM INT
+}
+
+chroots_lib.setup() {
+    if [ "$$" = "1" ]; then
+        echo "[!] PID 1 detected. Arming namespace traps..." >&2
+
+        # Sequence A: The EXIT Trap
+        # This must be defined first so it is guaranteed to fire regardless 
+        # of whether the script ends naturally or is forced to exit by another trap.
+        trap chroots_lib.cleanup EXIT
+
+        # Sequence B: The Cancellation Trap (TERM / INT)
+        # 1. 'trap - TERM INT' immediately disarms this trap to prevent recursive loops from kill -0.
+        # 2. 'kill -TERM 0' blasts the signal to the process group, killing the foreground 'emerge'.
+        # 3. 'exit 130' terminates Bash, which automatically triggers Sequence A (EXIT).
+        chroots_lib.setup_cancellation
+
+        # Sequence C: The Zombie Trap (CHLD)
+        # Installed last so it doesn't accidentally catch background tasks spawned
+        # during the setup phase itself.
+        chroots_lib.setup_zombie_reaper
+    else
+        echo "[!] Not PID 1 (PID=$$). Skipping namespace traps." >&2
+    fi
+    chroots_lib.maybe_mount_common_filesystems
+}
 
 _get_phase_path() {
     echo "${SEEDERS_PHASES_STATE_DIR}/${1}.done"
@@ -144,12 +176,6 @@ chroots_lib.validate_matrixos_private() {
     fi
 }
 
-chroots_lib.cleanup() {
-    # Final reap of any remaining zombies before exit.
-    wait 2>/dev/null || true
-    chroots_lib.maybe_umount_common_filesystems
-}
-
 chroots_lib._maybe_mount_sys() {
     if ! mountpoint -q /sys; then
         echo "Mounting sysfs on /sys inside chroot since it was not mounted by the host..." >&2
@@ -201,11 +227,6 @@ chroots_lib.maybe_mount_common_filesystems() {
     cat /proc/self/mountinfo >&2
     echo "PID 1 is:" >&2
     readlink /proc/1/exe >&2
-}
-
-chroots_lib.setup() {
-    chroots_lib.setup_zombie_reaper
-    chroots_lib.maybe_mount_common_filesystems
 }
 
 chroots_lib.maybe_umount_common_filesystems() {
