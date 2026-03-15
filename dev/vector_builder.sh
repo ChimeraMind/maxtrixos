@@ -75,7 +75,7 @@ finish() {
         fi
         mutt -s "${subject}" "${mutt_args[@]}" -- "${mail_dest}" < /dev/null
     elif [ -z "${ARG_SEND_MAIL}" ]; then
-        echo "Not seding an email to ${mail_dest} with the build results."
+        echo "Not sending an email to ${mail_dest} with the build results."
     else
         echo "mutt not installed, not emailing ${mail_dest} with build status." >&2
     fi
