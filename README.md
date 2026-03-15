@@ -164,10 +164,10 @@ sudo vector setupOS
 
 This will:
 
-* Set the `root` password.
-* Set the user password.
-* Set the LUKS encryption password (if you used encryption).
-* Regenerate SSH host keys for security.
+- Set the `root` password.
+- Set the user password.
+- Set the LUKS encryption password (if you used encryption).
+- Regenerate SSH host keys for security.
 
 To enable Docker: `systemctl enable --now docker`.
 
@@ -209,14 +209,17 @@ Update to the latest image:
 sudo vector upgrade
 ```
 
+Useful flags: `--pretend` (preview without applying), `-y` (skip prompts), `--update-bootloader` (update bootloader binaries), `--force` (upgrade even if up to date).
+
 ### Rollbacks
 
 If an update fails, simply boot into the previous entry (`ostree:1`). To manage deployments:
 
 ```shell
-sudo vector branch deployment  # to show which deployments are available.
-sudo vector branch pin 1       # to pin deployment 1.
-sudo vector branch unpin 1     # in case you want to clean up the pinning of deployment 1.
+sudo vector branch show         # show the currently booted deployment.
+sudo vector branch deployment    # show all local deployments.
+sudo vector branch pin 1         # pin deployment 1.
+sudo vector branch unpin 1       # unpin deployment 1.
 ```
 
 ### Branch Switching
@@ -224,7 +227,9 @@ sudo vector branch unpin 1     # in case you want to clean up the pinning of dep
 List available branches and switch between them (e.g., from `gnome` to `cosmic`):
 
 ```shell
-sudo vector branch switch
+sudo vector branch remote   # list remote branches available.
+sudo vector branch local    # list local branches.
+sudo vector branch switch   # interactively switch to a new branch.
 reboot
 ```
 
@@ -233,7 +238,7 @@ reboot
 - **Temporary Mutability**: `sudo vector readwrite` (resets on upgrade). So that you can run `emerge` as much as you like (important: switch to a `*-full` OSTree branch before doing this).
 - **Permanent Jailbreak**: matrixOS is immutable by default. However, if you want full control to modify system files, compile custom kernels, or use Portage directly, you can "jailbreak" the system. This converts your immutable OSTree installation into a standard, mutable Gentoo Linux installation.
   - **Warning:** This is a **one-way process**. Once you jailbreak, you cannot go back to automatic OSTree updates. You are responsible for maintaining the system yourself.
-  - List available branches: `sudo vector branch list`
+  - List available branches: `sudo vector branch remote`
   - Switch to the `-full` branch: `sudo vector branch switch <branch>-full`
   - Run the jailbreak script: `sudo vector jailbreak`
 
@@ -290,6 +295,8 @@ The `vector` CLI also provides direct access to individual build stages:
 | `vector dev janitor` | Clean up build artifacts. |
 | `vector dev check` | Verify host has required tools/data. |
 | `vector dev vm` | Test a generated image with QEMU. |
+
+For a full list of flags on any command, run `vector <command> --help`.
 
 **Resource Requirements**: x86-64-v3 CPU, 32GB+ RAM, ~70GB Disk.
 
