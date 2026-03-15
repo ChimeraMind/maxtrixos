@@ -18,13 +18,13 @@
 #
 set -eu
 
-source "${MATRIXOS_DEV_DIR:-/matrixos}"/headers/env.include.sh
-source "${MATRIXOS_DEV_DIR}"/build/seeders/headers/seedersenv.include.sh
+source "${MATRIXOS_DEV_DIR}"/headers/env.include.sh
+source "${MATRIXOS_DEV_DIR}"/build/seeders/common/params_lib.sh
 
 # SEEDER_CHROOT_NAME=abc
 # Name of the chroot directory that should be created by default.
 # First date of the first Monday of the current week, in the past.
-SEEDER_CHROOT_NAME="server-$(seeders_env.get_chroot_date)"
+SEEDER_CHROOT_NAME="server-$(params_lib.get_chroot_date)"
 if [ "${SEEDER_CHROOT_NAME}" = "server-" ]; then
     echo "Unable to correctly set SEEDER_CHROOT_NAME in server params.sh" >&2
     exit 1

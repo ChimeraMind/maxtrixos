@@ -10,18 +10,6 @@ source "${MATRIXOS_DEV_DIR}"/lib/env_lib.sh
 # See conf/matrixos.conf for documentation on these variables.
 MATRIXOS_SEEDER_DONE_FLAG_FILE="${SEEDERS_PHASES_STATE_DIR}/${SEEDER_DONE_FLAG_FILE_PREFIX}"
 
-# MATRIXOS_SEEDER_CHROOT_DATE=
-# Overrides the default dating scheme used below "YYYYMMDD" anchored to the
-# first past monday.
-seeders_env.get_chroot_date() {
-    if [ -n "${MATRIXOS_SEEDER_CHROOT_DATE:-}" ]; then
-        echo "Overridden MATRIXOS_SEEDER_CHROOT_DATE: ${MATRIXOS_SEEDER_CHROOT_DATE}" >&2
-        echo "${MATRIXOS_SEEDER_CHROOT_DATE}"
-        return 0
-    fi
-    date -d "$(( $(date +%u) - 1 )) days ago" +%Y%m%d
-}
-
 seeders_env.get_chroot_seeder_done_flag_file() {
     local seeder_name="${1}"
     if [ -z "${seeder_name}" ]; then
