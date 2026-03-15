@@ -239,6 +239,63 @@ func TestChrootArgs_WithoutDir(t *testing.T) {
 	}
 }
 
+func TestChrootArgs_CustomChrootExec(t *testing.T) {
+	c := &ChrootCmd{
+		Cmd:        Cmd{Name: "/bin/bash", Args: []string{"-c", "ls"}},
+		ChrootExec: "/usr/local/bin/my-chroot",
+		ChrootDir:  "/mnt/root",
+	}
+	args, err := chrootArgs(c)
+	if err != nil {
+		t.Fatalf("chrootArgs: unexpected error: %v", err)
+	}
+
+	expected := []string{
+		"--pid", "--fork", "--kill-child",
+		"--mount", "--uts", "--ipc",
+		"--mount-proc=/mnt/root/proc",
+		"/usr/local/bin/my-chroot", "/mnt/root", "/bin/bash",
+		"-c", "ls",
+	}
+	if len(args) != len(expected) {
+		t.Fatalf("len(args) = %d, want %d\nargs: %v", len(args), len(expected), args)
+	}
+	for i := range expected {
+		if args[i] != expected[i] {
+			t.Errorf("args[%d] = %q, want %q", i, args[i], expected[i])
+		}
+	}
+}
+
+func TestChrootArgs_CustomChrootExecWithDir(t *testing.T) {
+	c := &ChrootCmd{
+		Cmd:        Cmd{Name: "/bin/bash", Args: []string{"-c", "ls"}, Dir: "/work"},
+		ChrootExec: "/opt/chroot-init",
+		ChrootDir:  "/mnt/root",
+	}
+	args, err := chrootArgs(c)
+	if err != nil {
+		t.Fatalf("chrootArgs: unexpected error: %v", err)
+	}
+
+	expected := []string{
+		"--pid", "--fork", "--kill-child",
+		"--mount", "--uts", "--ipc",
+		"--mount-proc=/mnt/root/proc",
+		"--wd", "/work",
+		"/opt/chroot-init", "/mnt/root", "/bin/bash",
+		"-c", "ls",
+	}
+	if len(args) != len(expected) {
+		t.Fatalf("len(args) = %d, want %d\nargs: %v", len(args), len(expected), args)
+	}
+	for i := range expected {
+		if args[i] != expected[i] {
+			t.Errorf("args[%d] = %q, want %q", i, args[i], expected[i])
+		}
+	}
+}
+
 func TestChrootArgs_NoExtraArgs(t *testing.T) {
 	c := &ChrootCmd{
 		Cmd:       Cmd{Name: "/bin/sh"},
@@ -302,6 +359,87 @@ func TestChrootRun_DelegatesToRun(t *testing.T) {
 	}
 	if captured.args[len(captured.args)-1] != "ls" {
 		t.Errorf("last arg = %q, want %q", captured.args[len(captured.args)-1], "ls")
+	}
+}
+
+func TestChrootRun_CustomChrootExec(t *testing.T) {
+	origRun := Run
+	defer func() { Run = origRun }()
+
+	var captured struct {
+		name string
+		args []string
+	}
+	Run = func(c *Cmd) error {
+		captured.name = c.Name
+		captured.args = c.Args
+		return nil
+	}
+
+	err := ChrootRun(&ChrootCmd{
+		Cmd: Cmd{
+			Name:   "/bin/bash",
+			Args:   []string{"-c", "ls"},
+			Stdout: io.Discard,
+			Stderr: io.Discard,
+		},
+		ChrootExec: "/custom/chroot-exec",
+		ChrootDir:  "/mnt",
+	})
+	if err != nil {
+		t.Fatalf("ChrootRun: unexpected error: %v", err)
+	}
+	if captured.name != "unshare" {
+		t.Errorf("command = %q, want %q", captured.name, "unshare")
+	}
+	// Verify custom ChrootExec appears in args instead of default "chroot"
+	found := false
+	for _, a := range captured.args {
+		if a == "/custom/chroot-exec" {
+			found = true
+		}
+		if a == "chroot" {
+			t.Error("default 'chroot' should not appear when ChrootExec is set")
+		}
+	}
+	if !found {
+		t.Errorf("custom ChrootExec not found in args: %v", captured.args)
+	}
+}
+
+func TestChrootOutput_CustomChrootExec(t *testing.T) {
+	origOutput := Output
+	defer func() { Output = origOutput }()
+
+	var capturedArgs []string
+	Output = func(c *Cmd) ([]byte, error) {
+		capturedArgs = c.Args
+		return []byte("ok"), nil
+	}
+
+	out, err := ChrootOutput(&ChrootCmd{
+		Cmd:        Cmd{Name: "/bin/echo"},
+		ChrootExec: "/custom/chroot-exec",
+		ChrootDir:  "/mnt",
+	})
+	if err != nil {
+		t.Fatalf("ChrootOutput: unexpected error: %v", err)
+	}
+	if string(out) != "ok" {
+		t.Errorf("output = %q, want %q", string(out), "ok")
+	}
+	// Verify custom ChrootExec appears in args instead of default "chroot"
+	found := false
+	for _, a := range capturedArgs {
+		if a == "/custom/chroot-exec" {
+			found = true
+		}
+		if a == "chroot" {
+			t.Error("default 'chroot' should not appear when ChrootExec is set")
+		}
+	}
+	if !found {
+		t.Errorf("custom ChrootExec not found in args: %v", capturedArgs)
 	}
 }
 

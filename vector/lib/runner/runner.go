@@ -105,8 +105,13 @@ func chrootArgs(c *ChrootCmd) ([]string, error) {
 	}
 	unshareArgs = append(unshareArgs, dirArgs...)
 
+	chrootExec := c.ChrootExec
+	if chrootExec == "" {
+		chrootExec = "chroot"
+	}
+
 	execArgs := []string{
-		"chroot",
+		chrootExec,
 		c.ChrootDir,
 		c.Name,
 	}
@@ -125,7 +130,23 @@ func chrootArgs(c *ChrootCmd) ([]string, error) {
 // implementations.
 type ChrootCmd struct {
 	Cmd
-	ChrootDir string // root directory for the chroot
+	// ChrootExec is the executable to run to effectively "chroot".
+	// The dumbest possible executable is just "chroot", which is also
+	// the default for ChrootCmd if ChrootExec is not set.
+	// More complex executables can be specified such that you can inject
+	// a custom init logic (e.g. a real init system, the mounting of additional
+	// filesystems, etc.) or just to interpose some custom commands before
+	// calling exec and leaving the chroot.sh script executed inside the chroot
+	// as PID 1. In this case, the chroot.sh script would be responsible for executing
+	// the actual command specified in the ChrootCmd.Name field.
+	// In the context of this toolkit, this is used mainly for bind mounting additional
+	// filesystems privately inside the chroot, leveraging mount namespaces isolated
+	// via unshare, such that we avoid leaking mounts to the host, especially when bad
+	// things happen inside the chroot and we need to clean up mounts on exit (e.g
+	// due to a SIGKILL).
+	ChrootExec string
+	// ChrootDir is the root directory for the chroot.
+	ChrootDir string
 }
 
 // ChrootRunFunc is a function type that executes a command inside a chroot
