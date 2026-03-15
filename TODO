@@ -4,8 +4,6 @@ Golang migration:
     - [WAITING] Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
         chroot.sh code implemented. Now wait for deployment before
         changing code vector side.
-    - [WAITING] Reduce dependence of env vars in chroot.sh scripts, provide all
-      env vars via vector.
     - Check releaser when using rsync, check for /dev device nodes.
     - Consider if possible to implement unshare in code.
     - move all distro flavor specific business logic out of vector (once bash
