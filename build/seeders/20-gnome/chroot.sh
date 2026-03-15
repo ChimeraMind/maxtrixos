@@ -25,8 +25,6 @@
 #
 set -eu
 
-source "${MATRIXOS_DEV_DIR}/build/seeders/headers/seedersenv.include.sh"
-
 source "${MATRIXOS_DEV_DIR}/build/seeders/lib/chroots_lib.sh"
 
 # TODO: maybe we can infer the kernel from the package list.

@@ -4,7 +4,6 @@
 set -eu
 
 source "${MATRIXOS_DEV_DIR:-/matrixos}/headers/env.include.sh"
-source "${MATRIXOS_DEV_DIR}"/build/seeders/headers/seedersenv.include.sh
 
 _get_phase_path() {
     echo "${SEEDERS_PHASES_STATE_DIR}/${1}.done"
