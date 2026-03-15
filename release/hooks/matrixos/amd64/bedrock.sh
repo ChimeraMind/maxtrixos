@@ -14,18 +14,9 @@
 # The directory path to the matrixos-toolkit repository. This is useful for sourcing
 # common functions and utilities.
 #
-# MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH=/path/to/private-git-repo
+# MATRIXOS_PRIVATE_GIT_REPO_PATH=/path/to/private-git-repo
 # The directory path to the private git repository. This directory is expected to
 # be already empty at this stage.
-#
-# REF=matrixos/amd64/bedrock
-# The cleaned and stripped ostree ref (branch) name for the current release.
-#
-# MATRIXOS_DEFAULT_USERNAME=username
-# The default user account name configured for the OS.
-#
-# MATRIXOS_OSNAME=matrixos
-# The OS name identifier.
 #
 set -e
 
