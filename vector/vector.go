@@ -26,6 +26,9 @@ Usage:
     local           list all the local OS branches available.
     switch <ref>    switch to a new OS branch from those available.
   upgrade     - system upgrade tool, wraps ostree.
+  kargs       - manage kernel boot arguments in BLS configs.
+    add <karg>...   add kernel arguments to all boot entries (skip if already present).
+    rm <karg>...    remove kernel arguments from all boot entries.
   setupOS     - setup tool, configures passwords, accounts, languages, etc.
   readwrite   - temporarily (until next upgrade) turn OS into a (mutable) read-write system.
   jailbreak   - permanently turns this system into a regular mutable Gentoo.
@@ -54,6 +57,7 @@ func main() {
 	cmds := []commands.ICommand{
 		commands.NewBranchCommand(),
 		commands.NewUpgradeCommand(),
+		commands.NewKargsCommand(),
 		commands.NewFlashCommand(),
 		commands.NewReadWriteCommand(),
 		commands.NewSetupOSCommand(),
