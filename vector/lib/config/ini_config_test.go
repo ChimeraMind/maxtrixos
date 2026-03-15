@@ -113,7 +113,7 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 	check("Seeder.DistfilesDir", filepath.Join(artifactsRootPath, "out/seeder/distfiles"))
 	check("Seeder.BinpkgsDir", filepath.Join(artifactsRootPath, "out/seeder/binpkgs"))
 	check("Seeder.PortageReposDir", filepath.Join(artifactsRootPath, "out/seeder/repos"))
-	check("Seeder.GpgKeysDir", filepath.Join(confRootPath, "out/seeder/gpg-keys"))
+	check("Seeder.GpgKeysDir", filepath.Join(artifactsRootPath, "out/seeder/gpg-keys"))
 
 	check("Releaser.LocksDir", filepath.Join(rootPath, "locks/releaser"))
 	check("Releaser.HooksDir", filepath.Join(rootPath, "release/hooks"))
