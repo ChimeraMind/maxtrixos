@@ -215,6 +215,7 @@ func newRealSeeder(devDir string) *Seeder {
 			"matrixOS.Root":                             {devDir},
 			"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
 			"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
+			"Seeder.SeedsVersioningCadence":             {"weekly"},
 		},
 		Bools: map[string]bool{},
 	}
@@ -654,6 +655,7 @@ DOWNLOAD_DIR=${DOWNLOAD_DIR}
 CHROOT_RESUME=${CHROOT_RESUME}
 STAGE3_FILE=${STAGE3_FILE}
 STAGE3_URL=${STAGE3_URL}
+SEEDER_DATE_CADENCE=${SEEDER_DATE_CADENCE}
 EOF
 `, outputFile)
 	p := filepath.Join(dir, "prepper.sh")
@@ -676,6 +678,7 @@ func newPrepperSeeder(devDir, downloadsDir, stage3URL string) *Seeder {
 			"Seeder.ChrootPreppersPhasesStateDir":       {"/build/preppers/.preppers_phases"},
 			"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
 			"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
+			"Seeder.SeedsVersioningCadence":             {"weekly"},
 		},
 		Bools: map[string]bool{},
 	}
@@ -752,6 +755,7 @@ func TestExecutePrepper_Success(t *testing.T) {
 		"CHROOT_RESUME":                        "",
 		"STAGE3_FILE":                          "stage3-amd64-latest.tar.xz",
 		"STAGE3_URL":                           "https://example.com/stage3.tar.xz",
+		"SEEDER_DATE_CADENCE":                  "weekly",
 	}
 	for k, want := range checks {
 		got := env[k]
@@ -944,6 +948,7 @@ func TestSeed_Success(t *testing.T) {
 	cfg.Items["matrixOS.Root"] = []string{"/sr/build/daily"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
+	cfg.Items["Seeder.SeedsVersioningCadence"] = []string{"weekly"}
 
 	sd := &Seeder{
 		cfg:          cfg,
@@ -977,6 +982,7 @@ func TestSeed_Success(t *testing.T) {
 	wantEnv := map[string]bool{
 		"MATRIXOS_DEV_DIR=/matrixos":                      false,
 		"SEEDERS_PHASES_STATE_DIR=/build/.seeders_phases": false,
+		"SEEDER_DATE_CADENCE=weekly":                      false,
 	}
 	for _, e := range call.Env {
 		if _, ok := wantEnv[e]; ok {
@@ -1029,17 +1035,41 @@ func TestSeed_PhasesStateDirError(t *testing.T) {
 	}
 }
 
+func TestSeed_SeedsVersioningCadenceError(t *testing.T) {
+	mr := runner.NewMockRunner()
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
+	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
+	cfg.Items["Seeder.SeedsVersioningCadence"] = []string{"invalid-cadence"}
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.Seed("/mnt/chroot", SeederInfo{ChrootExec: "/x"})
+	if err == nil {
+		t.Fatal("expected error for invalid SeedsVersioningCadence")
+	}
+}
+
 func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	// Ensure that pre-existing MATRIXOS_DEV_DIR and SEEDERS_PHASES_STATE_DIR
 	// values in the environment are overridden, not duplicated.
 	t.Setenv("MATRIXOS_DEV_DIR", "/should/be/overridden")
 	t.Setenv("SEEDERS_PHASES_STATE_DIR", "/should/also/be/overridden")
+	t.Setenv("SEEDER_DATE_CADENCE", "should-be-overridden")
 
 	mr := runner.NewMockRunner()
 	cfg := workerTestConfig()
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
+	cfg.Items["Seeder.SeedsVersioningCadence"] = []string{"daily"}
 
 	sd := &Seeder{
 		cfg:          cfg,
@@ -1059,12 +1089,16 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	// Count occurrences of each key.
 	devDirCount := 0
 	phasesCount := 0
+	cadenceCount := 0
 	for _, e := range call.Env {
 		if strings.HasPrefix(e, "MATRIXOS_DEV_DIR=") {
 			devDirCount++
 		}
 		if strings.HasPrefix(e, "SEEDERS_PHASES_STATE_DIR=") {
 			phasesCount++
+		}
+		if strings.HasPrefix(e, "SEEDER_DATE_CADENCE=") {
+			cadenceCount++
 		}
 	}
 	if devDirCount != 1 {
@@ -1073,11 +1107,15 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	if phasesCount != 1 {
 		t.Errorf("SEEDERS_PHASES_STATE_DIR appears %d times, want 1", phasesCount)
 	}
+	if cadenceCount != 1 {
+		t.Errorf("SEEDER_DATE_CADENCE appears %d times, want 1", cadenceCount)
+	}
 
 	// Verify the correct values won.
 	wantEnv := map[string]bool{
 		"MATRIXOS_DEV_DIR=/matrixos":                      false,
 		"SEEDERS_PHASES_STATE_DIR=/build/.seeders_phases": false,
+		"SEEDER_DATE_CADENCE=daily":                       false,
 	}
 	for _, e := range call.Env {
 		if _, ok := wantEnv[e]; ok {

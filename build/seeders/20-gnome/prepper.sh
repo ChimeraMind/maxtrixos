@@ -52,6 +52,11 @@
 # If set to 1, it tells preppers to clone parent chroots using cp --reflink=auto instead of rsync,
 # if allowed by the system and the chroots.
 #
+# SEEDER_DATE_CADENCE
+# The cadence at which seeder chroots are versioned. This is used to determine the
+# name of the chroot directory for the seeder, and to determine when to create a new
+# chroot or reuse an existing one.
+#
 set -eu
 
 _prepper_dir="$(dirname "${0}")"

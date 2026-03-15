@@ -23,6 +23,11 @@
 # to determine if a seeder has completed its process and the chroot is in a state
 # that can be used as a base for derived seeders.
 #
+# SEEDER_DATE_CADENCE
+# The cadence at which seeder chroots are versioned. This is used to determine the
+# name of the chroot directory for the seeder, and to determine when to create a new
+# chroot or reuse an existing one.
+#
 set -eu
 
 source "${MATRIXOS_DEV_DIR}/headers/env.include.sh"
