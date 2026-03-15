@@ -1,32 +1,55 @@
-name: WWW Edge Monitor
+name: Edge Routing Monitor
 
 on:
   schedule:
-    - cron: '0 * * * *' # Runs at minute 0 past every hour
-  workflow_dispatch:    # Allows manual triggering via the UI
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
-  probe-redirect:
+  probe-redirects:
+    name: Test Apex and WWW
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        domain: ["matrixos.org", "www.matrixos.org"]
     steps:
-      - name: Assert www.matrixos.org redirects to GitHub
+      - name: Assert 301 Redirect to GitHub
         run: |
-          TARGET_URL="https://github.com/lxnay/matrixos"
+          TARGET="https://github.com/lxnay/matrixos"
           
-          # Fetch HTTP status and the exact redirect Location header
-          RESULT=$(curl -s -o /dev/null -w "%{http_code}|%{redirect_url}" https://www.matrixos.org)
+          RESULT=$(curl -s -o /dev/null -w "%{http_code}|%{redirect_url}" https://${{ matrix.domain }})
           STATUS=$(echo "$RESULT" | cut -d'|' -f1)
           LOCATION=$(echo "$RESULT" | cut -d'|' -f2)
           
           if [ "$STATUS" != "301" ]; then
-            echo "::error::Redirect failed. Expected HTTP 301, got $STATUS"
+            echo "::error::[${{ matrix.domain }}] Expected HTTP 301, got $STATUS"
             exit 1
           fi
           
-          # Match the prefix to allow for trailing slashes
-          if [[ "$LOCATION" != "$TARGET_URL"* ]]; then
-            echo "::error::Hijacked or broken route. Expected $TARGET_URL, got $LOCATION"
+          if [[ "$LOCATION" != "$TARGET"* ]]; then
+            echo "::error::[${{ matrix.domain }}] Expected redirect to $TARGET, got $LOCATION"
+            exit 1
+          fi
+
+  probe-subdomains:
+    name: Test Infrastructure Subdomains
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        subdomain: ["images.matrixos.org", "ostree.matrixos.org"]
+    steps:
+      - name: Assert Subdomain is healthy
+        run: |
+          TARGET="https://github.com/lxnay/matrixos"
+          
+          RESULT=$(curl -s -o /dev/null -w "%{http_code}|%{redirect_url}" https://${{ matrix.subdomain }})
+          STATUS=$(echo "$RESULT" | cut -d'|' -f1)
+          LOCATION=$(echo "$RESULT" | cut -d'|' -f2)
+          
+          # If it returns a 301 to our GitHub repo, the apex rule leaked
+          if [ "$STATUS" == "301" ] && [[ "$LOCATION" == "$TARGET"* ]]; then
+            echo "::error::CRITICAL: ${{ matrix.subdomain }} is not responding with 301 and expected Location"
             exit 1
           fi
           
-          echo "Success: Edge returned $STATUS and routed to $LOCATION"
+          echo "Success: ${{ matrix.subdomain }} routed correctly (Status: $STATUS)"
