@@ -313,7 +313,7 @@ func (r *Releaser) ReleaseHook() error {
 		"CHROOT_DIR="+r.imageDir,
 		"MATRIXOS_DEV_DIR="+devDir,
 		"DEFAULT_PRIVATE_GIT_REPO_PATH="+defaultPrivPath,
-		"MATRIXOS_DEFAULT_USERNAME="+defaultUsername,
+		"RELEASER_DEFAULT_USERNAME="+defaultUsername,
 		"MATRIXOS_OSNAME="+OSName,
 	)
 	cmd.Stdout = r.stdout
