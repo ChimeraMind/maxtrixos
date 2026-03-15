@@ -1,6 +1,23 @@
 #!/bin/bash
-# Actual entry point for execution inside chroot. This file is only executed inside the
-# seeding chroot.
+# This is the main script that is executed inside the chroot for a seeder.
+# It is responsible for executing the different phases of the seeding process, and
+# for keeping track of which phases have been completed, so that if the process
+# is interrupted, it can be resumed from the last completed phase.
+# At the end of the process, the chroot should be in a state where it can be used as
+# a base for derived seeders, or for generating artifacts (like a bootable image, a
+# Content Delivery System release, etc).
+#
+# Variables exported by the worker (vector/lib/seeder/worker.go) and available in
+# the environment:
+#
+# MATRIXOS_DEV_DIR
+# The path to the matrixOS dev directory from within the chroot, which is the root of the
+# matrixOS repository, and the main directory where seeders should read/write data.
+#
+# SEEDERS_PHASES_STATE_DIR: the path to the directory where seeders can read/write files to
+# keep track of which phases have been completed. This is used by the chroot.sh scripts
+# to implement idempotency and resumability.
+#
 set -eu
 
 source "${MATRIXOS_DEV_DIR}/build/seeders/headers/seedersenv.include.sh"

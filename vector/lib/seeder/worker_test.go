@@ -962,6 +962,7 @@ func TestSeed_Success(t *testing.T) {
 	cfg := workerTestConfig()
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
 	cfg.Items["matrixOS.Root"] = []string{"/sr/build/daily"}
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 
 	sd := &Seeder{
 		cfg:          cfg,
@@ -991,16 +992,20 @@ func TestSeed_Success(t *testing.T) {
 		t.Errorf("ChrootDir = %q, want %q", call.ChrootDir, "/mnt/chroot")
 	}
 
-	// Verify MATRIXOS_DEV_DIR is in the env.
-	found := false
+	// Verify expected env vars are present.
+	wantEnv := map[string]bool{
+		"MATRIXOS_DEV_DIR=/matrixos":                      false,
+		"SEEDERS_PHASES_STATE_DIR=/build/.seeders_phases": false,
+	}
 	for _, e := range call.Env {
-		if e == "MATRIXOS_DEV_DIR=/matrixos" {
-			found = true
-			break
+		if _, ok := wantEnv[e]; ok {
+			wantEnv[e] = true
 		}
 	}
-	if !found {
-		t.Error("MATRIXOS_DEV_DIR=/matrixos not found in env")
+	for env, found := range wantEnv {
+		if !found {
+			t.Errorf("%s not found in env", env)
+		}
 	}
 }
 
@@ -1023,10 +1028,92 @@ func TestSeed_DefaultDevDirError(t *testing.T) {
 	}
 }
 
+func TestSeed_PhasesStateDirError(t *testing.T) {
+	mr := runner.NewMockRunner()
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{""} // empty → error
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	err := sd.Seed("/mnt/chroot", SeederInfo{ChrootExec: "/x"})
+	if err == nil {
+		t.Fatal("expected error for empty PhasesStateDir")
+	}
+}
+
+func TestSeed_FiltersExistingEnvVars(t *testing.T) {
+	// Ensure that pre-existing MATRIXOS_DEV_DIR and SEEDERS_PHASES_STATE_DIR
+	// values in the environment are overridden, not duplicated.
+	t.Setenv("MATRIXOS_DEV_DIR", "/should/be/overridden")
+	t.Setenv("SEEDERS_PHASES_STATE_DIR", "/should/also/be/overridden")
+
+	mr := runner.NewMockRunner()
+	cfg := workerTestConfig()
+	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
+
+	sd := &Seeder{
+		cfg:          cfg,
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	info := SeederInfo{ChrootChrootExec: "/matrixos/build/seeders/00-bedrock/chroot.sh"}
+	if err := sd.Seed("/mnt/chroot", info); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+
+	call := mr.Calls[0]
+
+	// Count occurrences of each key.
+	devDirCount := 0
+	phasesCount := 0
+	for _, e := range call.Env {
+		if strings.HasPrefix(e, "MATRIXOS_DEV_DIR=") {
+			devDirCount++
+		}
+		if strings.HasPrefix(e, "SEEDERS_PHASES_STATE_DIR=") {
+			phasesCount++
+		}
+	}
+	if devDirCount != 1 {
+		t.Errorf("MATRIXOS_DEV_DIR appears %d times, want 1", devDirCount)
+	}
+	if phasesCount != 1 {
+		t.Errorf("SEEDERS_PHASES_STATE_DIR appears %d times, want 1", phasesCount)
+	}
+
+	// Verify the correct values won.
+	wantEnv := map[string]bool{
+		"MATRIXOS_DEV_DIR=/matrixos":                      false,
+		"SEEDERS_PHASES_STATE_DIR=/build/.seeders_phases": false,
+	}
+	for _, e := range call.Env {
+		if _, ok := wantEnv[e]; ok {
+			wantEnv[e] = true
+		}
+	}
+	for env, found := range wantEnv {
+		if !found {
+			t.Errorf("%s not found in env", env)
+		}
+	}
+}
+
 func TestSeed_ChrootRunnerError(t *testing.T) {
 	mr := runner.NewMockRunnerFailOnCall(0, fmt.Errorf("chroot boom"))
 	cfg := workerTestConfig()
 	cfg.Items["matrixOS.DefaultRoot"] = []string{"/matrixos"}
+	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 
 	sd := &Seeder{
 		cfg:          cfg,
