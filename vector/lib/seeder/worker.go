@@ -284,9 +284,9 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 	env := os.Environ()
 	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
 	env = config.FilterEnvKey(env, "SEEDER_BUILD_METADATA_FILE")
-	env = config.FilterEnvKey(env, "MATRIXOS_SEEDER_LOCK_DIR")
-	env = config.FilterEnvKey(env, "MATRIXOS_SEEDER_LOCK_WAIT_SECS")
-	env = config.FilterEnvKey(env, "MATRIXOS_PREPPERS_PHASES_STATE_DIR")
+	env = config.FilterEnvKey(env, "SEEDER_LOCK_DIR")
+	env = config.FilterEnvKey(env, "SEEDER_LOCK_WAIT_SECS")
+	env = config.FilterEnvKey(env, "PREPPERS_PHASES_STATE_DIR")
 	env = config.FilterEnvKey(env, "USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC")
 	env = config.FilterEnvKey(env, "SEEDER_CHROOT_NAME")
 	env = config.FilterEnvKey(env, "SEEDER_CHROOTS_DIR")
@@ -300,9 +300,9 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 	env = append(env,
 		"MATRIXOS_DEV_DIR="+devDir,
 		"SEEDER_BUILD_METADATA_FILE="+metadataFile,
-		"MATRIXOS_SEEDER_LOCK_DIR="+lockDir,
-		"MATRIXOS_SEEDER_LOCK_WAIT_SECS="+lockWaitSeconds,
-		"MATRIXOS_PREPPERS_PHASES_STATE_DIR="+preppersPhasesStateDir,
+		"SEEDER_LOCK_DIR="+lockDir,
+		"SEEDER_LOCK_WAIT_SECS="+lockWaitSeconds,
+		"PREPPERS_PHASES_STATE_DIR="+preppersPhasesStateDir,
 		"USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC="+useCpReflinkStr,
 		"SEEDER_CHROOT_NAME="+params.ChrootName,
 		"SEEDER_CHROOTS_DIR="+params.ChrootsDir,
