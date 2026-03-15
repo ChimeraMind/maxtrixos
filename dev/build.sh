@@ -18,7 +18,7 @@ fi
 source "${MATRIXOS_DEV_DIR}"/headers/env.include.sh
 source "${MATRIXOS_DEV_DIR}"/build/seeders/headers/seedersenv.include.sh
 
-source "${MATRIXOS_DEV_DIR}/build/seeders/lib/seeders_lib.sh"
+export MATRIXOS_DEV_DIR
 
 _is_help_arg() {
     local arg="${1:-}"
@@ -61,6 +61,38 @@ _root_privs() {
     if [ "${uid}" != "0" ]; then
         echo "Run ${0} as root." >&2
         return 1
+    fi
+}
+
+_maybe_initialize_matrixos_private_example() {
+    local private_repo_path="${1}"
+    if [ -z "${private_repo_path}" ]; then
+        echo "matrixOS private repo path is not set." >&2
+        return 1
+    fi
+    local private_git_url="${MATRIXOS_PRIVATE_EXAMPLE_GIT_REPO}"
+    local git_clone_args=(
+        ${MATRIXOS_SEEDER_GIT_CLONE_ARGS}
+    )
+    if [ ! -d "${private_repo_path}" ] || [ -z "$(ls -A "${private_repo_path}")" ]; then
+        echo "${private_repo_path} does not exist or is empty. Pulling it from: ${private_git_url} ..." >&2
+        mkdir -p "${private_repo_path}"
+        git clone "${git_clone_args[@]}" "${private_git_url}" "${private_repo_path}"
+        (
+            cd "${private_repo_path}"
+            ./make.sh
+        )
+    elif [ ! -d "${private_repo_path}/.git" ]; then
+        echo "${private_repo_path} must be a git repo" >&2
+        return 1
+    else
+        (
+            cd "${private_repo_path}"
+            if [ ! -e .built ]; then
+                echo "Updating ${private_repo_path} ..."
+                ./make.sh
+            fi
+        )
     fi
 }
 
