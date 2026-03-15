@@ -434,6 +434,9 @@ release_lib.release_hook() {
     (
         export MATRIXOS_DEV_DIR
         export MATRIXOS_DEFAULT_PRIVATE_GIT_REPO_PATH
+        export MATRIXOS_DEFAULT_USERNAME
+        export MATRIXOS_OSNAME
+        export REF="${branch}"
         export CHROOT_DIR="${imagedir}"
         "${hook_exec}"
     )

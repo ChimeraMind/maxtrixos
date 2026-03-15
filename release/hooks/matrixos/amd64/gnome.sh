@@ -18,6 +18,15 @@
 # The directory path to the private git repository. This directory is expected to
 # be already empty at this stage.
 #
+# REF=matrixos/amd64/gnome
+# The cleaned and stripped ostree ref (branch) name for the current release.
+#
+# MATRIXOS_DEFAULT_USERNAME=username
+# The default user account name configured for the OS.
+#
+# MATRIXOS_OSNAME=matrixos
+# The OS name identifier.
+#
 set -e
 
 source "${MATRIXOS_DEV_DIR}/release/hooks/matrixos/amd64/common.sh"
