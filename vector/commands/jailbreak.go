@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -9,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
 )
@@ -138,9 +136,10 @@ func getMountInfoFromSystem(mnt string) (*mountInfo, error) {
 type JailbreakCommand struct {
 	BaseCommand
 	UI
-	fs     *flag.FlagSet
-	run    *jailbreakRunner
-	prompt *Prompter
+	fs                    *flag.FlagSet
+	run                   *jailbreakRunner
+	prompt                *Prompter
+	yoloSkipFullBranchChk bool
 }
 
 // NewJailbreakCommand creates a new JailbreakCommand.
@@ -237,9 +236,6 @@ func (c *JailbreakCommand) Run() error {
 	if err := c.cleanConfig(sysroot, bootRoot, efiRoot); err != nil {
 		return err
 	}
-	if err := c.syncPortage(sysroot); err != nil {
-		return err
-	}
 	if err := c.cleanPackages(sysroot); err != nil {
 		return err
 	}
@@ -292,8 +288,10 @@ func (c *JailbreakCommand) sanityChecks(sysroot, bootRoot, efiRoot, fullSuffix s
 	if err := c.checkSysrootExists(sysroot); err != nil {
 		return err
 	}
-	if err := c.checkOnFullBranch(fullSuffix); err != nil {
-		return err
+	if !c.yoloSkipFullBranchChk {
+		if err := c.checkOnFullBranch(fullSuffix); err != nil {
+			return err
+		}
 	}
 	if err := c.checkVdbExists(fullSuffix); err != nil {
 		return err
@@ -553,7 +551,7 @@ func (c *JailbreakCommand) bootloaderSetup(bootRoot string) error {
 		return err
 	}
 
-	bootKernelPath, initramfsBootPath, err := c.copyKernelAndInitramfs(bootedKernel, bootRoot)
+	bootKernelPath, initramfsBootPath, err := c.copyKernelAndInitramfs(bootedKernel)
 	if err != nil {
 		return err
 	}
@@ -604,7 +602,7 @@ func (c *JailbreakCommand) resolveKernelPath(bootedKernel string) (string, error
 
 // copyKernelAndInitramfs copies the kernel and (if found) the matching
 // initramfs to /boot, returning the destination paths.
-func (c *JailbreakCommand) copyKernelAndInitramfs(bootedKernel, bootRoot string) (bootKernelPath, initramfsBootPath string, err error) {
+func (c *JailbreakCommand) copyKernelAndInitramfs(bootedKernel string) (bootKernelPath, initramfsBootPath string, err error) {
 	fmt.Fprintf(c.run.stdout, "%s%sCopying booted kernel ...%s\n",
 		c.cBold, c.iconGear, c.cReset)
 
@@ -789,61 +787,6 @@ func (c *JailbreakCommand) cleanConfigSetupSecurebootKeys(efiRoot string) error 
 	if err := opensslCmd.Run(); err != nil {
 		fmt.Fprintf(c.run.stderr, "%s%sFailed to generate MOK file: %v%s\n",
 			c.cYellow, c.iconWarn, err, c.cReset)
-	}
-
-	return nil
-}
-
-func (c *JailbreakCommand) syncPortage(sysroot string) error {
-	fmt.Fprintf(c.run.stdout, "%s%sLet me prep the Portage tree for ya... Downloading Portage ...%s\n",
-		c.cBold, c.iconDownload, c.cReset)
-
-	// emerge-webrsync (best effort).
-	webrsyncCmd := c.run.execCommand("emerge-webrsync")
-	webrsyncCmd.SetStdout(c.run.stdout)
-	webrsyncCmd.SetStderr(c.run.stderr)
-	webrsyncCmd.Run() // best effort
-
-	// Clone overlay repositories that use git.
-	reposConfPath := filepath.Join(sysroot, "etc", "portage", "repos.conf", "eselect-repo.conf")
-	reposData, err := c.run.readFile(reposConfPath)
-	if err != nil {
-		fmt.Fprintf(c.run.stderr, "%s%sCannot read repos config: %v%s\n",
-			c.cYellow, c.iconWarn, err, c.cReset)
-		return nil
-	}
-
-	ini, err := config.ParseIni(bytes.NewReader(reposData))
-	if err != nil {
-		fmt.Fprintf(c.run.stderr, "%s%sCannot parse repos config: %v%s\n",
-			c.cYellow, c.iconWarn, err, c.cReset)
-		return nil
-	}
-
-	for section, items := range ini {
-		if section == "" {
-			continue
-		}
-		if items["sync-type"] != "git" {
-			fmt.Fprintf(c.run.stderr, "%s%sRepository %s does not use git. Not supported...%s\n",
-				c.cYellow, c.iconWarn, section, c.cReset)
-			continue
-		}
-		repoDir := items["location"]
-		gitURL := items["sync-uri"]
-		if repoDir == "" || gitURL == "" {
-			continue
-		}
-
-		fmt.Fprintf(c.run.stdout, "%s%sCloning %s into %s for %s ...%s\n",
-			c.cBlue, c.iconDownload, gitURL, repoDir, section, c.cReset)
-		gitCmd := c.run.execCommand(
-			"git", "clone", "--depth", "1", gitURL,
-			filepath.Join(sysroot, repoDir),
-		)
-		gitCmd.SetStdout(c.run.stdout)
-		gitCmd.SetStderr(c.run.stderr)
-		gitCmd.Run() // best effort
 	}
 
 	return nil
