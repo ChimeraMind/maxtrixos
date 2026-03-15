@@ -164,6 +164,9 @@ chroots_lib.maybe_mount_common_filesystems() {
     chroots_lib._maybe_mount_sys
     chroots_lib._maybe_mount_dev
     chroots_lib._maybe_mount_run_lock
+    echo "Mounted common filesystems inside chroot: ${MOUNTS[*]}" >&2
+    echo "Dump of /proc/self/mountinfo:" >&2
+    cat /proc/self/mountinfo >&2
 }
 
 chroots_lib.maybe_umount_common_filesystems() {
