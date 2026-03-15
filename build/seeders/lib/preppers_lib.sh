@@ -24,6 +24,7 @@ preppers_lib.check_dir_is_root() {
 
 preppers_lib.check_active_mounts() {
     local chroot_dir="${1}"
+    local seeder_name="${2:-unknown}"
     if [ -z "${chroot_dir}" ]; then
         echo "preppers_lib.check_active_mounts missing parameter." >&2
         return 1
@@ -33,7 +34,7 @@ preppers_lib.check_active_mounts() {
     active_mounts=$(findmnt -rn -o TARGET --submounts --target "${chroot_dir}" \
         | grep "^${chroot_dir}" || true)
     if [ -n "${active_mounts}" ]; then
-        echo "[${_seeder_name}] Cannot operate sync to ${chroot_dir}. Active mounts detected:" >&2
+        echo "[${seeder_name}] Cannot operate sync to ${chroot_dir}. Active mounts detected:" >&2
         echo "${active_mounts}" >&2
         echo "Please umount them manually." >&2
         return 1
@@ -232,12 +233,13 @@ _is_rootfs_functional() {
 
 _move_chroot_dir_away() {
     local chroot_dir="${1}"
+    local seeder_name="${2}"
     echo
     local tmp_chroot_name
     tmp_chroot_name=$(basename "${chroot_dir}")
     local tmp_chroot_dir
     tmp_chroot_dir=$(mktemp -d --suffix="${tmp_chroot_name}" --tmpdir="$(dirname "${chroot_dir}")")
-    echo "[${_seeder_name}] Executing mv ${chroot_dir} ${tmp_chroot_dir} ... in another 5 seconds ..."
+    echo "[${seeder_name}] Executing mv ${chroot_dir} ${tmp_chroot_dir} ... in another 5 seconds ..."
     sleep 5
     mv "${chroot_dir}" "${tmp_chroot_dir}"
     mkdir -p "${chroot_dir}"
@@ -246,7 +248,7 @@ _move_chroot_dir_away() {
 preppers_lib.sanity_check_chroot_dir() {
     local chroot_dir="${1}"
     local chroot_resume="${2}"
-    local _seeder_name="${3}"
+    local seeder_name="${3}"
 
     if [ -z "${chroot_dir}" ]; then
         echo "Missing parameter to server prepper" >&2
@@ -263,36 +265,36 @@ preppers_lib.sanity_check_chroot_dir() {
     fi
 
     preppers_lib.check_dir_is_root "${chroot_dir}"
-    preppers_lib.check_active_mounts "${chroot_dir}"
+    preppers_lib.check_active_mounts "${chroot_dir}" "${seeder_name}"
 
     if [ -n "${chroot_resume}" ] && ! _is_rootfs_functional "${chroot_dir}"; then
-        echo "[${_seeder_name}] Root filesystem at ${chroot_dir} is NOT functional ..." >&2
-        echo "[${_seeder_name}] But you asked me to resume. You! So, what I am going to do is ..." >&2
-        echo "[${_seeder_name}] Moving everything to a temp dir and starting over, in 10 seconds ..." >&2
+        echo "[${seeder_name}] Root filesystem at ${chroot_dir} is NOT functional ..." >&2
+        echo "[${seeder_name}] But you asked me to resume. You! So, what I am going to do is ..." >&2
+        echo "[${seeder_name}] Moving everything to a temp dir and starting over, in 10 seconds ..." >&2
         local c=
         for c in {1..10}; do
             echo -en "${c}."
             sleep 1
         done
-        _move_chroot_dir_away "${chroot_dir}"
+        _move_chroot_dir_away "${chroot_dir}" "${seeder_name}"
 
     elif [ -n "${chroot_resume}" ] && [ -d "${chroot_dir}" ]; then
-        echo "[${_seeder_name}] Attempting to resume seeder in chroot: ${chroot_dir} ..."
+        echo "[${seeder_name}] Attempting to resume seeder in chroot: ${chroot_dir} ..."
         return 0
     elif [ -n "${chroot_resume}" ] && [ ! -d "${chroot_dir}" ]; then
-        echo "[${_seeder_name}] Requested a chroot resume but chroot dir: ${chroot_dir} does not exist." >&2
+        echo "[${seeder_name}] Requested a chroot resume but chroot dir: ${chroot_dir} does not exist." >&2
         return 1
     elif [ -z "${chroot_resume}" ] && [ -d "${chroot_dir}" ] && [ -x "${chroot_dir}/bin/ls" ]; then
-        echo "[${_seeder_name}] ${chroot_dir} exists and seems to be populated, while resume mode is not set." >&2
-        echo "[${_seeder_name}] This seems a very suspicious situation, but I will continue nonetheless in 10 seconds." >&2
-        echo "[${_seeder_name}] Press CTRL+C NOW if you think you made a mistake." >&2
-        echo "[${_seeder_name}] Moving everything to a temp dir and starting over, in 10 seconds..."
+        echo "[${seeder_name}] ${chroot_dir} exists and seems to be populated, while resume mode is not set." >&2
+        echo "[${seeder_name}] This seems a very suspicious situation, but I will continue nonetheless in 10 seconds." >&2
+        echo "[${seeder_name}] Press CTRL+C NOW if you think you made a mistake." >&2
+        echo "[${seeder_name}] Moving everything to a temp dir and starting over, in 10 seconds..."
         local c=
         for c in {1..10}; do
             echo -en "${c}."
             sleep 1
         done
-        _move_chroot_dir_away "${chroot_dir}"
+        _move_chroot_dir_away "${chroot_dir}" "${seeder_name}"
     fi
 
 }
