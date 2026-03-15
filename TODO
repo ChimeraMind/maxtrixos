@@ -6,7 +6,6 @@ Golang migration:
         changing code vector side.
     - [WAITING] Reduce dependence of env vars in chroot.sh scripts, provide all
       env vars via vector.
-    - Add support of ostree admin post-copy in imager (right before umounting)
     - Check releaser when using rsync, check for /dev device nodes.
     - Consider if possible to implement unshare in code.
     - move all distro flavor specific business logic out of vector (once bash
