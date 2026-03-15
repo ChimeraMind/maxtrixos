@@ -105,12 +105,11 @@ GpgOfficialPublicKey=pubkeys/ostree.gpg
 
 	check("Seeder.SeedersDir", filepath.Join(rootPath, "build/seeders"))
 	check("Seeder.LocksDir", filepath.Join(rootPath, "locks/seeder"))
-	// Relative to matrixOS.ArtifactsRoot
-	check("Seeder.DownloadsDir", filepath.Join(artifactsRootPath, "out/seeder/downloads"))
-	check("Seeder.DistfilesDir", filepath.Join(artifactsRootPath, "out/seeder/distfiles"))
-	check("Seeder.BinpkgsDir", filepath.Join(artifactsRootPath, "out/seeder/binpkgs"))
-	check("Seeder.PortageReposDir", filepath.Join(artifactsRootPath, "out/seeder/repos"))
-	check("Seeder.GpgKeysDir", filepath.Join(artifactsRootPath, "out/seeder/gpg-keys"))
+	check("Seeder.DownloadsDir", filepath.Join(rootPath, "out/seeder/downloads"))
+	check("Seeder.DistfilesDir", filepath.Join(rootPath, "out/seeder/distfiles"))
+	check("Seeder.BinpkgsDir", filepath.Join(rootPath, "out/seeder/binpkgs"))
+	check("Seeder.PortageReposDir", filepath.Join(rootPath, "out/seeder/repos"))
+	check("Seeder.GpgKeysDir", filepath.Join(confRootPath, "out/seeder/gpg-keys"))
 
 	check("Releaser.LocksDir", filepath.Join(rootPath, "locks/releaser"))
 	check("Releaser.HooksDir", filepath.Join(rootPath, "release/hooks"))
