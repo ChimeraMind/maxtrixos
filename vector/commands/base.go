@@ -3,8 +3,10 @@ package commands
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/ostree"
+	"regexp"
 	"strings"
 )
 

@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -142,15 +141,12 @@ type SetupOSCommand struct {
 	run *setupOSRunner
 
 	// Flags.
-	skipPasswords bool
-	usernameFlag  string
+	skipEncryption bool
+	skipPasswords  bool
+	usernameFlag   string
 
-	// State carried between steps.
-	usernameAfterChange string
-
-	// scanner is shared across all askInput calls so that buffered
-	// input from stdin is not lost between prompts.
-	scanner *bufio.Scanner
+	// prompt handles interactive user input.
+	prompt *Prompter
 }
 
 // NewSetupOSCommand creates a new SetupOSCommand
@@ -173,12 +169,13 @@ func (c *SetupOSCommand) Init(args []string) error {
 
 	c.StartUI()
 	c.run = defaultSetupOSRunner()
-	c.scanner = bufio.NewScanner(c.run.stdin)
+	c.prompt = NewPrompter(c.run.stdin, c.run.stdout, c.run.stderr, &c.UI)
 	return nil
 }
 
 func (c *SetupOSCommand) parseArgs(args []string) error {
 	c.fs = flag.NewFlagSet("setupOS", flag.ContinueOnError)
+	c.fs.BoolVar(&c.skipEncryption, "skip-encryption", false, "Skip disk encryption password change step")
 	c.fs.BoolVar(&c.skipPasswords, "skip-passwords", false, "Skip username change, user password and root password steps")
 	c.fs.StringVar(&c.usernameFlag, "username", "", "Set the username directly without prompting (useful with --skip-passwords)")
 	c.fs.Usage = func() {
@@ -244,37 +241,44 @@ func (c *SetupOSCommand) Run() error {
 
 	// Step 1: LUKS password
 	fmt.Fprintf(c.run.stdout, "%s%sStep 1: Disk Encryption%s\n", c.cBold, c.iconGear, c.cReset)
-	if err := c.changeLuksPassword(); err != nil {
-		return fmt.Errorf("LUKS password change failed: %w", err)
+	if c.skipEncryption {
+		fmt.Fprintf(c.run.stdout, "   %s%sSkipping disk encryption (--skip-encryption).%s\n",
+			c.cBlue, c.iconCheck, c.cReset)
+	} else {
+		if err := c.changeLuksPassword(); err != nil {
+			return fmt.Errorf("LUKS password change failed: %w", err)
+		}
 	}
 	fmt.Fprintln(c.run.stdout)
 
+	// Resolve the effective username for later steps.
+	username := defaultUsername
 	if c.usernameFlag != "" {
-		c.usernameAfterChange = c.usernameFlag
-	} else {
-		c.usernameAfterChange = defaultUsername
+		username = c.usernameFlag
 	}
 
 	if c.skipPasswords {
 		fmt.Fprintf(c.run.stdout, "   %s%sSkipping steps 2-4 (--skip-passwords), username=%s.%s\n\n",
-			c.cBlue, c.iconCheck, c.usernameAfterChange, c.cReset)
+			c.cBlue, c.iconCheck, username, c.cReset)
 	} else {
 		// Step 2: Username change
 		if c.usernameFlag == "" {
 			fmt.Fprintf(c.run.stdout, "%s%sStep 2: User Account%s\n", c.cBold, c.iconGear, c.cReset)
-			if err := c.changeUsername(defaultUsername); err != nil {
+			newName, err := c.changeUsername(defaultUsername)
+			if err != nil {
 				return fmt.Errorf("username change failed: %w", err)
 			}
+			username = newName
 		} else {
 			fmt.Fprintf(c.run.stdout, "%s%sStep 2: User Account (--username=%s)%s\n", c.cBold, c.iconGear, c.usernameFlag, c.cReset)
 			fmt.Fprintf(c.run.stdout, "   %s%sUsing provided username: %s%s\n",
-				c.cBlue, c.iconCheck, c.usernameAfterChange, c.cReset)
+				c.cBlue, c.iconCheck, username, c.cReset)
 		}
 		fmt.Fprintln(c.run.stdout)
 
 		// Step 3: User password
 		fmt.Fprintf(c.run.stdout, "%s%sStep 3: User Password%s\n", c.cBold, c.iconGear, c.cReset)
-		if err := c.changeUserPassword(c.usernameAfterChange); err != nil {
+		if err := c.changeUserPassword(username); err != nil {
 			return fmt.Errorf("user password change failed: %w", err)
 		}
 		fmt.Fprintln(c.run.stdout)
@@ -289,7 +293,7 @@ func (c *SetupOSCommand) Run() error {
 
 	// Step 5: Localization
 	fmt.Fprintf(c.run.stdout, "%s%sStep 5: Localization%s\n", c.cBold, c.iconGear, c.cReset)
-	if err := c.setupLocalization(efiRoot, jailbrokenEntry); err != nil {
+	if err := c.setupLocalization(username, jailbrokenEntry); err != nil {
 		return fmt.Errorf("localization setup failed: %w", err)
 	}
 	fmt.Fprintln(c.run.stdout)
@@ -315,74 +319,50 @@ func (c *SetupOSCommand) Run() error {
 	return nil
 }
 
-// askInput prompts the user for input with a default value and optional regex validation.
-// Returns the user's input or the default value if empty input is given.
-func (c *SetupOSCommand) askInput(prompt, defaultVal string, pattern *regexp.Regexp) (string, error) {
-	for {
-		defDisplay := defaultVal
-		if defDisplay == "" {
-			defDisplay = "none"
-		}
-		fmt.Fprintf(c.run.stdout, "   %s%s%s (default: %s): %s",
-			c.cYellow, c.iconQuestion, prompt, defDisplay, c.cReset)
-
-		if !c.scanner.Scan() {
-			if err := c.scanner.Err(); err != nil {
-				return "", fmt.Errorf("failed to read input: %w", err)
-			}
-			// EOF — use default.
-			return defaultVal, nil
-		}
-		input := strings.TrimSpace(c.scanner.Text())
-
-		if input == "" {
-			return defaultVal, nil
-		}
-
-		if pattern != nil && !pattern.MatchString(input) {
-			fmt.Fprintf(c.run.stderr, "   %s%sInvalid input format. Please try again.%s\n",
-				c.cRed, c.iconError, c.cReset)
-			continue
-		}
-		return input, nil
-	}
-}
-
 // checkUsername verifies that the given username exists on the system.
 func (c *SetupOSCommand) checkUsername(username string) error {
 	cmd := c.run.execCommand("id", "-u", username)
 	out, err := cmd.Output()
 	if err != nil || strings.TrimSpace(string(out)) == "" {
+		fmt.Fprintf(
+			c.run.stderr,
+			"   %s%sUser %s does not exist (removed or already migrated).%s\n",
+			c.cYellow, c.iconWarn, username, c.cReset,
+		)
+		fmt.Fprintf(
+			c.run.stderr,
+			"   %s%sTo re-run this step, use the --skip-passwords and --username flags.%s\n",
+			c.cYellow, c.iconWarn, c.cReset,
+		)
 		return fmt.Errorf("user %q does not exist (removed or already migrated)", username)
 	}
 	return nil
 }
 
 // changeUsername handles renaming the default user account.
-func (c *SetupOSCommand) changeUsername(defaultUsername string) error {
+// Returns the final username (either the new name or the original if skipped).
+func (c *SetupOSCommand) changeUsername(defaultUsername string) (string, error) {
 	if err := c.checkUsername(defaultUsername); err != nil {
 		fmt.Fprintf(c.run.stdout, "   %s%s%v%s\n", c.cYellow, c.iconWarn, err, c.cReset)
-		c.usernameAfterChange = defaultUsername
-		return nil
+		return defaultUsername, nil
 	}
 
-	selectedUsername, err := c.askInput(
+	selectedUsername, err := c.prompt.AskInput(
 		fmt.Sprintf("Enter desired username replacing %s, hit enter to skip", defaultUsername),
 		defaultUsername, userRegex)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if selectedUsername == defaultUsername {
 		fmt.Fprintf(c.run.stdout, "   %s%sSkipping username change.%s\n",
 			c.cBlue, c.iconCheck, c.cReset)
-		c.usernameAfterChange = defaultUsername
-		return nil
+		return defaultUsername, nil
 	}
 
-	selectedFullname, err := c.askInput("Enter desired full name, hit enter to skip", "", nil)
+	selectedFullname, err := c.prompt.AskInput("Enter desired full name, hit enter to skip", "", nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Rename group if it exists.
@@ -394,7 +374,7 @@ func (c *SetupOSCommand) changeUsername(defaultUsername string) error {
 		groupmodCmd.SetStdout(c.run.stdout)
 		groupmodCmd.SetStderr(c.run.stderr)
 		if err := groupmodCmd.Run(); err != nil {
-			return fmt.Errorf("failed to rename group: %w", err)
+			return "", fmt.Errorf("failed to rename group: %w", err)
 		}
 	}
 
@@ -413,7 +393,7 @@ func (c *SetupOSCommand) changeUsername(defaultUsername string) error {
 	usermodCmd.SetStdout(c.run.stdout)
 	usermodCmd.SetStderr(c.run.stderr)
 	if err := usermodCmd.Run(); err != nil {
-		return fmt.Errorf("failed to rename user: %w", err)
+		return "", fmt.Errorf("failed to rename user: %w", err)
 	}
 
 	// Clean up stock user config files.
@@ -433,8 +413,7 @@ func (c *SetupOSCommand) changeUsername(defaultUsername string) error {
 
 	fmt.Fprintf(c.run.stdout, "   %s%sUser renamed successfully.%s\n",
 		c.cGreen, c.iconCheck, c.cReset)
-	c.usernameAfterChange = selectedUsername
-	return nil
+	return selectedUsername, nil
 }
 
 // changeUserPassword runs passwd for the given user.
@@ -526,7 +505,7 @@ func (c *SetupOSCommand) changeLuksPassword() error {
 }
 
 // setupLocalization runs systemd-firstboot and configures AccountsService + keymap.
-func (c *SetupOSCommand) setupLocalization(efiRoot, jailbrokenEntry string) error {
+func (c *SetupOSCommand) setupLocalization(username, jailbrokenEntry string) error {
 	fmt.Fprintf(c.run.stdout, "   %s%sConfiguring system locale and timezone...%s\n",
 		c.cBold, c.iconGear, c.cReset)
 
@@ -563,15 +542,15 @@ func (c *SetupOSCommand) setupLocalization(efiRoot, jailbrokenEntry string) erro
 		}
 	}
 
-	if lang != "" && c.usernameAfterChange != "" {
+	if lang != "" && username != "" {
 		if _, err := c.run.stat(asUsersDir); err == nil {
-			userCfg := filepath.Join(asUsersDir, c.usernameAfterChange)
+			userCfg := filepath.Join(asUsersDir, username)
 
 			// Determine icon path.
 			srcIconPath := "/usr/share/pixmaps/faces/tree.jpg"
-			dstIconPath := "/home/" + c.usernameAfterChange + "/.face"
+			dstIconPath := "/home/" + username + "/.face"
 			if c.run.fileExists(srcIconPath) {
-				dstIconPath = filepath.Join(asIconsDir, c.usernameAfterChange)
+				dstIconPath = filepath.Join(asIconsDir, username)
 				c.run.copyFile(srcIconPath, dstIconPath)
 				c.run.chmod(dstIconPath, 0644)
 			}
@@ -582,7 +561,7 @@ func (c *SetupOSCommand) setupLocalization(efiRoot, jailbrokenEntry string) erro
 			c.run.chown(userCfg, 0, 0)
 
 			fmt.Fprintf(c.run.stdout, "   %s%sAccountsService configured for %s (lang=%s).%s\n",
-				c.cGreen, c.iconCheck, c.usernameAfterChange, lang, c.cReset)
+				c.cGreen, c.iconCheck, username, lang, c.cReset)
 		}
 	}
 
