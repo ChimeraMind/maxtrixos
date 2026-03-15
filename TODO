@@ -4,6 +4,7 @@ Golang migration:
     - [WAITING] Let seeders mount /dev, /dev/pts, /sys inside chroot.sh
         chroot.sh code implemented. Now wait for deployment before
         changing code vector side.
+    - [WAITING] remove USE_CP_REFLINK_MODE_INSTEAD_OF_RSYNC usage for seeder.
     - [WAITING] Migrate vector_builder.sh to Golang.
     - Check releaser when using rsync, check for /dev device nodes.
     - Consider if possible to implement unshare in code.
