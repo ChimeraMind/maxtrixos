@@ -134,7 +134,13 @@ func (c *EnterCommand) Run() error {
 
 // run implements the enter workflow.
 func (c *EnterCommand) run() error {
-	sd, err := newSeeder(c.cfg, nil)
+	opts := seeder.NewSeederOptions{
+		Verbose: false,
+		Stdin:   os.Stdin,
+		Stdout:  os.Stdout,
+		Stderr:  os.Stderr,
+	}
+	sd, err := newSeeder(c.cfg, &opts)
 	if err != nil {
 		return fmt.Errorf("failed to initialize seeder: %w", err)
 	}
@@ -223,7 +229,7 @@ func (c *EnterCommand) run() error {
 
 	// Enter each chroot.
 	for _, chrootDir := range chrootDirs {
-		if err := c.enterChroot(sd, chrootDir); err != nil {
+		if err := c.enter(sd, chrootDir); err != nil {
 			return fmt.Errorf("error entering chroot %s: %w", chrootDir, err)
 		}
 	}
@@ -270,9 +276,8 @@ func (c *EnterCommand) resolveNames(sps SeedersParams, names []string) ([]string
 	return resolved, nil
 }
 
-// enterChroot sets up mounts, runs an interactive shell inside the
-// chroot, and tears down mounts afterwards.
-func (c *EnterCommand) enterChroot(sd seeder.ISeeder, chrootDir string) error {
+// enter runs an interactive shell inside the chroot, and tears down mounts afterwards.
+func (c *EnterCommand) enter(sd seeder.ISeeder, chrootDir string) error {
 	name := filepath.Base(chrootDir)
 	c.SetupPrinters(name)
 	defer c.FlushPrinters()
@@ -284,28 +289,18 @@ func (c *EnterCommand) enterChroot(sd seeder.ISeeder, chrootDir string) error {
 		c.cBold, c.iconRocket, name, chrootDir, c.cReset)
 	c.Println(c.separator)
 
-	if c.skipLock {
-		c.Printf("%s%sSkipping seeder lock acquisition (--skiplock).%s\n",
-			c.cYellow, c.iconWarn, c.cReset)
-		if err := c.enterChrootWorker(sd, chrootDir); err != nil {
-			return fmt.Errorf(
-				"seeder %s chroot enter failed: %w", name, err,
-			)
-		}
-		return nil
-	}
-
-	return c.enterChrootWithLock(sd, chrootDir)
+	return c.chrootWorker(sd, chrootDir)
 }
 
-func (c *EnterCommand) enterChrootWithLock(sd seeder.ISeeder, chrootDir string) error {
+func (c *EnterCommand) chrootWorker(sd seeder.ISeeder, chrootDir string) error {
 	paramsName, err := sd.ParamsExecutableName()
 	if err != nil {
 		return fmt.Errorf("failed to get params executable name: %w", err)
 	}
 
 	// Find the corresponding seeder chroot dir matching it with chrootDir.
-	var seeder *seeder.SeederInfo
+	var si seeder.SeederInfo
+	var found bool
 	for _, info := range c.detected {
 		paramsPath := filepath.Join(info.Dir, paramsName)
 		if !filesystems.FileExists(paramsPath) {
@@ -317,47 +312,48 @@ func (c *EnterCommand) enterChrootWithLock(sd seeder.ISeeder, chrootDir string) 
 			continue
 		}
 		if slices.Contains(params.AllChrootDirs, chrootDir) {
-			seeder = &info
+			found = true
+			si = info // copy
 			break
 		}
 		if params.PreferredChrootDir == chrootDir {
 			// Last ditch attempt.
-			seeder = &info
+			found = true
+			si = info // copy
 			break
 		}
 	}
-	if seeder == nil {
+	if !found {
 		return fmt.Errorf(
 			"no valid seeder chroot found for chroot dir %s. Try with --skiplock and full chroot path.",
 			chrootDir,
 		)
 	}
 
-	return sd.ExecuteWithSeederLock(
-		seeder.Name,
-		func() error { return c.enterChrootWorker(sd, chrootDir) },
-	)
-}
-
-func (c *EnterCommand) enterChrootWorker(sd seeder.ISeeder, chrootDir string) error {
-	opts := seeder.SetupChrootMountsOptions{
-		ChrootDir:     chrootDir,
-		SkipIfMounted: true,
+	env := []string{
+		fmt.Sprintf("TERM=%s", os.Getenv("TERM")),
 	}
 
-	if err := sd.SetupChrootMounts(opts); err != nil {
-		return fmt.Errorf("error setting up mounts: %w", err)
-	}
+	// Monkey patch the seeder's chroot worker to use our chroot runner and env.
+	si.ChrootChrootExec = "/bin/sh"
+	si.ChrootChrootArgs = []string{"--login"}
 
-	// Run interactive shell.
-	return c.chrootRunner(&runner.ChrootCmd{
-		Cmd: runner.Cmd{
-			Name:   "/bin/sh",
-			Args:   []string{"--login"},
-			Stdin:  os.Stdin,
-			Stdout: os.Stdout,
-			Stderr: os.Stderr,
-		},
+	opts := &seeder.SeedOptions{
 		ChrootDir: chrootDir,
-	})
+		Info:      si,
+		Env:       env,
+		Stdin:     os.Stdin,
+		Stdout:    os.Stdout,
+		Stderr:    os.Stderr,
+	}
+
+	// This has the advantage that we use the same entry point.
+	enterer := func() error { return sd.Seed(opts) }
+
+	if c.skipLock {
+		c.Printf("%s%sSkipping seeder lock acquisition (--skiplock).%s\n",
+			c.cYellow, c.iconWarn, c.cReset)
+		return enterer()
+	}
+	return sd.ExecuteWithSeederLock(si.Name, enterer)
 }

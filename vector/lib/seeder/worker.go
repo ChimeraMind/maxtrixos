@@ -401,208 +401,6 @@ func (s *Seeder) ExecutePrepper(info SeederInfo, params *SeederParams, opts *Pre
 	return s.runner(cmd)
 }
 
-// --- Mount management ---
-
-// mountPrivateGitRepo sets up a read-only bind mount for the private git
-// repo inside the chroot.
-func (s *Seeder) mountPrivateGitRepo(opts *SetupChrootMountsOptions) error {
-	privatePath, err := s.PrivateGitRepoPath()
-	if err != nil {
-		return fmt.Errorf("error getting private repo path: %w", err)
-	}
-	defaultPrivatePath, err := s.DefaultPrivateGitRepoPath()
-	if err != nil {
-		return fmt.Errorf("error getting default private git repo path: %w", err)
-	}
-
-	if !filesystems.DirectoryExists(privatePath) {
-		s.PrintWarning(
-			"%s does not exist, skipping private git repo mount ...\n",
-			privatePath,
-		)
-		return nil
-	}
-
-	privateBind, err := filesystems.NewBindMount(
-		filesystems.BindMountOptions{
-			Src:      privatePath,
-			Dst:      filepath.Join(opts.ChrootDir, defaultPrivatePath),
-			ReadOnly: true,
-			MkdirAll: true,
-			Stdout:   s.stdout,
-			Stderr:   s.stderr,
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("error creating RO mount for private repo: %w", err)
-	}
-
-	dst := privateBind.Dst()
-	mounted, err := filesystems.IsMounted(dst)
-	if err != nil {
-		return fmt.Errorf("error checking if private repo mount exists: %w", err)
-	}
-	if opts.SkipIfMounted && mounted {
-		s.Print("Skipping (already mounted): %s ...\n", dst)
-		return nil
-	}
-
-	s.Print("Mounting: %s ...\n", dst)
-	s.trackMount(dst)
-	if err := privateBind.Mount(); err != nil {
-		return fmt.Errorf("error mounting RO private repo: %w", err)
-	}
-	return nil
-}
-
-// mountDistDir sets up a bind mount for the distfiles directory inside the chroot.
-func (s *Seeder) mountDistDir(opts *SetupChrootMountsOptions) error {
-	distDir, err := s.DistfilesDir()
-	if err != nil {
-		return fmt.Errorf("error getting distfiles dir: %w", err)
-	}
-
-	if err := os.MkdirAll(distDir, 0755); err != nil {
-		return fmt.Errorf("failed to create %s: %w", distDir, err)
-	}
-
-	distMount, err := filesystems.BindMountDistdir(
-		filesystems.BindMountDistdirOptions{
-			DistfilesDir: distDir,
-			Rootfs:       opts.ChrootDir,
-			Stdout:       s.stdout,
-			Stderr:       s.stderr,
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("error creating distfiles mount: %w", err)
-	}
-
-	dst := distMount.Dst()
-	mounted, err := filesystems.IsMounted(dst)
-	if err != nil {
-		return fmt.Errorf("error checking if distfiles mount exists: %w", err)
-	}
-
-	if opts.SkipIfMounted && mounted {
-		s.Print("Skipping (already mounted): %s ...\n", dst)
-		return nil
-	}
-
-	s.Print("Mounting: %s ...\n", dst)
-	s.trackMount(dst)
-	if err := distMount.Mount(); err != nil {
-		return fmt.Errorf("error mounting distfiles: %w", err)
-	}
-	return nil
-}
-
-// mountBinpkgsDir sets up a bind mount for the binpkgs directory inside the chroot.
-func (s *Seeder) mountBinpkgsDir(opts *SetupChrootMountsOptions) error {
-	binDir, err := s.BinpkgsDir()
-	if err != nil {
-		return fmt.Errorf("error getting binpkgs dir: %w", err)
-	}
-
-	if err := os.MkdirAll(binDir, 0755); err != nil {
-		return fmt.Errorf("failed to create %s: %w", binDir, err)
-	}
-
-	binMount, err := filesystems.BindMountBinpkgs(
-		filesystems.BindMountBinpkgsOptions{
-			BinpkgsDir: binDir,
-			Rootfs:     opts.ChrootDir,
-			Stdout:     s.stdout,
-			Stderr:     s.stderr,
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("error creating binpkgs mount: %w", err)
-	}
-
-	dst := binMount.Dst()
-	mounted, err := filesystems.IsMounted(dst)
-	if err != nil {
-		return fmt.Errorf("error checking if binpkgs mount exists: %w", err)
-	}
-
-	if opts.SkipIfMounted && mounted {
-		s.Print("Skipping (already mounted): %s ...\n", dst)
-		return nil
-	}
-
-	s.Print("Mounting: %s ...\n", dst)
-	s.trackMount(dst)
-	if err := binMount.Mount(); err != nil {
-		return fmt.Errorf("error mounting binpkgs: %w", err)
-	}
-	return nil
-}
-
-// SetupChrootMounts sets up all bind mounts needed for a seeder chroot.
-// All mount points are tracked and can be cleaned up by calling Cleanup().
-func (s *Seeder) SetupChrootMounts(opts SetupChrootMountsOptions) error {
-	if opts.ChrootDir == "" {
-		return fmt.Errorf("missing ChrootDir parameter")
-	}
-
-	delegated, err := s.DelegatedChrootSystemMounts()
-	if err != nil {
-		return fmt.Errorf(
-			"error checking if delegated chroot system mounts is enabled: %w",
-			err,
-		)
-	}
-
-	if delegated {
-		// TODO: make this the default after April 2026, remove the old mounting code
-		// and config entry.
-		s.Print("Delegating mounting of system mounts inside chroot ...\n")
-		return nil
-	}
-
-	s.Print("Mounting common rootfs mounts (dev, sys, proc, shm, run/lock) ...\n")
-	// Common rootfs mounts (dev, sys, proc, shm, run/lock).
-	common, err := filesystems.NewCommonRootfsMounts(
-		filesystems.CommonRootfsMountsOptions{
-			MountPoint:    opts.ChrootDir,
-			SkipIfMounted: opts.SkipIfMounted,
-			Mounting: func(mnt string) {
-				s.Print("Mounting: %s ...\n", mnt)
-				s.trackMount(mnt)
-			},
-			Skipping: func(mnt string) {
-				s.Print("Skipping (already mounted): %s ...\n", mnt)
-			},
-			Mounted: func(mnt string) {
-				s.Print("Mounted: %s ...\n", mnt)
-			},
-			Stdout: s.stdout,
-			Stderr: s.stderr,
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("error creating common mounts init: %w", err)
-	}
-	if err := common.Setup(); err != nil {
-		return fmt.Errorf("error setting up common mounts setup: %w", err)
-	}
-
-	if err := s.mountPrivateGitRepo(&opts); err != nil {
-		return fmt.Errorf("error mounting private git repo: %w", err)
-	}
-
-	if err := s.mountDistDir(&opts); err != nil {
-		return fmt.Errorf("error mounting distfiles: %w", err)
-	}
-
-	if err := s.mountBinpkgsDir(&opts); err != nil {
-		return fmt.Errorf("error mounting binpkgs: %w", err)
-	}
-
-	return nil
-}
-
 // --- Chroot DNS ---
 
 // SetupChrootDNS copies /etc/resolv.conf into the chroot.
@@ -780,9 +578,13 @@ func (s *Seeder) generateSeederEnvVars(env []string) ([]string, error) {
 
 // Seed runs the seeder's chroot script inside the chroot
 // using unshare for namespace isolation.
-func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
+func (s *Seeder) Seed(opts *SeedOptions) error {
+	if opts == nil {
+		return fmt.Errorf("opts cannot be nil")
+	}
+
 	// Start with a pristine environment.
-	env, err := s.generateSharedEnvVars(nil)
+	env, err := s.generateSharedEnvVars(opts.Env)
 	if err != nil {
 		return err
 	}
@@ -797,15 +599,34 @@ func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
 	}
 	initScript := filepath.Join(seedersDir, "init.sh")
 
+	stdin := opts.Stdin
+	if stdin == nil {
+		stdin = s.stdin
+	}
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = s.stdout
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = s.stderr
+	}
+	dir := opts.Dir
+	if dir == "" {
+		dir = "/"
+	}
+
 	return s.chrootRunner(&runner.ChrootCmd{
 		Cmd: runner.Cmd{
-			Name:   info.ChrootChrootExec,
+			Name:   opts.Info.ChrootChrootExec,
+			Args:   opts.Info.ChrootChrootArgs,
 			Env:    env,
-			Dir:    "/",
-			Stdout: s.stdout,
-			Stderr: s.stderr,
+			Dir:    dir,
+			Stdin:  stdin,
+			Stdout: stdout,
+			Stderr: stderr,
 		},
 		ChrootExec: initScript,
-		ChrootDir:  chrootDir,
+		ChrootDir:  opts.ChrootDir,
 	})
 }
