@@ -256,6 +256,7 @@ type Imager struct {
 	ostree              ostree.IOstree
 	fsenc               filesystems.IFsenc
 	runner              runner.Func
+	chrootRunner        runner.ChrootRunFunc
 	stdout              io.Writer
 	stderr              io.Writer
 	efiDevice           string
@@ -398,13 +399,14 @@ func NewImager(cfg config.IConfig, ot ostree.IOstree, fsenc filesystems.IFsenc, 
 	}
 
 	im := &Imager{
-		cfg:    cfg,
-		ostree: ot,
-		fsenc:  fsenc,
-		qa:     qa,
-		runner: runner.Run,
-		stdout: os.Stdout,
-		stderr: os.Stderr,
+		cfg:          cfg,
+		ostree:       ot,
+		fsenc:        fsenc,
+		qa:           qa,
+		runner:       runner.Run,
+		chrootRunner: runner.ChrootRun,
+		stdout:       os.Stdout,
+		stderr:       os.Stderr,
 	}
 	if opts != nil {
 		im.efiDevice = opts.EfiDevice
