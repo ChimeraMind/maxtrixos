@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/config"
+	"matrixos/vector/lib/ostree"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -473,6 +473,98 @@ func TestUpgradeBootloaderMissingCert(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("Expected error for missing cert, got nil")
+	}
+}
+
+func TestUpgradeToFlag(t *testing.T) {
+	targetCommit := "specific-commit-sha"
+	h := setupUpgradeHarness(t, mockCurrentSHA, mockNewSHA)
+	defer h.cleanup()
+
+	// Add packages for the target commit so analyzeDiff works.
+	h.mock.PackagesByCommit[targetCommit] = []string{"app-misc/foo-2.0"}
+
+	cmd, err := newTestUpgradeCommand(h.mock, []string{"-y", "--to", targetCommit})
+	if err != nil {
+		t.Fatalf("newTestUpgradeCommand failed: %v", err)
+	}
+
+	output, err := runCaptureStdout(func() error {
+		return cmd.Run()
+	})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	// The --to commit should appear as the update target, not LastCommit_.
+	if strings.Contains(output, mockNewSHA) {
+		t.Errorf("Should not contain LastCommit_ %q when --to is used\nGot:\n%s",
+			mockNewSHA, output)
+	}
+	expected := []string{
+		"Update Available: " + targetCommit,
+		"Deploying update...",
+		"Upgrade successful!",
+	}
+	for _, s := range expected {
+		if !strings.Contains(output, s) {
+			t.Errorf("Missing expected output: %q\nGot:\n%s", s, output)
+		}
+	}
+}
+
+func TestUpgradeToFlagPretend(t *testing.T) {
+	targetCommit := "pretend-commit-sha"
+	h := setupUpgradeHarness(t, mockCurrentSHA, mockNewSHA)
+	defer h.cleanup()
+
+	h.mock.PackagesByCommit[targetCommit] = []string{"app-misc/foo-3.0"}
+
+	cmd, err := newTestUpgradeCommand(h.mock, []string{"--pretend", "--to", targetCommit})
+	if err != nil {
+		t.Fatalf("newTestUpgradeCommand failed: %v", err)
+	}
+
+	output, err := runCaptureStdout(func() error {
+		return cmd.Run()
+	})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	expected := []string{
+		"Update Available: " + targetCommit,
+		"Running in pretend mode. Exiting.",
+	}
+	for _, s := range expected {
+		if !strings.Contains(output, s) {
+			t.Errorf("Missing expected output: %q\nGot:\n%s", s, output)
+		}
+	}
+	if strings.Contains(output, "Deploying update...") {
+		t.Error("Should not deploy in pretend mode")
+	}
+}
+
+func TestUpgradeToFlagSameAsCurrentCommit(t *testing.T) {
+	h := setupUpgradeHarness(t, mockCurrentSHA, mockNewSHA)
+	defer h.cleanup()
+
+	// Use --to with the same commit as current; should report up to date.
+	cmd, err := newTestUpgradeCommand(h.mock, []string{"-y", "--to", mockCurrentSHA})
+	if err != nil {
+		t.Fatalf("newTestUpgradeCommand failed: %v", err)
+	}
+
+	output, err := runCaptureStdout(func() error {
+		return cmd.Run()
+	})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if !strings.Contains(output, "System is already up to date") {
+		t.Errorf("Expected 'System is already up to date' when --to equals current commit\nGot:\n%s", output)
 	}
 }
 
