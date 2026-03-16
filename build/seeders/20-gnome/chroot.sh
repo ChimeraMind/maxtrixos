@@ -37,6 +37,8 @@
 # name of the chroot directory for the seeder, and to determine when to create a new
 # chroot or reuse an existing one.
 #
+set -e
+source /etc/profile
 set -eu
 
 source "${MATRIXOS_DEV_DIR}/build/seeders/lib/chroots_lib.sh"
@@ -96,7 +98,6 @@ gnome.tweak_resolved() {
 
 main() {
     cd /
-    source /etc/profile
 
     chroots_lib.setup
 
