@@ -226,14 +226,6 @@ exit 0' > "${STUB_BIN}/env-update"
     [ "$status" -eq 0 ]
 }
 
-# --- MOUNTS array / maybe_umount_common_filesystems ---
-
-@test "maybe_umount_common_filesystems handles empty MOUNTS" {
-    MOUNTS=()
-    run chroots_lib.maybe_umount_common_filesystems
-    [ "$status" -eq 0 ]
-}
-
 # --- default_buildenv_bootstrap error paths (with stubs) ---
 
 @test "default_buildenv_bootstrap fails with empty seeder name" {
@@ -353,14 +345,14 @@ EOF
     # Since we're not PID 1, it should mention skipping.
     [[ "$output" == *"Not PID 1"* ]]
     [[ "$output" == *"Skipping namespace traps"* ]]
-    # Should still do the mount checks (all report already mounted).
-    [[ "$output" == *"already mounted"* ]]
+    # Should still dump mount info and PID 1 identity.
+    [[ "$output" == *"Dump of /proc/self/mountinfo"* ]]
+    [[ "$output" == *"PID 1 is"* ]]
 }
 
 # --- cleanup ---
 
-@test "cleanup does not error with empty MOUNTS" {
-    MOUNTS=()
+@test "cleanup does not error" {
     run chroots_lib.cleanup
     [ "$status" -eq 0 ]
 }

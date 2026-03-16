@@ -112,6 +112,24 @@ _load_init_script() {
     [ -d "${CHROOT_DIR}/${DEFAULT_PRIVATE_GIT_REPO_PATH#/}" ]
 }
 
+@test "init: setup_chroot_env creates chroot sys directory" {
+    _load_init_script
+    setup_chroot_env "${CHROOT_DIR}"
+    [ -d "${CHROOT_DIR}/sys" ]
+}
+
+@test "init: setup_chroot_env creates chroot dev directory" {
+    _load_init_script
+    setup_chroot_env "${CHROOT_DIR}"
+    [ -d "${CHROOT_DIR}/dev" ]
+}
+
+@test "init: setup_chroot_env creates chroot run/lock directory" {
+    _load_init_script
+    setup_chroot_env "${CHROOT_DIR}"
+    [ -d "${CHROOT_DIR}/run/lock" ]
+}
+
 # ===========================================================================
 # setup_chroot_env – bind mounts when not yet mounted
 # ===========================================================================
@@ -139,6 +157,29 @@ _load_init_script() {
     local expected_dst="${CHROOT_DIR}/${DEFAULT_PRIVATE_GIT_REPO_PATH#/}"
     grep -q "mount --bind ${SEEDER_PRIVATE_GIT_REPO_PATH} ${expected_dst}" "${CALL_LOG}"
     grep -q "mount --make-private ${expected_dst}" "${CALL_LOG}"
+}
+
+@test "init: setup_chroot_env mounts sysfs" {
+    _load_init_script
+    setup_chroot_env "${CHROOT_DIR}"
+
+    grep -q "mount -t sysfs sys ${CHROOT_DIR}/sys" "${CALL_LOG}"
+}
+
+@test "init: setup_chroot_env mounts devtmpfs, devpts, and devshm" {
+    _load_init_script
+    setup_chroot_env "${CHROOT_DIR}"
+
+    grep -q "mount -t devtmpfs devtmpfs ${CHROOT_DIR}/dev" "${CALL_LOG}"
+    grep -q "mount -t devpts devpts ${CHROOT_DIR}/dev/pts" "${CALL_LOG}"
+    grep -q "mount -t tmpfs devshm ${CHROOT_DIR}/dev/shm" "${CALL_LOG}"
+}
+
+@test "init: setup_chroot_env mounts run/lock tmpfs" {
+    _load_init_script
+    setup_chroot_env "${CHROOT_DIR}"
+
+    grep -q "mount -t tmpfs run ${CHROOT_DIR}/run/lock" "${CALL_LOG}"
 }
 
 # ===========================================================================
@@ -182,16 +223,49 @@ _load_init_script() {
     ! grep -q "mount --bind ${SEEDER_PRIVATE_GIT_REPO_PATH}" "${CALL_LOG}"
 }
 
+@test "init: setup_chroot_env skips sysfs mount when already mounted" {
+    _load_init_script
+
+    export STUB_MOUNTPOINTS="${CHROOT_DIR}/sys"
+    run setup_chroot_env "${CHROOT_DIR}"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already mounted on the host, skipping"* ]]
+    ! grep -q "mount -t sysfs" "${CALL_LOG}"
+}
+
+@test "init: setup_chroot_env skips dev mount when already mounted" {
+    _load_init_script
+
+    export STUB_MOUNTPOINTS="${CHROOT_DIR}/dev"
+    run setup_chroot_env "${CHROOT_DIR}"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already mounted on the host, skipping"* ]]
+    ! grep -q "mount -t devtmpfs" "${CALL_LOG}"
+}
+
+@test "init: setup_chroot_env skips run/lock mount when already mounted" {
+    _load_init_script
+
+    export STUB_MOUNTPOINTS="${CHROOT_DIR}/run/lock"
+    run setup_chroot_env "${CHROOT_DIR}"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already mounted on the host, skipping"* ]]
+    ! grep -q "mount -t tmpfs run" "${CALL_LOG}"
+}
+
 @test "init: setup_chroot_env skips all mounts when all already mounted" {
     _load_init_script
 
     local expected_dst="${CHROOT_DIR}/${DEFAULT_PRIVATE_GIT_REPO_PATH#/}"
-    export STUB_MOUNTPOINTS="${CHROOT_DIR}/var/cache/distfiles ${CHROOT_DIR}/var/cache/binpkgs ${expected_dst}"
+    export STUB_MOUNTPOINTS="${CHROOT_DIR}/var/cache/distfiles ${CHROOT_DIR}/var/cache/binpkgs ${expected_dst} ${CHROOT_DIR}/sys ${CHROOT_DIR}/dev ${CHROOT_DIR}/run/lock"
     run setup_chroot_env "${CHROOT_DIR}"
 
     [ "$status" -eq 0 ]
-    # No bind mounts should have been performed.
-    ! grep -q "mount --bind" "${CALL_LOG}"
+    # No mounts should have been performed at all.
+    ! grep -q "^mount " "${CALL_LOG}"
 }
 
 # ===========================================================================
