@@ -15,6 +15,7 @@ setup() {
     export SEEDER_BINPKGS_DIR="${TEST_TMPDIR}/binpkgs-host"
     export SEEDER_PRIVATE_GIT_REPO_PATH="${TEST_TMPDIR}/private-host"
     export DEFAULT_PRIVATE_GIT_REPO_PATH="/var/lib/private-git"
+    export RUNNER_TYPE="seeder"
 
     CHROOT_DIR="${TEST_TMPDIR}/chroot"
     mkdir -p "${CHROOT_DIR}"
@@ -293,7 +294,7 @@ _load_init_script() {
     run main "${CHROOT_DIR}" "/seed.sh" "--flag"
     [[ "${output}" == *"Starting chroot()"* ]]
     [[ "${output}" == *"chroot_dir=${CHROOT_DIR}"* ]]
-    [[ "${output}" == *"seeding_script=/seed.sh"* ]]
+    [[ "${output}" == *"target_exec=/seed.sh"* ]]
     [[ "${output}" == *"args=--flag"* ]]
 }
 

@@ -1,6 +1,6 @@
 #!/bin/bash
-# This script is used to prepare the chroot environment for a seed and then
-# execute the chroot() syscall to start the seeding process.
+# This script is used to prepare the chroot environment for a seed, release or image
+# and then execute the chroot() syscall to start the seeding process.
 # This script is effectively the entrypoint for unshare and acts as PID 1, until
 # the exec call at the end (which makes the target seeding script PID 1).
 #
@@ -13,16 +13,25 @@
 # SEEDER_PRIVATE_GIT_REPO_PATH
 # The path to the private git repository from outside the chroot. This is expected
 # to be bind mount inside the chroot at DEFAULT_PRIVATE_GIT_REPO_PATH.
+# Runner: seeder.
 #
 # SEEDER_DISTFILES_DIR
 # The path to the distfiles directory from outside the chroot. This is expected
 # to be bind mount inside the chroot at /var/cache/distfiles if not already
 # mounted.
-# 
+# Runner: seeder.
+#
 # SEEDER_BINPKGS_DIR
 # The path to the binpkgs directory from outside the chroot. This is expected
 # to be bind mount inside the chroot at /var/cache/binpkgs if not already
 # mounted.
+# Runner: seeder.
+#
+# RUNNER_TYPE
+# The type of the runner executing the seeding process. This is used to
+# determine who is calling us and act accordingly. For example, if the runner is the Releaser,
+# we know that we are in a release context.
+# Valid values are: "seeder", "releaser", "imager".
 #
 # This script takes the following arguments:
 # $1: The path to the chroot dir.
@@ -176,28 +185,42 @@ maybe_mount_run_lock() {
 setup_chroot_env() {
     local chroot_dir="${1}"
 
-    maybe_mount_distfiles "${chroot_dir}"
-    maybe_mount_binpkgs "${chroot_dir}"
-    maybe_mount_private_git "${chroot_dir}"
+    if [ -z "${chroot_dir}" ]; then
+        echo "chroot_dir is not set, unable to setup chroot environment." >&2
+        return 1
+    fi
+
+    local runner_type="${RUNNER_TYPE:-}"
+    if [ -z "${runner_type}" ]; then
+        echo "RUNNER_TYPE is not set, unable to setup chroot environment." >&2
+        return 1
+    fi
+
+    if [ "${runner_type}" = "seeder" ]; then
+        maybe_mount_distfiles "${chroot_dir}"
+        maybe_mount_binpkgs "${chroot_dir}"
+        maybe_mount_private_git "${chroot_dir}"
+    fi
+
     maybe_mount_sys "${chroot_dir}"
     maybe_mount_dev "${chroot_dir}"
     maybe_mount_run_lock "${chroot_dir}"
-    # The rest of the filesystems are mounted by the callee seeding script.
+    # The rest of the filesystems are mounted by the callee target executable.
 }
 
 main() {
     local chroot_dir="${1}"
     shift
 
-    local seeding_script="${1}"
+    local target_exec="${1}"
     shift
 
     echo "Starting chroot()." >&2
-    echo "chroot_dir=${chroot_dir}, seeding_script=${seeding_script}, args=${*}" >&2
+    echo "chroot_dir=${chroot_dir}, target_exec=${target_exec}, args=${*}" >&2
     # Setup the chroot environment (mounts, env vars, etc).
     setup_chroot_env "${chroot_dir}"
-    # Execute the seeding script inside the chroot w/exec so it becomes PID 1.
-    exec chroot "${chroot_dir}" "${seeding_script}" "${@}"
+    # Execute the target executable inside the chroot w/exec so it becomes PID 1.
+    exec chroot "${chroot_dir}" "${target_exec}" "${@}"
 }
 
 main "${@}"
