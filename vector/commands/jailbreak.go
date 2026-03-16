@@ -360,7 +360,7 @@ func (c *JailbreakCommand) checkVdbExists(fullSuffix string) error {
 		return fmt.Errorf("failed to get Releaser.ReadOnlyVdb: %w", err)
 	}
 	_, roVdbErr := c.run.stat(roVdb)
-	_, varDbErr := c.run.stat("/var/db/pkg")
+	_, varDbErr := c.run.stat(ostree.RwVdbPath)
 	if roVdbErr != nil && varDbErr != nil {
 		return fmt.Errorf("you have not switched to a -%s branch or must reboot first", fullSuffix)
 	}
@@ -720,15 +720,15 @@ func (c *JailbreakCommand) cleanConfigSetupSystemdRepart(sysroot string) error {
 }
 
 func (c *JailbreakCommand) cleanConfigSetupVarDbPkg(sysroot string) error {
-	fmt.Fprintf(c.run.stdout, "%s%sSetting up /var/db/pkg ...%s\n",
-		c.cBold, c.iconGear, c.cReset)
+	fmt.Fprintf(c.run.stdout, "%s%sSetting up %s ...%s\n",
+		c.cBold, c.iconGear, ostree.RwVdbPath, c.cReset)
 	roVdb, err := c.configStr("Releaser.ReadOnlyVdb")
 	if err != nil {
 		return err
 	}
 
 	// Remove any symlink at /var/db/pkg, then move the read-only VDB into place.
-	varDbPkg := filepath.Join(sysroot, "var", "db", "pkg")
+	varDbPkg := filepath.Join(sysroot, ostree.RwVdbPath)
 	if err := c.run.removeAll(varDbPkg); err != nil {
 		return fmt.Errorf("failed to remove %s: %w", varDbPkg, err)
 	}
