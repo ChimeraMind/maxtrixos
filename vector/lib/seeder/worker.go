@@ -781,8 +781,8 @@ func (s *Seeder) generateSeederEnvVars(env []string) ([]string, error) {
 // Seed runs the seeder's chroot script inside the chroot
 // using unshare for namespace isolation.
 func (s *Seeder) Seed(chrootDir string, info SeederInfo) error {
-	env := os.Environ()
-	env, err := s.generateSharedEnvVars(env)
+	// Start with a pristine environment.
+	env, err := s.generateSharedEnvVars(nil)
 	if err != nil {
 		return err
 	}
