@@ -451,10 +451,26 @@ func TestReleasesBuiltReleasesFile(t *testing.T) {
 			"Expected gnome branch in file, got: %s", content,
 		)
 	}
+
+	// Verify in-memory accumulation.
+	want := []string{
+		"matrixos/amd64/dev/bedrock",
+		"matrixos/amd64/dev/gnome",
+	}
+	if len(cmd.BuiltReleases) != len(want) {
+		t.Fatalf("BuiltReleases len = %d, want %d",
+			len(cmd.BuiltReleases), len(want))
+	}
+	for i, w := range want {
+		if cmd.BuiltReleases[i] != w {
+			t.Errorf("BuiltReleases[%d] = %q, want %q",
+				i, cmd.BuiltReleases[i], w)
+		}
+	}
 }
 
 func TestReleasesBuiltReleasesFileEmpty(t *testing.T) {
-	// No file configured — should be a no-op.
+	// No file configured — should be a no-op for file I/O.
 	cmd := &ReleasesCommand{}
 	cmd.sd = seeder.DefaultMockSeeder()
 
@@ -463,6 +479,13 @@ func TestReleasesBuiltReleasesFileEmpty(t *testing.T) {
 	}
 	if err := cmd.recordBuiltRelease("branch"); err != nil {
 		t.Fatalf("recordBuiltRelease failed: %v", err)
+	}
+
+	// In-memory slice is still populated even without a file.
+	if len(cmd.BuiltReleases) != 1 ||
+		cmd.BuiltReleases[0] != "branch" {
+		t.Errorf("BuiltReleases = %v, want [branch]",
+			cmd.BuiltReleases)
 	}
 }
 
