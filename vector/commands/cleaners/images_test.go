@@ -4,6 +4,7 @@ import (
 	"matrixos/vector/lib/config"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 )
 
@@ -197,6 +198,59 @@ func TestImagesCleaner_Run(t *testing.T) {
 				if _, err := os.Stat(path); os.IsNotExist(err) {
 					t.Errorf("File %s should have been kept", f)
 				}
+			}
+		})
+	}
+}
+
+func TestImageFileNamePattern(t *testing.T) {
+	regex := regexp.MustCompile(ImageFileNamePattern)
+
+	matching := []string{
+		// .img.xz variants
+		"matrixos_amd64_dev_gnome-20260320.img.xz",
+		"matrixos_amd64_dev_gnome-20260320.img.xz.asc",
+		"matrixos_amd64_dev_gnome-20260320.img.xz.sha256",
+		// .img.qcow2 variants
+		"matrixos_amd64_dev_server-20260318.img.qcow2",
+		"matrixos_amd64_dev_server-20260318.img.qcow2.asc",
+		"matrixos_amd64_dev_server-20260318.img.qcow2.sha256",
+		// .img only (packages.txt, pubkey.asc)
+		"matrixos_amd64_dev_server-20260223.img.packages.txt",
+		"matrixos_amd64_dev_server-20260302.img.pubkey.asc",
+		// bare .img
+		"matrixos_amd64_dev_server-20260320.img",
+		// .img.zstd variants
+		"matrixos_amd64_dev_server-20260320.img.zstd",
+		"matrixos_amd64_dev_server-20260320.img.zstd.asc",
+		"matrixos_amd64_dev_server-20260320.img.zstd.sha256",
+		// .img.gz variants
+		"matrixos_amd64_dev_server-20260320.img.gz",
+		"matrixos_amd64_dev_server-20260320.img.gz.asc",
+		// .img.bz2 variants
+		"matrixos_amd64_dev_server-20260320.img.bz2",
+		"matrixos_amd64_dev_server-20260320.img.bz2.sha256",
+	}
+
+	notMatching := []string{
+		"random_file.txt",
+		"matrixos_amd64_dev_server-2026031.img.xz",
+		"something_else-20260320.img.xz",
+		"matrixos_amd64_dev_server-20260320.txt",
+	}
+
+	for _, name := range matching {
+		t.Run("match_"+name, func(t *testing.T) {
+			if !regex.MatchString(name) {
+				t.Errorf("expected %q to match", name)
+			}
+		})
+	}
+
+	for _, name := range notMatching {
+		t.Run("nomatch_"+name, func(t *testing.T) {
+			if regex.MatchString(name) {
+				t.Errorf("expected %q to NOT match", name)
 			}
 		})
 	}
