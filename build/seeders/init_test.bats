@@ -298,6 +298,171 @@ _load_init_script() {
     [[ "${output}" == *"args=--flag"* ]]
 }
 
+# ===========================================================================
+# maybe_mount_efi – standalone function tests
+# ===========================================================================
+
+@test "init: maybe_mount_efi fails when chroot_dir is empty" {
+    _load_init_script
+    export IMAGER_EFI_MOUNT="${TEST_TMPDIR}/efi-host"
+    export IMAGER_EFI_ROOT="/efi"
+
+    run maybe_mount_efi ""
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"chroot_dir is not set"* ]]
+}
+
+@test "init: maybe_mount_efi fails when IMAGER_EFI_MOUNT is unset" {
+    _load_init_script
+    unset IMAGER_EFI_MOUNT
+    export IMAGER_EFI_ROOT="/efi"
+
+    run maybe_mount_efi "${CHROOT_DIR}"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"IMAGER_EFI_MOUNT is not set"* ]]
+}
+
+@test "init: maybe_mount_efi bind-mounts EFI partition" {
+    _load_init_script
+    export IMAGER_EFI_MOUNT="${TEST_TMPDIR}/efi-host"
+    export IMAGER_EFI_ROOT="/efi"
+
+    maybe_mount_efi "${CHROOT_DIR}"
+
+    [ -d "${CHROOT_DIR}/efi" ]
+    grep -q "mount --bind ${IMAGER_EFI_MOUNT} ${CHROOT_DIR}/efi" "${CALL_LOG}"
+    grep -q "mount --make-private ${CHROOT_DIR}/efi" "${CALL_LOG}"
+}
+
+@test "init: maybe_mount_efi skips when already mounted" {
+    _load_init_script
+    export IMAGER_EFI_MOUNT="${TEST_TMPDIR}/efi-host"
+    export IMAGER_EFI_ROOT="/efi"
+    export STUB_MOUNTPOINTS="${CHROOT_DIR}/efi"
+
+    run maybe_mount_efi "${CHROOT_DIR}"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already mounted on the host, skipping"* ]]
+    ! grep -q "mount --bind ${IMAGER_EFI_MOUNT}" "${CALL_LOG}"
+}
+
+# ===========================================================================
+# maybe_mount_boot – standalone function tests
+# ===========================================================================
+
+@test "init: maybe_mount_boot fails when chroot_dir is empty" {
+    _load_init_script
+    export IMAGER_BOOT_MOUNT="${TEST_TMPDIR}/boot-host"
+    export IMAGER_BOOT_ROOT="/boot"
+
+    run maybe_mount_boot ""
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"chroot_dir is not set"* ]]
+}
+
+@test "init: maybe_mount_boot fails when IMAGER_BOOT_MOUNT is unset" {
+    _load_init_script
+    unset IMAGER_BOOT_MOUNT
+    export IMAGER_BOOT_ROOT="/boot"
+
+    run maybe_mount_boot "${CHROOT_DIR}"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"IMAGER_BOOT_MOUNT is not set"* ]]
+}
+
+@test "init: maybe_mount_boot bind-mounts boot partition" {
+    _load_init_script
+    export IMAGER_BOOT_MOUNT="${TEST_TMPDIR}/boot-host"
+    export IMAGER_BOOT_ROOT="/boot"
+
+    maybe_mount_boot "${CHROOT_DIR}"
+
+    [ -d "${CHROOT_DIR}/boot" ]
+    grep -q "mount --bind ${IMAGER_BOOT_MOUNT} ${CHROOT_DIR}/boot" "${CALL_LOG}"
+    grep -q "mount --make-private ${CHROOT_DIR}/boot" "${CALL_LOG}"
+}
+
+@test "init: maybe_mount_boot skips when already mounted" {
+    _load_init_script
+    export IMAGER_BOOT_MOUNT="${TEST_TMPDIR}/boot-host"
+    export IMAGER_BOOT_ROOT="/boot"
+    export STUB_MOUNTPOINTS="${CHROOT_DIR}/boot"
+
+    run maybe_mount_boot "${CHROOT_DIR}"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already mounted on the host, skipping"* ]]
+    ! grep -q "mount --bind ${IMAGER_BOOT_MOUNT}" "${CALL_LOG}"
+}
+
+# ===========================================================================
+# setup_chroot_env – imager runner type
+# ===========================================================================
+
+@test "init: setup_chroot_env with imager runner type mounts EFI and boot" {
+    _load_init_script
+    export RUNNER_TYPE="imager"
+    export IMAGER_EFI_MOUNT="${TEST_TMPDIR}/efi-host"
+    export IMAGER_BOOT_MOUNT="${TEST_TMPDIR}/boot-host"
+    export IMAGER_EFI_ROOT="/efi"
+    export IMAGER_BOOT_ROOT="/boot"
+
+    setup_chroot_env "${CHROOT_DIR}"
+
+    # EFI and boot should be mounted.
+    grep -q "mount --bind ${IMAGER_EFI_MOUNT} ${CHROOT_DIR}/efi" "${CALL_LOG}"
+    grep -q "mount --bind ${IMAGER_BOOT_MOUNT} ${CHROOT_DIR}/boot" "${CALL_LOG}"
+    # Seeder-specific mounts should NOT appear.
+    ! grep -q "mount --bind ${SEEDER_DISTFILES_DIR}" "${CALL_LOG}"
+    ! grep -q "mount --bind ${SEEDER_BINPKGS_DIR}" "${CALL_LOG}"
+}
+
+@test "init: setup_chroot_env with imager runner type still mounts sys, dev, run/lock" {
+    _load_init_script
+    export RUNNER_TYPE="imager"
+    export IMAGER_EFI_MOUNT="${TEST_TMPDIR}/efi-host"
+    export IMAGER_BOOT_MOUNT="${TEST_TMPDIR}/boot-host"
+    export IMAGER_EFI_ROOT="/efi"
+    export IMAGER_BOOT_ROOT="/boot"
+
+    setup_chroot_env "${CHROOT_DIR}"
+
+    grep -q "mount -t sysfs sys ${CHROOT_DIR}/sys" "${CALL_LOG}"
+    grep -q "mount -t devtmpfs devtmpfs ${CHROOT_DIR}/dev" "${CALL_LOG}"
+    grep -q "mount -t tmpfs run ${CHROOT_DIR}/run/lock" "${CALL_LOG}"
+}
+
+@test "init: setup_chroot_env with seeder runner type does NOT mount EFI or boot" {
+    _load_init_script
+    export RUNNER_TYPE="seeder"
+    export IMAGER_EFI_MOUNT="${TEST_TMPDIR}/efi-host"
+    export IMAGER_BOOT_MOUNT="${TEST_TMPDIR}/boot-host"
+    export IMAGER_EFI_ROOT="/efi"
+    export IMAGER_BOOT_ROOT="/boot"
+
+    setup_chroot_env "${CHROOT_DIR}"
+
+    # Seeder should NOT attempt EFI/boot mounts.
+    ! grep -q "mount --bind ${IMAGER_EFI_MOUNT}" "${CALL_LOG}"
+    ! grep -q "mount --bind ${IMAGER_BOOT_MOUNT}" "${CALL_LOG}"
+    # But should still mount distfiles and binpkgs.
+    grep -q "mount --bind ${SEEDER_DISTFILES_DIR}" "${CALL_LOG}"
+    grep -q "mount --bind ${SEEDER_BINPKGS_DIR}" "${CALL_LOG}"
+}
+
+@test "init: setup_chroot_env prints runner type" {
+    _load_init_script
+    export RUNNER_TYPE="imager"
+    export IMAGER_EFI_MOUNT="${TEST_TMPDIR}/efi-host"
+    export IMAGER_BOOT_MOUNT="${TEST_TMPDIR}/boot-host"
+    export IMAGER_EFI_ROOT="/efi"
+    export IMAGER_BOOT_ROOT="/boot"
+
+    run setup_chroot_env "${CHROOT_DIR}"
+    [[ "$output" == *"Runner type is imager"* ]]
+}
+
 @test "init: main invokes chroot with correct arguments" {
     _load_init_script
 
