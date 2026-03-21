@@ -10,13 +10,20 @@ import (
 	"time"
 
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/ostree"
+	"matrixos/vector/lib/runner"
 )
 
-// allLockTimeout is the maximum time to wait for the build lock.
-var allLockTimeout = 600 * time.Second
+var (
+	// imagerDefaultFlags are the default flags passed to the imager command.
+	imagerDefaultFlags = []string{"--local-ostree"}
 
-// allMailCommand is the mail program used to send build-result emails.
-var allMailCommand = "mutt"
+	// allLockTimeout is the maximum time to wait for the build lock.
+	allLockTimeout = 600 * time.Second
+
+	// allMailCommand is the mail program used to send build-result emails.
+	allMailCommand = "mutt"
+)
 
 // AllCommand orchestrates a full build-and-release cycle:
 // seeds → releases → images → janitor → CDN push.
@@ -43,13 +50,40 @@ type AllCommand struct {
 	cdnPusher      string
 	verbose        bool
 
+	// Replaceable for testing
+	cmdRunner runner.Func
+
 	// Internal state
 	logFile string
 }
 
+func verifyCndPusher(cdnPusherPath string) (bool, error) {
+	run := false
+	if cdnPusherPath == "" {
+		return run, nil
+	}
+
+	if !filesystems.FileExists(cdnPusherPath) {
+		return run, fmt.Errorf("cdn-pusher %s: file not found", cdnPusherPath)
+	}
+
+	info, err := os.Stat(cdnPusherPath)
+	if err != nil {
+		return run, fmt.Errorf("cdn-pusher %s: %w", cdnPusherPath, err)
+	}
+
+	if info.Mode()&0111 == 0 {
+		return run, fmt.Errorf("unable to push to CDN. %s not executable", cdnPusherPath)
+	}
+	run = true
+	return run, nil
+}
+
 // NewAllCommand creates a new AllCommand.
 func NewAllCommand() *AllCommand {
-	return &AllCommand{}
+	return &AllCommand{
+		cmdRunner: runner.Run,
+	}
 }
 
 func (c *AllCommand) Name() string {
@@ -121,218 +155,15 @@ func (c *AllCommand) parseArgs(args []string) error {
 		return fmt.Errorf("build ID cannot be empty")
 	}
 
+	if _, err := verifyCndPusher(c.cdnPusher); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (c *AllCommand) Run() error {
 	return c.RunWithGuard(c.run)
-}
-
-func (c *AllCommand) run() error {
-	c.SetupPrinters("build:all")
-	defer c.FlushPrinters()
-
-	// Acquire build lock.
-	unlock, err := c.acquireBuildLock()
-	if err != nil {
-		return err
-	}
-	defer unlock()
-
-	// Set up log file.
-	logF, err := c.setupLogFile()
-	if err != nil {
-		return err
-	}
-	defer logF.Close()
-
-	c.Printf("Logfile at: %s\n", c.logFile)
-
-	// Run the pipeline; send mail on exit.
-	runErr := c.runPipeline()
-
-	c.sendMail(runErr)
-	return runErr
-}
-
-// runPipeline executes the seeds → releases → images → janitor → CDN pipeline.
-func (c *AllCommand) runPipeline() error {
-	var builtReleases []string
-
-	if !c.onlyImages {
-		// --- Seeds ---
-		c.Printf("Building new seeds ...\n")
-		builtSeeders, err := c.runSeeds()
-		if err != nil {
-			return fmt.Errorf("seeds build failed: %w", err)
-		}
-
-		for _, s := range builtSeeders {
-			c.Printf("Seeder built: %s\n", s)
-		}
-
-		// --- Releases ---
-		var onlySeeders []string
-		if len(builtSeeders) > 0 {
-			onlySeeders = builtSeeders
-			c.Printf(
-				"Releasing only for freshly built seeders: %s ...\n",
-				strings.Join(builtSeeders, ","))
-		} else if c.forceRelease {
-			c.Printf(
-				"Forcing releases and new images via --force-release.\n")
-		} else {
-			c.Printf("Nothing to release. Yay.\n")
-			return nil
-		}
-
-		c.Printf("Releasing newly built seeds ...\n")
-		releases, err := c.runReleases(onlySeeders)
-		if err != nil {
-			return fmt.Errorf("releases failed: %w", err)
-		}
-
-		c.Printf("Creating images for the new releases ...\n")
-
-		if c.onBuildServer {
-			c.Printf(
-				"Executing on a build server, " +
-					"stripping remote names ...\n")
-			for i, r := range releases {
-				if idx := strings.Index(r, ":"); idx >= 0 {
-					releases[i] = r[idx+1:]
-				}
-			}
-		}
-
-		for _, r := range releases {
-			c.Printf("Built release: %s\n", r)
-		}
-		builtReleases = releases
-	} else {
-		c.Printf("Forcing new images only via --only-images ...\n")
-	}
-
-	// --- Images ---
-	executeImager := false
-	var onlyReleases []string
-
-	if c.skipImages {
-		c.Printf("Skipping images creation via --skip-images.\n")
-	} else if len(builtReleases) > 0 {
-		onlyReleases = builtReleases
-		c.Printf(
-			"Creating new images only for freshly built releases: %s ...\n",
-			strings.Join(builtReleases, ","))
-		executeImager = true
-	} else if c.forceImages {
-		c.Printf("Forcing new images via --force-images.\n")
-		executeImager = true
-	} else if c.onlyImages {
-		c.Printf("Creating only images (all) via --only-images.\n")
-		executeImager = true
-	} else {
-		c.Printf("No images to release. Yay?\n")
-	}
-
-	if executeImager {
-		if err := c.runImages(onlyReleases); err != nil {
-			return fmt.Errorf("images build failed: %w", err)
-		}
-	}
-
-	// --- Janitor ---
-	if !c.disableJanitor {
-		c.Printf("Running janitor clean ups ...\n")
-		if err := c.runJanitor(); err != nil {
-			return fmt.Errorf("janitor failed: %w", err)
-		}
-	}
-
-	// --- CDN Pusher ---
-	if err := c.runCDNPusher(builtReleases, executeImager); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// runSeeds builds all seeds and returns the names
-// of successfully built seeders.
-func (c *AllCommand) runSeeds() ([]string, error) {
-	args := []string{"--verbose"}
-	args = append(args, c.seederFilterArgs()...)
-	if c.resumeSeeders {
-		args = append(args, "--resume")
-	}
-
-	cmd := NewSeedsCommand()
-	if err := cmd.Init(args); err != nil {
-		return nil, err
-	}
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-	return cmd.BuiltSeeders, nil
-}
-
-// runReleases releases seeders and returns the built
-// release branches. If onlySeeders is non-empty, only
-// those seeders are released.
-func (c *AllCommand) runReleases(onlySeeders []string) ([]string, error) {
-	args := []string{"--verbose"}
-	args = append(args, c.seederFilterArgs()...)
-	if len(onlySeeders) > 0 {
-		args = append(args,
-			"--only-seeders="+strings.Join(onlySeeders, ","))
-	}
-
-	cmd := NewReleasesCommand()
-	if err := cmd.Init(args); err != nil {
-		return nil, err
-	}
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-	return cmd.BuiltReleases, nil
-}
-
-// runImages builds images for the given release branches.
-// If onlyReleases is non-empty, only those branches are imaged.
-func (c *AllCommand) runImages(onlyReleases []string) error {
-	args := []string{"--local-ostree"}
-	if len(onlyReleases) > 0 {
-		args = append(args,
-			"--only-releases="+strings.Join(onlyReleases, ","))
-	}
-
-	cmd := NewImagesCommand()
-	if err := cmd.Init(args); err != nil {
-		return err
-	}
-	return cmd.Run()
-}
-
-// runJanitor runs artifact cleanup.
-func (c *AllCommand) runJanitor() error {
-	cmd := NewJanitorCommand()
-	if err := cmd.Init(nil); err != nil {
-		return err
-	}
-	return cmd.Run()
-}
-
-// seederFilterArgs returns the --skip-seeders and --only-seeders flags
-// forwarded to both the seeder and releaser sub-processes.
-func (c *AllCommand) seederFilterArgs() []string {
-	var args []string
-	if c.skipSeedersRaw != "" {
-		args = append(args, "--skip-seeders="+c.skipSeedersRaw)
-	}
-	if c.onlySeedersRaw != "" {
-		args = append(args, "--only-seeders="+c.onlySeedersRaw)
-	}
-	return args
 }
 
 // sendMail sends a build-result email via mutt if available and enabled.
@@ -365,13 +196,240 @@ func (c *AllCommand) sendMail(buildErr error) {
 	}
 	muttArgs = append(muttArgs, "--", c.mailUser)
 
-	cmd := execCommand(muttExec, muttArgs...)
-	cmd.Stdin = strings.NewReader("")
-	cmd.Stdout = c.StdoutWriter()
-	cmd.Stderr = c.StderrWriter()
-	if err := cmd.Run(); err != nil {
+	cmd := runner.Cmd{
+		Name:   muttExec,
+		Args:   muttArgs,
+		Stdin:  strings.NewReader(""),
+		Stdout: c.StdoutWriter(),
+		Stderr: c.StderrWriter(),
+	}
+	if err := c.cmdRunner(&cmd); err != nil {
 		c.PrintErrf("Failed to send mail: %v\n", err)
 	}
+}
+
+func (c *AllCommand) run() error {
+	c.SetupPrinters("build:all")
+	defer c.FlushPrinters()
+
+	// Acquire build lock.
+	unlock, err := c.acquireBuildLock()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	// Set up log file.
+	logF, err := c.setupLogFile()
+	if err != nil {
+		return err
+	}
+	defer logF.Close()
+
+	c.Printf("Logfile at: %s\n", c.logFile)
+
+	// Run the pipeline; send mail on exit.
+	runErr := c.runPipeline()
+
+	c.sendMail(runErr)
+	return runErr
+}
+
+// runPipeline executes the seeds → releases → images → janitor → CDN pipeline.
+func (c *AllCommand) runPipeline() error {
+	builtSeeders, done, err := c.buildSeeds()
+	if err != nil {
+		return err
+	}
+	if done {
+		return nil
+	}
+
+	builtReleases, done, err := c.buildReleases(builtSeeders)
+	if err != nil {
+		return err
+	}
+	if done {
+		return nil
+	}
+
+	imagesBuilt, err := c.buildImages(builtReleases)
+	if err != nil {
+		return err
+	}
+
+	if err := c.runJanitor(); err != nil {
+		return err
+	}
+
+	if err := c.runCDNPusher(builtReleases, imagesBuilt); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// buildImages decides whether to build images and, if so,
+// runs the imager. It returns true if images were built.
+func (c *AllCommand) buildImages(builtReleases []string) (bool, error) {
+	var onlyReleases []string
+
+	if c.skipImages {
+		c.Printf("Skipping images creation via --skip-images.\n")
+		return false, nil
+	}
+
+	if len(builtReleases) > 0 {
+		onlyReleases = builtReleases
+		c.Printf(
+			"Creating new images only for freshly built releases: %s ...\n",
+			strings.Join(builtReleases, ","),
+		)
+	} else if c.forceImages {
+		c.Printf("Forcing new images via --force-images.\n")
+	} else if c.onlyImages {
+		c.Printf("Creating only images (all) via --only-images.\n")
+	} else {
+		c.Printf("No images to release. Yay?\n")
+		return false, nil
+	}
+
+	args := imagerDefaultFlags
+	if len(onlyReleases) > 0 {
+		onlyReleasesFlag := "--only-releases=" + strings.Join(onlyReleases, ",")
+		args = append(args, onlyReleasesFlag)
+	}
+
+	cmd := NewImagesCommand()
+	if err := cmd.Init(args); err != nil {
+		return false, err
+	}
+
+	if err := cmd.Run(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// buildReleases decides whether to build releases and, if so,
+// runs the releaser. It returns the list of built releases, a done
+// flag indicating there is nothing to release (pipeline should stop),
+// or an error.
+func (c *AllCommand) buildReleases(builtSeeders []string) ([]string, bool, error) {
+	if !c.forceRelease && len(builtSeeders) == 0 {
+		c.Printf("No new seeds built, skipping releases and images.\n")
+		return nil, true, nil
+	}
+
+	var onlySeeders []string
+	if c.forceRelease {
+		c.Printf("Forcing all releases and new images via --force-release.\n")
+	} else if len(builtSeeders) > 0 {
+		onlySeeders = builtSeeders
+		c.Printf(
+			"Releasing only for freshly built seeders: %s ...\n",
+			strings.Join(builtSeeders, ","),
+		)
+	}
+
+	c.Printf("Releasing ...\n")
+
+	var args []string
+	if c.verbose {
+		args = append(args, "--verbose")
+	}
+	args = append(args, c.seederFilterArgs()...)
+	if len(onlySeeders) > 0 {
+		onlySeedersFlag := "--only-seeders=" + strings.Join(onlySeeders, ",")
+		args = append(args, onlySeedersFlag)
+	}
+
+	cmd := NewReleasesCommand()
+	if err := cmd.Init(args); err != nil {
+		return nil, false, err
+	}
+	if err := cmd.Run(); err != nil {
+		return nil, false, err
+	}
+
+	releases := cmd.BuiltReleases // copy.
+
+	if c.onBuildServer {
+		// We do not want to reference a remote in the release branches built
+		// when building on the build server, because it's not configured by design.
+		c.Printf("Executing on a build server, stripping remote prefixes ...\n")
+		for i, r := range releases {
+			releases[i] = ostree.CleanRemoteFromRef(r)
+		}
+	}
+
+	for _, r := range releases {
+		c.Printf("Built release: %s\n", r)
+	}
+	return releases, false, nil
+}
+
+// buildSeeds decides whether to build seeds and, if so, runs the seeder.
+// It returns the list of built seeders, a done flag indicating there is
+// nothing to release (pipeline should stop), or an error.
+func (c *AllCommand) buildSeeds() ([]string, bool, error) {
+	if c.onlyImages {
+		c.Printf("Skipping seeds and releases build due to --only-images.\n")
+		return nil, false, nil
+	}
+
+	c.Printf("Seeding ...\n")
+
+	var args []string
+	if c.verbose {
+		args = append(args, "--verbose")
+	}
+	args = append(args, c.seederFilterArgs()...)
+	if c.resumeSeeders {
+		args = append(args, "--resume")
+	}
+
+	cmd := NewSeedsCommand()
+	if err := cmd.Init(args); err != nil {
+		return nil, false, err
+	}
+	if err := cmd.Run(); err != nil {
+		return nil, false, err
+	}
+
+	for _, s := range cmd.BuiltSeeders {
+		c.Printf("Seeder built: %s\n", s)
+	}
+
+	return cmd.BuiltSeeders, false, nil
+}
+
+// runJanitor runs artifact cleanup.
+func (c *AllCommand) runJanitor() error {
+	if c.disableJanitor {
+		c.Printf("Janitor disabled, skipping ...\n")
+		return nil
+	}
+
+	c.Printf("Running janitor clean ups ...\n")
+	cmd := NewJanitorCommand()
+	if err := cmd.Init(nil); err != nil {
+		return err
+	}
+	return cmd.Run()
+}
+
+// seederFilterArgs returns the --skip-seeders and --only-seeders flags
+// forwarded to both the seeder and releaser sub-processes.
+func (c *AllCommand) seederFilterArgs() []string {
+	var args []string
+	if c.skipSeedersRaw != "" {
+		args = append(args, "--skip-seeders="+c.skipSeedersRaw)
+	}
+	if c.onlySeedersRaw != "" {
+		args = append(args, "--only-seeders="+c.onlySeedersRaw)
+	}
+	return args
 }
 
 // configItem returns the config value for key, returning an
@@ -379,8 +437,7 @@ func (c *AllCommand) sendMail(buildErr error) {
 func (c *AllCommand) configItem(key string) (string, error) {
 	v, err := c.cfg.GetItem(key)
 	if err != nil {
-		return "", fmt.Errorf(
-			"failed to get %s: %w", key, err)
+		return "", fmt.Errorf("failed to get %s: %w", key, err)
 	}
 	if v == "" {
 		return "", fmt.Errorf("%s is not set", key)
@@ -396,21 +453,20 @@ func (c *AllCommand) acquireBuildLock() (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	locksDir := filepath.Join(
-		baseLocksDir, c.buildID+"-builder")
+
+	locksDir := filepath.Join(baseLocksDir, c.buildID+"-builder")
 	if err := os.MkdirAll(locksDir, 0755); err != nil {
 		return nil, fmt.Errorf(
 			"failed to create locks dir: %w", err)
 	}
-	lockFile := filepath.Join(
-		locksDir, c.buildID+"-builder.lock")
-	unlock, err := filesystems.AcquireFileLock(
-		lockFile, allLockTimeout)
+
+	lockFile := filepath.Join(locksDir, c.buildID+"-builder.lock")
+	unlock, err := filesystems.AcquireFileLock(lockFile, allLockTimeout)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"failed to acquire build lock "+
-				"(another builder running?): %w", err)
+			"failed to acquire build lock (another builder running?): %w", err)
 	}
+
 	return unlock, nil
 }
 
@@ -421,43 +477,37 @@ func (c *AllCommand) setupLogFile() (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	logDir := filepath.Join(
-		baseLogDir, c.buildID+"-builder")
+
+	logDir := filepath.Join(baseLogDir, c.buildID+"-builder")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return nil, fmt.Errorf(
-			"failed to create log dir: %w", err)
+		return nil, fmt.Errorf("failed to create log dir: %w", err)
 	}
-	c.logFile = filepath.Join(logDir,
-		fmt.Sprintf("build-%s.log",
-			time.Now().Format("20060102-150405")))
+
+	c.logFile = filepath.Join(
+		logDir,
+		fmt.Sprintf(
+			"build-%s.log",
+			time.Now().Format("20060102-150405"),
+		),
+	)
 
 	logF, err := os.Create(c.logFile)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to create log file: %w", err)
+		return nil, fmt.Errorf("failed to create log file: %w", err)
 	}
 	return logF, nil
 }
 
 // runCDNPusher executes the CDN pusher script if configured.
-func (c *AllCommand) runCDNPusher(
-	builtReleases []string, imagesBuilt bool,
-) error {
-	if c.cdnPusher == "" {
+func (c *AllCommand) runCDNPusher(builtReleases []string, imagesBuilt bool) error {
+	var run bool
+	var err error
+	if run, err = verifyCndPusher(c.cdnPusher); err != nil {
+		return err
+	}
+	if !run {
+		c.Printf("CDN pusher not configured, skipping CDN push.\n")
 		return nil
-	}
-
-	if !filesystems.FileExists(c.cdnPusher) {
-		return fmt.Errorf("cdn-pusher %s: file not found", c.cdnPusher)
-	}
-	info, err := os.Stat(c.cdnPusher)
-	if err != nil {
-		return fmt.Errorf("cdn-pusher %s: %w", c.cdnPusher, err)
-	}
-	if info.Mode()&0111 == 0 {
-		return fmt.Errorf(
-			"ERROR: unable to push to CDN. %s not executable",
-			c.cdnPusher)
 	}
 
 	imagesFlag := "0"
@@ -465,12 +515,18 @@ func (c *AllCommand) runCDNPusher(
 		imagesFlag = "1"
 	}
 
-	cmd := execCommand(c.cdnPusher)
-	cmd.Env = append(os.Environ(),
+	env := append(os.Environ(),
 		"MATRIXOS_BUILT_RELEASES="+strings.Join(builtReleases, " "),
 		"MATRIXOS_BUILT_IMAGES="+imagesFlag,
 	)
-	cmd.Stdout = c.StdoutWriter()
-	cmd.Stderr = c.StderrWriter()
-	return cmd.Run()
+
+	c.Printf("Pushing to CDN via %s ...\n", c.cdnPusher)
+
+	cmd := runner.Cmd{
+		Name:   c.cdnPusher,
+		Env:    env,
+		Stdout: c.StdoutWriter(),
+		Stderr: c.StderrWriter(),
+	}
+	return c.cmdRunner(&cmd)
 }
