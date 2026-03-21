@@ -692,12 +692,23 @@ func TestSeedsRecordBuiltSeedersFile(t *testing.T) {
 	if !strings.Contains(string(data), "00-bedrock") {
 		t.Errorf("Expected seeder name in file, got: %s", data)
 	}
+
+	// Verify in-memory accumulation.
+	if len(cmd.BuiltSeeders) != 1 ||
+		cmd.BuiltSeeders[0] != "00-bedrock" {
+		t.Errorf("BuiltSeeders = %v, want [00-bedrock]",
+			cmd.BuiltSeeders)
+	}
 }
 
 func TestSeedsRecordBuiltSeedersFileNoFlag(t *testing.T) {
 	cmd := &SeedsCommand{}
 	if err := cmd.recordBuiltSeedersFile("x"); err != nil {
 		t.Fatalf("Expected nil error when flag empty, got: %v", err)
+	}
+	// In-memory slice is still populated even without a file.
+	if len(cmd.BuiltSeeders) != 1 || cmd.BuiltSeeders[0] != "x" {
+		t.Errorf("BuiltSeeders = %v, want [x]", cmd.BuiltSeeders)
 	}
 }
 
@@ -726,6 +737,13 @@ func TestSeedsRecordResults(t *testing.T) {
 	seedersData, _ := os.ReadFile(seedersFile)
 	if !strings.Contains(string(seedersData), "00-bedrock") {
 		t.Error("seeders file missing seeder name")
+	}
+
+	// Verify in-memory accumulation via recordResults.
+	if len(cmd.BuiltSeeders) != 1 ||
+		cmd.BuiltSeeders[0] != "00-bedrock" {
+		t.Errorf("BuiltSeeders = %v, want [00-bedrock]",
+			cmd.BuiltSeeders)
 	}
 }
 
