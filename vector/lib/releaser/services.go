@@ -12,7 +12,6 @@ import (
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
-	"matrixos/vector/lib/runner"
 )
 
 func (r *Releaser) SetupHostname() error {
@@ -127,30 +126,6 @@ func (r *Releaser) SetupServices() error {
 		return fmt.Errorf("failed to parse services file: %w", err)
 	}
 
-	// Set up chroot mounts for systemctl execution.
-	mounts, err := filesystems.NewCommonRootfsMounts(
-		filesystems.CommonRootfsMountsOptions{
-			MountPoint: r.imageDir,
-			Mounting: func(mnt string) {
-				r.Print("Mounting: %s ...\n", mnt)
-				r.trackMount(mnt)
-			},
-			Mounted: func(mnt string) {
-				r.Print("Mounted: %s\n", mnt)
-			},
-			Stdout: r.stdout,
-			Stderr: r.stderr,
-		},
-	)
-	if err != nil {
-		return err
-	}
-	defer mounts.Cleanup()
-
-	if err := mounts.Setup(); err != nil {
-		return fmt.Errorf("failed to set up chroot mounts: %w", err)
-	}
-
 	// Group services by action type.
 	var (
 		enable        []string
@@ -196,17 +171,12 @@ func (r *Releaser) SetupServices() error {
 		// and writing to /dev/kmsg instead of our captured stdout/stderr.
 		cmdArgs := []string{"-c", `systemctl "$@"; exit $?`, "--"}
 		cmdArgs = append(cmdArgs, args...)
-		cmd := runner.ChrootCmd{
-			Cmd: runner.Cmd{
-				Name:   "/bin/bash",
-				Args:   cmdArgs,
-				Stdin:  nil,
-				Stdout: r.stdout,
-				Stderr: r.stderr,
-			},
-			ChrootDir: r.imageDir,
-		}
-		return r.chrootRunner(&cmd)
+
+		return r.chroot(
+			nil,
+			"/bin/bash",
+			cmdArgs,
+		)
 	}
 
 	for _, svc := range enable {

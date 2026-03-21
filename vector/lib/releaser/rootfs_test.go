@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"matrixos/vector/lib/config"
@@ -24,13 +25,13 @@ func TestCleanRootfs_SecureBootCertPathError(t *testing.T) {
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: t.TempDir(),
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     t.TempDir(),
 	}
 
 	err := r.CleanRootfs()
@@ -52,13 +53,13 @@ func TestCleanRootfs_CopySecureBootCertFails(t *testing.T) {
 	}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: imageDir,
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     imageDir,
 	}
 
 	err := r.CleanRootfs()
@@ -84,13 +85,13 @@ func TestCleanRootfs_SecureBootKekPathError(t *testing.T) {
 	}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: imageDir,
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     imageDir,
 	}
 
 	err := r.CleanRootfs()
@@ -115,13 +116,13 @@ func TestCleanRootfs_CopySecureBootKekFails(t *testing.T) {
 	}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: imageDir,
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     imageDir,
 	}
 
 	err := r.CleanRootfs()
@@ -149,13 +150,13 @@ func TestCleanRootfs_DefaultPrivateGitRepoPathError(t *testing.T) {
 	}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: imageDir,
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     imageDir,
 	}
 
 	err := r.CleanRootfs()
@@ -220,13 +221,13 @@ func TestCleanRootfs_HappyPath(t *testing.T) {
 	}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: imageDir,
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     imageDir,
 	}
 
 	err := r.CleanRootfs()
@@ -306,13 +307,13 @@ func TestCleanRootfs_CertCopyPreservesExistingFile(t *testing.T) {
 	}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: imageDir,
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     imageDir,
 	}
 
 	if err := r.CleanRootfs(); err != nil {
@@ -346,13 +347,13 @@ func TestPostCleanShrink_PrintsStartAndEndMessages(t *testing.T) {
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: imageDir,
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     imageDir,
 	}
 
 	_ = r.PostCleanShrink()
@@ -377,13 +378,13 @@ func TestPostCleanShrink_MountSetupFailure(t *testing.T) {
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: imageDir,
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     imageDir,
 	}
 
 	err := r.PostCleanShrink()
@@ -396,24 +397,37 @@ func TestPostCleanShrink_TracksMounts(t *testing.T) {
 	mockMountSyscalls(t)
 
 	imageDir := t.TempDir()
+	seedersDir := t.TempDir()
+	initScript := filepath.Join(seedersDir, "init.sh")
+	os.WriteFile(initScript, []byte("#!/bin/sh\n"), 0o755)
 
-	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
+	chrootCalled := false
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"matrixOS.Root":     {t.TempDir()},
+			"Seeder.SeedersDir": {seedersDir},
+		},
+		Bools: map[string]bool{},
+	}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		cfg:    cfg,
+		ostree: &ostree.MockOstree{},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error {
+			chrootCalled = true
+			return nil
+		}),
 		qa:       qa,
 		stdout:   &bytes.Buffer{},
 		stderr:   &bytes.Buffer{},
 		imageDir: imageDir,
 	}
 
-	_ = r.PostCleanShrink()
-
-	// The Mounting callback should have been called for each mount point.
-	if len(r.trackedMounts) == 0 {
-		t.Error("expected trackedMounts to be populated by the Mounting callback")
+	if err := r.PostCleanShrink(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !chrootCalled {
+		t.Error("expected chroot to be called")
 	}
 }
 
@@ -421,13 +435,13 @@ func TestPostCleanShrink_EmptyImageDir(t *testing.T) {
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: "",
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     "",
 	}
 
 	err := r.PostCleanShrink()
@@ -516,27 +530,22 @@ func TestPostCleanShrink_WalkerPreservesNonStaticFiles(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPostCleanShrink_ChrootRunFailure(t *testing.T) {
-	// Mock mounts to no-op, but make ChrootRun fail.
-	origMount := filesystems.Mount
-	origUnmount := filesystems.Unmount
-
-	filesystems.Mount = func(source, target, fstype string, flags uintptr, data string) error {
-		return nil
-	}
-	filesystems.Unmount = func(target string, flags int) error {
-		return nil
-	}
-
-	t.Cleanup(func() {
-		filesystems.Mount = origMount
-		filesystems.Unmount = origUnmount
-	})
+	mockMountSyscalls(t)
 
 	chrootRunCalled := false
 
 	imageDir := t.TempDir()
+	seedersDir := t.TempDir()
+	initScript := filepath.Join(seedersDir, "init.sh")
+	os.WriteFile(initScript, []byte("#!/bin/sh\n"), 0o755)
 
-	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"matrixOS.Root":     {t.TempDir()},
+			"Seeder.SeedersDir": {seedersDir},
+		},
+		Bools: map[string]bool{},
+	}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
 		cfg:    cfg,
@@ -586,13 +595,13 @@ func TestCleanRootfs_ToleratesMissingPaths(t *testing.T) {
 	}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: imageDir,
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     imageDir,
 	}
 
 	if err := r.CleanRootfs(); err != nil {
@@ -609,17 +618,317 @@ func TestCleanRootfs_ErrConfigPropagates(t *testing.T) {
 	cfg := &config.ErrConfig{Err: wantErr}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
-		ostree:   &ostree.MockOstree{},
+		cfg:          cfg,
+		ostree:       &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:       qa,
-		stdout:   &bytes.Buffer{},
-		stderr:   &bytes.Buffer{},
-		imageDir: t.TempDir(),
+		qa:           qa,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     t.TempDir(),
 	}
 
 	err := r.CleanRootfs()
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// chroot
+// ---------------------------------------------------------------------------
+
+// newChrootReleaser builds a Releaser wired for chroot tests.
+// It creates a real init.sh script under seedersDir so os.Stat succeeds.
+func newChrootReleaser(t *testing.T, mr *runner.MockRunner) *Releaser {
+	t.Helper()
+
+	seedersDir := t.TempDir()
+	initScript := filepath.Join(seedersDir, "init.sh")
+	if err := os.WriteFile(initScript, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write init.sh: %v", err)
+	}
+
+	imageDir := t.TempDir()
+
+	return &Releaser{
+		cfg: &config.MockConfig{
+			Items: map[string][]string{
+				"matrixOS.Root":     {"/dev/root"},
+				"Seeder.SeedersDir": {seedersDir},
+			},
+			Bools: map[string]bool{},
+		},
+		ostree:       &ostree.MockOstree{},
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     imageDir,
+	}
+}
+
+func TestChroot_HappyPath(t *testing.T) {
+	mr := runner.NewMockRunner()
+	r := newChrootReleaser(t, mr)
+
+	err := r.chroot([]string{"FOO=bar"}, "echo", []string{"hello"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(mr.Calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(mr.Calls))
+	}
+	call := mr.Calls[0]
+
+	if call.Name != "chroot:echo" {
+		t.Errorf("Name = %q, want %q", call.Name, "chroot:echo")
+	}
+	if !slices.Equal(call.Args, []string{"hello"}) {
+		t.Errorf("Args = %v, want %v", call.Args, []string{"hello"})
+	}
+	if call.ChrootDir != r.imageDir {
+		t.Errorf("ChrootDir = %q, want %q", call.ChrootDir, r.imageDir)
+	}
+}
+
+func TestChroot_SetsEnvironment(t *testing.T) {
+	mr := runner.NewMockRunner()
+	r := newChrootReleaser(t, mr)
+
+	err := r.chroot([]string{"OTHER=val"}, "cmd", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := mr.Calls[0].Env
+
+	if !slices.Contains(env, "MATRIXOS_DEV_DIR=/dev/root") {
+		t.Errorf("env missing MATRIXOS_DEV_DIR=/dev/root: %v", env)
+	}
+	if !slices.Contains(env, "RUNNER_TYPE=releaser") {
+		t.Errorf("env missing RUNNER_TYPE=releaser: %v", env)
+	}
+	if !slices.Contains(env, "OTHER=val") {
+		t.Errorf("env missing OTHER=val: %v", env)
+	}
+}
+
+func TestChroot_ReplacesExistingEnvKeys(t *testing.T) {
+	mr := runner.NewMockRunner()
+	r := newChrootReleaser(t, mr)
+
+	env := []string{
+		"MATRIXOS_DEV_DIR=/old/path",
+		"RUNNER_TYPE=builder",
+		"KEEP=me",
+	}
+
+	err := r.chroot(env, "cmd", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := mr.Calls[0].Env
+
+	if slices.Contains(got, "MATRIXOS_DEV_DIR=/old/path") {
+		t.Error("old MATRIXOS_DEV_DIR should have been filtered")
+	}
+	if slices.Contains(got, "RUNNER_TYPE=builder") {
+		t.Error("old RUNNER_TYPE should have been filtered")
+	}
+	if !slices.Contains(got, "MATRIXOS_DEV_DIR=/dev/root") {
+		t.Errorf("missing new MATRIXOS_DEV_DIR: %v", got)
+	}
+	if !slices.Contains(got, "RUNNER_TYPE=releaser") {
+		t.Errorf("missing new RUNNER_TYPE: %v", got)
+	}
+	if !slices.Contains(got, "KEEP=me") {
+		t.Errorf("KEEP=me should be preserved: %v", got)
+	}
+}
+
+func TestChroot_NilEnv(t *testing.T) {
+	mr := runner.NewMockRunner()
+	r := newChrootReleaser(t, mr)
+
+	err := r.chroot(nil, "cmd", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := mr.Calls[0].Env
+	if !slices.Contains(got, "MATRIXOS_DEV_DIR=/dev/root") {
+		t.Errorf("missing MATRIXOS_DEV_DIR: %v", got)
+	}
+	if !slices.Contains(got, "RUNNER_TYPE=releaser") {
+		t.Errorf("missing RUNNER_TYPE: %v", got)
+	}
+}
+
+func TestChroot_DevDirError(t *testing.T) {
+	mr := runner.NewMockRunner()
+	r := newChrootReleaser(t, mr)
+
+	r.cfg = &config.MockConfig{
+		Items: map[string][]string{
+			"Seeder.SeedersDir": {"/some/dir"},
+		},
+		Bools: map[string]bool{},
+	}
+
+	err := r.chroot(nil, "cmd", nil)
+	if err == nil {
+		t.Fatal("expected error when DevDir fails, got nil")
+	}
+	if len(mr.Calls) != 0 {
+		t.Errorf("expected no runner calls, got %d", len(mr.Calls))
+	}
+}
+
+func TestChroot_DevDirConfigError(t *testing.T) {
+	mr := runner.NewMockRunner()
+
+	r := &Releaser{
+		cfg:          &config.ErrConfig{Err: errors.New("cfg broken")},
+		ostree:       &ostree.MockOstree{},
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     "/tmp",
+	}
+
+	err := r.chroot(nil, "cmd", nil)
+	if err == nil {
+		t.Fatal("expected error when config is broken, got nil")
+	}
+	if len(mr.Calls) != 0 {
+		t.Errorf("expected no runner calls, got %d", len(mr.Calls))
+	}
+}
+
+func TestChroot_SeedersDirError(t *testing.T) {
+	mr := runner.NewMockRunner()
+	r := newChrootReleaser(t, mr)
+
+	r.cfg = &config.MockConfig{
+		Items: map[string][]string{
+			"matrixOS.Root": {"/dev/root"},
+		},
+		Bools: map[string]bool{},
+	}
+
+	err := r.chroot(nil, "cmd", nil)
+	if err == nil {
+		t.Fatal("expected error when SeedersDir is missing, got nil")
+	}
+	if len(mr.Calls) != 0 {
+		t.Errorf("expected no runner calls, got %d", len(mr.Calls))
+	}
+}
+
+func TestChroot_InitScriptNotFound(t *testing.T) {
+	mr := runner.NewMockRunner()
+
+	seedersDir := t.TempDir()
+
+	r := &Releaser{
+		cfg: &config.MockConfig{
+			Items: map[string][]string{
+				"matrixOS.Root":     {"/dev/root"},
+				"Seeder.SeedersDir": {seedersDir},
+			},
+			Bools: map[string]bool{},
+		},
+		ostree:       &ostree.MockOstree{},
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+		imageDir:     t.TempDir(),
+	}
+
+	err := r.chroot(nil, "cmd", nil)
+	if err == nil {
+		t.Fatal("expected error when init script is missing, got nil")
+	}
+	if len(mr.Calls) != 0 {
+		t.Errorf("expected no runner calls, got %d", len(mr.Calls))
+	}
+}
+
+func TestChroot_RunnerError(t *testing.T) {
+	wantErr := errors.New("chroot exec failed")
+	mr := runner.NewMockRunnerFailOnCall(0, wantErr)
+	r := newChrootReleaser(t, mr)
+
+	err := r.chroot(nil, "cmd", []string{"arg1"})
+	if err == nil {
+		t.Fatal("expected error from chrootRunner, got nil")
+	}
+	if !errors.Is(err, wantErr) {
+		if !bytes.Contains([]byte(err.Error()), []byte("chroot exec failed")) {
+			t.Errorf("error %q should contain %q", err, wantErr)
+		}
+	}
+	if len(mr.Calls) != 1 {
+		t.Errorf("expected 1 runner call, got %d", len(mr.Calls))
+	}
+}
+
+func TestChroot_ChrootCmdFields(t *testing.T) {
+	var captured *runner.ChrootCmd
+
+	seedersDir := t.TempDir()
+	initScript := filepath.Join(seedersDir, "init.sh")
+	if err := os.WriteFile(initScript, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write init.sh: %v", err)
+	}
+
+	imageDir := t.TempDir()
+	outBuf := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+
+	r := &Releaser{
+		cfg: &config.MockConfig{
+			Items: map[string][]string{
+				"matrixOS.Root":     {"/dev/root"},
+				"Seeder.SeedersDir": {seedersDir},
+			},
+			Bools: map[string]bool{},
+		},
+		ostree: &ostree.MockOstree{},
+		chrootRunner: func(c *runner.ChrootCmd) error {
+			captured = c
+			return nil
+		},
+		stdout:   outBuf,
+		stderr:   errBuf,
+		imageDir: imageDir,
+	}
+
+	err := r.chroot([]string{"A=1"}, "mybin", []string{"--flag", "val"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if captured == nil {
+		t.Fatal("chrootRunner was not called")
+	}
+	if captured.ChrootExec != initScript {
+		t.Errorf("ChrootExec = %q, want %q", captured.ChrootExec, initScript)
+	}
+	if captured.ChrootDir != imageDir {
+		t.Errorf("ChrootDir = %q, want %q", captured.ChrootDir, imageDir)
+	}
+	if captured.Cmd.Name != "mybin" {
+		t.Errorf("Name = %q, want %q", captured.Cmd.Name, "mybin")
+	}
+	if !slices.Equal(captured.Cmd.Args, []string{"--flag", "val"}) {
+		t.Errorf("Args = %v, want %v", captured.Cmd.Args, []string{"--flag", "val"})
+	}
+	if captured.Cmd.Stdout != outBuf {
+		t.Error("Stdout not wired to releaser stdout")
+	}
+	if captured.Cmd.Stderr != errBuf {
+		t.Error("Stderr not wired to releaser stderr")
 	}
 }
