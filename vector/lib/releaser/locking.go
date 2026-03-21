@@ -6,8 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"syscall"
 	"time"
+
+	"matrixos/vector/lib/filesystems"
 )
 
 func (r *Releaser) ReleaseLockDir() (string, error) {
@@ -46,12 +47,6 @@ func (r *Releaser) ExecuteWithReleaseLock(fn func() error) error {
 	}
 	r.Print("Acquiring release %s lock via %s ...\n", r.ref, lockPath)
 
-	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open lock file %s: %w", lockPath, err)
-	}
-	defer lockFile.Close()
-
 	timeoutStr, err := r.LockWaitSeconds()
 	if err != nil {
 		return fmt.Errorf("failed to get lock wait seconds: %w", err)
@@ -61,20 +56,11 @@ func (r *Releaser) ExecuteWithReleaseLock(fn func() error) error {
 		return fmt.Errorf("invalid lock wait seconds %q: %w", timeoutStr, err)
 	}
 
-	// Try to acquire the exclusive lock with a timeout.
-	locked := make(chan error, 1)
-	go func() {
-		locked <- syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX)
-	}()
-
-	select {
-	case err := <-locked:
-		if err != nil {
-			return fmt.Errorf("failed to acquire lock %s: %w", lockPath, err)
-		}
-	case <-time.After(time.Duration(timeoutSecs) * time.Second):
-		return fmt.Errorf("timed out waiting for release lock %s", lockPath)
+	unlock, err := filesystems.AcquireFileLock(lockPath, time.Duration(timeoutSecs)*time.Second)
+	if err != nil {
+		return err
 	}
+	defer unlock()
 
 	r.Print("Lock for releaser %s, %s acquired!\n", r.ref, lockPath)
 	return fn()

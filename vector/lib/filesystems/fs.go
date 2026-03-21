@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -765,4 +766,39 @@ func PrintBlockDeviceInfo(w io.Writer, blockDevice string) error {
 		fmt.Fprintln(w, info.String())
 	}
 	return nil
+}
+
+// AcquireFileLock acquires an exclusive flock on the file at path,
+// creating it if necessary, and returns an unlock function that
+// releases the lock and closes the file.
+//
+// The goroutine+select pattern matches the locking used by the seeder,
+// releaser and imager packages.  If the lock cannot be acquired within
+// timeout the call fails with an error.
+func AcquireFileLock(path string, timeout time.Duration) (func(), error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open lock file %s: %w", path, err)
+	}
+
+	locked := make(chan error, 1)
+	go func() {
+		locked <- syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
+	}()
+
+	select {
+	case err := <-locked:
+		if err != nil {
+			f.Close()
+			return nil, fmt.Errorf("failed to acquire lock on %s: %w", path, err)
+		}
+	case <-time.After(timeout):
+		f.Close()
+		return nil, fmt.Errorf("timed out waiting for lock on %s", path)
+	}
+
+	return func() {
+		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		f.Close()
+	}, nil
 }
