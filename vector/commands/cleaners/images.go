@@ -15,7 +15,7 @@ import (
 const (
 
 	// ImageFileNamePattern defines a regexp string to match for matrixOS image file names.
-	ImageFileNamePattern = "(matrixos.*)-([0-9]{8}).img.((xz|zstd|gz|bz2)|(qcow2))(|.asc|.sha256|.packages.txt)"
+	ImageFileNamePattern = "(matrixos.*)-([0-9]{8}).img(.xz|.zstd|.gz|.bz2|.qcow2|)(.pubkey.asc|.asc|.sha256|.packages.txt|)"
 )
 
 type ImagesCleaner struct {
