@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -271,5 +272,106 @@ func TestAcquireFileLock(t *testing.T) {
 	// Lock file should exist.
 	if _, err := os.Stat(lockPath); err != nil {
 		t.Errorf("lock file should exist: %v", err)
+	}
+}
+
+// TestGlobalLogWriterSubCommands verifies that when SetGlobalLogWriter
+// is active, sub-commands that create their own UI + styledWriter
+// instances (via StartUI / SetupPrinters) automatically tee output to
+// the shared log — reproducing the real AllCommand pipeline where
+// seeds, releases, images and janitor each embed their own UI.
+func TestGlobalLogWriterSubCommands(t *testing.T) {
+	var logBuf bytes.Buffer
+	SetGlobalLogWriter(&logBuf)
+	defer ClearGlobalLogWriter()
+
+	// --- Parent: AllCommand ---
+	parent := NewAllCommand()
+	parent.StartUI()
+	parent.SetupPrinters("build:all")
+	parent.Printf("parent: starting pipeline\n")
+
+	// --- Sub-command 1: SeedsCommand ---
+	seeds := NewSeedsCommand()
+	seeds.StartUI()
+	seeds.SetupPrinters("seeds:main")
+	seeds.Printf("seeds: building bedrock\n")
+	seeds.PrintErrf("seeds: warning chroot\n")
+	seeds.FlushPrinters()
+
+	// --- Sub-command 2: ReleasesCommand ---
+	releases := NewReleasesCommand()
+	releases.StartUI()
+	releases.SetupPrinters("releases:main")
+	releases.Printf("releases: committing ostree\n")
+	releases.FlushPrinters()
+
+	// --- Sub-command 3: ImagesCommand ---
+	images := NewImagesCommand()
+	images.StartUI()
+	images.SetupPrinters("images:all")
+	images.Printf("images: building gnome image\n")
+	images.FlushPrinters()
+
+	// --- Sub-command 4: JanitorCommand ---
+	janitor := NewJanitorCommand()
+	janitor.StartUI()
+	janitor.SetupPrinters("janitor")
+	janitor.Printf("janitor: cleaning old artifacts\n")
+	janitor.FlushPrinters()
+
+	// --- Back to parent ---
+	parent.Printf("parent: pipeline done\n")
+	parent.FlushPrinters()
+
+	logStr := logBuf.String()
+	for _, want := range []string{
+		"parent: starting pipeline",
+		"seeds: building bedrock",
+		"seeds: warning chroot",
+		"releases: committing ostree",
+		"images: building gnome image",
+		"janitor: cleaning old artifacts",
+		"parent: pipeline done",
+	} {
+		if !strings.Contains(logStr, want) {
+			t.Errorf("log missing %q\nlog contents:\n%s",
+				want, logStr)
+		}
+	}
+	if strings.Contains(logStr, "\033[") {
+		t.Error("log should be ANSI-stripped")
+	}
+}
+
+// TestGlobalLogWriterSubCommandsCleared verifies that after
+// ClearGlobalLogWriter is called, new sub-commands no longer
+// tee to the log.
+func TestGlobalLogWriterSubCommandsCleared(t *testing.T) {
+	var logBuf bytes.Buffer
+	SetGlobalLogWriter(&logBuf)
+
+	cmd := NewSeedsCommand()
+	cmd.StartUI()
+	cmd.SetupPrinters("seeds:main")
+	cmd.Printf("before clear\n")
+	cmd.FlushPrinters()
+
+	ClearGlobalLogWriter()
+
+	cmd2 := NewReleasesCommand()
+	cmd2.StartUI()
+	cmd2.SetupPrinters("releases:main")
+	cmd2.Printf("after clear\n")
+	cmd2.FlushPrinters()
+
+	logStr := logBuf.String()
+	if !strings.Contains(logStr, "before clear") {
+		t.Errorf("log should contain pre-clear output, got %q",
+			logStr)
+	}
+	if strings.Contains(logStr, "after clear") {
+		t.Errorf("log should NOT contain post-clear output, got %q",
+			logStr)
 	}
 }
