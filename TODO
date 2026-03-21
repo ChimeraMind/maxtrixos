@@ -7,6 +7,7 @@ Golang migration:
       - [WAITING] vector jailbreak
 
 Features:
+    - Experiment with parallel seeder workflow (need to add deps declaration or used XX-seedname ordering)
     - [sd-boot] Closely watch https://github.com/ostreedev/ostree/pull/3359
         This will be our trampoline to support bootc in the future.
         Step 1: support sd-boot alongside grub2, start building new images with sd-boot.
