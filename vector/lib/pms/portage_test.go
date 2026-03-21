@@ -128,12 +128,16 @@ func TestPackageList_NonexistentVdb(t *testing.T) {
 }
 
 func TestPackageList_UnreadableCategoryDir(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping: root bypasses directory permission checks")
+	}
+
 	vdb := t.TempDir()
 	catDir := filepath.Join(vdb, "broken-cat")
 	if err := os.MkdirAll(catDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	// Remove read permission so ReadDir inside the category fails.
+	// Remove read+execute permissions so ReadDir inside the category fails.
 	if err := os.Chmod(catDir, 0000); err != nil {
 		t.Fatal(err)
 	}
