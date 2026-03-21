@@ -226,6 +226,9 @@ func (c *AllCommand) run() error {
 	}
 	defer logF.Close()
 
+	// Tee all styled output (this command + sub-commands) to the log.
+	SetGlobalLogWriter(logF)
+	defer ClearGlobalLogWriter()
 	c.SetLogWriter(logF)
 
 	c.Printf("Logfile at: %s\n", c.logFile)

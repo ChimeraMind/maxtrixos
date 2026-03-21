@@ -15,6 +15,25 @@ var ansiStripRe = regexp.MustCompile(
 		`|\x1b\][^\x07]*\x07`, // OSC (Operating System Commands)
 )
 
+var (
+	globalLogMu   sync.Mutex
+	globalLogDest io.Writer
+)
+
+// SetGlobalLogWriter sets a process-wide log writer that every
+// subsequently created styledWriter will tee ANSI-stripped output to.
+// Call ClearGlobalLogWriter when done.
+func SetGlobalLogWriter(w io.Writer) {
+	globalLogMu.Lock()
+	defer globalLogMu.Unlock()
+	globalLogDest = w
+}
+
+// ClearGlobalLogWriter removes the process-wide log writer.
+func ClearGlobalLogWriter() {
+	SetGlobalLogWriter(nil)
+}
+
 // styledWriter is an io.Writer that decorates each complete line of output
 // with a colored/bold prefix and an ANSI reset suffix.  Partial writes are
 // buffered until a newline arrives so that every line gets the full treatment.
@@ -40,12 +59,17 @@ type styledWriter struct {
 // style+prefix and appends a reset sequence.  When isTTY is false, incoming
 // ANSI escape sequences and \r-based overwrites are stripped before output.
 func newStyledWriter(dest io.Writer, prefix, style, reset string, isTTY bool) *styledWriter {
+	globalLogMu.Lock()
+	lw := globalLogDest
+	globalLogMu.Unlock()
+
 	return &styledWriter{
-		dest:   dest,
-		prefix: prefix,
-		style:  style,
-		reset:  reset,
-		isTTY:  isTTY,
+		dest:    dest,
+		logDest: lw,
+		prefix:  prefix,
+		style:   style,
+		reset:   reset,
+		isTTY:   isTTY,
 	}
 }
 
