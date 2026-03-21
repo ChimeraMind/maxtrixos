@@ -18,6 +18,7 @@ type BuildCommand struct {
 // NewBuildCommand creates a new BuildCommand
 func NewBuildCommand() *BuildCommand {
 	subcommands := map[string]func() ICommand{
+		"all":      func() ICommand { return NewAllCommand() },
 		"image":    func() ICommand { return NewImageCommand() },
 		"images":   func() ICommand { return NewImagesCommand() },
 		"release":  func() ICommand { return NewReleaseCommand() },
