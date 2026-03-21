@@ -3,13 +3,9 @@
 #                  state between chroot.sh scripts and only executed inside seeding chroots.
 set -eu
 
-# Used by maybe_mount_common_filesystems.
-MOUNTS=()
-
 chroots_lib.cleanup() {
     # Final reap of any remaining zombies before exit.
     wait 2>/dev/null || true
-    chroots_lib.maybe_umount_common_filesystems
 }
 
 # When running as PID 1 in a PID namespace (via unshare --pid --fork),
@@ -66,7 +62,11 @@ chroots_lib.setup() {
     else
         echo "[!] Not PID 1 (PID=$$). Skipping namespace traps." >&2
     fi
-    chroots_lib.maybe_mount_common_filesystems
+
+    echo "Dump of /proc/self/mountinfo:" >&2
+    cat /proc/self/mountinfo >&2
+    echo "PID 1 is:" >&2
+    readlink /proc/1/exe >&2
 }
 
 _get_phase_path() {
@@ -174,73 +174,6 @@ chroots_lib.validate_matrixos_private() {
         echo "${matrixos_private} is not a bind-mount. seeder should do this." >&2
         return 1
     fi
-}
-
-chroots_lib._maybe_mount_sys() {
-    if ! mountpoint -q /sys; then
-        echo "Mounting sysfs on /sys inside chroot since it was not mounted by the host..." >&2
-        mkdir -p /sys
-        MOUNTS+=( "/sys" )
-        mount -t sysfs sys /sys
-    else
-        echo "/sys is already mounted on the host, skipping mounting it inside chroot." >&2
-    fi
-}
-
-chroots_lib._maybe_mount_dev() {
-    if ! mountpoint -q /dev; then
-        echo "Mounting devtmpfs on /dev inside chroot since it was not mounted by the host..." >&2
-        mkdir -p /dev
-
-        MOUNTS+=( "/dev" )
-        mount -t devtmpfs devtmpfs /dev
-
-        echo "Mounting devpts on /dev/pts inside chroot since it was not mounted by the host..." >&2
-        MOUNTS+=( "/dev/pts" )
-        mount -t devpts devpts /dev/pts -o rw,nosuid,noexec,relatime,gid=5,mode=600,ptmxmode=000
-
-        echo "Mounting tmpfs on /dev/shm inside chroot since it was not mounted by the host..." >&2
-        MOUNTS+=( "/dev/shm" )
-        mount -t tmpfs devshm /dev/shm -o rw,nosuid,nodev,mode=1777
-    else
-        echo "/dev is already mounted on the host, skipping mounting it inside chroot." >&2
-    fi
-}
-
-chroots_lib._maybe_mount_run_lock() {
-    if ! mountpoint -q /run/lock; then
-        echo "Mounting tmpfs on /run/lock inside chroot since it was not mounted by the host..." >&2
-        mkdir -p /run/lock
-        MOUNTS+=( "/run/lock" )
-        mount -t tmpfs run /run/lock -o rw,nosuid,nodev,noexec,relatime,size=5M
-    else
-        echo "/run/lock is already mounted on the host, skipping mounting it inside chroot." >&2
-    fi
-}
-
-chroots_lib.maybe_mount_common_filesystems() {
-    chroots_lib._maybe_mount_sys
-    chroots_lib._maybe_mount_dev
-    chroots_lib._maybe_mount_run_lock
-    echo "Mounted common filesystems inside chroot: ${MOUNTS[*]}" >&2
-    echo "Dump of /proc/self/mountinfo:" >&2
-    cat /proc/self/mountinfo >&2
-    echo "PID 1 is:" >&2
-    readlink /proc/1/exe >&2
-}
-
-chroots_lib.maybe_umount_common_filesystems() {
-    local m=
-    # Umount in reverse order.
-    for (( idx=${#MOUNTS[@]}-1 ; idx>=0 ; idx-- )) ; do
-        m="${MOUNTS[idx]}"
-        if mountpoint -q "${m}"; then
-            echo "Unmounting ${m} inside chroot..." >&2
-            umount -l "${m}"
-        else
-            echo "${m} is not mounted, skipping unmount." >&2
-        fi
-    done
 }
 
 chroots_lib.default_portage_bootstrap() {
