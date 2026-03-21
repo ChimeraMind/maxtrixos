@@ -304,17 +304,6 @@ func (c *SeedsCommand) seederWorker(sd seeder.ISeeder, info seeder.SeederInfo) e
 		)
 	}
 
-	// Setup mounts.
-	opts := seeder.SetupChrootMountsOptions{
-		ChrootDir:     chrootDir,
-		SkipIfMounted: true,
-	}
-	if err := sd.SetupChrootMounts(opts); err != nil {
-		return fmt.Errorf(
-			"[%s] mount setup failed: %w", info.Name, err,
-		)
-	}
-
 	// Setup DNS.
 	if err := sd.SetupChrootDNS(chrootDir); err != nil {
 		return fmt.Errorf(
@@ -334,7 +323,11 @@ func (c *SeedsCommand) seederWorker(sd seeder.ISeeder, info seeder.SeederInfo) e
 		"[%s] Running seeder inside %s ...\n",
 		info.Name, chrootDir,
 	)
-	if err := sd.Seed(chrootDir, info); err != nil {
+	opts := &seeder.SeedOptions{
+		ChrootDir: chrootDir,
+		Info:      info,
+	}
+	if err := sd.Seed(opts); err != nil {
 		return fmt.Errorf(
 			"[%s] chroot execution failed: %w", info.Name, err,
 		)
