@@ -3,12 +3,12 @@ package ostree
 import (
 	"fmt"
 	"matrixos/vector/lib/config"
+	"matrixos/vector/lib/runner"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"matrixos/vector/lib/runner"
 )
 
 func TestCommitAndListPackages(t *testing.T) {
@@ -16,7 +16,7 @@ func TestCommitAndListPackages(t *testing.T) {
 
 	// Create root first — we need its resolved path to lay out the commit content
 	// so that the in-commit paths match what ListPackages looks up via
-	// filepath.Join(root, "/var/db/pkg").
+	// filepath.Join(root, RwVdbPath).
 	root := t.TempDir()
 	// Resolve symlinks (e.g. /tmp -> sysroot/tmp) so ostree can traverse the path.
 	root, err := filepath.EvalSymlinks(root)
@@ -35,7 +35,7 @@ func TestCommitAndListPackages(t *testing.T) {
 
 	// Strip the leading separator so filepath.Join works correctly.
 	relRoot := strings.TrimPrefix(root, string(filepath.Separator))
-	pkgDir := filepath.Join(contentDir, relRoot, "var", "db", "pkg", "sys-apps", "systemd")
+	pkgDir := filepath.Join(contentDir, relRoot, RwVdbPath, "sys-apps", "systemd")
 	if err := os.MkdirAll(pkgDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestCommitAndListPackages(t *testing.T) {
 	// Setup Ostree struct
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Releaser.ReadOnlyVdb": {"/var/db/pkg"},
+			"Releaser.ReadOnlyVdb": {RwVdbPath},
 			"Ostree.Root":          {root},
 		},
 	}
@@ -81,7 +81,7 @@ func TestCommitAndListPackages(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Also create the vdb dir in sysroot as ListPackages checks for existence
-	if err := os.MkdirAll(filepath.Join(root, "var", "db", "pkg"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, RwVdbPath), 0755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -111,7 +111,7 @@ func TestListPackagesErrors(t *testing.T) {
 
 	cfg = &config.MockConfig{
 		Items: map[string][]string{
-			"Releaser.ReadOnlyVdb": {"/var/db/pkg"},
+			"Releaser.ReadOnlyVdb": {RwVdbPath},
 		},
 	}
 	o, _ = NewOstree(NewOstreeOptions{Config: cfg})
@@ -124,7 +124,7 @@ func TestListPackagesErrors(t *testing.T) {
 func TestListPackagesMocked(t *testing.T) {
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"Releaser.ReadOnlyVdb": {"/var/db/pkg"},
+			"Releaser.ReadOnlyVdb": {RwVdbPath},
 			"Ostree.Root":          {"/"},
 		},
 	}
@@ -147,7 +147,7 @@ d00755 0 0 0 abc abc /var/db/pkg/cat/other
 
 	// We need directoryExists to return true for sysroot/var/db/pkg
 	sysroot := t.TempDir()
-	os.MkdirAll(filepath.Join(sysroot, "var/db/pkg"), 0755)
+	os.MkdirAll(filepath.Join(sysroot, RwVdbPath), 0755)
 
 	pkgs, err := o.ListPackages("commit")
 	if err != nil {
