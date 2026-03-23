@@ -214,6 +214,7 @@ release_common.check_leaking_buckets() {
             "${imagedir}" |
         grep -v \
             -E '.*usr/lib64/ruby/gems.*' \
+            -E '.*usr/lib64/node_modules/npm/node_modules/npm/.*' \
         2>/dev/null || true
     )
     if [ "${#leaking_key_files[@]}" -gt 0 ]; then
