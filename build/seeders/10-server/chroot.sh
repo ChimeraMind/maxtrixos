@@ -69,10 +69,6 @@ server.build_everything() {
     chroots_lib.generic_forced_rebuild "${BUILD_KERNEL_PACKAGES[@]}"
 }
 
-server.clean_temporary_artifacts() {
-    chroots_lib.default_clean_temporary_artifacts
-}
-
 server.tweak_nsswitch() {
     # make the default /etc/nsswitch.conf a bit less dumb
     # and add support for dns and mdns resolution.
@@ -101,7 +97,6 @@ main() {
         server.portage_bootstrap
         server.build_everything
         server.tweak_nsswitch
-        server.clean_temporary_artifacts
         server.tweak_resolved
     )
 

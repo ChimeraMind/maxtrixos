@@ -140,10 +140,6 @@ bedrock.build_everything() {
     chroots_lib.rebuild_before_portage_counter "${INITIAL_PORTAGE_COUNTER}"
 }
 
-bedrock.clean_temporary_artifacts () {
-    chroots_lib.default_clean_temporary_artifacts
-}
-
 setup_portage_counter() {
     # Load portage counter from disk if we previously saved it.
     local stored_portage_counter=
@@ -184,7 +180,6 @@ main() {
         bedrock.build_system
         bedrock.build_everything
         bedrock.tweak_nsswitch
-        bedrock.clean_temporary_artifacts
     )
 
     # Pre-run tests to check that for every phase we have a function declared
