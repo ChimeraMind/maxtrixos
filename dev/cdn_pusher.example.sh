@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-if [ -e /etc/profile ]; then
+if [ -f /etc/profile ]; then
     source /etc/profile
 fi
 set -eu
