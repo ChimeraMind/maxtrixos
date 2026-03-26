@@ -67,6 +67,10 @@ chroots_lib.setup() {
     cat /proc/self/mountinfo >&2
     echo "PID 1 is:" >&2
     readlink /proc/1/exe >&2
+    echo "Cgroup state:" >&2
+    echo "Memory limit (cgroup v2): $(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo 'N/A')" >&2
+    echo "CPU quota (cgroup v2): $(cat /sys/fs/cgroup/cpu.max 2>/dev/null || echo 'N/A')" >&2
+    echo "CPU set (cgroup v2): $(cat /sys/fs/cgroup/cpuset.cpus.effective 2>/dev/null || echo 'N/A')" >&2
 }
 
 _get_phase_path() {
@@ -322,12 +326,97 @@ chroots_lib.get_current_portage_counter() {
     (for f in /var/db/pkg/*/*/COUNTER; do cat "${f}"; echo; done) | sort -n | tail -n 1
 }
 
-chroots_lib.try_get_emerge_jobs_flags() {
-    local num_procs=
-    num_procs=$(nproc || true)
-    # Assume 1C/2G
-    num_gib=$(free -g | awk '/^Mem:/{print $2}' || true)
+chroots_lib.try_get_cgroup_cpuset() {
+    # When cpuset is active, nproc reflects the pinned cores via
+    # sched_getaffinity.  Check cpuset.cpus.effective to confirm
+    # cpuset is actually constraining us.
+    local cg_cpuset="/sys/fs/cgroup/cpuset.cpus.effective"
+    if [ ! -f "${cg_cpuset}" ]; then
+        echo "No cgroup cpuset found at ${cg_cpuset}. Cannot determine CPU count via cpuset." >&2
+        return 1
+    fi
 
+    local num_procs=
+    num_procs=$(nproc 2>/dev/null || true)
+    if [ -z "${num_procs}" ] || [ "${num_procs}" -lt 1 ] 2>/dev/null; then
+        echo "nproc returned invalid value despite cpuset being present." >&2
+        return 1
+    fi
+
+    echo "${num_procs}"
+}
+
+chroots_lib.try_get_cgroup_cpu_max() {
+    # Determine effective CPU count.
+    # cpu.max (format: "$MAX $PERIOD" in µs) gives the bandwidth limit;
+    # effective CPUs = max / period.  nproc only reflects cpuset, not
+    # cpu bandwidth, so we prefer cpu.max when present.
+    local num_procs=
+    local cg_cpu_max="/sys/fs/cgroup/cpu.max"
+    if [ ! -f "${cg_cpu_max}" ]; then
+        echo "No cgroup cpu.max found at ${cg_cpu_max}. Cannot determine CPU quota via cpu.max." >&2
+        return 1
+    fi
+
+    local cpu_raw=
+    cpu_raw=$(cat "${cg_cpu_max}" 2>/dev/null || true)
+    local quota= period=
+    quota=$(echo "${cpu_raw}" | awk '{print $1}')
+    period=$(echo "${cpu_raw}" | awk '{print $2}')
+    if [ -n "${quota}" ] && [ "${quota}" != "max" ] && [ -n "${period}" ] && [ "${period}" -gt 0 ] 2>/dev/null; then
+        num_procs=$(( quota / period ))
+        if [ "${num_procs}" -lt 1 ]; then
+            num_procs=1
+        fi
+    fi
+
+    echo "${num_procs}"
+}
+
+chroots_lib.try_get_cgroup_memory_max() {
+    # Inside the cgroup namespace, /sys/fs/cgroup/memory.max is visible
+    # and shows the per-worker limit (same mechanism Docker uses).
+    # Fall back to free(1) for unconstrained or non-cgroup runs.
+    local num_gib=
+    local cg_max="/sys/fs/cgroup/memory.max"
+    if [ ! -f "${cg_max}" ]; then
+        echo "No cgroup memory.max found at ${cg_max}. Assuming unconstrained memory." >&2
+        return 1
+    fi
+
+    local max_bytes=
+    max_bytes=$(cat "${cg_max}" 2>/dev/null || true)
+    if [ -n "${max_bytes}" ] && [ "${max_bytes}" != "max" ]; then
+        num_gib=$(( max_bytes / 1073741824 ))
+        if [ "${num_gib}" -lt 1 ]; then
+            num_gib=1
+        fi
+    fi
+    echo "${num_gib}"
+}
+
+chroots_lib.try_get_emerge_jobs_flags() {
+    # Prefer cpuset (reflects pinned cores via nproc) over cpu.max
+    # (bandwidth throttling).  Fall back to nproc if neither is set.
+    local num_procs=
+    num_procs=$(chroots_lib.try_get_cgroup_cpuset || true)
+    if [ -z "${num_procs}" ]; then
+        num_procs=$(chroots_lib.try_get_cgroup_cpu_max || true)
+    fi
+    if [ -z "${num_procs}" ]; then
+        echo "No cgroup CPU constraints detected. Using nproc to determine CPU count." >&2
+        num_procs=$(nproc 2>/dev/null || true)
+    fi
+
+    local num_gib=
+    num_gib=$(chroots_lib.try_get_cgroup_memory_max || true)
+
+    if [ -z "${num_gib}" ]; then
+        echo "No cgroup memory constraints detected. Using free(1) to determine total memory." >&2
+        num_gib=$(free -g | awk '/^Mem:/{print $2}' || true)
+    fi
+
+    # Assume 1C/2G.
     if [ -z "${num_procs}" ] || [ -z "${num_gib}" ]; then
         echo "WARNING: Could not determine number of processors or amount of memory. Using default 2C/4G." >&2
         num_procs=2
@@ -346,6 +435,7 @@ chroots_lib.try_get_emerge_jobs_flags() {
             echo "WARNING: Limiting emerge jobs to ${num_gib_procs} based on available memory (${num_gib} GiB)." >&2
             num_procs="${num_gib_procs}"
         fi
+        echo "Determined emerge jobs flags: --jobs=${num_procs} --load-average=${num_procs}" >&2
     fi
 
     local flags=()

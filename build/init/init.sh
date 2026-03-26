@@ -252,6 +252,23 @@ maybe_mount_boot() {
     fi
 }
 
+maybe_mount_cgroup2() {
+    local chroot_dir="${1}"
+    if [ -z "${chroot_dir}" ]; then
+        echo "chroot_dir is not set, unable to mount cgroup2." >&2
+        return 1
+    fi
+
+    local dst_cgroup="${chroot_dir%/}/sys/fs/cgroup"
+    mkdir -p "${dst_cgroup}"
+    if ! mountpoint -q "${dst_cgroup}"; then
+        echo "Mounting cgroup2 on ${dst_cgroup} ..."
+        mount -t cgroup2 none "${dst_cgroup}"
+    else
+        echo "${dst_cgroup} already mounted, skipping cgroup2 mount." >&2
+    fi
+}
+
 setup_chroot_env() {
     local chroot_dir="${1}"
 
@@ -278,9 +295,51 @@ setup_chroot_env() {
     fi
 
     maybe_mount_sys "${chroot_dir}"
+    maybe_mount_cgroup2 "${chroot_dir}"
     maybe_mount_dev "${chroot_dir}"
     maybe_mount_run_lock "${chroot_dir}"
     # The rest of the filesystems are mounted by the callee target executable.
+}
+
+setup_cgroups() {
+    chroot_dir="${1}"
+    if [ -z "${chroot_dir}" ]; then
+        echo "chroot_dir is not set, unable to setup cgroups." >&2
+        return 1
+    fi
+
+    # Print worker resource diagnostics.
+    # We read from the chroot-relative cgroup2 mount
+    # (${chroot_dir}/sys/fs/cgroup/) which was mounted by
+    # maybe_mount_cgroup2() and reflects the worker's cgroup namespace.
+    local cg_root="${chroot_dir%/}/sys/fs/cgroup"
+    local cg_mem_max="${cg_root}/memory.max"
+    local cg_cpu_max="${cg_root}/cpu.max"
+    local cg_cpuset="${cg_root}/cpuset.cpus.effective"
+
+    if [ -f "${cg_mem_max}" ]; then
+        local max_bytes
+        max_bytes=$(cat "${cg_mem_max}" 2>/dev/null || true)
+        if [ -n "${max_bytes}" ] && [ "${max_bytes}" != "max" ]; then
+            local mem_gib=$(( max_bytes / 1073741824 ))
+            echo "init.sh: cgroup memory.max=${max_bytes} (${mem_gib} GiB)" >&2
+        else
+            echo "init.sh: cgroup memory.max=${max_bytes:-N/A}" >&2
+        fi
+    else
+        echo "init.sh: cgroup memory.max=N/A (${cg_mem_max} not enabled)" >&2
+    fi
+
+    if [ -f "${cg_cpu_max}" ]; then
+        echo "init.sh: cgroup cpu.max=$(cat "${cg_cpu_max}" 2>/dev/null)" >&2
+    else
+        echo "init.sh: cgroup cpu.max=N/A (${cg_cpu_max} not enabled)" >&2
+    fi
+    if [ -f "${cg_cpuset}" ]; then
+        echo "init.sh: cgroup cpuset.cpus=$(cat "${cg_cpuset}" 2>/dev/null)" >&2
+    else
+        echo "init.sh: cgroup cpuset.cpus=N/A (${cg_cpuset} not enabled)" >&2
+    fi
 }
 
 main() {
@@ -294,6 +353,8 @@ main() {
     echo "chroot_dir=${chroot_dir}, target_exec=${target_exec}, args=${*}" >&2
     # Setup the chroot environment (mounts, env vars, etc).
     setup_chroot_env "${chroot_dir}"
+    setup_cgroups "${chroot_dir}"
+
     # Execute the target executable inside the chroot w/exec so it becomes PID 1.
     exec chroot "${chroot_dir}" "${target_exec}" "${@}"
 }

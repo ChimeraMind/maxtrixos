@@ -261,7 +261,7 @@ _load_init_script() {
     _load_init_script
 
     local expected_dst="${CHROOT_DIR}/${DEFAULT_PRIVATE_GIT_REPO_PATH#/}"
-    export STUB_MOUNTPOINTS="${CHROOT_DIR}/var/cache/distfiles ${CHROOT_DIR}/var/cache/binpkgs ${expected_dst} ${CHROOT_DIR}/sys ${CHROOT_DIR}/dev ${CHROOT_DIR}/run/lock"
+    export STUB_MOUNTPOINTS="${CHROOT_DIR}/var/cache/distfiles ${CHROOT_DIR}/var/cache/binpkgs ${expected_dst} ${CHROOT_DIR}/sys ${CHROOT_DIR}/sys/fs/cgroup ${CHROOT_DIR}/dev ${CHROOT_DIR}/run/lock"
     run setup_chroot_env "${CHROOT_DIR}"
 
     [ "$status" -eq 0 ]
