@@ -489,6 +489,34 @@ chroots_lib.generic_forced_rebuild() {
     emerge "${common_args[@]}" "${@}"
 }
 
+chroots_lib.clean_old_distfiles() {
+    local distdir="/var/cache/distfiles"
+    local ttl_days="30"
+
+    # Guard: if noatime is active, atime is never updated so -atime based
+    # eviction would incorrectly delete recently-used packages.
+    local mount_opts=
+    mount_opts=$(findmnt -n -o OPTIONS --target "${distdir}" 2>/dev/null || true)
+    if [[ ",${mount_opts}," == *",noatime,"* ]]; then
+        echo "[!] WARNING: ${distdir} is mounted with noatime. Skipping atime-based eviction." >&2
+        echo "[!] Remount without noatime (relatime is fine) for distfiles cache eviction to work." >&2
+        return 0
+    fi
+
+    echo "[*] Sweeping ${distdir} for distfiles unread in ${ttl_days} days..."
+
+    # Evict stale source tarballs based on access time (atime).
+    # Distfiles are plain archives; no Portage index to rebuild afterwards.
+    find "${distdir}" -type f \
+        -atime +"${ttl_days}" \
+        -print -delete
+
+    # Prune empty subdirectories (some mirrors/fetchers create them).
+    find "${distdir}" -mindepth 1 -type d -empty -delete
+
+    echo "[*] Distfiles cache eviction complete."
+}
+
 chroots_lib.clean_old_binpkgs() {
     # This script relies on the fact that the BINPKG_DIR is bind-mounted without noatime.
     local pkgdir="/var/cache/binpkgs"
