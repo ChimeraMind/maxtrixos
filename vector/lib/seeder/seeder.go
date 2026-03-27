@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"sync"
+	"syscall"
 
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
@@ -24,12 +25,14 @@ type SeederFilterFunc func(name string) bool
 
 // SeederInfo holds the resolved paths for a single discovered seeder.
 type SeederInfo struct {
-	Name             string   // e.g. "00-bedrock"
-	Dir              string   // absolute directory path
-	ChrootExec       string   // path to the chroot executable itself (e.g. chroot)
-	ChrootChrootExec string   // path to the chroot executable inside the chroot
-	ChrootChrootArgs []string // args to run the chroot executable inside the chroot
-	PrepperExec      string   // path to the prepper executable
+	Name                  string   // e.g. "00-bedrock"
+	Dir                   string   // absolute directory path
+	ChrootExec            string   // path to the chroot executable itself (e.g. chroot)
+	ChrootChrootExec      string   // path to the chroot executable inside the chroot
+	ChrootChrootArgs      []string // args to run the chroot executable inside the chroot
+	PrepperExec           string   // path to the prepper executable
+	PostBuildExec         string   // path to the post-build executable (empty if absent)
+	PostBuildChrootExec   string   // path to the post-build executable inside the chroot
 }
 
 // NewSeederOptions contains options for creating a new Seeder.
@@ -42,13 +45,14 @@ type NewSeederOptions struct {
 
 // SeedOptions contains options for running a seeder.
 type SeedOptions struct {
-	ChrootDir string
-	Dir       string
-	Info      SeederInfo
-	Env       []string
-	Stdin     io.Reader
-	Stdout    io.Writer
-	Stderr    io.Writer
+	ChrootDir   string
+	Dir         string
+	Info        SeederInfo
+	Env         []string
+	Stdin       io.Reader
+	Stdout      io.Writer
+	Stderr      io.Writer
+	SysProcAttr *syscall.SysProcAttr
 }
 
 // ISeeder defines the interface for seeder operations.
@@ -89,6 +93,8 @@ type ISeeder interface {
 	ParamsExecutableName() (string, error)
 	// PrepperExecName returns the name of the prepper executable inside each seeder directory.
 	PrepperExecName() (string, error)
+	// PostBuildExecName returns the name of the post-build executable inside each seeder directory.
+	PostBuildExecName() (string, error)
 	// ChrootMetadataDir returns the chroot-side directory for build metadata.
 	ChrootMetadataDir() (string, error)
 	// ChrootMetadataDirBuildFileName returns the file name for build metadata inside the chroot metadata directory.
@@ -177,6 +183,21 @@ type ISeeder interface {
 	SetupChrootDirs(chrootDir string) error
 	// Seed runs the seeder script inside the chroot.
 	Seed(opts *SeedOptions) error
+	// PostBuild runs the post-build script inside the chroot.
+	// It is called sequentially after all parallel builds complete.
+	PostBuild(opts *SeedOptions) error
+	// Parallelism returns the maximum number of seeders to build concurrently.
+	Parallelism() (int, error)
+	// MaxMemoryGiB returns the maximum total memory (in GiB) for all parallel workers.
+	// 0 means use all available system memory.
+	MaxMemoryGiB() (int, error)
+	// MaxCPUs returns the maximum number of CPUs for all parallel workers.
+	// 0 means use all available CPUs.
+	MaxCPUs() (int, error)
+	// CoresMultiplier returns the CPU cores oversubscription multiplier.
+	// Values > 1.0 allow overlapping cpuset ranges, giving each worker more
+	// cores than a strict partition. Defaults to 1.0.
+	CoresMultiplier() (float64, error)
 }
 
 // Seeder provides seed detection and manipulation operations.

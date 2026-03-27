@@ -256,3 +256,91 @@ func TestSeedsVersioningCadence_PropagatesError(t *testing.T) {
 		t.Errorf("got error %v, want %v", err, wantErr)
 	}
 }
+
+func TestParallelism_Default(t *testing.T) {
+	s := newTestSeeder()
+	got, err := s.Parallelism()
+	if err != nil {
+		t.Fatalf("Parallelism: %v", err)
+	}
+	if got != 1 {
+		t.Errorf("got %d, want 1", got)
+	}
+}
+
+func TestParallelism_Set(t *testing.T) {
+	s := newTestSeeder()
+	s.cfg.(*config.MockConfig).Items["Seeder.Parallelism"] = []string{"4"}
+	got, err := s.Parallelism()
+	if err != nil {
+		t.Fatalf("Parallelism: %v", err)
+	}
+	if got != 4 {
+		t.Errorf("got %d, want 4", got)
+	}
+}
+
+func TestParallelism_InvalidValue(t *testing.T) {
+	s := newTestSeeder()
+	s.cfg.(*config.MockConfig).Items["Seeder.Parallelism"] = []string{"notanumber"}
+	_, err := s.Parallelism()
+	if err == nil {
+		t.Fatal("expected error for invalid parallelism, got nil")
+	}
+}
+
+func TestParallelism_NegativeValue(t *testing.T) {
+	s := newTestSeeder()
+	s.cfg.(*config.MockConfig).Items["Seeder.Parallelism"] = []string{"-1"}
+	got, err := s.Parallelism()
+	if err != nil {
+		t.Fatalf("Parallelism: %v", err)
+	}
+	if got != 1 {
+		t.Errorf("got %d, want 1 (clamped)", got)
+	}
+}
+
+func TestCoresMultiplier_Default(t *testing.T) {
+	s := newTestSeeder()
+	got, err := s.CoresMultiplier()
+	if err != nil {
+		t.Fatalf("CoresMultiplier: %v", err)
+	}
+	if got != 1.0 {
+		t.Errorf("got %f, want 1.0", got)
+	}
+}
+
+func TestCoresMultiplier_Set(t *testing.T) {
+	s := newTestSeeder()
+	s.cfg.(*config.MockConfig).Items["Seeder.CoresMultiplier"] = []string{"1.5"}
+	got, err := s.CoresMultiplier()
+	if err != nil {
+		t.Fatalf("CoresMultiplier: %v", err)
+	}
+	if got != 1.5 {
+		t.Errorf("got %f, want 1.5", got)
+	}
+}
+
+func TestCoresMultiplier_InvalidValue(t *testing.T) {
+	s := newTestSeeder()
+	s.cfg.(*config.MockConfig).Items["Seeder.CoresMultiplier"] = []string{"notfloat"}
+	_, err := s.CoresMultiplier()
+	if err == nil {
+		t.Fatal("expected error for invalid CoresMultiplier, got nil")
+	}
+}
+
+func TestCoresMultiplier_ClampLow(t *testing.T) {
+	s := newTestSeeder()
+	s.cfg.(*config.MockConfig).Items["Seeder.CoresMultiplier"] = []string{"0.01"}
+	got, err := s.CoresMultiplier()
+	if err != nil {
+		t.Fatalf("CoresMultiplier: %v", err)
+	}
+	if got != 0.1 {
+		t.Errorf("got %f, want 0.1 (clamped)", got)
+	}
+}
