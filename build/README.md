@@ -14,7 +14,7 @@ The heart of the build system is the `vector seeds` command (located at `vector/
 
 ### Usage
 
-While typically invoked by the high-level `dev/build.sh` or `dev/vector_builder.sh` wrappers, `vector seeds` can be run manually for debugging or specific build tasks:
+While typically invoked by the high-level `dev/build.sh` wrapper, `vector seeds` can be run manually for debugging or specific build tasks:
 
 ```bash
 # Build all seeders

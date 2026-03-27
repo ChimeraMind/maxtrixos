@@ -1,7 +1,6 @@
 # Overall TODO
 
 Golang migration:
-    - [WAITING] Migrate vector_builder.sh to Golang (vector build all done, need to wait).
     - add integration tests for vector usage inside VM to run manually first
       - [WAITING] vector setupOS
       - [WAITING] vector jailbreak
