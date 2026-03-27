@@ -186,8 +186,26 @@ test.flatpak() {
     fi
 }
 
+test.setupOS() {
+    vector setupOS \
+        --skip-encryption \
+        --skip-passwords \
+        --locale en_US.UTF-8 \
+        --keymap us \
+        --timezone Europe/London \
+        --hostname testvm-$RANDOM
+}
+
+test.jailbreak() {
+    echo "Testing jailbreak functionality... This is a one way ticket to hell."
+    vector jailbreak \
+        --yolo-skip-full-branch-check \
+        --yolo-skip-destroy-confirmation
+}
+
 
 main() {
+    cd /
 
     local tests=(
         test.start_sshd
@@ -199,6 +217,8 @@ main() {
         test.systemctl_status
         test.ostree_status
         test.flatpak
+        test.setupOS
+        test.jailbreak
     )
 
     local exit_st=0

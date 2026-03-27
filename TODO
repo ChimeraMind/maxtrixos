@@ -1,10 +1,5 @@
 # Overall TODO
 
-Golang migration:
-    - add integration tests for vector usage inside VM to run manually first
-      - [WAITING] vector setupOS
-      - [WAITING] vector jailbreak
-
 Features:
     - [sd-boot] Closely watch https://github.com/ostreedev/ostree/pull/3359
         This will be our trampoline to support bootc in the future.
