@@ -14,11 +14,12 @@ import (
 func newDetectTestDetector(t *testing.T, seedersDir, chrootSeedersDir string) *SeederDetector {
 	t.Helper()
 	cfg := &config.MockConfig{Items: map[string][]string{
-		"Seeder.SeedersDir":             {seedersDir},
-		"Seeder.ChrootSeedersDir":       {chrootSeedersDir},
-		"Seeder.SeederDisabledFileName": {"__disabled__"},
-		"Seeder.ChrootExecutableName":   {"chroot.sh"},
-		"Seeder.PrepperExecutableName":  {"prepper.sh"},
+		"Seeder.SeedersDir":              {seedersDir},
+		"Seeder.ChrootSeedersDir":        {chrootSeedersDir},
+		"Seeder.SeederDisabledFileName":  {"__disabled__"},
+		"Seeder.ChrootExecutableName":    {"chroot.sh"},
+		"Seeder.PrepperExecutableName":   {"prepper.sh"},
+		"Seeder.PostBuildExecutableName": {"poster.sh"},
 	}, Bools: map[string]bool{}}
 	d, err := NewSeederDetector(cfg)
 	if err != nil {

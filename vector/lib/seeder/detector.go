@@ -95,6 +95,10 @@ func (d *SeederDetector) Detect(skip, only SeederFilterFunc) ([]SeederInfo, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to get prepper exec name: %w", err)
 	}
+	postBuildExecName, err := d.configItem("Seeder.PostBuildExecutableName")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get post-build exec name: %w", err)
+	}
 
 	entries, err := os.ReadDir(seedersDir)
 	if err != nil {
@@ -160,13 +164,26 @@ func (d *SeederDetector) Detect(skip, only SeederFilterFunc) ([]SeederInfo, erro
 		)
 		fmt.Fprintf(d.stderr, "Found prepper at: %s\n", prepperExec)
 
-		seeders = append(seeders, SeederInfo{
+		info := SeederInfo{
 			Name:             seederName,
 			Dir:              seederDir,
 			ChrootExec:       seederExec,
 			ChrootChrootExec: chrootSeederExec,
 			PrepperExec:      prepperExec,
-		})
+		}
+
+		// Post-build script is optional.
+		postBuildExec := filepath.Join(seederDir, postBuildExecName)
+		if filesystems.PathExists(postBuildExec) {
+			if err := checkExecutable(postBuildExec); err != nil {
+				return nil, fmt.Errorf("please chmod +x %s", postBuildExec)
+			}
+			info.PostBuildExec = postBuildExec
+			info.PostBuildChrootExec = filepath.Join(chrootSeederDir, postBuildExecName)
+			fmt.Fprintf(d.stderr, "Found post-build at: %s\n", postBuildExec)
+		}
+
+		seeders = append(seeders, info)
 	}
 
 	return seeders, nil
