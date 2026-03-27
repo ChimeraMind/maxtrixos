@@ -379,3 +379,75 @@ EOF
     [[ "$output" == *"EMAINT: --repo=gentoo sync"* ]]
     [[ "$output" == *"EMAINT: --repo=musl sync"* ]]
 }
+
+# --- clean_old_binpkgs ---
+
+_stub_find_and_emaint() {
+    export FIND_LOG="${TEST_TMPDIR}/find.log"
+    export EMAINT_LOG="${TEST_TMPDIR}/emaint.log"
+    cat > "${STUB_BIN}/find" << 'STUB'
+#!/bin/bash
+echo "$*" >> "$FIND_LOG"
+STUB
+    chmod +x "${STUB_BIN}/find"
+
+    cat > "${STUB_BIN}/emaint" << 'STUB'
+#!/bin/bash
+echo "$*" >> "$EMAINT_LOG"
+STUB
+    chmod +x "${STUB_BIN}/emaint"
+}
+
+@test "clean_old_binpkgs invokes find for stale .tbz2, .gpkg.tar, .xpak files" {
+    _stub_find_and_emaint
+
+    run chroots_lib.clean_old_binpkgs
+    [ "$status" -eq 0 ]
+
+    # First find call: stale package deletion.
+    local line1
+    line1=$(sed -n '1p' "${FIND_LOG}")
+    [[ "${line1}" == "/var/cache/binpkgs"* ]]
+    [[ "${line1}" == *"-type f"* ]]
+    [[ "${line1}" == *"*.tbz2"* ]]
+    [[ "${line1}" == *"*.gpkg.tar"* ]]
+    [[ "${line1}" == *"*.xpak"* ]]
+    [[ "${line1}" == *"-atime +30"* ]]
+    [[ "${line1}" == *"-print"* ]]
+    [[ "${line1}" == *"-delete"* ]]
+}
+
+@test "clean_old_binpkgs prunes empty directories with -mindepth 1" {
+    _stub_find_and_emaint
+
+    run chroots_lib.clean_old_binpkgs
+    [ "$status" -eq 0 ]
+
+    # Second find call: empty directory pruning.
+    local line2
+    line2=$(sed -n '2p' "${FIND_LOG}")
+    [[ "${line2}" == "/var/cache/binpkgs -mindepth 1 -type d -empty -delete" ]]
+}
+
+@test "clean_old_binpkgs calls emaint binhost --fix" {
+    _stub_find_and_emaint
+
+    run chroots_lib.clean_old_binpkgs
+    [ "$status" -eq 0 ]
+
+    local emaint_call
+    emaint_call=$(cat "${EMAINT_LOG}")
+    [ "${emaint_call}" = "binhost --fix" ]
+}
+
+@test "clean_old_binpkgs prints sweep and completion messages" {
+    _stub_find_and_emaint
+
+    run chroots_lib.clean_old_binpkgs
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Sweeping /var/cache/binpkgs for binpkgs unread in 30 days"* ]]
+    [[ "$output" == *"Binary packages cache eviction complete"* ]]
+}
+
+# Note: Error propagation when find/emaint fails is handled by set -eu (script
+# convention) and cannot be tested through bats' `run` which disables set -e.
