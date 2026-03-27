@@ -271,6 +271,20 @@ also reads from `conf/client.conf` (e.g. the upgrade command).
 
 **Important**: If you fork this repository to customize builds, update `GitRepo` in `conf/matrixos.conf` to point to your fork.
 
+### Build Resource Management
+
+The Seeder supports parallel builds with fine-grained resource control via `conf/matrixos.conf`
+under the `[Seeder]` section:
+
+| Setting | Default | Description |
+| ------- | ------- | ----------- |
+| `Parallelism` | `2` | Number of seed builds to run concurrently. |
+| `MaxMemoryGiB` | `0` (all) | Maximum total memory (GiB) across all workers. Each worker gets `MaxMemoryGiB / Parallelism`. |
+| `MaxCores` | `0` (all) | Maximum CPU cores across all workers. Each worker gets `MaxCores / Parallelism`. |
+| `CoresMultiplier` | `1.0` | CPU cores oversubscription multiplier. Values > 1.0 allow overlapping cpuset ranges, useful when build load is asymmetric or when using cgroups with soft CPU limits. |
+
+Resource limits are enforced via cgroups v2 when `Parallelism` > 1.
+
 ### Build Workflow
 
 Run the build script as root. It handles the entire pipeline.

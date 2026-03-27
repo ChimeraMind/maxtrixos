@@ -34,7 +34,8 @@ The build process is defined by "seeders" located in `build/seeders/`. Each seed
 1. **`params.sh`**: Defines environment variables specific to the seeder, such as the target chroot directory name.
 2. **`prepper.sh`**: A script executed on the **host** system. It prepares the chroot directory. For the base layer (`00-bedrock`), this involves downloading and unpacking the Gentoo Stage3 tarball. For subsequent layers, it usually involves cloning the previous layer's chroot using `cp --reflink=auto`.
 3. **`chroot.sh`**: The main build script executed **inside** the chroot. It installs packages, configures system services, and performs customizations.
-4. **`packages.conf`** (Optional): A configuration file listing the packages to be installed for that specific layer.
+4. **`poster.sh`**: A post-build script executed **inside** each chroot after all parallel builds complete. It runs sequentially and is typically used for cleanup tasks (e.g. `eclean-dist`/`eclean-pkg`) that need exclusive access to shared bind mounts.
+5. **`packages.conf`** (Optional): A configuration file listing the packages to be installed for that specific layer.
 
 ## The Build Library
 
@@ -56,9 +57,10 @@ The build system is designed for rapid iteration:
 
 ## Directory Structure
 
+* `init/`: Contains `init.sh`, the initialization script for the matrixOS toolkit.
 * `seeders/`: Contains the layer definitions (e.g., `00-bedrock`, `10-server`, `20-gnome`).
+* `seeders/common/`: Shared scripts and Portage configuration used across all seeders.
 * `seeders/lib/`: Shell libraries for preppers and chroot operations.
-* `seeders/headers/`: Environment variable definitions and constants.
 
 ## Seeder Layers
 
