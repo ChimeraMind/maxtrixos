@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"syscall"
 )
 
 // Cmd describes an external command to execute. Zero-value fields are
@@ -16,13 +17,14 @@ import (
 //   - Stdout=nil  → output discarded
 //   - Stderr=nil  → output discarded
 type Cmd struct {
-	Name   string
-	Args   []string
-	Dir    string   // working directory; empty inherits parent
-	Env    []string // environment; nil inherits parent
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	Name        string
+	Args        []string
+	Dir         string              // working directory; empty inherits parent
+	Env         []string            // environment; nil inherits parent
+	Stdin       io.Reader
+	Stdout      io.Writer
+	Stderr      io.Writer
+	SysProcAttr *syscall.SysProcAttr // optional process attributes (e.g. UseCgroupFD)
 }
 
 // Func is the canonical function type for executing an external command.
@@ -52,6 +54,7 @@ var Run Func = func(c *Cmd) error {
 	cmd.Stdin = c.Stdin
 	cmd.Stdout = c.Stdout
 	cmd.Stderr = c.Stderr
+	cmd.SysProcAttr = c.SysProcAttr
 	return cmd.Run()
 }
 
@@ -62,6 +65,7 @@ var Output OutputFunc = func(c *Cmd) ([]byte, error) {
 	cmd.Dir = c.Dir
 	cmd.Env = c.Env
 	cmd.Stdin = c.Stdin
+	cmd.SysProcAttr = c.SysProcAttr
 	return cmd.Output()
 }
 
@@ -73,6 +77,7 @@ var CombinedOutput CombinedOutputFunc = func(c *Cmd) ([]byte, error) {
 	cmd.Dir = c.Dir
 	cmd.Env = c.Env
 	cmd.Stdin = c.Stdin
+	cmd.SysProcAttr = c.SysProcAttr
 	return cmd.CombinedOutput()
 }
 
@@ -102,6 +107,9 @@ func chrootArgs(c *ChrootCmd) ([]string, error) {
 		"--uts",
 		"--ipc",
 		fmt.Sprintf("--mount-proc=%s/proc", c.ChrootDir),
+	}
+	if c.SysProcAttr != nil && c.SysProcAttr.UseCgroupFD {
+		unshareArgs = append(unshareArgs, "--cgroup")
 	}
 	unshareArgs = append(unshareArgs, dirArgs...)
 
@@ -164,12 +172,13 @@ var ChrootRun ChrootRunFunc = func(c *ChrootCmd) error {
 		return err
 	}
 	return Run(&Cmd{
-		Name:   "unshare",
-		Args:   uArgs,
-		Env:    c.Env,
-		Stdin:  c.Stdin,
-		Stdout: c.Stdout,
-		Stderr: c.Stderr,
+		Name:        "unshare",
+		Args:        uArgs,
+		Env:         c.Env,
+		Stdin:       c.Stdin,
+		Stdout:      c.Stdout,
+		Stderr:      c.Stderr,
+		SysProcAttr: c.SysProcAttr,
 	})
 }
 
@@ -180,9 +189,10 @@ var ChrootOutput ChrootOutputFunc = func(c *ChrootCmd) ([]byte, error) {
 		return nil, err
 	}
 	return Output(&Cmd{
-		Name:  "unshare",
-		Args:  uArgs,
-		Env:   c.Env,
-		Stdin: c.Stdin,
+		Name:        "unshare",
+		Args:        uArgs,
+		Env:         c.Env,
+		Stdin:       c.Stdin,
+		SysProcAttr: c.SysProcAttr,
 	})
 }
