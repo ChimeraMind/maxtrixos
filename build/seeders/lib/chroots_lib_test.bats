@@ -398,7 +398,64 @@ STUB
     chmod +x "${STUB_BIN}/emaint"
 }
 
+_stub_findmnt() {
+    local opts="${1}"
+    cat > "${STUB_BIN}/findmnt" << STUB
+#!/bin/bash
+echo "${opts}"
+STUB
+    chmod +x "${STUB_BIN}/findmnt"
+}
+
+@test "clean_old_binpkgs skips eviction when mounted with noatime" {
+    _stub_findmnt "rw,noatime,seclabel"
+    _stub_find_and_emaint
+
+    run chroots_lib.clean_old_binpkgs
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mounted with noatime"* ]]
+    [[ "$output" == *"Skipping atime-based eviction"* ]]
+    # find and emaint must NOT have been called.
+    [ ! -f "${FIND_LOG}" ]
+    [ ! -f "${EMAINT_LOG}" ]
+}
+
+@test "clean_old_binpkgs skips eviction when noatime is first option" {
+    _stub_findmnt "noatime,rw"
+    _stub_find_and_emaint
+
+    run chroots_lib.clean_old_binpkgs
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Skipping atime-based eviction"* ]]
+    [ ! -f "${FIND_LOG}" ]
+}
+
+@test "clean_old_binpkgs proceeds with relatime mount" {
+    _stub_findmnt "rw,relatime,seclabel"
+    _stub_find_and_emaint
+
+    run chroots_lib.clean_old_binpkgs
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Sweeping"* ]]
+    [ -f "${FIND_LOG}" ]
+}
+
+@test "clean_old_binpkgs proceeds when findmnt is unavailable" {
+    # No findmnt stub → the real findmnt will fail or return something benign.
+    cat > "${STUB_BIN}/findmnt" << 'STUB'
+#!/bin/bash
+exit 1
+STUB
+    chmod +x "${STUB_BIN}/findmnt"
+    _stub_find_and_emaint
+
+    run chroots_lib.clean_old_binpkgs
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Sweeping"* ]]
+}
+
 @test "clean_old_binpkgs invokes find for stale .tbz2, .gpkg.tar, .xpak files" {
+    _stub_findmnt "rw,relatime"
     _stub_find_and_emaint
 
     run chroots_lib.clean_old_binpkgs
@@ -418,6 +475,7 @@ STUB
 }
 
 @test "clean_old_binpkgs prunes empty directories with -mindepth 1" {
+    _stub_findmnt "rw,relatime"
     _stub_find_and_emaint
 
     run chroots_lib.clean_old_binpkgs
@@ -430,6 +488,7 @@ STUB
 }
 
 @test "clean_old_binpkgs calls emaint binhost --fix" {
+    _stub_findmnt "rw,relatime"
     _stub_find_and_emaint
 
     run chroots_lib.clean_old_binpkgs
@@ -441,6 +500,7 @@ STUB
 }
 
 @test "clean_old_binpkgs prints sweep and completion messages" {
+    _stub_findmnt "rw,relatime"
     _stub_find_and_emaint
 
     run chroots_lib.clean_old_binpkgs

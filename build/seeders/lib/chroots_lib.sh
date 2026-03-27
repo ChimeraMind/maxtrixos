@@ -494,6 +494,16 @@ chroots_lib.clean_old_binpkgs() {
     local pkgdir="/var/cache/binpkgs"
     local ttl_days="30"
 
+    # Guard: if noatime is active, atime is never updated so -atime based
+    # eviction would incorrectly delete recently-used packages.
+    local mount_opts=
+    mount_opts=$(findmnt -n -o OPTIONS --target "${pkgdir}" 2>/dev/null || true)
+    if [[ ",${mount_opts}," == *",noatime,"* ]]; then
+        echo "[!] WARNING: ${pkgdir} is mounted with noatime. Skipping atime-based eviction." >&2
+        echo "[!] Remount without noatime (relatime is fine) for binpkg cache eviction to work." >&2
+        return 0
+    fi
+
     echo "[*] Sweeping ${pkgdir} for binpkgs unread in ${ttl_days} days..."
 
     # Evict stale binary packages based strictly on access time (atime).
