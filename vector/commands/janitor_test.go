@@ -75,6 +75,7 @@ ChrootSeedersDir = %s/seeders
 SeederDisabledFileName = __disabled__
 ChrootExecutableName = chroot.sh
 PrepperExecutableName = prepper.sh
+PostBuildExecutableName = poster.sh
 ParamsExecutableName = params.sh
 
 [matrixOS]
