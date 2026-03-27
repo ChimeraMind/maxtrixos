@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -242,12 +243,58 @@ func (c *SeedsCommand) runSeeds() error {
 		return fmt.Errorf("failed to read cores multiplier config: %w", err)
 	}
 
-	if err := c.runSeedsParallel(seeders, &parallelOpts{
-		parallelism:     parallelism,
+	// Parse params for every seeder to extract dependencies.
+	paramsByName, err := c.parseSeedersParams(seeders)
+	if err != nil {
+		return err
+	}
+
+	// Create per-worker cgroups for memory and CPU limiting.
+	cgPool, err := c.createWorkerCgroups(&cgroupOpts{
 		maxMemGiB:       maxMemGiB,
 		maxCPUs:         maxCPUs,
 		coresMultiplier: coresMultiplier,
-	}); err != nil {
+	}, parallelism)
+	if err != nil {
+		return err
+	}
+
+	// Context cancelled on SIGINT/SIGTERM via PushCleanup.
+	ctx, cancel := context.WithCancel(context.Background())
+	c.PushCleanup(cancel)
+	defer cancel()
+
+	psOpts := &seeder.ParallelSeedOptions{
+		Seeders:      seeders,
+		ParamsByName: paramsByName,
+		Parallelism:  parallelism,
+		Verbose:      c.verbose,
+		ChrootDir:    c.chrootDir,
+		Resume:       c.resume,
+		Stage3File:   c.stage3File,
+		NewSeeder: func(opts *seeder.NewSeederOptions) (seeder.ISeeder, error) {
+			return newSeeder(c.cfg, opts)
+		},
+		NewStdoutWriter: func(label string) io.Writer {
+			return c.UI.NewStdoutWriter(label)
+		},
+		NewStderrWriter: func(label string) io.Writer {
+			return c.UI.NewStderrWriter(label)
+		},
+		PushCleanup:  c.PushCleanup,
+		OnSeederDone: c.recordResults,
+	}
+	if cgPool != nil {
+		psOpts.SysProcAttr = cgPool.SysProcAttr
+	}
+
+	if err := seeder.ParallelSeed(ctx, psOpts); err != nil {
+		writerSetup(sd)
+		return err
+	}
+
+	// Run post-build hooks sequentially.
+	if err := c.runPostBuild(seeders, paramsByName); err != nil {
 		writerSetup(sd)
 		return err
 	}
@@ -261,112 +308,15 @@ func (c *SeedsCommand) runSeeds() error {
 	return nil
 }
 
-type buildSeedGraphOptions struct {
-	seeders      []seeder.SeederInfo
-	paramsByName map[string]*seeder.SeederParams
-	infoByName   map[string]seeder.SeederInfo
-}
-
-// seedGraph holds the shared dependency-graph state for the worker pool.
-type seedGraph struct {
-	mu         sync.Mutex
-	depCount   map[string]int
-	dependents map[string][]string
-	remaining  int
-	stopped    bool
-	ready      chan string
-}
-
-func (c *SeedsCommand) buildSeedGraph(opts *buildSeedGraphOptions) *seedGraph {
-	// Build dependency graph: for each seeder, record which other
-	// seeders in the current set it depends on.
-	graph := &seedGraph{
-		depCount:   make(map[string]int, len(opts.seeders)),
-		dependents: make(map[string][]string),
-		remaining:  len(opts.seeders),
-		ready:      make(chan string, len(opts.seeders)),
-	}
-	for _, info := range opts.seeders {
-		count := 0
-		for _, dep := range opts.paramsByName[info.Name].Depends {
-			if _, ok := opts.infoByName[dep]; ok {
-				count++
-				graph.dependents[dep] = append(graph.dependents[dep], info.Name)
-			}
-			// Dependencies not in the current set are assumed satisfied.
-		}
-		graph.depCount[info.Name] = count
-	}
-
-	// Seed the ready queue with seeders that have zero unsatisfied deps.
-	for _, info := range opts.seeders {
-		if graph.depCount[info.Name] == 0 {
-			graph.ready <- info.Name
-		}
-	}
-	return graph
-}
-
-type parallelOpts struct {
-	parallelism     int
+type cgroupOpts struct {
 	maxMemGiB       int
 	maxCPUs         int
 	coresMultiplier float64
 }
 
-// runSeedsParallel builds seeders concurrently, respecting dependency
-// order and the configured parallelism limit. Each seeder gets its own
-// ISeeder instance so stdout/stderr and mount tracking are isolated.
-func (c *SeedsCommand) runSeedsParallel(seeders []seeder.SeederInfo, opts *parallelOpts) error {
-	parallelism := opts.parallelism
-	// Parse params for every seeder to extract dependencies.
-	paramsByName, err := c.parseSeedersParams(seeders)
-	if err != nil {
-		return err
-	}
-
-	// Build lookup structures.
-	infoByName := make(map[string]seeder.SeederInfo, len(seeders))
-	for _, info := range seeders {
-		infoByName[info.Name] = info
-	}
-
-	// Build dependency graph: for each seeder, record which other
-	// seeders in the current set it depends on.
-	bsOpts := &buildSeedGraphOptions{
-		seeders:      seeders,
-		paramsByName: paramsByName,
-		infoByName:   infoByName,
-	}
-	graph := c.buildSeedGraph(bsOpts)
-
-	// Create per-worker cgroups for memory and CPU limiting.
-	cgPool, err := c.createWorkerCgroups(opts, parallelism)
-	if err != nil {
-		return err
-	}
-
-	// Context cancelled on SIGINT/SIGTERM via PushCleanup.
-	ctx, cancel := context.WithCancel(context.Background())
-	c.PushCleanup(cancel)
-	defer cancel()
-
-	wpOpts := &runWorkerPoolOptions{
-		parallelism:  parallelism,
-		infoByName:   infoByName,
-		paramsByName: paramsByName,
-		graph:        graph,
-		cgPool:       cgPool,
-	}
-	if err := c.runWorkerPool(ctx, wpOpts); err != nil {
-		return err
-	}
-	return c.runPostBuild(seeders, paramsByName)
-}
-
 // createWorkerCgroups sets up per-worker cgroup v2 resource limits.
 // Returns nil when parallelism <= 1 (no isolation needed).
-func (c *SeedsCommand) createWorkerCgroups(opts *parallelOpts, parallelism int) (*cgroups.WorkerPool, error) {
+func (c *SeedsCommand) createWorkerCgroups(opts *cgroupOpts, parallelism int) (*cgroups.WorkerPool, error) {
 	if parallelism <= 1 {
 		return nil, nil
 	}
@@ -408,14 +358,6 @@ func (c *SeedsCommand) createWorkerCgroups(opts *parallelOpts, parallelism int) 
 	return cgPool, nil
 }
 
-type runWorkerPoolOptions struct {
-	parallelism  int
-	infoByName   map[string]seeder.SeederInfo
-	paramsByName map[string]*seeder.SeederParams
-	graph        *seedGraph
-	cgPool       *cgroups.WorkerPool
-}
-
 // runPostBuild runs post-build scripts sequentially for every seeder
 // that has a PostBuildExec configured. Called after all parallel builds
 // complete successfully.
@@ -428,7 +370,7 @@ func (c *SeedsCommand) runPostBuild(seeders []seeder.SeederInfo, paramsByName ma
 		}
 
 		params := paramsByName[info.Name]
-		chrootDir, err := c.resolveChrootDir(info.Name, params)
+		chrootDir, err := seeder.ResolveChrootDir(info.Name, params, c.chrootDir)
 		if err != nil {
 			return err
 		}
@@ -464,239 +406,7 @@ func (c *SeedsCommand) runPostBuild(seeders []seeder.SeederInfo, paramsByName ma
 	return nil
 }
 
-// runWorkerPool spawns a fixed pool of worker goroutines that pull
-// seeders from the graph's ready channel.  Workers stop when the
-// context is cancelled, an error occurs, or all seeders are done.
-func (c *SeedsCommand) runWorkerPool(ctx context.Context, opts *runWorkerPoolOptions) error {
-	var firstErr error
-	var errMu sync.Mutex
 
-	setError := func(err error) {
-		errMu.Lock()
-		if firstErr == nil {
-			firstErr = err
-		}
-		errMu.Unlock()
-		// Signal all workers to stop by closing the ready channel.
-		opts.graph.mu.Lock()
-		if !opts.graph.stopped {
-			opts.graph.stopped = true
-			close(opts.graph.ready)
-		}
-		opts.graph.mu.Unlock()
-	}
-
-	// Fixed worker pool: each goroutine pulls from ready until the
-	// channel is closed or the context is cancelled.
-	var wg sync.WaitGroup
-	for i := 0; i < opts.parallelism; i++ {
-		workerIdx := i
-		wg.Go(func() {
-			sysProcAttr := opts.cgPool.SysProcAttr(workerIdx)
-			for {
-
-				var seederName string
-				select {
-				case <-ctx.Done():
-					return
-				case name, ok := <-opts.graph.ready:
-					if !ok {
-						return
-					}
-					seederName = name
-				}
-
-				info := opts.infoByName[seederName]
-
-				// Create an isolated ISeeder for this worker.
-				sopts := &seeder.NewSeederOptions{
-					Verbose: c.verbose,
-					Stdout:  c.UI.NewStdoutWriter(fmt.Sprintf("seeds:%s", seederName)),
-					Stderr:  c.UI.NewStderrWriter(fmt.Sprintf("seeds:%s", seederName)),
-				}
-				workerSD, err := newSeeder(c.cfg, sopts)
-				if err != nil {
-					setError(fmt.Errorf("[%s] failed to create seeder: %w", seederName, err))
-					return
-				}
-
-				c.PushCleanup(workerSD.Cleanup)
-
-				// Run the worker under its file lock.
-				err = workerSD.ExecuteWithSeederLock(seederName, func() error {
-					swOpts := &seederWorkerOptions{
-						sd:          workerSD,
-						info:        info,
-						params:      opts.paramsByName[seederName],
-						sysProcAttr: sysProcAttr,
-					}
-					return c.seederWorker(ctx, swOpts)
-				})
-				workerSD.Cleanup()
-
-				if err != nil {
-					setError(fmt.Errorf("seeder %s failed: %w", seederName, err))
-					return
-				}
-
-				// Notify dependents and possibly close ready.
-				opts.graph.mu.Lock()
-				if !opts.graph.stopped {
-					opts.graph.remaining--
-					for _, dep := range opts.graph.dependents[seederName] {
-						opts.graph.depCount[dep]--
-						if opts.graph.depCount[dep] == 0 {
-							opts.graph.ready <- dep
-						}
-					}
-					if opts.graph.remaining == 0 {
-						opts.graph.stopped = true
-						close(opts.graph.ready)
-					}
-				}
-				opts.graph.mu.Unlock()
-			}
-		})
-	}
-
-	wg.Wait()
-	return firstErr
-}
-
-type seederWorkerOptions struct {
-	sd          seeder.ISeeder
-	info        seeder.SeederInfo
-	params      *seeder.SeederParams
-	sysProcAttr *syscall.SysProcAttr
-}
-
-// seederWorker processes a single seeder: resolve chroot dir, run
-// prepper, set up DNS/dirs, execute chroot script, mark done, and
-// record results.
-// When params is nil it parses them from disk (sequential path).
-func (c *SeedsCommand) seederWorker(ctx context.Context, swOpts *seederWorkerOptions) error {
-	sd := swOpts.sd
-	info := swOpts.info
-	params := swOpts.params
-
-	sd.Print(
-		"[%s] Accepted seeder for execution\n", info.Name,
-	)
-
-	// Resolve chroot directory.
-	chrootDir, err := c.resolveChrootDir(info.Name, params)
-	if err != nil {
-		return err
-	}
-	if c.chrootDir != "" {
-		sd.PrintWarning(
-			"[%s] Overriding chroot dir with --chroot-dir='%s'. This can be dangerous for multiple chroots.\n",
-			info.Name,
-			c.chrootDir,
-		)
-	}
-
-	flagFile, err := sd.SeederDoneFlagFile(info.Name, chrootDir)
-	if err != nil {
-		return err
-	}
-
-	// Check if already done.
-	done, err := sd.IsSeederDone(info.Name, chrootDir)
-	if err != nil {
-		return err
-	}
-
-	if done {
-		sd.Print(
-			"[%s] Already marked as done via %s. Skipping.\n",
-			info.Name, flagFile,
-		)
-		return nil
-	}
-
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	// Execute prepper.
-	sd.Print(
-		"[%s] Executing prepper %s ...\n",
-		info.Name, info.PrepperExec,
-	)
-	prepOpts := &seeder.PrepperOptions{
-		ChrootDir:  chrootDir,
-		Resume:     c.resume,
-		Stage3File: c.stage3File,
-	}
-	if err := sd.ExecutePrepper(
-		info, params, prepOpts,
-	); err != nil {
-		return fmt.Errorf(
-			"[%s] prepper failed: %w", info.Name, err,
-		)
-	}
-
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	// Setup DNS.
-	if err := sd.SetupChrootDNS(chrootDir); err != nil {
-		return fmt.Errorf(
-			"[%s] DNS setup failed: %w", info.Name, err,
-		)
-	}
-
-	// Setup chroot dirs.
-	if err := sd.SetupChrootDirs(chrootDir); err != nil {
-		return fmt.Errorf(
-			"[%s] dir setup failed: %w", info.Name, err,
-		)
-	}
-
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	// Execute seeder inside chroot.
-	sd.Print(
-		"[%s] Running seeder inside %s ...\n",
-		info.Name, chrootDir,
-	)
-	opts := &seeder.SeedOptions{
-		ChrootDir:   chrootDir,
-		Info:        info,
-		SysProcAttr: swOpts.sysProcAttr,
-	}
-	if err := sd.Seed(opts); err != nil {
-		return fmt.Errorf(
-			"[%s] chroot execution failed: %w", info.Name, err,
-		)
-	}
-
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	// Mark done.
-	sd.Print("[%s] Flagging %s as complete ...\n",
-		info.Name, chrootDir,
-	)
-	if err := sd.MarkSeederDone(info.Name, chrootDir); err != nil {
-		return err
-	}
-
-	// Record results (thread-safe).
-	if err := c.recordResults(info.Name, chrootDir); err != nil {
-		return fmt.Errorf(
-			"[%s] failed to record results: %w", info.Name, err,
-		)
-	}
-
-	sd.Print("[%s] SUCCESS: Build complete.\n", info.Name)
-	return nil
-}
 
 // parseSeedersParams parses the params file for each seeder and returns
 // a map of seeder name to parsed params.
@@ -728,22 +438,6 @@ func (c *SeedsCommand) parseSeedersParams(seeders []seeder.SeederInfo) (map[stri
 }
 
 // --- Helper methods ---
-
-// resolveChrootDir returns the chroot directory for a seeder, preferring
-// the --chroot-dir flag override when set.
-func (c *SeedsCommand) resolveChrootDir(name string, params *seeder.SeederParams) (string, error) {
-	chrootDir := params.PreferredChrootDir
-	if c.chrootDir != "" {
-		chrootDir = c.chrootDir
-	}
-	if chrootDir == "" {
-		return "", fmt.Errorf(
-			"[%s] no chroot dir specified in params or --chroot-dir",
-			name,
-		)
-	}
-	return chrootDir, nil
-}
 
 // skipFilter returns a SeederFilterFunc that skips seeders present in
 // --skip-seeders.  Returns nil when no skip list is configured.
