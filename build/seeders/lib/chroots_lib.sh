@@ -455,6 +455,7 @@ chroots_lib.emerge_common_args() {
         --binpkg-respect-use=y
         --buildpkg
         --usepkg
+        --usepkg-exclude-live=y
         --quiet-build=y
         --verbose
     )
