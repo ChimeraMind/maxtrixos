@@ -5,3 +5,5 @@
 /.vscode
 # matrixos-private.git repo location
 /private/
+# user configs
+/conf/*.conf.d/*.conf
