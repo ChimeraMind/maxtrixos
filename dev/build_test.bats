@@ -114,34 +114,36 @@ EOF
 
 # --- main ---
 
-@test "main passes --on-build-server --disable-send-mail to vector_builder.sh" {
+@test "main passes --on-build-server --disable-send-mail to vector" {
     cat > "${STUB_BIN}/id" << 'EOF'
 #!/bin/bash
 echo "0"
 EOF
     chmod +x "${STUB_BIN}/id"
 
-    cat > "${MATRIXOS_DEV_DIR}/dev/vector_builder.sh" << 'EOF'
+    mkdir -p "${MATRIXOS_DEV_DIR}/vector"
+    cat > "${MATRIXOS_DEV_DIR}/vector/vector" << 'EOF'
 #!/bin/bash
 echo "ARGS: $@"
 EOF
-    chmod +x "${MATRIXOS_DEV_DIR}/dev/vector_builder.sh"
+    chmod +x "${MATRIXOS_DEV_DIR}/vector/vector"
 
     run main --foo --bar
     [ "$status" -eq 0 ]
-    [[ "$output" == *"ARGS: --on-build-server --disable-send-mail --foo --bar"* ]]
+    [[ "$output" == *"ARGS: build all --on-build-server --disable-send-mail --foo --bar"* ]]
 }
 
 @test "main skips root check and warning when --help is passed" {
-    cat > "${MATRIXOS_DEV_DIR}/dev/vector_builder.sh" << 'EOF'
+    mkdir -p "${MATRIXOS_DEV_DIR}/vector"
+    cat > "${MATRIXOS_DEV_DIR}/vector/vector" << 'EOF'
 #!/bin/bash
 echo "ARGS: $@"
 EOF
-    chmod +x "${MATRIXOS_DEV_DIR}/dev/vector_builder.sh"
+    chmod +x "${MATRIXOS_DEV_DIR}/vector/vector"
 
     run main --help
     [ "$status" -eq 0 ]
     # Should NOT print the build warning
     [[ "$output" != *"ATTENTION PLEASE"* ]]
-    [[ "$output" == *"ARGS: --on-build-server --disable-send-mail --help"* ]]
+    [[ "$output" == *"ARGS: build all --on-build-server --disable-send-mail --help"* ]]
 }
