@@ -23,7 +23,7 @@ func TestBuildCommandInitNoSubcommand(t *testing.T) {
 }
 
 func TestBuildCommandInitValidSubcommand(t *testing.T) {
-	for _, sub := range []string{"image", "images", "release", "releases", "seeds"} {
+	for _, sub := range []string{"all", "image", "images", "release", "releases", "seeds"} {
 		t.Run(sub, func(t *testing.T) {
 			cmd := NewBuildCommand()
 			// Pass "--help" would cause exit, so just check Init parses the subcommand name.
@@ -78,6 +78,7 @@ func TestBuildCommandRunUnknownSubcommand(t *testing.T) {
 func TestBuildCommandSubcommandsRegistered(t *testing.T) {
 	cmd := NewBuildCommand()
 	expected := map[string]bool{
+		"all":      true,
 		"image":    true,
 		"images":   true,
 		"release":  true,
