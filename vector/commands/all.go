@@ -321,6 +321,11 @@ func (c *AllCommand) buildImages(builtReleases []string) (bool, error) {
 // flag indicating there is nothing to release (pipeline should stop),
 // or an error.
 func (c *AllCommand) buildReleases(builtSeeders []string) ([]string, bool, error) {
+	if c.onlyImages {
+		c.Printf("Skipping releases build due to --only-images.\n")
+		return nil, false, nil
+	}
+
 	if !c.forceRelease && len(builtSeeders) == 0 {
 		c.Printf("No new seeds built, skipping releases and images.\n")
 		return nil, true, nil
