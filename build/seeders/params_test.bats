@@ -40,6 +40,11 @@ teardown() {
 
 # ===== 00-bedrock/params.sh =====
 
+@test "bedrock params: SEEDER_DEPENDS is empty" {
+    source "${BATS_TEST_DIRNAME}/00-bedrock/params.sh"
+    [ "${SEEDER_DEPENDS}" = "" ]
+}
+
 @test "bedrock params: SEEDER_CHROOT_NAME has correct format" {
     source "${BATS_TEST_DIRNAME}/00-bedrock/params.sh"
     [[ "${SEEDER_CHROOT_NAME}" =~ ^bedrock-[0-9]{8}$ ]]
@@ -158,6 +163,11 @@ teardown() {
 
 # ===== 10-server/params.sh =====
 
+@test "server params: SEEDER_DEPENDS lists 00-bedrock" {
+    source "${BATS_TEST_DIRNAME}/10-server/params.sh"
+    [ "${SEEDER_DEPENDS}" = "00-bedrock" ]
+}
+
 @test "server params: SEEDER_CHROOT_NAME has correct format" {
     source "${BATS_TEST_DIRNAME}/10-server/params.sh"
     [[ "${SEEDER_CHROOT_NAME}" =~ ^server-[0-9]{8}$ ]]
@@ -171,6 +181,11 @@ teardown() {
 
 # ===== 20-gnome/params.sh =====
 
+@test "gnome params: SEEDER_DEPENDS lists 00-bedrock" {
+    source "${BATS_TEST_DIRNAME}/20-gnome/params.sh"
+    [ "${SEEDER_DEPENDS}" = "00-bedrock" ]
+}
+
 @test "gnome params: SEEDER_CHROOT_NAME has correct format" {
     source "${BATS_TEST_DIRNAME}/20-gnome/params.sh"
     [[ "${SEEDER_CHROOT_NAME}" =~ ^gnome-[0-9]{8}$ ]]
@@ -183,6 +198,11 @@ teardown() {
 }
 
 # ===== 21-cosmic/params.sh =====
+
+@test "cosmic params: SEEDER_DEPENDS lists 00-bedrock" {
+    source "${BATS_TEST_DIRNAME}/21-cosmic/params.sh"
+    [ "${SEEDER_DEPENDS}" = "00-bedrock" ]
+}
 
 @test "cosmic params: SEEDER_CHROOT_NAME has correct format" {
     source "${BATS_TEST_DIRNAME}/21-cosmic/params.sh"

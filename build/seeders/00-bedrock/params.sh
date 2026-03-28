@@ -34,6 +34,11 @@ set -eu
 
 source "${MATRIXOS_DEV_DIR}"/build/seeders/common/params_lib.sh
 
+# SEEDER_DEPENDS="dep1 dep2"
+# Space-separated list of seeder names that this seeder depends on.
+# Used by the seeder orchestration to implement parallel seed builds.
+SEEDER_DEPENDS=""
+
 # SEEDER_CHROOT_NAME=abc
 # Name of the chroot directory that should be created by default.
 # First date of the first Monday of the current week, in the past.
