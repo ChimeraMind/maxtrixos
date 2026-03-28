@@ -93,6 +93,12 @@ func TestAllParseArgsAllFlags(t *testing.T) {
 	getEuid = func() int { return 0 }
 	defer func() { getEuid = origEuid }()
 
+	tmp := t.TempDir()
+	pusher := filepath.Join(tmp, "push.sh")
+	if err := os.WriteFile(pusher, []byte("#!/bin/sh\n"), 0755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
 	cmd := NewAllCommand()
 	err := cmd.parseArgs([]string{
 		"--force-release",
@@ -108,7 +114,7 @@ func TestAllParseArgsAllFlags(t *testing.T) {
 		"--disable-janitor",
 		"--disable-send-mail",
 		"--mail-user", "ops@example.com",
-		"--cdn-pusher", "/usr/local/bin/push",
+		"--cdn-pusher", pusher,
 		"--verbose",
 	})
 	if err != nil {
@@ -151,8 +157,8 @@ func TestAllParseArgsAllFlags(t *testing.T) {
 	if !cmd.disableMail {
 		t.Error("disableMail should be true")
 	}
-	if cmd.cdnPusher != "/usr/local/bin/push" {
-		t.Errorf("cdnPusher = %q, want %q", cmd.cdnPusher, "/usr/local/bin/push")
+	if cmd.cdnPusher != pusher {
+		t.Errorf("cdnPusher = %q, want %q", cmd.cdnPusher, pusher)
 	}
 	if cmd.mailUser != "ops@example.com" {
 		t.Errorf("mailUser = %q, want %q",
@@ -242,7 +248,10 @@ func TestAllCDNPusherMissing(t *testing.T) {
 }
 
 func TestAllCDNPusherEmpty(t *testing.T) {
-	cmd := &AllCommand{}
+	cmd := NewAllCommand()
+	cmd.StartUI()
+	cmd.SetupPrinters("test")
+
 	err := cmd.runCDNPusher(nil, false)
 	if err != nil {
 		t.Errorf("expected nil error for empty CDN pusher, got: %v", err)
