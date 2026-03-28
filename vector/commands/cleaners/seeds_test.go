@@ -433,6 +433,7 @@ func createTestSeeder(
 SEEDER_CHROOT_NAME="%s"
 SEEDER_CHROOTS_DIR="%s"
 PREFERRED_SEEDER_CHROOT_DIR="%s"
+SEEDER_DEPENDS=""
 
 %s_params.find_latest_chroot_dir() {
     echo "%s"
@@ -463,6 +464,7 @@ func buildSeedsCleanerConfig(
 		"Seeder.SeederDisabledFileName":             {".disabled"},
 		"Seeder.ChrootExecutableName":               {"chroot.sh"},
 		"Seeder.PrepperExecutableName":              {"prepper.sh"},
+		"Seeder.PostBuildExecutableName":            {"poster.sh"},
 		"Seeder.ParamsExecutableName":               {"params.sh"},
 		"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
 		"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
