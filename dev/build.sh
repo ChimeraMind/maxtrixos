@@ -15,7 +15,7 @@ set -eu
 if [ -z "${MATRIXOS_DEV_DIR:-}" ]; then
     MATRIXOS_DEV_DIR="$(realpath $(dirname "${0}")/../)"
 fi
-export MATRIXOS_DEV_DIR
+
 
 
 _is_help_arg() {
@@ -68,7 +68,10 @@ main() {
         _print_build_warning
     fi
 
-    exec "${MATRIXOS_DEV_DIR}/dev/vector_builder.sh" --on-build-server --disable-send-mail "${@}"
+    cd "${MATRIXOS_DEV_DIR}"
+    VECTOR_EXEC="${MATRIXOS_DEV_DIR}/vector/vector"
+
+    exec "${VECTOR_EXEC}" build all --on-build-server --disable-send-mail "${@}"
 }
 
 main "${@}"
