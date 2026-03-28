@@ -362,7 +362,14 @@ func releaseTestSetup(t *testing.T) (*Releaser, *ostree.MockOstree) {
 
 	cfgMock := r.cfg.(*config.MockConfig)
 	cfgMock.Items["Seeder.ChrootMetadataDir"] = []string{"usr/share/matrixos"}
+	cfgMock.Items["Releaser.ReadOnlyVdb"] = []string{"usr/share/vdb"}
 	cfgMock.Bools["Releaser.GenerateStaticDeltas"] = true
+
+	// Create a minimal RO vdb so listPackages succeeds.
+	vdbDir := filepath.Join(r.imageDir, "usr", "share", "vdb", "sys-apps", "placeholder-1.0")
+	if err := os.MkdirAll(vdbDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	return r, mock
 }
@@ -724,5 +731,142 @@ func TestRelease_EmptyImageDir(t *testing.T) {
 	err := r.Release(opts)
 	if err == nil || !strings.Contains(err.Error(), "imageDir") {
 		t.Fatalf("expected imageDir error, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// listPackages
+// ---------------------------------------------------------------------------
+
+// mkVdbPkg creates a category/package directory inside a vdb root.
+func mkVdbPkg(t *testing.T, vdbDir, cat, pkg string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(vdbDir, cat, pkg), 0755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func newListPkgReleaser(t *testing.T, roVdb string) *Releaser {
+	t.Helper()
+	r, _ := newOstreeTestReleaser(t)
+	r.cfg = &config.MockConfig{
+		Items: map[string][]string{
+			"Releaser.ReadOnlyVdb": {roVdb},
+		},
+		Bools: map[string]bool{},
+	}
+	return r
+}
+
+func TestListPackages_UsesReadOnlyVdb(t *testing.T) {
+	roVdb := "usr/share/vdb"
+	r := newListPkgReleaser(t, roVdb)
+
+	// Create the RO vdb with a package.
+	mkVdbPkg(t, filepath.Join(r.imageDir, roVdb), "sys-apps", "systemd-256")
+
+	pkgs, err := r.listPackages(r.imageDir)
+	if err != nil {
+		t.Fatalf("listPackages: %v", err)
+	}
+	if len(pkgs) != 1 || pkgs[0] != "sys-apps/systemd-256" {
+		t.Fatalf("expected [sys-apps/systemd-256], got %v", pkgs)
+	}
+}
+
+func TestListPackages_FallsBackToRwVdb(t *testing.T) {
+	roVdb := "usr/share/vdb-does-not-exist"
+	r := newListPkgReleaser(t, roVdb)
+
+	// Only create the RW vdb (var/db/pkg).
+	mkVdbPkg(t, filepath.Join(r.imageDir, ostree.RwVdbPath), "dev-libs", "openssl-3.1")
+
+	pkgs, err := r.listPackages(r.imageDir)
+	if err != nil {
+		t.Fatalf("listPackages: %v", err)
+	}
+	if len(pkgs) != 1 || pkgs[0] != "dev-libs/openssl-3.1" {
+		t.Fatalf("expected [dev-libs/openssl-3.1], got %v", pkgs)
+	}
+}
+
+func TestListPackages_RoVdbTakesPrecedenceOverRw(t *testing.T) {
+	roVdb := "usr/share/vdb"
+	r := newListPkgReleaser(t, roVdb)
+
+	// Create both vdb directories with different content.
+	mkVdbPkg(t, filepath.Join(r.imageDir, roVdb), "sys-apps", "from-ro-1.0")
+	mkVdbPkg(t, filepath.Join(r.imageDir, ostree.RwVdbPath), "sys-apps", "from-rw-1.0")
+
+	pkgs, err := r.listPackages(r.imageDir)
+	if err != nil {
+		t.Fatalf("listPackages: %v", err)
+	}
+	// Should use ro vdb, not rw.
+	if len(pkgs) != 1 || pkgs[0] != "sys-apps/from-ro-1.0" {
+		t.Fatalf("expected [sys-apps/from-ro-1.0], got %v", pkgs)
+	}
+}
+
+func TestListPackages_NoVdbDir(t *testing.T) {
+	roVdb := "no/such/vdb"
+	r := newListPkgReleaser(t, roVdb)
+
+	// Neither RO nor RW vdb exists.
+	_, err := r.listPackages(r.imageDir)
+	if err == nil {
+		t.Fatal("expected error when no vdb directory exists")
+	}
+	if !strings.Contains(err.Error(), "no vdb directory found") {
+		t.Errorf("error = %q, want 'no vdb directory found'", err)
+	}
+}
+
+func TestListPackages_ReadOnlyVdbConfigError(t *testing.T) {
+	r, _ := newOstreeTestReleaser(t)
+	// Empty config → ReadOnlyVdb returns an error.
+	r.cfg = &config.MockConfig{
+		Items: map[string][]string{},
+		Bools: map[string]bool{},
+	}
+
+	_, err := r.listPackages(r.imageDir)
+	if err == nil {
+		t.Fatal("expected error when ReadOnlyVdb config is missing")
+	}
+}
+
+func TestListPackages_MultiplePackages(t *testing.T) {
+	roVdb := "usr/share/vdb"
+	r := newListPkgReleaser(t, roVdb)
+
+	vdbRoot := filepath.Join(r.imageDir, roVdb)
+	mkVdbPkg(t, vdbRoot, "sys-apps", "systemd-256")
+	mkVdbPkg(t, vdbRoot, "dev-libs", "openssl-3.1")
+	mkVdbPkg(t, vdbRoot, "app-misc", "screen-4.9")
+
+	pkgs, err := r.listPackages(r.imageDir)
+	if err != nil {
+		t.Fatalf("listPackages: %v", err)
+	}
+	if len(pkgs) != 3 {
+		t.Fatalf("expected 3 packages, got %d: %v", len(pkgs), pkgs)
+	}
+}
+
+func TestListPackages_UsesProvidedImageDir(t *testing.T) {
+	roVdb := "usr/share/vdb"
+	r := newListPkgReleaser(t, roVdb)
+
+	// Use a separate temp dir (not r.imageDir) as the imageDir argument.
+	altImageDir := t.TempDir()
+	mkVdbPkg(t, filepath.Join(altImageDir, roVdb), "net-misc", "curl-8.5")
+
+	pkgs, err := r.listPackages(altImageDir)
+	if err != nil {
+		t.Fatalf("listPackages: %v", err)
+	}
+	if len(pkgs) != 1 || pkgs[0] != "net-misc/curl-8.5" {
+		t.Fatalf("expected [net-misc/curl-8.5], got %v", pkgs)
 	}
 }
