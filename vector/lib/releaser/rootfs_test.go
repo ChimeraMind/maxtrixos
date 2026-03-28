@@ -397,15 +397,15 @@ func TestPostCleanShrink_TracksMounts(t *testing.T) {
 	mockMountSyscalls(t)
 
 	imageDir := t.TempDir()
-	seedersDir := t.TempDir()
-	initScript := filepath.Join(seedersDir, "init.sh")
-	os.WriteFile(initScript, []byte("#!/bin/sh\n"), 0o755)
+	devDir := t.TempDir()
+	initDir := filepath.Join(devDir, "build", "init")
+	os.MkdirAll(initDir, 0o755)
+	os.WriteFile(filepath.Join(initDir, "init.sh"), []byte("#!/bin/sh\n"), 0o755)
 
 	chrootCalled := false
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"matrixOS.Root":     {t.TempDir()},
-			"Seeder.SeedersDir": {seedersDir},
+			"matrixOS.Root": {devDir},
 		},
 		Bools: map[string]bool{},
 	}
@@ -535,14 +535,14 @@ func TestPostCleanShrink_ChrootRunFailure(t *testing.T) {
 	chrootRunCalled := false
 
 	imageDir := t.TempDir()
-	seedersDir := t.TempDir()
-	initScript := filepath.Join(seedersDir, "init.sh")
-	os.WriteFile(initScript, []byte("#!/bin/sh\n"), 0o755)
+	devDir := t.TempDir()
+	initDir := filepath.Join(devDir, "build", "init")
+	os.MkdirAll(initDir, 0o755)
+	os.WriteFile(filepath.Join(initDir, "init.sh"), []byte("#!/bin/sh\n"), 0o755)
 
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"matrixOS.Root":     {t.TempDir()},
-			"Seeder.SeedersDir": {seedersDir},
+			"matrixOS.Root": {devDir},
 		},
 		Bools: map[string]bool{},
 	}
@@ -638,13 +638,16 @@ func TestCleanRootfs_ErrConfigPropagates(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // newChrootReleaser builds a Releaser wired for chroot tests.
-// It creates a real init.sh script under seedersDir so os.Stat succeeds.
+// It creates a real init.sh script under devDir/build/init/ so os.Stat succeeds.
 func newChrootReleaser(t *testing.T, mr *runner.MockRunner) *Releaser {
 	t.Helper()
 
-	seedersDir := t.TempDir()
-	initScript := filepath.Join(seedersDir, "init.sh")
-	if err := os.WriteFile(initScript, []byte("#!/bin/sh\n"), 0o755); err != nil {
+	devDir := t.TempDir()
+	initDir := filepath.Join(devDir, "build", "init")
+	if err := os.MkdirAll(initDir, 0o755); err != nil {
+		t.Fatalf("mkdir init dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(initDir, "init.sh"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write init.sh: %v", err)
 	}
 
@@ -653,8 +656,7 @@ func newChrootReleaser(t *testing.T, mr *runner.MockRunner) *Releaser {
 	return &Releaser{
 		cfg: &config.MockConfig{
 			Items: map[string][]string{
-				"matrixOS.Root":     {"/dev/root"},
-				"Seeder.SeedersDir": {seedersDir},
+				"matrixOS.Root": {devDir},
 			},
 			Bools: map[string]bool{},
 		},
@@ -695,6 +697,8 @@ func TestChroot_SetsEnvironment(t *testing.T) {
 	mr := runner.NewMockRunner()
 	r := newChrootReleaser(t, mr)
 
+	devDir, _ := r.DevDir()
+
 	err := r.chroot([]string{"OTHER=val"}, "cmd", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -702,8 +706,8 @@ func TestChroot_SetsEnvironment(t *testing.T) {
 
 	env := mr.Calls[0].Env
 
-	if !slices.Contains(env, "MATRIXOS_DEV_DIR=/dev/root") {
-		t.Errorf("env missing MATRIXOS_DEV_DIR=/dev/root: %v", env)
+	if !slices.Contains(env, "MATRIXOS_DEV_DIR="+devDir) {
+		t.Errorf("env missing MATRIXOS_DEV_DIR=%s: %v", devDir, env)
 	}
 	if !slices.Contains(env, "RUNNER_TYPE=releaser") {
 		t.Errorf("env missing RUNNER_TYPE=releaser: %v", env)
@@ -716,6 +720,8 @@ func TestChroot_SetsEnvironment(t *testing.T) {
 func TestChroot_ReplacesExistingEnvKeys(t *testing.T) {
 	mr := runner.NewMockRunner()
 	r := newChrootReleaser(t, mr)
+
+	devDir, _ := r.DevDir()
 
 	env := []string{
 		"MATRIXOS_DEV_DIR=/old/path",
@@ -736,7 +742,7 @@ func TestChroot_ReplacesExistingEnvKeys(t *testing.T) {
 	if slices.Contains(got, "RUNNER_TYPE=builder") {
 		t.Error("old RUNNER_TYPE should have been filtered")
 	}
-	if !slices.Contains(got, "MATRIXOS_DEV_DIR=/dev/root") {
+	if !slices.Contains(got, "MATRIXOS_DEV_DIR="+devDir) {
 		t.Errorf("missing new MATRIXOS_DEV_DIR: %v", got)
 	}
 	if !slices.Contains(got, "RUNNER_TYPE=releaser") {
@@ -751,13 +757,15 @@ func TestChroot_NilEnv(t *testing.T) {
 	mr := runner.NewMockRunner()
 	r := newChrootReleaser(t, mr)
 
+	devDir, _ := r.DevDir()
+
 	err := r.chroot(nil, "cmd", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	got := mr.Calls[0].Env
-	if !slices.Contains(got, "MATRIXOS_DEV_DIR=/dev/root") {
+	if !slices.Contains(got, "MATRIXOS_DEV_DIR="+devDir) {
 		t.Errorf("missing MATRIXOS_DEV_DIR: %v", got)
 	}
 	if !slices.Contains(got, "RUNNER_TYPE=releaser") {
@@ -770,9 +778,7 @@ func TestChroot_DevDirError(t *testing.T) {
 	r := newChrootReleaser(t, mr)
 
 	r.cfg = &config.MockConfig{
-		Items: map[string][]string{
-			"Seeder.SeedersDir": {"/some/dir"},
-		},
+		Items: map[string][]string{},
 		Bools: map[string]bool{},
 	}
 
@@ -806,36 +812,16 @@ func TestChroot_DevDirConfigError(t *testing.T) {
 	}
 }
 
-func TestChroot_SeedersDirError(t *testing.T) {
-	mr := runner.NewMockRunner()
-	r := newChrootReleaser(t, mr)
-
-	r.cfg = &config.MockConfig{
-		Items: map[string][]string{
-			"matrixOS.Root": {"/dev/root"},
-		},
-		Bools: map[string]bool{},
-	}
-
-	err := r.chroot(nil, "cmd", nil)
-	if err == nil {
-		t.Fatal("expected error when SeedersDir is missing, got nil")
-	}
-	if len(mr.Calls) != 0 {
-		t.Errorf("expected no runner calls, got %d", len(mr.Calls))
-	}
-}
-
 func TestChroot_InitScriptNotFound(t *testing.T) {
 	mr := runner.NewMockRunner()
 
-	seedersDir := t.TempDir()
+	devDir := t.TempDir()
+	// Do NOT create build/init/init.sh under devDir.
 
 	r := &Releaser{
 		cfg: &config.MockConfig{
 			Items: map[string][]string{
-				"matrixOS.Root":     {"/dev/root"},
-				"Seeder.SeedersDir": {seedersDir},
+				"matrixOS.Root": {devDir},
 			},
 			Bools: map[string]bool{},
 		},
@@ -877,8 +863,10 @@ func TestChroot_RunnerError(t *testing.T) {
 func TestChroot_ChrootCmdFields(t *testing.T) {
 	var captured *runner.ChrootCmd
 
-	seedersDir := t.TempDir()
-	initScript := filepath.Join(seedersDir, "init.sh")
+	devDir := t.TempDir()
+	initDir := filepath.Join(devDir, "build", "init")
+	os.MkdirAll(initDir, 0o755)
+	initScript := filepath.Join(initDir, "init.sh")
 	if err := os.WriteFile(initScript, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write init.sh: %v", err)
 	}
@@ -890,8 +878,7 @@ func TestChroot_ChrootCmdFields(t *testing.T) {
 	r := &Releaser{
 		cfg: &config.MockConfig{
 			Items: map[string][]string{
-				"matrixOS.Root":     {"/dev/root"},
-				"Seeder.SeedersDir": {seedersDir},
+				"matrixOS.Root": {devDir},
 			},
 			Bools: map[string]bool{},
 		},

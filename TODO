@@ -1,7 +1,6 @@
 # Overall TODO
 
 Golang migration:
-    - [WAITING] Add delegated system mounts support for: imager, releaser.
     - [WAITING] Migrate vector_builder.sh to Golang.
     - add integration tests for vector usage inside VM to run manually first
       - [WAITING] vector setupOS
@@ -14,6 +13,6 @@ Features:
         Step 2: switch to UKI.
         Step 3: add bootc support.
     - Add UKI building to kernel build (make USE flag optional).
-    - Test bootc & migration to UKI.
+    - Investigate root-less builds using unshare.
     - Support Cloud Init (add VM tests).
     - Add more VM tests (test flatpak, test snap, test SecureBoot, etc).

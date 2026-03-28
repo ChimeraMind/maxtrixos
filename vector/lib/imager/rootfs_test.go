@@ -15,11 +15,12 @@ import (
 func TestChroot(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		initScript := filepath.Join(tmpDir, "init.sh")
-		os.WriteFile(initScript, []byte("#!/bin/bash\n"), 0755)
+		initDir := filepath.Join(tmpDir, "build", "init")
+		os.MkdirAll(initDir, 0755)
+		os.WriteFile(filepath.Join(initDir, "init.sh"), []byte("#!/bin/bash\n"), 0755)
 
 		cfg := baseImageConfig()
-		cfg.Items["Seeder.SeedersDir"] = []string{tmpDir}
+		cfg.Items["matrixOS.Root"] = []string{tmpDir}
 
 		mr := runner.NewMockRunner()
 		im := newTestImager(cfg, &ostree.MockOstree{})
@@ -74,11 +75,12 @@ func TestChroot(t *testing.T) {
 
 	t.Run("EnvFiltersExistingKeys", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		initScript := filepath.Join(tmpDir, "init.sh")
-		os.WriteFile(initScript, []byte("#!/bin/bash\n"), 0755)
+		initDir := filepath.Join(tmpDir, "build", "init")
+		os.MkdirAll(initDir, 0755)
+		os.WriteFile(filepath.Join(initDir, "init.sh"), []byte("#!/bin/bash\n"), 0755)
 
 		cfg := baseImageConfig()
-		cfg.Items["Seeder.SeedersDir"] = []string{tmpDir}
+		cfg.Items["matrixOS.Root"] = []string{tmpDir}
 
 		mr := runner.NewMockRunner()
 		im := newTestImager(cfg, &ostree.MockOstree{})
@@ -132,7 +134,6 @@ func TestChroot(t *testing.T) {
 	t.Run("DevDirError", func(t *testing.T) {
 		cfg := baseImageConfig()
 		delete(cfg.Items, "matrixOS.Root")
-		cfg.Items["Seeder.SeedersDir"] = []string{"/tmp"}
 
 		mr := runner.NewMockRunner()
 		im := newTestImager(cfg, &ostree.MockOstree{})
@@ -148,27 +149,12 @@ func TestChroot(t *testing.T) {
 		}
 	})
 
-	t.Run("SeedersDirConfigError", func(t *testing.T) {
-		cfg := baseImageConfig()
-		// Do not set Seeder.SeedersDir — GetItem will fail.
-
-		mr := runner.NewMockRunner()
-		im := newTestImager(cfg, &ostree.MockOstree{})
-		im.chrootRunner = mr.ChrootRun
-		im.rootfs = "/test-rootfs"
-
-		err := im.chroot(nil, "/bin/echo", nil)
-		if err == nil {
-			t.Fatal("expected error when SeedersDir config is missing")
-		}
-	})
-
 	t.Run("InitScriptNotFound", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		// Do NOT create init.sh.
+		// Do NOT create build/init/init.sh.
 
 		cfg := baseImageConfig()
-		cfg.Items["Seeder.SeedersDir"] = []string{tmpDir}
+		cfg.Items["matrixOS.Root"] = []string{tmpDir}
 
 		mr := runner.NewMockRunner()
 		im := newTestImager(cfg, &ostree.MockOstree{})
@@ -186,11 +172,12 @@ func TestChroot(t *testing.T) {
 
 	t.Run("ChrootRunnerError", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		initScript := filepath.Join(tmpDir, "init.sh")
-		os.WriteFile(initScript, []byte("#!/bin/bash\n"), 0755)
+		initDir := filepath.Join(tmpDir, "build", "init")
+		os.MkdirAll(initDir, 0755)
+		os.WriteFile(filepath.Join(initDir, "init.sh"), []byte("#!/bin/bash\n"), 0755)
 
 		cfg := baseImageConfig()
-		cfg.Items["Seeder.SeedersDir"] = []string{tmpDir}
+		cfg.Items["matrixOS.Root"] = []string{tmpDir}
 
 		mr := runner.NewMockRunnerFailOnCall(0, errors.New("chroot failed"))
 		im := newTestImager(cfg, &ostree.MockOstree{})
@@ -208,11 +195,12 @@ func TestChroot(t *testing.T) {
 
 	t.Run("StdoutStderrWired", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		initScript := filepath.Join(tmpDir, "init.sh")
-		os.WriteFile(initScript, []byte("#!/bin/bash\n"), 0755)
+		initDir := filepath.Join(tmpDir, "build", "init")
+		os.MkdirAll(initDir, 0755)
+		os.WriteFile(filepath.Join(initDir, "init.sh"), []byte("#!/bin/bash\n"), 0755)
 
 		cfg := baseImageConfig()
-		cfg.Items["Seeder.SeedersDir"] = []string{tmpDir}
+		cfg.Items["matrixOS.Root"] = []string{tmpDir}
 
 		var stdout, stderr bytes.Buffer
 		mr := runner.NewMockRunner()

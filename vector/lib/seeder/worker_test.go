@@ -1078,6 +1078,7 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	cfg.Items["matrixOS.OverlayGitRepo"] = []string{"https://example.com/overlay.git"}
 	cfg.Items["matrixOS.DefaultPrivateGitRepoPath"] = []string{"/matrixos/private"}
 	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{"/srv/private"}
+	cfg.Items["matrixOS.Root"] = []string{"/srv/build/daily"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
 	cfg.Items["Seeder.SeedsVersioningCadence"] = []string{"daily"}
@@ -1198,6 +1199,7 @@ func TestSeed_ChrootRunnerError(t *testing.T) {
 	cfg.Items["matrixOS.OverlayGitRepo"] = []string{"https://example.com/overlay.git"}
 	cfg.Items["matrixOS.DefaultPrivateGitRepoPath"] = []string{"/matrixos/private"}
 	cfg.Items["matrixOS.PrivateGitRepoPath"] = []string{"/srv/private"}
+	cfg.Items["matrixOS.Root"] = []string{"/srv/build/daily"}
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{"/build/.seeders_phases"}
 	cfg.Items["Seeder.ChrootSeederDoneFlagFileNamePrefix"] = []string{"seeder.complete"}
 	cfg.Items["Seeder.SeedsVersioningCadence"] = []string{"weekly"}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Unit tests for build/seeders/init.sh
+# Unit tests for build/init/init.sh
 #
 # init.sh ends with `main "${@}"`, so we strip that line and source the
 # remaining function definitions.  External commands (mount, mountpoint,
@@ -68,7 +68,7 @@ teardown() {
 # Helper: source init.sh without executing main.
 _load_init_script() {
     local tmp="${TEST_TMPDIR}/_init_$$.sh"
-    sed '/^main "\${@}"$/d' "${BATS_TEST_DIRNAME}/init.sh" > "${tmp}"
+    sed '/^main "\${@}"$/d' "${BATS_TEST_DIRNAME}/../init/init.sh" > "${tmp}"
     source "${tmp}"
 }
 
@@ -488,9 +488,9 @@ _load_init_script() {
 # ===========================================================================
 
 @test "init: script starts with set -eu" {
-    grep -q '^set -eu' "${BATS_TEST_DIRNAME}/init.sh"
+    grep -q '^set -eu' "${BATS_TEST_DIRNAME}/../init/init.sh"
 }
 
 @test "init: script ends with main call" {
-    tail -n 1 "${BATS_TEST_DIRNAME}/init.sh" | grep -q '^main "\${@}"$'
+    tail -n 1 "${BATS_TEST_DIRNAME}/../init/init.sh" | grep -q '^main "\${@}"$'
 }
