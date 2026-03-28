@@ -83,8 +83,8 @@ type MockSeeder struct {
 	ParallelismErr               error
 	MaxMemoryGiB_                int
 	MaxMemoryGiBErr              error
-	MaxCPUs_                     int
-	MaxCPUsErr                   error
+	MaxCores_                    int
+	MaxCoresErr                  error
 	CoresMultiplier_             float64
 	CoresMultiplierErr           error
 
@@ -339,8 +339,8 @@ func (m *MockSeeder) Parallelism() (int, error) {
 func (m *MockSeeder) MaxMemoryGiB() (int, error) {
 	return m.MaxMemoryGiB_, m.MaxMemoryGiBErr
 }
-func (m *MockSeeder) MaxCPUs() (int, error) {
-	return m.MaxCPUs_, m.MaxCPUsErr
+func (m *MockSeeder) MaxCores() (int, error) {
+	return m.MaxCores_, m.MaxCoresErr
 }
 func (m *MockSeeder) CoresMultiplier() (float64, error) {
 	if m.CoresMultiplier_ == 0 && m.CoresMultiplierErr == nil {

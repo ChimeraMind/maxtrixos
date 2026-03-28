@@ -233,9 +233,9 @@ func (c *SeedsCommand) runSeeds() error {
 	if err != nil {
 		return fmt.Errorf("failed to read max memory config: %w", err)
 	}
-	maxCPUs, err := sd.MaxCPUs()
+	maxCores, err := sd.MaxCores()
 	if err != nil {
-		return fmt.Errorf("failed to read max CPUs config: %w", err)
+		return fmt.Errorf("failed to read max cores config: %w", err)
 	}
 
 	coresMultiplier, err := sd.CoresMultiplier()
@@ -252,7 +252,7 @@ func (c *SeedsCommand) runSeeds() error {
 	// Create per-worker cgroups for memory and CPU limiting.
 	cgPool, err := c.createWorkerCgroups(&cgroupOpts{
 		maxMemGiB:       maxMemGiB,
-		maxCPUs:         maxCPUs,
+		maxCores:        maxCores,
 		coresMultiplier: coresMultiplier,
 	}, parallelism)
 	if err != nil {
@@ -310,7 +310,7 @@ func (c *SeedsCommand) runSeeds() error {
 
 type cgroupOpts struct {
 	maxMemGiB       int
-	maxCPUs         int
+	maxCores        int
 	coresMultiplier float64
 }
 
@@ -333,8 +333,8 @@ func (c *SeedsCommand) createWorkerCgroups(opts *cgroupOpts, parallelism int) (*
 	}
 	memPerWorker := totalBytes / uint64(parallelism)
 	numCPUs := runtime.NumCPU()
-	if opts.maxCPUs > 0 && opts.maxCPUs < numCPUs {
-		numCPUs = opts.maxCPUs
+	if opts.maxCores > 0 && opts.maxCores < numCPUs {
+		numCPUs = opts.maxCores
 	}
 	cgPool, err := cgroups.NewWorkerPool(&cgroups.WorkerPoolOptions{
 		Parallelism:       parallelism,

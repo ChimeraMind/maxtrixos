@@ -205,16 +205,16 @@ func (s *Seeder) MaxMemoryGiB() (int, error) {
 	return n, nil
 }
 
-// MaxCPUs returns the maximum number of CPUs to allocate across all parallel
-// workers. 0 means use all available CPUs.
-func (s *Seeder) MaxCPUs() (int, error) {
-	v, err := s.cfg.GetItem("Seeder.MaxCPUs")
+// MaxCores returns the maximum number of CPU cores to allocate across all parallel
+// workers. 0 means use all available cores.
+func (s *Seeder) MaxCores() (int, error) {
+	v, err := s.cfg.GetItem("Seeder.MaxCores")
 	if err != nil || v == "" {
 		return 0, nil
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil {
-		return 0, fmt.Errorf("invalid Seeder.MaxCPUs %q: %w", v, err)
+		return 0, fmt.Errorf("invalid Seeder.MaxCores %q: %w", v, err)
 	}
 	if n < 0 {
 		return 0, nil

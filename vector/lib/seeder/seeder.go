@@ -191,9 +191,9 @@ type ISeeder interface {
 	// MaxMemoryGiB returns the maximum total memory (in GiB) for all parallel workers.
 	// 0 means use all available system memory.
 	MaxMemoryGiB() (int, error)
-	// MaxCPUs returns the maximum number of CPUs for all parallel workers.
-	// 0 means use all available CPUs.
-	MaxCPUs() (int, error)
+	// MaxCores returns the maximum number of CPU cores for all parallel workers.
+	// 0 means use all available cores.
+	MaxCores() (int, error)
 	// CoresMultiplier returns the CPU cores oversubscription multiplier.
 	// Values > 1.0 allow overlapping cpuset ranges, giving each worker more
 	// cores than a strict partition. Defaults to 1.0.
