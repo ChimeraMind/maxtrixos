@@ -6,6 +6,7 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -534,5 +535,168 @@ func TestMockRunner_OutputWithData(t *testing.T) {
 	}
 	if string(out1) != "second" {
 		t.Errorf("out1 = %q, want %q", string(out1), "second")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SysProcAttr – chrootArgs --cgroup flag and forwarding
+// ---------------------------------------------------------------------------
+
+func TestChrootArgs_WithUseCgroupFD(t *testing.T) {
+	c := &ChrootCmd{
+		Cmd: Cmd{
+			Name:        "/bin/bash",
+			Args:        []string{"-c", "ls"},
+			SysProcAttr: &syscall.SysProcAttr{UseCgroupFD: true},
+		},
+		ChrootDir: "/mnt/root",
+	}
+	args, err := chrootArgs(c)
+	if err != nil {
+		t.Fatalf("chrootArgs: unexpected error: %v", err)
+	}
+
+	expected := []string{
+		"--pid", "--fork", "--kill-child",
+		"--mount", "--uts", "--ipc",
+		"--mount-proc=/mnt/root/proc",
+		"--cgroup",
+		"chroot", "/mnt/root", "/bin/bash",
+		"-c", "ls",
+	}
+	if len(args) != len(expected) {
+		t.Fatalf("len(args) = %d, want %d\nargs: %v", len(args), len(expected), args)
+	}
+	for i := range expected {
+		if args[i] != expected[i] {
+			t.Errorf("args[%d] = %q, want %q", i, args[i], expected[i])
+		}
+	}
+}
+
+func TestChrootArgs_WithUseCgroupFDAndDir(t *testing.T) {
+	c := &ChrootCmd{
+		Cmd: Cmd{
+			Name:        "/bin/bash",
+			Args:        []string{"-c", "ls"},
+			Dir:         "/work",
+			SysProcAttr: &syscall.SysProcAttr{UseCgroupFD: true},
+		},
+		ChrootDir: "/mnt/root",
+	}
+	args, err := chrootArgs(c)
+	if err != nil {
+		t.Fatalf("chrootArgs: unexpected error: %v", err)
+	}
+
+	expected := []string{
+		"--pid", "--fork", "--kill-child",
+		"--mount", "--uts", "--ipc",
+		"--mount-proc=/mnt/root/proc",
+		"--cgroup",
+		"--wd", "/work",
+		"chroot", "/mnt/root", "/bin/bash",
+		"-c", "ls",
+	}
+	if len(args) != len(expected) {
+		t.Fatalf("len(args) = %d, want %d\nargs: %v", len(args), len(expected), args)
+	}
+	for i := range expected {
+		if args[i] != expected[i] {
+			t.Errorf("args[%d] = %q, want %q", i, args[i], expected[i])
+		}
+	}
+}
+
+func TestChrootArgs_WithoutUseCgroupFD(t *testing.T) {
+	c := &ChrootCmd{
+		Cmd: Cmd{
+			Name:        "/bin/bash",
+			Args:        []string{"-c", "ls"},
+			SysProcAttr: &syscall.SysProcAttr{UseCgroupFD: false},
+		},
+		ChrootDir: "/mnt/root",
+	}
+	args, err := chrootArgs(c)
+	if err != nil {
+		t.Fatalf("chrootArgs: unexpected error: %v", err)
+	}
+	for _, a := range args {
+		if a == "--cgroup" {
+			t.Fatal("--cgroup should not be present when UseCgroupFD is false")
+		}
+	}
+}
+
+func TestChrootArgs_NilSysProcAttr(t *testing.T) {
+	c := &ChrootCmd{
+		Cmd:       Cmd{Name: "/bin/bash", Args: []string{"-c", "ls"}},
+		ChrootDir: "/mnt/root",
+	}
+	args, err := chrootArgs(c)
+	if err != nil {
+		t.Fatalf("chrootArgs: unexpected error: %v", err)
+	}
+	for _, a := range args {
+		if a == "--cgroup" {
+			t.Fatal("--cgroup should not be present when SysProcAttr is nil")
+		}
+	}
+}
+
+func TestChrootRun_ForwardsSysProcAttr(t *testing.T) {
+	origRun := Run
+	defer func() { Run = origRun }()
+
+	var capturedAttr *syscall.SysProcAttr
+	Run = func(c *Cmd) error {
+		capturedAttr = c.SysProcAttr
+		return nil
+	}
+
+	spa := &syscall.SysProcAttr{UseCgroupFD: true}
+	err := ChrootRun(&ChrootCmd{
+		Cmd: Cmd{
+			Name:        "/bin/bash",
+			Args:        []string{"-c", "ls"},
+			Stdout:      io.Discard,
+			Stderr:      io.Discard,
+			SysProcAttr: spa,
+		},
+		ChrootDir: "/mnt",
+	})
+	if err != nil {
+		t.Fatalf("ChrootRun: unexpected error: %v", err)
+	}
+	if capturedAttr != spa {
+		t.Errorf("SysProcAttr not forwarded through ChrootRun: got %v, want %v",
+			capturedAttr, spa)
+	}
+}
+
+func TestChrootOutput_ForwardsSysProcAttr(t *testing.T) {
+	origOutput := Output
+	defer func() { Output = origOutput }()
+
+	var capturedAttr *syscall.SysProcAttr
+	Output = func(c *Cmd) ([]byte, error) {
+		capturedAttr = c.SysProcAttr
+		return nil, nil
+	}
+
+	spa := &syscall.SysProcAttr{UseCgroupFD: true}
+	_, err := ChrootOutput(&ChrootCmd{
+		Cmd: Cmd{
+			Name:        "/bin/echo",
+			SysProcAttr: spa,
+		},
+		ChrootDir: "/mnt",
+	})
+	if err != nil {
+		t.Fatalf("ChrootOutput: unexpected error: %v", err)
+	}
+	if capturedAttr != spa {
+		t.Errorf("SysProcAttr not forwarded through ChrootOutput: got %v, want %v",
+			capturedAttr, spa)
 	}
 }
