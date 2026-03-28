@@ -1,0 +1,3 @@
+# This pulls in a gigantic package: media-fonts/noto
+# But let's keep it there for now, and double down with ms fonts
+media-fonts/fonts-meta ms
