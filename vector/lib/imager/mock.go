@@ -7,6 +7,31 @@ import (
 	"os"
 )
 
+// MockBootloader implements Bootloader for testing.
+type MockBootloader struct {
+	ConfigureCalled       bool
+	ConfigureErr          error
+	InstallCalled         bool
+	InstallErr            error
+	ConfigureVmtestCalled bool
+	ConfigureVmtestErr    error
+}
+
+func (m *MockBootloader) Configure() error {
+	m.ConfigureCalled = true
+	return m.ConfigureErr
+}
+
+func (m *MockBootloader) Install() error {
+	m.InstallCalled = true
+	return m.InstallErr
+}
+
+func (m *MockBootloader) ConfigureVmtest() error {
+	m.ConfigureVmtestCalled = true
+	return m.ConfigureVmtestErr
+}
+
 // MockImager implements IImager for testing.
 // Only the fields/methods relevant to each test need to be configured;
 // everything else returns safe zero values.
@@ -64,6 +89,7 @@ type MockImager struct {
 	ImageTestsErr                error
 	InstallBootloaderResult      []string
 	InstallBootloaderErr         error
+	Bootloader_                  Bootloader
 	Mode_                        ImageMode
 
 	// Track calls
@@ -273,6 +299,12 @@ func (m *MockImager) SetupBootloaderConfig() error {
 func (m *MockImager) SetupVmtestConfig() error {
 	m.SetupVmtestConfigCalled = true
 	return nil
+}
+func (m *MockImager) GetBootloader() Bootloader {
+	if m.Bootloader_ != nil {
+		return m.Bootloader_
+	}
+	return &MockBootloader{}
 }
 func (m *MockImager) InstallSecurebootCerts() error {
 	m.InstallSecurebootCalled = true

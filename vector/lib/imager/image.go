@@ -199,10 +199,12 @@ type IImager interface {
 	GetKernelPath() (string, error)
 	// SetupPasswords sets default passwords for the matrix and root users.
 	SetupPasswords() error
-	// SetupBootloaderConfig sets up the GRUB bootloader configuration.
+	// SetupBootloaderConfig sets up the bootloader configuration.
 	SetupBootloaderConfig() error
-	// SetupVmtestConfig creates a VM test grub config based on the ostree boot config.
+	// SetupVmtestConfig creates a VM test boot config based on the ostree boot config.
 	SetupVmtestConfig() error
+	// GetBootloader returns the configured Bootloader implementation.
+	GetBootloader() Bootloader
 	// InstallSecurebootCerts installs SecureBoot certificates on the EFI partition.
 	InstallSecurebootCerts() error
 	// InstallMemtest installs the memtest86+ EFI binary to the EFI boot directory.
@@ -213,9 +215,8 @@ type IImager interface {
 	ExtractPackageList() ([]string, error)
 	// SetupHooks runs image-specific hook scripts.
 	SetupHooks() error
-	// InstallBootloader installs the GRUB bootloader into the image by running
-	// grub-install inside a chroot of the deployed rootfs, then replaces the
-	// unsigned GRUBX64.EFI with the signed version.
+	// InstallBootloader installs the bootloader into the image using the
+	// configured Bootloader implementation.
 	InstallBootloader() error
 	// Cleanup unmounts all mount points tracked by this Imager instance in
 	// reverse order, detaches loop devices, syncs, and removes temp dirs.
@@ -257,6 +258,7 @@ type Imager struct {
 	fsenc               filesystems.IFsenc
 	runner              runner.Func
 	chrootRunner        runner.ChrootRunFunc
+	bootloader          Bootloader
 	stdout              io.Writer
 	stderr              io.Writer
 	efiDevice           string
@@ -408,6 +410,7 @@ func NewImager(cfg config.IConfig, ot ostree.IOstree, fsenc filesystems.IFsenc, 
 		stdout:       os.Stdout,
 		stderr:       os.Stderr,
 	}
+	im.bootloader = NewGrubBootloader(im)
 	if opts != nil {
 		im.efiDevice = opts.EfiDevice
 		im.bootDevice = opts.BootDevice
