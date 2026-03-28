@@ -6,7 +6,6 @@ import (
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/seeder"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -127,26 +126,12 @@ func (c *SeedsCleaner) Run() error {
 		fmt.Printf("[%s] Working on seed %s ...\n", info.Name, name)
 
 		// Parse seeder params.
-		paramsName, err := sd.ParamsExecutableName()
-		if err != nil {
-			return err
-		}
-		paramsPath := filepath.Join(info.Dir, paramsName)
-		if !filesystems.FileExists(paramsPath) {
-			fmt.Fprintf(
-				os.Stderr,
-				"[%s] Params file %s does not exist, skipping ...",
-				info.Name, paramsPath,
-			)
-			continue
-		}
-
-		params, err := sd.ParseSeederParams(info.Name, paramsPath)
+		params, err := sd.ParseSeederParams(info)
 		if err != nil {
 			fmt.Fprintf(
 				os.Stderr,
-				"[%s] Unable to parse params file %s: %v",
-				info.Name, paramsPath, err,
+				"[%s] Unable to parse params: %v",
+				info.Name, err,
 			)
 			continue
 		}

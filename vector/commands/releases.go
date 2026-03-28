@@ -335,16 +335,7 @@ func (c *ReleasesCommand) releaseWorker(info seeder.SeederInfo) (string, error) 
 // its params.sh file. This grabs both the preferred chroot dir (which may not exist)
 // and the latest available chroot dir (which checks for existing chroots).
 func (c *ReleasesCommand) findChrootDir(info seeder.SeederInfo) (string, error) {
-	paramsName, err := c.sd.ParamsExecutableName()
-	if err != nil {
-		return "", err
-	}
-	paramsPath := filepath.Join(info.Dir, paramsName)
-	if !filesystems.FileExists(paramsPath) {
-		return "", fmt.Errorf("unable to find %s", paramsPath)
-	}
-
-	params, err := c.sd.ParseSeederParams(info.Name, paramsPath)
+	params, err := c.sd.ParseSeederParams(info)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse params: %w", err)
 	}
@@ -379,11 +370,12 @@ func (c *ReleasesCommand) transferMatrixOSPrivate(imageDir string) error {
 		)
 	}
 
-	srcRepo, err := c.sd.PrivateGitRepoPath()
+	scfg := seeder.NewSeederConfig(c.cfg)
+	srcRepo, err := scfg.PrivateGitRepoPath()
 	if err != nil {
 		return fmt.Errorf("failed to get private git repo path: %w", err)
 	}
-	defaultPath, err := c.sd.DefaultPrivateGitRepoPath()
+	defaultPath, err := scfg.DefaultPrivateGitRepoPath()
 	if err != nil {
 		return fmt.Errorf(
 			"failed to get default private git repo path: %w",

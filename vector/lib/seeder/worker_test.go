@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"matrixos/vector/lib/config"
-	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/runner"
 )
 
@@ -18,7 +17,7 @@ import (
 func newTestSeederWithConfig(cfg *config.MockConfig) *Seeder {
 	mr := runner.NewMockRunner()
 	return &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -228,11 +227,12 @@ func newRealSeeder(devDir string) *Seeder {
 			"Seeder.ChrootSeedersPhasesStateDir":        {"/build/.seeders_phases"},
 			"Seeder.ChrootSeederDoneFlagFileNamePrefix": {"seeder.complete"},
 			"Seeder.SeedsVersioningCadence":             {"weekly"},
+			"Seeder.ParamsExecutableName":               {"params.sh"},
 		},
 		Bools: map[string]bool{},
 	}
 	return &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       runner.Run,
 		chrootRunner: runner.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -245,7 +245,7 @@ func TestParseSeederParams_Success(t *testing.T) {
 	latestDir := filepath.Join(tmp, "chroots", "bedrock-20260228")
 	os.MkdirAll(latestDir, 0755)
 
-	paramsFile := writeParamsScript(t, tmp,
+	writeParamsScript(t, tmp,
 		"bedrock",
 		"bedrock-20260228",
 		"/mnt/chroots",
@@ -258,7 +258,7 @@ func TestParseSeederParams_Success(t *testing.T) {
 	)
 
 	sd := newRealSeeder(tmp)
-	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	params, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err != nil {
 		t.Fatalf("ParseSeederParams: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestParseSeederParams_Depends(t *testing.T) {
 	os.WriteFile(paramsFile, []byte(script), 0755)
 
 	sd := newRealSeeder(tmp)
-	params, err := sd.ParseSeederParams("10-server", paramsFile)
+	params, err := sd.ParseSeederParams(SeederInfo{Name: "10-server", Dir: tmp})
 	if err != nil {
 		t.Fatalf("ParseSeederParams: %v", err)
 	}
@@ -362,7 +362,7 @@ func TestParseSeederParams_SpaceSeparatedCompleteChrootDirs(t *testing.T) {
 	os.WriteFile(paramsFile, []byte(script), 0755)
 
 	sd := newRealSeeder(tmp)
-	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	params, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err != nil {
 		t.Fatalf("ParseSeederParams: %v", err)
 	}
@@ -389,7 +389,7 @@ func TestParseSeederParams_PartialChrootDirs(t *testing.T) {
 		"/mnt/chroots/bedrock-20260301",
 		"/mnt/chroots/bedrock-20260308",
 	}
-	paramsFile := writeParamsScriptFull(t, tmp,
+	writeParamsScriptFull(t, tmp,
 		"bedrock", "bedrock-20260228", "/mnt/chroots",
 		"/mnt/chroots/bedrock-20260228", latestDir,
 		[]string{"/mnt/chroots/bedrock-20260228"},
@@ -397,7 +397,7 @@ func TestParseSeederParams_PartialChrootDirs(t *testing.T) {
 	)
 
 	sd := newRealSeeder(tmp)
-	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	params, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err != nil {
 		t.Fatalf("ParseSeederParams: %v", err)
 	}
@@ -440,7 +440,7 @@ func TestParseSeederParams_UsesDevDir(t *testing.T) {
 	os.WriteFile(paramsFile, []byte(script), 0755)
 
 	sd := newRealSeeder("/my/custom/devdir")
-	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	params, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err != nil {
 		t.Fatalf("ParseSeederParams: %v", err)
 	}
@@ -455,13 +455,13 @@ func TestParseSeederParams_EmptyChrootName(t *testing.T) {
 	latestDir := filepath.Join(tmp, "latest-chroot")
 	os.MkdirAll(latestDir, 0755)
 
-	paramsFile := writeParamsScript(t, tmp,
+	writeParamsScript(t, tmp,
 		"bedrock", "", "/mnt/chroots", "/mnt/chroots/bedrock", latestDir,
 		[]string{"/mnt/chroots/bedrock"},
 	)
 
 	sd := newRealSeeder(tmp)
-	_, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	_, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err == nil {
 		t.Fatal("Expected error for empty ChrootName, got nil")
 	}
@@ -475,13 +475,13 @@ func TestParseSeederParams_EmptyChrootsDir(t *testing.T) {
 	latestDir := filepath.Join(tmp, "latest-chroot")
 	os.MkdirAll(latestDir, 0755)
 
-	paramsFile := writeParamsScript(t, tmp,
+	writeParamsScript(t, tmp,
 		"bedrock", "bedrock-20260228", "", "/mnt/chroots/bedrock", latestDir,
 		[]string{},
 	)
 
 	sd := newRealSeeder(tmp)
-	_, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	_, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err == nil {
 		t.Fatal("Expected error for empty ChrootsDir, got nil")
 	}
@@ -496,13 +496,13 @@ func TestParseSeederParams_EmptyPreferredChrootDir(t *testing.T) {
 	latestDir := filepath.Join(tmp, "latest-chroot")
 	os.MkdirAll(latestDir, 0755)
 
-	paramsFile := writeParamsScript(t, tmp,
+	writeParamsScript(t, tmp,
 		"bedrock", "bedrock-20260228", "/mnt/chroots", "", latestDir,
 		[]string{},
 	)
 
 	sd := newRealSeeder(tmp)
-	_, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	_, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err == nil {
 		t.Fatal("Expected error for empty PreferredChrootDir, got nil")
 	}
@@ -516,14 +516,14 @@ func TestParseSeederParams_EmptyLatestChrootDir(t *testing.T) {
 	tmp := t.TempDir()
 
 	// The find_latest_chroot_dir function returns empty string.
-	paramsFile := writeParamsScript(t, tmp,
+	writeParamsScript(t, tmp,
 		"bedrock", "bedrock-20260228", "/mnt/chroots",
 		"/mnt/chroots/bedrock-20260228", "",
 		[]string{"/mnt/chroots/bedrock-20260228"},
 	)
 
 	sd := newRealSeeder(tmp)
-	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	params, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err != nil {
 		t.Fatalf("ParseSeederParams: %v", err)
 	}
@@ -549,7 +549,7 @@ func TestParseSeederParams_FunctionMissing(t *testing.T) {
 	os.WriteFile(paramsFile, []byte(script), 0755)
 
 	sd := newRealSeeder(tmp)
-	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	params, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err != nil {
 		t.Fatalf("ParseSeederParams: %v", err)
 	}
@@ -565,14 +565,14 @@ func TestParseSeederParams_LatestChrootDirNotExist(t *testing.T) {
 
 	// Point to a directory that does not exist.
 	missingDir := filepath.Join(tmp, "does-not-exist")
-	paramsFile := writeParamsScript(t, tmp,
+	writeParamsScript(t, tmp,
 		"bedrock", "bedrock-20260228", "/mnt/chroots",
 		"/mnt/chroots/bedrock-20260228", missingDir,
 		[]string{""},
 	)
 
 	sd := newRealSeeder(tmp)
-	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	params, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err != nil {
 		t.Fatalf("ParseSeederParams: %v", err)
 	}
@@ -593,11 +593,12 @@ func TestParseParamsVariables_LatestAvailableChrootDir(t *testing.T) {
 	latestDir := filepath.Join(tmp, "chroots", "bedrock-latest")
 	os.MkdirAll(latestDir, 0755)
 
-	paramsFile := writeParamsScript(t, tmp,
+	writeParamsScript(t, tmp,
 		"bedrock", "bedrock-20260228", "/mnt/chroots",
 		"/mnt/chroots/bedrock-20260228", latestDir,
 		[]string{latestDir},
 	)
+	paramsFile := filepath.Join(tmp, "params.sh")
 
 	sd := newRealSeeder(tmp)
 	// Call parseParamsVariables directly to test the raw output
@@ -635,11 +636,12 @@ func TestParseParamsVariables_DifferentSeedNames(t *testing.T) {
 			latestDir := filepath.Join(tmp, "chroots", "latest")
 			os.MkdirAll(latestDir, 0755)
 
-			paramsFile := writeParamsScript(t, tmp,
+			writeParamsScript(t, tmp,
 				tc.seedName, "chroot-name", "/chroots",
 				"/chroots/preferred", latestDir,
 				[]string{latestDir},
 			)
+			paramsFile := filepath.Join(tmp, "params.sh")
 
 			sd := newRealSeeder(tmp)
 			params, err := sd.parseParamsVariables(tc.seederName, paramsFile)
@@ -664,7 +666,7 @@ func TestParseSeederParams_MissingVariable(t *testing.T) {
 	os.WriteFile(paramsFile, []byte(script), 0755)
 
 	sd := newRealSeeder(tmp)
-	_, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	_, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err == nil {
 		t.Fatal("Expected error for missing variables, got nil")
 	}
@@ -678,7 +680,7 @@ func TestParseSeederParams_BadScript(t *testing.T) {
 	os.WriteFile(paramsFile, []byte("#!/bin/bash\n(((\n"), 0755)
 
 	sd := newRealSeeder(tmp)
-	_, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	_, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err == nil {
 		t.Fatal("Expected error for bad script, got nil")
 	}
@@ -691,34 +693,40 @@ func TestParseSeederParams_NonexistentFile(t *testing.T) {
 	tmp := t.TempDir()
 
 	sd := newRealSeeder(tmp)
-	_, err := sd.ParseSeederParams(
-		"00-bedrock",
-		filepath.Join(tmp, "does-not-exist.sh"),
-	)
+	_, err := sd.ParseSeederParams(SeederInfo{
+		Name: "00-bedrock",
+		Dir:  tmp,
+	})
 	if err == nil {
 		t.Fatal("Expected error for nonexistent file, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to source params") {
+	if !strings.Contains(err.Error(), "params file not found") {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
 
 func TestParseSeederParams_DevDirError(t *testing.T) {
+	tmp := t.TempDir()
+	// Create a params.sh so the file-exists check passes.
+	paramsFile := filepath.Join(tmp, "params.sh")
+	os.WriteFile(paramsFile, []byte("#!/bin/bash\n"), 0755)
+
 	cfg := &config.MockConfig{
 		Items: map[string][]string{
-			"matrixOS.Root": {""},
+			"matrixOS.Root":              {""},
+			"Seeder.ParamsExecutableName": {"params.sh"},
 		},
 		Bools: map[string]bool{},
 	}
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       runner.Run,
 		chrootRunner: runner.ChrootRun,
 		stdout:       &bytes.Buffer{},
 		stderr:       &bytes.Buffer{},
 	}
 
-	_, err := sd.ParseSeederParams("00-bedrock", "/fake/params.sh")
+	_, err := sd.ParseSeederParams(SeederInfo{Name: "00-bedrock", Dir: tmp})
 	if err == nil {
 		t.Fatal("Expected error for empty DevDir, got nil")
 	}
@@ -785,7 +793,7 @@ func newPrepperSeeder(devDir, downloadsDir, stage3URL string) *Seeder {
 		Bools: map[string]bool{},
 	}
 	return &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       runner.Run,
 		chrootRunner: runner.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -939,7 +947,7 @@ func TestExecutePrepper_DevDirError(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       runner.Run,
 		chrootRunner: runner.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -972,7 +980,7 @@ func TestExecutePrepper_DownloadsDirError(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       runner.Run,
 		chrootRunner: runner.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1005,7 +1013,7 @@ func TestExecutePrepper_Stage3URLError(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       runner.Run,
 		chrootRunner: runner.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1040,7 +1048,7 @@ func TestSeed_Success(t *testing.T) {
 	cfg.Items["Seeder.SeedersDir"] = []string{"/matrixos/build/seeders"}
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1097,7 +1105,7 @@ func TestSeed_DefaultDevDirError(t *testing.T) {
 	cfg.Items["matrixOS.DefaultRoot"] = []string{""} // empty → error
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1117,7 +1125,7 @@ func TestSeed_PhasesStateDirError(t *testing.T) {
 	cfg.Items["Seeder.ChrootSeedersPhasesStateDir"] = []string{""} // empty → error
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1139,7 +1147,7 @@ func TestSeed_SeedsVersioningCadenceError(t *testing.T) {
 	cfg.Items["Seeder.SeedsVersioningCadence"] = []string{"invalid-cadence"}
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1180,7 +1188,7 @@ func TestSeed_FiltersExistingEnvVars(t *testing.T) {
 	cfg.Items["Seeder.SeedersDir"] = []string{"/matrixos/build/seeders"}
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1301,7 +1309,7 @@ func TestSeed_ChrootRunnerError(t *testing.T) {
 	cfg.Items["Seeder.SeedersDir"] = []string{"/matrixos/build/seeders"}
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1510,7 +1518,7 @@ func TestImportGentooGpgKeys_Success(t *testing.T) {
 	cfg.Items["Seeder.GpgKeysDir"] = []string{gpgDir}
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1553,7 +1561,7 @@ func TestImportGentooGpgKeys_FixesFilePermissions(t *testing.T) {
 	cfg.Items["Seeder.GpgKeysDir"] = []string{gpgDir}
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1579,7 +1587,7 @@ func TestImportGentooGpgKeys_GpgKeysDirError(t *testing.T) {
 
 	mr := runner.NewMockRunner()
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1600,7 +1608,7 @@ func TestImportGentooGpgKeys_RunnerError(t *testing.T) {
 	cfg.Items["Seeder.GpgKeysDir"] = []string{gpgDir}
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1686,7 +1694,7 @@ func TestSetupChrootDirs_CreatesPhasesDirAndCallsSetupDevDir(t *testing.T) {
 	cfg.Bools["Seeder.DeleteDotGitFromGitRepo"] = false
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1731,7 +1739,7 @@ func TestSetupChrootDirs_SkipsCloneIfDevDirExists(t *testing.T) {
 	os.MkdirAll(chrootDevDir, 0755)
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1763,7 +1771,7 @@ func TestSetupChrootDirs_RemoteClone(t *testing.T) {
 	cfg.Bools["Seeder.DeleteDotGitFromGitRepo"] = false
 
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1803,7 +1811,7 @@ func TestSetupChrootDirs_PhasesStateDirError(t *testing.T) {
 
 	mr := runner.NewMockRunner()
 	sd := &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},
@@ -1958,20 +1966,9 @@ func TestParseSeederParams_RealSeeders(t *testing.T) {
 		t.Fatal("Detect returned no seeders")
 	}
 
-	paramsName, err := sd.ParamsExecutableName()
-	if err != nil {
-		t.Fatalf("ParamsExecutableName: %v", err)
-	}
-
 	for _, info := range seeders {
-		paramsPath := filepath.Join(info.Dir, paramsName)
-		if !filesystems.FileExists(paramsPath) {
-			t.Errorf("%s not found for seeder %s", paramsName, info.Name)
-			continue
-		}
-
 		t.Run(info.Name, func(t *testing.T) {
-			params, err := sd.ParseSeederParams(info.Name, paramsPath)
+			params, err := sd.ParseSeederParams(info)
 			if err != nil {
 				t.Fatalf("ParseSeederParams(%s): %v", info.Name, err)
 			}

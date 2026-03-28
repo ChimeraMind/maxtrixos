@@ -25,14 +25,14 @@ type SeederFilterFunc func(name string) bool
 
 // SeederInfo holds the resolved paths for a single discovered seeder.
 type SeederInfo struct {
-	Name                  string   // e.g. "00-bedrock"
-	Dir                   string   // absolute directory path
-	ChrootExec            string   // path to the chroot executable itself (e.g. chroot)
-	ChrootChrootExec      string   // path to the chroot executable inside the chroot
-	ChrootChrootArgs      []string // args to run the chroot executable inside the chroot
-	PrepperExec           string   // path to the prepper executable
-	PostBuildExec         string   // path to the post-build executable (empty if absent)
-	PostBuildChrootExec   string   // path to the post-build executable inside the chroot
+	Name                string   // e.g. "00-bedrock"
+	Dir                 string   // absolute directory path
+	ChrootExec          string   // path to the chroot executable itself (e.g. chroot)
+	ChrootChrootExec    string   // path to the chroot executable inside the chroot
+	ChrootChrootArgs    []string // args to run the chroot executable inside the chroot
+	PrepperExec         string   // path to the prepper executable
+	PostBuildExec       string   // path to the post-build executable (empty if absent)
+	PostBuildChrootExec string   // path to the post-build executable inside the chroot
 }
 
 // NewSeederOptions contains options for creating a new Seeder.
@@ -56,8 +56,13 @@ type SeedOptions struct {
 }
 
 // ISeeder defines the interface for seeder operations.
-// It mirrors all public methods of Seeder for testability.
+// Only methods that are called through ISeeder-typed variables (by
+// callers, workers, or parallel orchestration) belong here. Pure config
+// accessors live on SeederConfig; internal helpers stay on the concrete
+// Seeder struct.
 type ISeeder interface {
+	// --- I/O ---
+
 	// SetStdout replaces the writer used for informational output.
 	SetStdout(w io.Writer)
 	// SetStderr replaces the writer used for warnings and errors.
@@ -66,7 +71,6 @@ type ISeeder interface {
 	Stdout() io.Writer
 	// Stderr returns the current warning/error output writer.
 	Stderr() io.Writer
-
 	// Print writes a formatted informational message to stdout.
 	Print(format string, args ...any)
 	// PrintWarning writes a formatted warning message to stderr.
@@ -74,90 +78,14 @@ type ISeeder interface {
 	// PrintError writes a formatted error/diagnostic message to stderr.
 	PrintError(format string, args ...any)
 
-	// SeedersDir returns the path where seeder scripts are placed in the build toolkit.
-	SeedersDir() (string, error)
-	// ChrootSeedersDir returns the base seeders directory path.
-	ChrootSeedersDir() (string, error)
-	// ChrootBuildArtifactsDir returns the directory path for build artifacts inside the chroot.
-	ChrootBuildArtifactsDir() (string, error)
-	// DisabledSeederFile returns the sentinel file name that disables a seeder directory.
-	DisabledSeederFile() (string, error)
-	// UseLocalGitRepoInsideChroot returns whether to use a local git repository inside the chroot.
-	UseLocalGitRepoInsideChroot() (bool, error)
-	// DeleteDotGitFromGitRepo returns whether to delete the .git directory from the git repository
-	// when copying it into the chroot.
-	DeleteDotGitFromGitRepo() (bool, error)
-	// ChrootExecName returns the name of the chroot executable inside each seeder directory.
-	ChrootExecName() (string, error)
-	// ParamsExecutableName returns the name of the params executable inside each seeder directory.
-	ParamsExecutableName() (string, error)
-	// PrepperExecName returns the name of the prepper executable inside each seeder directory.
-	PrepperExecName() (string, error)
-	// PostBuildExecName returns the name of the post-build executable inside each seeder directory.
-	PostBuildExecName() (string, error)
-	// ChrootMetadataDir returns the chroot-side directory for build metadata.
-	ChrootMetadataDir() (string, error)
-	// ChrootMetadataDirBuildFileName returns the file name for build metadata inside the chroot metadata directory.
-	ChrootMetadataDirBuildFileName() (string, error)
-	// BuildMetadataFile returns the full path to the build metadata file.
-	BuildMetadataFile() (string, error)
-	// PhasesStateDir returns the chroot-side directory for seeder phase checkpoints.
-	PhasesStateDir() (string, error)
-	// PreppersPhasesStateDir returns the chroot-side directory for prepper phase checkpoints.
-	PreppersPhasesStateDir() (string, error)
-	// SeederDoneFlagFilePrefix returns the prefix for done-flag files.
-	SeederDoneFlagFilePrefix() (string, error)
-	// PrivateExampleGitRepo returns the URL for the private example git repository.
-	PrivateExampleGitRepo() (string, error)
-	// PrivateGitRepoPath returns the local path for the private git repository.
-	PrivateGitRepoPath() (string, error)
-	// LockDir returns the directory where seeder file locks are stored.
-	LockDir() (string, error)
-	// LockWaitSeconds returns the configured lock acquisition timeout in seconds.
-	LockWaitSeconds() (string, error)
-	// Stage3DownloadUrl returns the URL where the latest Gentoo stage3 tarball
-	// metadata can be downloaded.
-	Stage3DownloadUrl() (string, error)
+	// --- Params ---
 
-	// RetryableCmd executes the command up to tries times, sleeping 5 seconds
-	// between attempts. Returns nil on the first successful invocation, or the
-	// last error after all retries are exhausted.
-	RetryableCmd(tries int, name string, args ...string) error
-	// MaybeInitializePrivateRepo ensures the private example repository exists
-	// and is built. It clones the repo from PrivateExampleGitRepo if missing,
-	// or runs ./make.sh if the .built marker is absent.
-	MaybeInitializePrivateRepo() error
+	// ParseSeederParams resolves the params executable inside
+	// info.Dir, sources it in a bash subshell, and extracts the
+	// required variables (SEEDER_CHROOT_NAME, etc.).
+	ParseSeederParams(info SeederInfo) (*SeederParams, error)
 
-	// SeederLockDir returns the seeder lock directory, creating it if necessary.
-	SeederLockDir() (string, error)
-	// SeederLockPath returns the lock file path for the given seeder name.
-	SeederLockPath(name string) (string, error)
-	// ExecuteWithSeederLock acquires an exclusive file lock for the given seeder name,
-	// executes fn under that lock, and releases the lock when fn returns.
-	// If the lock cannot be acquired within the configured timeout, an error is returned.
-	// If fn panics or the process crashes, the OS closes the file descriptor and
-	// releases the lock automatically.
-	ExecuteWithSeederLock(name string, fn func() error) error
-
-	// GitCloneArgs returns the git clone arguments configured for the seeder.
-	GitCloneArgs() (string, error)
-
-	// DownloadsDir returns the path where seeder downloads are stored.
-	DownloadsDir() (string, error)
-	// DistfilesDir returns the path where distfiles are stored.
-	DistfilesDir() (string, error)
-	// BinpkgsDir returns the path where binary packages are stored.
-	BinpkgsDir() (string, error)
-	// GpgKeysDir returns the path where Gentoo releng GPG keys are kept.
-	GpgKeysDir() (string, error)
-	// DevDir returns the matrixOS toolkit root directory (matrixOS.Root).
-	DevDir() (string, error)
-	// DefaultDevDir returns the default matrixOS root inside chroots.
-	DefaultDevDir() (string, error)
-	// GitRepo returns the matrixOS git repository URL.
-	GitRepo() (string, error)
-	// DefaultPrivateGitRepoPath returns the private repo path inside chroots.
-	DefaultPrivateGitRepoPath() (string, error)
+	// --- Done-flag management ---
 
 	// SeederDoneFlagFile computes the done-flag file path for a seeder.
 	SeederDoneFlagFile(name, chrootDir string) (string, error)
@@ -165,9 +93,13 @@ type ISeeder interface {
 	IsSeederDone(name, chrootDir string) (bool, error)
 	// MarkSeederDone creates the done-flag file for the given seeder.
 	MarkSeederDone(name, chrootDir string) error
-	// ParseSeederParams sources a seeder params.sh and extracts the
-	// required variables (SEEDER_CHROOT_NAME, etc.).
-	ParseSeederParams(name, paramsPath string) (*SeederParams, error)
+
+	// --- Lifecycle / operations ---
+
+	// MaybeInitializePrivateRepo ensures the private example repository exists
+	// and is built. It clones the repo from PrivateExampleGitRepo if missing,
+	// or runs ./make.sh if the .built marker is absent.
+	MaybeInitializePrivateRepo() error
 	// ImportGentooGpgKeys imports Gentoo release engineering GPG keys.
 	ImportGentooGpgKeys() error
 	// ExecutePrepper runs the prepper script with required env vars.
@@ -186,23 +118,17 @@ type ISeeder interface {
 	// PostBuild runs the post-build script inside the chroot.
 	// It is called sequentially after all parallel builds complete.
 	PostBuild(opts *SeedOptions) error
-	// Parallelism returns the maximum number of seeders to build concurrently.
-	Parallelism() (int, error)
-	// MaxMemoryGiB returns the maximum total memory (in GiB) for all parallel workers.
-	// 0 means use all available system memory.
-	MaxMemoryGiB() (int, error)
-	// MaxCores returns the maximum number of CPU cores for all parallel workers.
-	// 0 means use all available cores.
-	MaxCores() (int, error)
-	// CoresMultiplier returns the CPU cores oversubscription multiplier.
-	// Values > 1.0 allow overlapping cpuset ranges, giving each worker more
-	// cores than a strict partition. Defaults to 1.0.
-	CoresMultiplier() (float64, error)
+
+	// --- Locking ---
+
+	// ExecuteWithSeederLock acquires an exclusive file lock for the given seeder name,
+	// executes fn under that lock, and releases the lock when fn returns.
+	ExecuteWithSeederLock(name string, fn func() error) error
 }
 
 // Seeder provides seed detection and manipulation operations.
 type Seeder struct {
-	cfg          config.IConfig
+	*SeederConfig
 	runner       runner.Func
 	chrootRunner runner.ChrootRunFunc
 	stdin        io.Reader
@@ -238,7 +164,7 @@ func NewSeeder(cfg config.IConfig, opts *NewSeederOptions) (*Seeder, error) {
 	}
 
 	return &Seeder{
-		cfg:          cfg,
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       runner.Run,
 		chrootRunner: runner.ChrootRun,
 		stdin:        stdin,

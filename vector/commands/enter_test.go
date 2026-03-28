@@ -71,7 +71,6 @@ func enterLockTestSetup(t *testing.T, chrootDirs ...string) (*seeder.MockSeeder,
 		t.Fatalf("WriteFile: %v", err)
 	}
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		CompleteChrootDirs: chrootDirs,
 	}
@@ -206,7 +205,6 @@ func TestEnterRunWithNamedTarget(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootName:         "bedrock",
 		ChrootsDir:         chrootsDir,
@@ -251,7 +249,6 @@ func TestEnterRunWithNamedTarget(t *testing.T) {
 
 func TestEnterRunNoMatchingNames(t *testing.T) {
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	restore := withMockSeeder(sd)
 	defer restore()
 
@@ -400,7 +397,6 @@ func TestEnterRunMultipleDirectories(t *testing.T) {
 
 func TestEnterDetectionError(t *testing.T) {
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	restore := withMockSeeder(sd)
 	defer restore()
 
@@ -421,23 +417,32 @@ func TestEnterDetectionError(t *testing.T) {
 
 func TestEnterParamsExecNameError(t *testing.T) {
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableNameErr = fmt.Errorf("config missing")
+	sd.ParseSeederParamsErr = fmt.Errorf("config missing")
 	restore := withMockSeeder(sd)
 	defer restore()
 
-	det := &seeder.MockSeederDetector{}
+	seederDir := filepath.Join(t.TempDir(), "00-test")
+	os.MkdirAll(seederDir, 0755)
+	det := &seeder.MockSeederDetector{
+		Detect_: []seeder.SeederInfo{
+			{Name: "00-test", Dir: seederDir},
+		},
+	}
 
 	cmd, err := newTestEnterCommand(det, nil, []string{"somename"})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
 
+	// makeSeederParams silently skips parse errors, so run() proceeds
+	// but fails because "somename" cannot be resolved.
 	err = cmd.run()
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "params executable name") {
-		t.Errorf("Unexpected error: %v", err)
+	// The parse error is silently skipped, run() fails with target resolution.
+	if strings.Contains(err.Error(), "failed to make params map") {
+		t.Errorf("Should not fail on params map: %v", err)
 	}
 }
 
@@ -592,7 +597,6 @@ func TestEnterRunLockUsesSeederName(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootName:         "bedrock",
 		ChrootsDir:         chrootsDir,
@@ -647,7 +651,6 @@ func TestEnterRunLockNoMatchingSeeder(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		CompleteChrootDirs: []string{"/some/other/dir"},
 	}
@@ -712,26 +715,37 @@ func TestEnterRunNewSeederError(t *testing.T) {
 	}
 }
 
-func TestEnterRunMakeSeederParamsError(t *testing.T) {
-	// When makeSeederParams fails (ParamsExecutableName error), run()
-	// should return "failed to make params map".
+func TestEnterRunMakeSeederParamsSkipsErrors(t *testing.T) {
+	// When ParseSeederParams fails, makeSeederParams should skip
+	// those seeders and still return a valid (possibly empty) map.
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableNameErr = fmt.Errorf("params name unavailable")
+	sd.ParseSeederParamsErr = fmt.Errorf("params name unavailable")
 	restore := withMockSeeder(sd)
 	defer restore()
 
-	det := &seeder.MockSeederDetector{}
+	seederDir := filepath.Join(t.TempDir(), "00-broken")
+	if err := os.MkdirAll(seederDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	det := &seeder.MockSeederDetector{
+		Detect_: []seeder.SeederInfo{
+			{Name: "00-broken", Dir: seederDir},
+		},
+	}
 	cmd, err := newTestEnterCommand(det, nil, []string{"somename"})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
 
+	// run() should not fail because makeSeederParams silently skips
+	// seeders with unparseable params. It will fail later because
+	// "somename" cannot be resolved, but not with a params map error.
 	err = cmd.run()
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to make params map") {
-		t.Errorf("Unexpected error: %v", err)
+	if strings.Contains(err.Error(), "failed to make params map") {
+		t.Errorf("Should not fail on params map: %v", err)
 	}
 }
 
@@ -748,7 +762,6 @@ func TestEnterMakeSeederParamsSkipsUnparseable(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParamsErr = fmt.Errorf("parse error")
 	restore := withMockSeeder(sd)
 	defer restore()
@@ -785,7 +798,6 @@ func TestEnterMakeSeederParamsSkipsMissingParamsFile(t *testing.T) {
 	// Deliberately do NOT create params.sh.
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	restore := withMockSeeder(sd)
 	defer restore()
 
@@ -830,7 +842,6 @@ func TestEnterRunSeederNameTargetPreferredChrootDir(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootsDir:         chrootsDir,
 		PreferredChrootDir: chrootDir,
@@ -885,7 +896,6 @@ func TestEnterRunSeederNameTargetLatestAvailableChrootDir(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootsDir:               chrootsDir,
 		PreferredChrootDir:       "",
@@ -935,7 +945,6 @@ func TestEnterRunSeederNameTargetNoChrootDirs(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		PreferredChrootDir:       "",
 		LatestAvailableChrootDir: "",
@@ -970,7 +979,6 @@ func TestEnterRunSeederNameTargetNotInParams(t *testing.T) {
 	// Target contains '/' but is NOT found in seedersParams →
 	// "unrecognized argument" error.
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	restore := withMockSeeder(sd)
 	defer restore()
 
@@ -1007,7 +1015,6 @@ func TestEnterRunLockWithPreferredChrootDirMatch(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		PreferredChrootDir: chrootDir,
 		CompleteChrootDirs: []string{}, // empty — forces PreferredChrootDir fallback in lock
@@ -1087,7 +1094,6 @@ func TestEnterResolveNamesEmptyChrootsDir(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootsDir: "", // empty — should be skipped
 	}
@@ -1127,7 +1133,6 @@ func TestEnterResolveNamesSeederNotInSps(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	// ParseSeederParams returns error → makeSeederParams skips it,
 	// so sps won't contain "00-broken". resolveNames must also skip it.
 	sd.ParseSeederParamsErr = fmt.Errorf("bad params")
@@ -1175,7 +1180,6 @@ func TestEnterRunMixedTargetsSeederNameAndDirectory(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootsDir:         chrootsDir,
 		PreferredChrootDir: chrootDir2,
@@ -1228,7 +1232,6 @@ func TestEnterRunWithPartialChrootDirTarget(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		CompleteChrootDirs: []string{},          // NOT in complete
 		PartialChrootDirs:  []string{chrootDir}, // only in partial
@@ -1288,7 +1291,6 @@ func TestEnterRunLockResolvesPartialChrootDir(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootName:         "bedrock",
 		ChrootsDir:         chrootsDir,
@@ -1343,7 +1345,6 @@ func TestEnterRunPartialAndCompleteMixed(t *testing.T) {
 	}
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		CompleteChrootDirs: []string{completeDir},
 		PartialChrootDirs:  []string{partialDir},

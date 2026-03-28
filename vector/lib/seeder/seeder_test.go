@@ -10,8 +10,9 @@ import (
 // newTestSeeder returns a Seeder with mock dependencies suitable for unit tests.
 func newTestSeeder() *Seeder {
 	mr := runner.NewMockRunner()
+	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	return &Seeder{
-		cfg:          &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+		SeederConfig: NewSeederConfig(cfg),
 		runner:       mr.Run,
 		chrootRunner: mr.ChrootRun,
 		stdout:       &bytes.Buffer{},

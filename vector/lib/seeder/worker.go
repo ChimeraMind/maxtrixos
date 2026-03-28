@@ -212,10 +212,19 @@ func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, e
 	return params, nil
 }
 
-// ParseSeederParams executes the given params.sh in a bash subshell
-// and captures the three key variables it must set.
-func (s *Seeder) ParseSeederParams(name, paramsPath string) (*SeederParams, error) {
-	return s.parseParamsVariables(name, paramsPath)
+// ParseSeederParams resolves the params executable inside info.Dir,
+// checks that it exists, and runs it in a bash subshell to extract the
+// required seeder variables.
+func (s *Seeder) ParseSeederParams(info SeederInfo) (*SeederParams, error) {
+	paramsName, err := s.ParamsExecutableName()
+	if err != nil {
+		return nil, fmt.Errorf("[%s] failed to get params name: %w", info.Name, err)
+	}
+	paramsPath := filepath.Join(info.Dir, paramsName)
+	if !filesystems.FileExists(paramsPath) {
+		return nil, fmt.Errorf("[%s] params file not found: %s", info.Name, paramsPath)
+	}
+	return s.parseParamsVariables(info.Name, paramsPath)
 }
 
 // --- GPG key management ---
