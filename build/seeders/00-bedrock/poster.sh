@@ -45,7 +45,7 @@ bedrock_poster.clean_artifacts() {
     chroots_lib.default_clean_temporary_artifacts
 
     # Clean stale distfiles
-    eclean-dist
+    chroots_lib.clean_old_distfiles
     # Clean stale binary packages
     chroots_lib.clean_old_binpkgs
 }

@@ -511,3 +511,76 @@ STUB
 
 # Note: Error propagation when find/emaint fails is handled by set -eu (script
 # convention) and cannot be tested through bats' `run` which disables set -e.
+
+# --- clean_old_distfiles ---
+
+_stub_find_only() {
+    export FIND_LOG="${TEST_TMPDIR}/find.log"
+    cat > "${STUB_BIN}/find" << 'STUB'
+#!/bin/bash
+echo "$*" >> "$FIND_LOG"
+STUB
+    chmod +x "${STUB_BIN}/find"
+}
+
+@test "clean_old_distfiles skips eviction when mounted with noatime" {
+    _stub_findmnt "rw,noatime"
+    _stub_find_only
+
+    run chroots_lib.clean_old_distfiles
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mounted with noatime"* ]]
+    [[ "$output" == *"Skipping atime-based eviction"* ]]
+    [ ! -f "${FIND_LOG}" ]
+}
+
+@test "clean_old_distfiles invokes find for stale distfiles" {
+    _stub_findmnt "rw,relatime"
+    _stub_find_only
+
+    run chroots_lib.clean_old_distfiles
+    [ "$status" -eq 0 ]
+
+    local line1
+    line1=$(sed -n '1p' "${FIND_LOG}")
+    [[ "${line1}" == "/var/cache/distfiles"* ]]
+    [[ "${line1}" == *"-type f"* ]]
+    [[ "${line1}" == *"-atime +30"* ]]
+    [[ "${line1}" == *"-print"* ]]
+    [[ "${line1}" == *"-delete"* ]]
+}
+
+@test "clean_old_distfiles does not filter by extension" {
+    _stub_findmnt "rw,relatime"
+    _stub_find_only
+
+    run chroots_lib.clean_old_distfiles
+    [ "$status" -eq 0 ]
+
+    local line1
+    line1=$(sed -n '1p' "${FIND_LOG}")
+    # Distfiles are arbitrary tarballs — no extension filter.
+    [[ "${line1}" != *"-name"* ]]
+}
+
+@test "clean_old_distfiles prunes empty directories with -mindepth 1" {
+    _stub_findmnt "rw,relatime"
+    _stub_find_only
+
+    run chroots_lib.clean_old_distfiles
+    [ "$status" -eq 0 ]
+
+    local line2
+    line2=$(sed -n '2p' "${FIND_LOG}")
+    [[ "${line2}" == "/var/cache/distfiles -mindepth 1 -type d -empty -delete" ]]
+}
+
+@test "clean_old_distfiles prints sweep and completion messages" {
+    _stub_findmnt "rw,relatime"
+    _stub_find_only
+
+    run chroots_lib.clean_old_distfiles
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Sweeping /var/cache/distfiles for distfiles unread in 30 days"* ]]
+    [[ "$output" == *"Distfiles cache eviction complete"* ]]
+}
