@@ -37,6 +37,9 @@ type ReleasesCommand struct {
 	// Parsed from flags
 	skipSeeders []string
 	onlySeeders []string
+
+	// Results populated during Run().
+	BuiltReleases []string
 }
 
 // NewReleasesCommand creates a new ReleasesCommand.
@@ -449,6 +452,8 @@ func (c *ReleasesCommand) initBuiltReleasesFile() error {
 // recordBuiltRelease appends the given branch to the built-releases
 // output file if the corresponding flag was provided.
 func (c *ReleasesCommand) recordBuiltRelease(branch string) error {
+	c.BuiltReleases = append(c.BuiltReleases, branch)
+
 	if c.builtReleasesFile == "" {
 		return nil
 	}
