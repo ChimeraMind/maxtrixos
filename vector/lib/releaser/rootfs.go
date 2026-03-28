@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/runner"
 )
@@ -114,6 +115,51 @@ func (r *Releaser) CleanRootfs() error {
 	return nil
 }
 
+// chroot executes a command inside the image directory via chroot and unshare.
+func (r *Releaser) chroot(env []string, name string, args []string) error {
+
+	devDir, err := r.DevDir()
+	if err != nil {
+		return fmt.Errorf("failed to get dev dir: %w", err)
+	}
+
+	seedersDir, err := r.cfg.GetItem("Seeder.SeedersDir")
+	if err != nil {
+		return err
+	}
+
+	initScript := filepath.Join(seedersDir, "init.sh")
+	if _, err := os.Stat(initScript); os.IsNotExist(err) {
+		return fmt.Errorf("init script not found at %s", initScript)
+	}
+
+	env = config.FilterEnvKey(env, "MATRIXOS_DEV_DIR")
+	env = config.FilterEnvKey(env, "RUNNER_TYPE")
+	env = append(env,
+		"MATRIXOS_DEV_DIR="+devDir,
+		"RUNNER_TYPE=releaser",
+	)
+
+	cmd := runner.ChrootCmd{
+		Cmd: runner.Cmd{
+			Name:   name,
+			Args:   args,
+			Env:    env,
+			Stdout: r.stdout,
+			Stderr: r.stderr,
+		},
+		ChrootExec: initScript,
+		ChrootDir:  r.imageDir,
+	}
+
+	err = r.chrootRunner(&cmd)
+	if err != nil {
+		return fmt.Errorf("chrooted %s %s failed: %w", name, args, err)
+	}
+
+	return nil
+}
+
 func (r *Releaser) PostCleanShrink() error {
 	if err := checkImageDir(r.imageDir); err != nil {
 		return err
@@ -124,45 +170,23 @@ func (r *Releaser) PostCleanShrink() error {
 
 	r.Print("Shrinking the rootfs to save space ...\n")
 
-	// Set up chroot mounts for emerge.
-	mounts, err := filesystems.NewCommonRootfsMounts(
-		filesystems.CommonRootfsMountsOptions{
-			MountPoint: r.imageDir,
-			Mounting: func(mnt string) {
-				r.Print("Mounting: %s ...\n", mnt)
-				r.trackMount(mnt)
-			},
-			Mounted: func(mnt string) {
-				r.Print("Mounted: %s\n", mnt)
-			},
-			Stdout: r.stdout,
-			Stderr: r.stderr,
+	err := r.chroot(
+		nil,
+		"/bin/bash",
+		// bash -c 'cmd "$@"' -- <args...> passes args as positional params.
+		// The exit $? ensures we return the correct exit code from emerge and
+		// prevent bash from optimizing the command, making emerge run as PID 1.
+		[]string{
+			"-c",
+			`source /etc/profile; emerge "$@"; exit $?`,
+			"--",
+			"--depclean",
+			"--with-bdeps=n",
+			"--complete-graph",
 		},
 	)
 	if err != nil {
 		return err
-	}
-	defer mounts.Cleanup()
-
-	if err := mounts.Setup(); err != nil {
-		return fmt.Errorf("failed to set up chroot mounts: %w", err)
-	}
-
-	err = r.chrootRunner(&runner.ChrootCmd{
-		Cmd: runner.Cmd{
-			Name: "emerge",
-			Args: []string{
-				"--depclean",
-				"--with-bdeps=n",
-				"--complete-graph",
-			},
-			Stdout: r.stdout,
-			Stderr: r.stderr,
-		},
-		ChrootDir: r.imageDir,
-	})
-	if err != nil {
-		return fmt.Errorf("emerge --depclean failed: %w", err)
 	}
 
 	removeDirs := []string{"/usr/include"}

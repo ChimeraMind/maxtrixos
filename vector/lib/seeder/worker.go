@@ -760,6 +760,7 @@ func (s *Seeder) generateSeederEnvVars(env []string) ([]string, error) {
 	env = config.FilterEnvKey(env, "SEEDER_PRIVATE_GIT_REPO_PATH")
 	env = config.FilterEnvKey(env, "SEEDER_DISTFILES_DIR")
 	env = config.FilterEnvKey(env, "SEEDER_BINPKGS_DIR")
+	env = config.FilterEnvKey(env, "RUNNER_TYPE")
 	env = append(env,
 		// Inside chroots, we always want /matrixos.
 		"MATRIXOS_DEV_DIR="+defaultDevDir,
@@ -770,6 +771,7 @@ func (s *Seeder) generateSeederEnvVars(env []string) ([]string, error) {
 		"SEEDER_PRIVATE_GIT_REPO_PATH="+privatePath,
 		"SEEDER_DISTFILES_DIR="+distDir,
 		"SEEDER_BINPKGS_DIR="+binpkgsDir,
+		"RUNNER_TYPE=seeder",
 	)
 	return env, nil
 }
