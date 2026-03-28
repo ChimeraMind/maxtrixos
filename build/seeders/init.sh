@@ -27,6 +27,24 @@
 # mounted.
 # Runner: seeder.
 #
+# IMAGER_EFI_MOUNT
+# The path to the EFI partition mount point from outside the chroot. This is expected
+# to be bind mount inside the chroot at /efi if not already mounted.
+# Runner: imager.
+#
+# IMAGER_BOOT_MOUNT
+# The path to the boot partition mount point from outside the chroot. This is expected
+# to be bind mount inside the chroot at /boot if not already mounted.
+# Runner: imager.
+#
+# IMAGER_EFI_ROOT
+# The path to the EFI partition root from the perspective of the chroot.
+# Runner: imager.
+#
+# IMAGER_BOOT_ROOT
+# The path to the boot partition root from the perspective of the chroot.
+# Runner: imager.
+#
 # RUNNER_TYPE
 # The type of the runner executing the seeding process. This is used to
 # determine who is calling us and act accordingly. For example, if the runner is the Releaser,
@@ -182,6 +200,58 @@ maybe_mount_run_lock() {
     fi
 }
 
+maybe_mount_efi() {
+    local chroot_dir="${1}"
+    if [ -z "${chroot_dir}" ]; then
+        echo "chroot_dir is not set, unable to mount EFI partition." >&2
+        return 1
+    fi
+
+    if [ -z "${IMAGER_EFI_MOUNT:-}" ]; then
+        echo "IMAGER_EFI_MOUNT is not set, unable to setup chroot environment for imager." >&2
+        return 1
+    fi
+
+    local dst_efi="${chroot_dir%/}${IMAGER_EFI_ROOT}"
+    mkdir -p "${dst_efi}"
+    if ! mountpoint -q "${dst_efi}"; then
+        echo "Mounting ${IMAGER_EFI_MOUNT} on ${dst_efi} ..."
+        mount --bind "${IMAGER_EFI_MOUNT}" "${dst_efi}"
+        # This is not necessary starting util-linux 2.27 since unshare
+        # enforces --propagation private by default. But let's keep this for
+        # a bit to be on the safe side.
+        mount --make-private "${dst_efi}"
+    else
+        echo "${dst_efi} already mounted on the host, skipping mounting it inside chroot." >&2
+    fi
+}
+
+maybe_mount_boot() {
+    local chroot_dir="${1}"
+    if [ -z "${chroot_dir}" ]; then
+        echo "chroot_dir is not set, unable to mount boot partition." >&2
+        return 1
+    fi
+
+    if [ -z "${IMAGER_BOOT_MOUNT:-}" ]; then
+        echo "IMAGER_BOOT_MOUNT is not set, unable to setup chroot environment for imager." >&2
+        return 1
+    fi
+
+    local dst_boot="${chroot_dir%/}${IMAGER_BOOT_ROOT}"
+    mkdir -p "${dst_boot}"
+    if ! mountpoint -q "${dst_boot}"; then
+        echo "Mounting ${IMAGER_BOOT_MOUNT} on ${dst_boot} ..."
+        mount --bind "${IMAGER_BOOT_MOUNT}" "${dst_boot}"
+        # This is not necessary starting util-linux 2.27 since unshare
+        # enforces --propagation private by default. But let's keep this for
+        # a bit to be on the safe side.
+        mount --make-private "${dst_boot}"
+    else
+        echo "${dst_boot} already mounted on the host, skipping mounting it inside chroot." >&2
+    fi
+}
+
 setup_chroot_env() {
     local chroot_dir="${1}"
 
@@ -195,11 +265,16 @@ setup_chroot_env() {
         echo "RUNNER_TYPE is not set, unable to setup chroot environment." >&2
         return 1
     fi
+    echo "init.sh: Runner type is ${runner_type}."
 
     if [ "${runner_type}" = "seeder" ]; then
         maybe_mount_distfiles "${chroot_dir}"
         maybe_mount_binpkgs "${chroot_dir}"
         maybe_mount_private_git "${chroot_dir}"
+    fi
+    if [ "${runner_type}" = "imager" ]; then
+        maybe_mount_efi "${chroot_dir}"
+        maybe_mount_boot "${chroot_dir}"
     fi
 
     maybe_mount_sys "${chroot_dir}"
