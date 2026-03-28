@@ -44,6 +44,9 @@ type SeedsCommand struct {
 	// Parsed from flags
 	skipSeeders []string
 	onlySeeders []string
+
+	// Results populated during Run().
+	BuiltSeeders []string
 }
 
 // NewSeedsCommand creates a new SeedsCommand.
@@ -436,6 +439,8 @@ func (c *SeedsCommand) recordBuiltRootfsFile(chrootDir string) error {
 }
 
 func (c *SeedsCommand) recordBuiltSeedersFile(seederName string) error {
+	c.BuiltSeeders = append(c.BuiltSeeders, seederName)
+
 	if c.builtSeedersFile == "" {
 		return nil
 	}
