@@ -173,7 +173,7 @@ func (r *Releaser) PostCleanShrink() error {
 		// prevent bash from optimizing the command, making emerge run as PID 1.
 		[]string{
 			"-c",
-			`source /etc/profile; emerge "$@"; exit $?`,
+			`test -e /etc/profile && source /etc/profile; emerge "$@"; exit $?`,
 			"--",
 			"--depclean",
 			"--with-bdeps=n",
