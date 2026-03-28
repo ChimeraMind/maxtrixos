@@ -66,7 +66,6 @@ _load_chroot_script() {
         bedrock.build_system
         bedrock.build_everything
         bedrock.tweak_nsswitch
-        bedrock.clean_temporary_artifacts
     )
 
     for phase in "${expected_phases[@]}"; do
@@ -109,7 +108,6 @@ _load_chroot_script() {
         server.portage_bootstrap
         server.build_everything
         server.tweak_nsswitch
-        server.clean_temporary_artifacts
         server.tweak_resolved
     )
 
@@ -120,7 +118,7 @@ _load_chroot_script() {
 
 @test "server chroot: BUILD_KERNEL_PACKAGES are defined" {
     _load_chroot_script "${BATS_TEST_DIRNAME}/10-server/chroot.sh"
-    [[ "${BUILD_KERNEL_PACKAGES[*]}" == *"matrixos-kernel"* ]]
+    [[ "${BUILD_KERNEL_PACKAGES[*]}" == *"matrixos-initramfs"* ]]
 }
 
 @test "server chroot: UPSTREAM_PORTAGE_REPOS is empty" {
@@ -141,7 +139,6 @@ _load_chroot_script() {
         gnome.build_everything
         gnome.tweak_nsswitch
         gnome.tweak_resolved
-        gnome.clean_temporary_artifacts
     )
 
     for phase in "${expected_phases[@]}"; do
