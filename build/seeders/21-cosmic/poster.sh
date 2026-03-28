@@ -46,7 +46,8 @@ cosmic_poster.clean_artifacts() {
 
     # Clean stale distfiles
     eclean-dist
-    eclean-pkg
+    # Clean stale binary packages
+    chroots_lib.clean_old_binpkgs
 }
 
 main() {

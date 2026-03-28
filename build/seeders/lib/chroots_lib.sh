@@ -488,3 +488,27 @@ chroots_lib.generic_forced_rebuild() {
     echo ">> emerge (forcing rebuild)" "${common_args[@]}" "${@}"
     emerge "${common_args[@]}" "${@}"
 }
+
+chroots_lib.clean_old_binpkgs() {
+    # This script relies on the fact that the BINPKG_DIR is bind-mounted without noatime.
+    local pkgdir="/var/cache/binpkgs"
+    local ttl_days="30"
+
+    echo "[*] Sweeping ${pkgdir} for binpkgs unread in ${ttl_days} days..."
+
+    # Evict stale binary packages based strictly on access time (atime).
+    # (Note: If your kernel defaults to 'relatime', atime only updates if the 
+    # previous atime was earlier than mtime/ctime, or if 24 hours have passed. 
+    # For a multi-day TTL, relatime is perfectly sufficient).
+    find "${pkgdir}" -type f \
+        \( -name "*.tbz2" -o -name "*.gpkg.tar" -o -name "*.xpak" \) \
+        -atime +"${ttl_days}" \
+        -print -delete
+
+    # Prune orphaned category directories left behind.
+    find "${pkgdir}" -mindepth 1 -type d -empty -delete
+
+    # Synchronize the Portage index.
+    emaint binhost --fix
+    echo "[*] Binary packages cache eviction complete."
+}
