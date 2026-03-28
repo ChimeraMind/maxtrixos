@@ -145,8 +145,8 @@ func prepareMachineID(imageDir string) error {
 // prepareVarDbPkg moves var/db/pkg to the read-only VDB location and creates
 // a relative symlink back.
 func (o *Ostree) prepareVarDbPkg(imageDir, roVdbPath string) error {
-	o.Print("Setting up /var/db/pkg...\n")
-	varDbPkg := filepath.Join(imageDir, "var", "db", "pkg")
+	o.Print("Setting up %s...\n", roVdbPath)
+	varDbPkg := filepath.Join(imageDir, RwVdbPath)
 	usrVarDbPkg := filepath.Join(imageDir, roVdbPath)
 
 	o.Print("Moving %s to %s\n", varDbPkg, usrVarDbPkg)

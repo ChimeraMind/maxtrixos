@@ -13,6 +13,11 @@ import (
 	"matrixos/vector/lib/filesystems"
 )
 
+const (
+	// RwVdbPath is the rw path to the Portage package database.
+	RwVdbPath = "/var/db/pkg"
+)
+
 // ParseModeString takes a hybrid string like "-00644" and parses it.
 func ParseModeString(input string) (*filesystems.PathMode, error) {
 	if len(input) < 4 {
@@ -173,7 +178,7 @@ func (o *Ostree) ListPackages(commit string) ([]string, error) {
 	if err == nil && len(pkgs) > 0 {
 		return pkgs, nil
 	}
-	return o.listPackagesFromPath(root, "/var/db/pkg", commit)
+	return o.listPackagesFromPath(root, RwVdbPath, commit)
 }
 
 func (o *Ostree) listPackagesFromPath(root, path, commit string) ([]string, error) {

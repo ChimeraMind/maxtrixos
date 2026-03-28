@@ -10,6 +10,7 @@ import (
 
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
+	"matrixos/vector/lib/pms"
 )
 
 func (r *Releaser) SymlinkEtc() error {
@@ -125,6 +126,29 @@ func (r *Releaser) MaybeOstreeInit() error {
 	return r.ostree.SetGpg(gpgEnabled)
 }
 
+func (r *Releaser) listPackages(imageDir string) ([]string, error) {
+	roVdb, err := r.ReadOnlyVdb()
+	if err != nil {
+		return nil, err
+	}
+	rwVdb := ostree.RwVdbPath
+
+	roPath := filepath.Join(imageDir, roVdb)
+	rwPath := filepath.Join(imageDir, rwVdb)
+
+	var vdb string
+	if filesystems.DirectoryExists(roPath) {
+		vdb = roPath
+	} else if filesystems.DirectoryExists(rwPath) {
+		vdb = rwPath
+	}
+
+	if vdb == "" {
+		return nil, errors.New("no vdb directory found in image")
+	}
+	return pms.PackageList(vdb)
+}
+
 func (r *Releaser) Release(opts CommitOptions) error {
 	if err := checkImageDir(r.imageDir); err != nil {
 		return err
@@ -172,12 +196,19 @@ func (r *Releaser) Release(opts CommitOptions) error {
 		return err
 	}
 
-	body := fmt.Sprintf("%s %s (parent: %s) at %s\n\nBuild metadata:\n%s\n",
+	pkgList, err := r.listPackages(r.imageDir)
+	if err != nil {
+		return fmt.Errorf("failed to list packages for release commit body: %w", err)
+	}
+
+	body := fmt.Sprintf(
+		"%s %s (parent: %s) at %s\n\nBuild metadata:\n%s\nPackages:\n%s\n",
 		fancyOsName,
 		opts.Branch,
 		parentBranch,
 		time.Now().Format("2006-01-02"),
 		metadata,
+		strings.Join(pkgList, "\n"),
 	)
 
 	// Normalise timestamps before commit.

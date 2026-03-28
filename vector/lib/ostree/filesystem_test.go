@@ -203,7 +203,7 @@ func TestPrepareFilesystemHierarchyEdgeCases(t *testing.T) {
 
 		cfg := &config.MockConfig{
 			Items: map[string][]string{
-				"Releaser.ReadOnlyVdb": {"/var/db/pkg"},
+				"Releaser.ReadOnlyVdb": {RwVdbPath},
 				"Imager.EfiRoot":       {"/efi"},
 			},
 		}
