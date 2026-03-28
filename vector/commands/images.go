@@ -255,7 +255,7 @@ func (c *ImagesCommand) imageWorker(ref string) error {
 	c.ot.SetRef(rr.Ref)
 
 	// Fail fast on bad params.
-	if err := failFastChecks(c.ot, im); err != nil {
+	if err := failFastChecks(c.ot, imager.NewImagerConfig(c.cfg)); err != nil {
 		return err
 	}
 
