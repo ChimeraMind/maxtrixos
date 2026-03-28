@@ -593,11 +593,12 @@ func (s *Seeder) Seed(opts *SeedOptions) error {
 		return err
 	}
 
-	seedersDir, err := s.SeedersDir()
+	devDir, err := s.DevDir()
 	if err != nil {
-		return fmt.Errorf("error getting seeders dir: %w", err)
+		return err
 	}
-	initScript := filepath.Join(seedersDir, "init.sh")
+
+	initScript := filepath.Join(devDir, "build", "init", "init.sh")
 
 	stdin := opts.Stdin
 	if stdin == nil {

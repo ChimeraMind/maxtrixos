@@ -15,12 +15,7 @@ func (im *Imager) chroot(env []string, name string, args []string) error {
 		return fmt.Errorf("failed to get dev dir: %w", err)
 	}
 
-	seedersDir, err := im.cfg.GetItem("Seeder.SeedersDir")
-	if err != nil {
-		return err
-	}
-
-	initScript := filepath.Join(seedersDir, "init.sh")
+	initScript := filepath.Join(devDir, "build", "init", "init.sh")
 	if _, err := os.Stat(initScript); os.IsNotExist(err) {
 		return fmt.Errorf("init script not found at %s", initScript)
 	}
