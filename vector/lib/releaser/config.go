@@ -1,10 +1,34 @@
 package releaser
 
-import "fmt"
+import (
+	"fmt"
+
+	"matrixos/vector/lib/config"
+)
+
+// ReleaserConfig provides releaser configuration accessors. It wraps a
+// config.IConfig and exposes the parsed, validated values that callers
+// outside the releaser package need.
+//
+// Releaser embeds *ReleaserConfig, so all accessors are available on a
+// Releaser instance as well. Callers that only need configuration (not
+// build operations) can create a ReleaserConfig directly via
+// NewReleaserConfig.
+type ReleaserConfig struct {
+	cfg config.IConfig
+}
+
+// NewReleaserConfig creates a new ReleaserConfig instance.
+func NewReleaserConfig(cfg config.IConfig) *ReleaserConfig {
+	return &ReleaserConfig{cfg: cfg}
+}
+
+// --- Config accessors ---
+// Each method retrieves a single configuration value and validates it.
 
 // configItem retrieves a non-empty config string or returns an error.
-func (r *Releaser) configItem(key string) (string, error) {
-	v, err := r.cfg.GetItem(key)
+func (c *ReleaserConfig) configItem(key string) (string, error) {
+	v, err := c.cfg.GetItem(key)
 	if err != nil {
 		return "", err
 	}
@@ -14,54 +38,54 @@ func (r *Releaser) configItem(key string) (string, error) {
 	return v, nil
 }
 
-func (r *Releaser) Hostname() (string, error) {
-	return r.configItem("Releaser.Hostname")
+func (c *ReleaserConfig) Hostname() (string, error) {
+	return c.configItem("Releaser.Hostname")
 }
 
-func (r *Releaser) HooksDir() (string, error) {
-	return r.configItem("Releaser.HooksDir")
+func (c *ReleaserConfig) HooksDir() (string, error) {
+	return c.configItem("Releaser.HooksDir")
 }
 
-func (r *Releaser) DevDir() (string, error) {
-	return r.configItem("matrixOS.Root")
+func (c *ReleaserConfig) DevDir() (string, error) {
+	return c.configItem("matrixOS.Root")
 }
 
-func (r *Releaser) ReadOnlyVdb() (string, error) {
-	return r.configItem("Releaser.ReadOnlyVdb")
+func (c *ReleaserConfig) ReadOnlyVdb() (string, error) {
+	return c.configItem("Releaser.ReadOnlyVdb")
 }
 
-func (r *Releaser) LockDir() (string, error) {
-	return r.configItem("Releaser.LocksDir")
+func (c *ReleaserConfig) LockDir() (string, error) {
+	return c.configItem("Releaser.LocksDir")
 }
 
-func (r *Releaser) LockWaitSeconds() (string, error) {
-	return r.configItem("Releaser.LockWaitSeconds")
+func (c *ReleaserConfig) LockWaitSeconds() (string, error) {
+	return c.configItem("Releaser.LockWaitSeconds")
 }
 
-func (r *Releaser) GenerateStaticDeltas() (bool, error) {
-	return r.cfg.GetBool("Releaser.GenerateStaticDeltas")
+func (c *ReleaserConfig) GenerateStaticDeltas() (bool, error) {
+	return c.cfg.GetBool("Releaser.GenerateStaticDeltas")
 }
 
-func (r *Releaser) SecureBootCertPath() (string, error) {
-	return r.configItem("Seeder.SecureBootPublicKey")
+func (c *ReleaserConfig) SecureBootCertPath() (string, error) {
+	return c.configItem("Seeder.SecureBootPublicKey")
 }
 
-func (r *Releaser) SecureBootKekPath() (string, error) {
-	return r.configItem("Seeder.SecureBootKekPublicKey")
+func (c *ReleaserConfig) SecureBootKekPath() (string, error) {
+	return c.configItem("Seeder.SecureBootKekPublicKey")
 }
 
-func (r *Releaser) PrivateGitRepoPath() (string, error) {
-	return r.configItem("matrixOS.PrivateGitRepoPath")
+func (c *ReleaserConfig) PrivateGitRepoPath() (string, error) {
+	return c.configItem("matrixOS.PrivateGitRepoPath")
 }
 
-func (r *Releaser) DefaultPrivateGitRepoPath() (string, error) {
-	return r.configItem("matrixOS.DefaultPrivateGitRepoPath")
+func (c *ReleaserConfig) DefaultPrivateGitRepoPath() (string, error) {
+	return c.configItem("matrixOS.DefaultPrivateGitRepoPath")
 }
 
-func (r *Releaser) BuildMetadataFile() (string, error) {
-	return r.configItem("Seeder.ChrootMetadataDir")
+func (c *ReleaserConfig) BuildMetadataFile() (string, error) {
+	return c.configItem("Seeder.ChrootMetadataDir")
 }
 
-func (r *Releaser) ServicesDir() (string, error) {
-	return r.configItem("Releaser.HooksDir")
+func (c *ReleaserConfig) ServicesDir() (string, error) {
+	return c.configItem("Releaser.HooksDir")
 }

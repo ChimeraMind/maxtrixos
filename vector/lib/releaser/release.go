@@ -56,120 +56,21 @@ type NewReleaserOptions struct {
 }
 
 // IRelease defines the interface for release operations.
-// It mirrors all public methods of Releaser for testability.
+// It contains only the methods that callers outside this package use
+// through an interface-typed variable (e.g. commands.ReleaseCommand).
+// All remaining public methods live on *Releaser directly.
 type IRelease interface {
 	// SetStdout replaces the writer used for informational output.
 	SetStdout(w io.Writer)
 	// SetStderr replaces the writer used for warnings and errors.
 	SetStderr(w io.Writer)
-	// Stdout returns the current informational output writer.
-	Stdout() io.Writer
-	// Stderr returns the current warning/error output writer.
-	Stderr() io.Writer
-
 	// Print writes a formatted informational message to stdout.
 	Print(format string, args ...any)
-	// PrintWarning writes a formatted warning message to stderr.
-	PrintWarning(format string, args ...any)
-	// PrintError writes a formatted error/diagnostic message to stderr.
-	PrintError(format string, args ...any)
-
-	// SetChrootDir sets the source chroot directory.
-	SetChrootDir(dir string)
-	// ChrootDir returns the source chroot directory.
-	ChrootDir() string
-	// SetImageDir sets the destination image directory.
-	// It validates that dir is a non-empty existing directory.
-	SetImageDir(dir string) error
-	// ImageDir returns the destination image directory.
-	ImageDir() string
-	// SetRef sets the ostree ref (branch).
-	SetRef(ref string)
-	// Ref returns the ostree ref (branch).
-	Ref() string
-
-	// Hostname returns the configured release hostname.
-	Hostname() (string, error)
-	// HooksDir returns the directory where per-branch release hooks live.
-	HooksDir() (string, error)
-	// DevDir returns the matrixOS dev directory (Root).
-	DevDir() (string, error)
-	// ReadOnlyVdb returns the path used for the read-only Portage vardb.
-	ReadOnlyVdb() (string, error)
-	// LockDir returns the directory where releaser file locks are stored.
-	LockDir() (string, error)
-	// LockWaitSeconds returns the configured lock acquisition timeout.
-	LockWaitSeconds() (string, error)
-	// GenerateStaticDeltas returns whether ostree static deltas should be generated.
-	GenerateStaticDeltas() (bool, error)
-	// SecureBootCertPath returns the path to the SecureBoot db certificate.
-	SecureBootCertPath() (string, error)
-	// SecureBootKekPath returns the path to the SecureBoot KEK certificate.
-	SecureBootKekPath() (string, error)
-	// PrivateGitRepoPath returns the private git repo path.
-	PrivateGitRepoPath() (string, error)
-	// DefaultPrivateGitRepoPath returns the default private git repo path (used inside chroots).
-	DefaultPrivateGitRepoPath() (string, error)
-	// BuildMetadataFile returns the seeder build metadata file path.
-	BuildMetadataFile() (string, error)
-	// ServicesDir returns the directory where per-branch systemd service configs live.
-	ServicesDir() (string, error)
-
-	// CheckMatrixOS validates the matrixOS development environment.
-	CheckMatrixOS() error
-	// SyncFilesystem synchronises the chroot directory into the image directory
-	// using either cp --reflink=auto or rsync.
-	SyncFilesystem() error
-	// PreCleanQAChecks runs pre-clean quality assurance checks on the image directory.
-	PreCleanQAChecks() error
-	// CleanRootfs cleans the image directory rootfs for release.
-	CleanRootfs() error
-	// SetupHostname configures the hostname inside the image directory.
-	SetupHostname() error
-	// SetupServices configures systemd services inside the image directory
-	// based on the per-ref services configuration file.
-	SetupServices() error
-	// ReleaseHook runs the per-ref release hook script, if one exists.
-	ReleaseHook() error
-	// PostCleanShrink removes unnecessary development artifacts to save space.
-	PostCleanShrink() error
-
-	// OstreePrepare prepares and validates the filesystem hierarchy for OSTree.
-	OstreePrepare() error
-	// MaybeOstreeInit initialises the local ostree repository if it does not already exist.
-	MaybeOstreeInit() error
-	// SymlinkEtc creates a /etc -> usr/etc symlink in the image directory
-	// to prevent emerge from recreating /etc during post-clean.
-	SymlinkEtc() error
-	// UnlinkEtc removes the /etc symlink before an ostree commit.
-	UnlinkEtc() error
-	// AddExtraDotDotToUsrEtcPortage adjusts the /usr/etc/portage symlink
-	// after /etc has been moved to /usr/etc, adding an extra "../" prefix.
-	AddExtraDotDotToUsrEtcPortage() error
-	// RemoveExtraDotDotFromUsrEtcPortage removes the extra "../" prefix from the
-	// /usr/etc/portage symlink so it works after client-side deployment.
-	RemoveExtraDotDotFromUsrEtcPortage() error
-
-	// Build runs the full release pipeline for a single branch.
-	// It performs environment verification, pre-release operations,
-	// GPG initialisation, ostree preparation, a two-commit workflow
-	// (full branch without consume, then regular branch with consume
-	// and full as parent), and all intermediate symlink/portage
-	// adjustments.  The full branch name is derived from the current
-	// ref via IOstree.BranchToFull.
-	Build() error
-
-	// Release commits the image directory to the ostree repository.
-	Release(opts CommitOptions) error
-
-	// ReleaseLockDir returns the lock directory, creating it if necessary.
-	ReleaseLockDir() (string, error)
-	// ReleaseLockPath returns the lock file path.
-	ReleaseLockPath() (string, error)
 	// ExecuteWithReleaseLock acquires an exclusive file lock for the given .Ref,
 	// executes fn under that lock, and releases the lock when fn returns.
 	ExecuteWithReleaseLock(fn func() error) error
-
+	// Build runs the full release pipeline for a single branch.
+	Build() error
 	// Cleanup unmounts all mount points tracked by this Releaser instance
 	// in reverse order. It is safe to call multiple times.
 	Cleanup()
@@ -177,7 +78,7 @@ type IRelease interface {
 
 // Releaser provides release creation and manipulation operations.
 type Releaser struct {
-	cfg          config.IConfig
+	*ReleaserConfig
 	ostree       ostree.IOstree
 	runner       runner.Func
 	chrootRunner runner.ChrootRunFunc
@@ -219,17 +120,17 @@ func NewReleaser(cfg config.IConfig, ot ostree.IOstree, opts *NewReleaserOptions
 	}
 
 	return &Releaser{
-		cfg:          cfg,
-		ostree:       ot,
-		runner:       runner.Run,
-		chrootRunner: runner.ChrootRun,
-		qa:           qa,
-		stdout:       os.Stdout,
-		stderr:       os.Stderr,
-		chrootDir:    opts.ChrootDir,
-		imageDir:     opts.ImageDir,
-		ref:          opts.Ref,
-		verbose:      opts.Verbose,
+		ReleaserConfig: NewReleaserConfig(cfg),
+		ostree:         ot,
+		runner:         runner.Run,
+		chrootRunner:   runner.ChrootRun,
+		qa:             qa,
+		stdout:         os.Stdout,
+		stderr:         os.Stderr,
+		chrootDir:      opts.ChrootDir,
+		imageDir:       opts.ImageDir,
+		ref:            opts.Ref,
+		verbose:        opts.Verbose,
 	}, nil
 }
 
