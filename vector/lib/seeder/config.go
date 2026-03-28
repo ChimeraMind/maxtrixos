@@ -3,6 +3,8 @@ package seeder
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 // configItem retrieves a non-empty config string or returns an error.
@@ -55,6 +57,10 @@ func (s *Seeder) ParamsExecutableName() (string, error) {
 
 func (s *Seeder) PrepperExecName() (string, error) {
 	return s.configItem("Seeder.PrepperExecutableName")
+}
+
+func (s *Seeder) PostBuildExecName() (string, error) {
+	return s.configItem("Seeder.PostBuildExecutableName")
 }
 
 func (s *Seeder) ChrootMetadataDir() (string, error) {
@@ -160,4 +166,76 @@ func (s *Seeder) SeedsVersioningCadence() (string, error) {
 			"invalid Seeder.SeedsVersioningCadence %q: must be daily, weekly, or monthly", v,
 		)
 	}
+}
+
+// Parallelism returns the maximum number of seeders to build in parallel.
+// Defaults to 1 (sequential) if not set or invalid.
+func (s *Seeder) Parallelism() (int, error) {
+	v, err := s.cfg.GetItem("Seeder.Parallelism")
+	if err != nil {
+		return 1, nil
+	}
+	if v == "" {
+		return 1, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("invalid Seeder.Parallelism %q: %w", v, err)
+	}
+	if n < 1 {
+		return 1, nil
+	}
+	return n, nil
+}
+
+// MaxMemoryGiB returns the maximum total memory (in GiB) to allocate across
+// all parallel workers. 0 means use all available system memory.
+func (s *Seeder) MaxMemoryGiB() (int, error) {
+	v, err := s.cfg.GetItem("Seeder.MaxMemoryGiB")
+	if err != nil || v == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("invalid Seeder.MaxMemoryGiB %q: %w", v, err)
+	}
+	if n < 0 {
+		return 0, nil
+	}
+	return n, nil
+}
+
+// MaxCPUs returns the maximum number of CPUs to allocate across all parallel
+// workers. 0 means use all available CPUs.
+func (s *Seeder) MaxCPUs() (int, error) {
+	v, err := s.cfg.GetItem("Seeder.MaxCPUs")
+	if err != nil || v == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("invalid Seeder.MaxCPUs %q: %w", v, err)
+	}
+	if n < 0 {
+		return 0, nil
+	}
+	return n, nil
+}
+
+// CoresMultiplier returns the CPU cores oversubscription multiplier.
+// Values > 1.0 allow overlapping cpuset ranges between workers, giving
+// each worker more cores than a strict partition. Defaults to 1.0.
+func (s *Seeder) CoresMultiplier() (float64, error) {
+	v, err := s.cfg.GetItem("Seeder.CoresMultiplier")
+	if err != nil || strings.TrimSpace(v) == "" {
+		return 1.0, nil
+	}
+	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid Seeder.CoresMultiplier %q: %w", v, err)
+	}
+	if f < 0.1 {
+		return 0.1, nil
+	}
+	return f, nil
 }

@@ -37,6 +37,8 @@ type MockSeeder struct {
 	ParamsExecutableNameErr           error
 	PrepperExecName_                  string
 	PrepperExecNameErr                error
+	PostBuildExecName_                string
+	PostBuildExecNameErr              error
 	ChrootMetadataDir_                string
 	ChrootMetadataDirErr              error
 	ChrootMetadataDirBuildFileName_   string
@@ -77,6 +79,14 @@ type MockSeeder struct {
 	GitRepoErr                   error
 	DefaultPrivateGitRepoPath_   string
 	DefaultPrivateGitRepoPathErr error
+	Parallelism_                 int
+	ParallelismErr               error
+	MaxMemoryGiB_                int
+	MaxMemoryGiBErr              error
+	MaxCPUs_                     int
+	MaxCPUsErr                   error
+	CoresMultiplier_             float64
+	CoresMultiplierErr           error
 
 	// Execution
 	RetryableCmdErr               error
@@ -102,6 +112,7 @@ type MockSeeder struct {
 	SetupChrootDNSErr      error
 	SetupChrootDirsErr     error
 	SeedErr                error
+	PostBuildErr           error
 
 	// Track calls
 	RetryableCmdCalled               bool
@@ -114,6 +125,7 @@ type MockSeeder struct {
 	SetupChrootDNSCalled             bool
 	SetupChrootDirsCalled            bool
 	SeedCalled                       bool
+	PostBuildCalled                  bool
 	MarkSeederDoneCalled             bool
 }
 
@@ -179,6 +191,9 @@ func (m *MockSeeder) ParamsExecutableName() (string, error) {
 }
 func (m *MockSeeder) PrepperExecName() (string, error) {
 	return m.PrepperExecName_, m.PrepperExecNameErr
+}
+func (m *MockSeeder) PostBuildExecName() (string, error) {
+	return m.PostBuildExecName_, m.PostBuildExecNameErr
 }
 func (m *MockSeeder) ChrootMetadataDir() (string, error) {
 	return m.ChrootMetadataDir_, m.ChrootMetadataDirErr
@@ -310,4 +325,26 @@ func (m *MockSeeder) SetupChrootDirs(chrootDir string) error {
 func (m *MockSeeder) Seed(*SeedOptions) error {
 	m.SeedCalled = true
 	return m.SeedErr
+}
+func (m *MockSeeder) PostBuild(*SeedOptions) error {
+	m.PostBuildCalled = true
+	return m.PostBuildErr
+}
+func (m *MockSeeder) Parallelism() (int, error) {
+	if m.Parallelism_ == 0 && m.ParallelismErr == nil {
+		return 1, nil
+	}
+	return m.Parallelism_, m.ParallelismErr
+}
+func (m *MockSeeder) MaxMemoryGiB() (int, error) {
+	return m.MaxMemoryGiB_, m.MaxMemoryGiBErr
+}
+func (m *MockSeeder) MaxCPUs() (int, error) {
+	return m.MaxCPUs_, m.MaxCPUsErr
+}
+func (m *MockSeeder) CoresMultiplier() (float64, error) {
+	if m.CoresMultiplier_ == 0 && m.CoresMultiplierErr == nil {
+		return 1.0, nil
+	}
+	return m.CoresMultiplier_, m.CoresMultiplierErr
 }

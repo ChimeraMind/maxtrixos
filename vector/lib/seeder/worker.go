@@ -29,6 +29,7 @@ var (
 set -eu
 export MATRIXOS_DEV_DIR={{shq .DevDir}}
 source {{shq .ParamsPath}}
+echo "${SEEDER_DEPENDS}"
 echo "${SEEDER_CHROOT_NAME}"
 echo "${SEEDER_CHROOTS_DIR}"
 echo "${PREFERRED_SEEDER_CHROOT_DIR}"
@@ -39,9 +40,10 @@ echo $("{{.SeedName}}_params.find_latest_chroot_dir" {{shq .Name}} || true)
 
 // SeederParams holds the key variables exported by a seeder's params.sh.
 type SeederParams struct {
-	ChrootName         string // SEEDER_CHROOT_NAME
-	ChrootsDir         string // SEEDER_CHROOTS_DIR
-	PreferredChrootDir string // PREFERRED_SEEDER_CHROOT_DIR
+	Depends            []string // SEEDER_DEPENDS (space-separated list)
+	ChrootName         string   // SEEDER_CHROOT_NAME
+	ChrootsDir         string   // SEEDER_CHROOTS_DIR
+	PreferredChrootDir string   // PREFERRED_SEEDER_CHROOT_DIR
 	// Computed path to the latest available chroot directory for this seeder.
 	// This points to the latest effectively available directory, which may
 	// differ from PREFERRED_SEEDER_CHROOT_DIR if that directory is missing or not ready.
@@ -148,15 +150,22 @@ func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, e
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
-	if len(lines) < 5 {
+	if len(lines) < 6 {
 		return nil, fmt.Errorf(
-			"expected 5 lines from params %s, got %d",
+			"expected 6 lines from params %s, got %d",
 			paramsPath, len(lines),
 		)
 	}
 
+	var depends []string
+	for field := range strings.FieldsSeq(lines[0]) {
+		if field != "" {
+			depends = append(depends, field)
+		}
+	}
+
 	var allChrootDirs []string
-	for _, line := range lines[4:] {
+	for _, line := range lines[5:] {
 		for _, field := range strings.Fields(line) {
 			if field != "" {
 				allChrootDirs = append(allChrootDirs, field)
@@ -165,10 +174,11 @@ func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, e
 	}
 
 	params := &SeederParams{
-		ChrootName:               strings.TrimSpace(lines[0]),
-		ChrootsDir:               strings.TrimSpace(lines[1]),
-		PreferredChrootDir:       strings.TrimSpace(lines[2]),
-		LatestAvailableChrootDir: strings.TrimSpace(lines[3]),
+		Depends:                  depends,
+		ChrootName:               strings.TrimSpace(lines[1]),
+		ChrootsDir:               strings.TrimSpace(lines[2]),
+		PreferredChrootDir:       strings.TrimSpace(lines[3]),
+		LatestAvailableChrootDir: strings.TrimSpace(lines[4]),
 		AllChrootDirs:            allChrootDirs,
 	}
 
@@ -619,13 +629,73 @@ func (s *Seeder) Seed(opts *SeedOptions) error {
 
 	return s.chrootRunner(&runner.ChrootCmd{
 		Cmd: runner.Cmd{
-			Name:   opts.Info.ChrootChrootExec,
-			Args:   opts.Info.ChrootChrootArgs,
-			Env:    env,
-			Dir:    dir,
-			Stdin:  stdin,
-			Stdout: stdout,
-			Stderr: stderr,
+			Name:        opts.Info.ChrootChrootExec,
+			Args:        opts.Info.ChrootChrootArgs,
+			Env:         env,
+			Dir:         dir,
+			Stdin:       stdin,
+			Stdout:      stdout,
+			Stderr:      stderr,
+			SysProcAttr: opts.SysProcAttr,
+		},
+		ChrootExec: initScript,
+		ChrootDir:  opts.ChrootDir,
+	})
+}
+
+// PostBuild runs the post-build script inside the chroot.
+// It follows the same pattern as Seed but uses the PostBuildChrootExec path.
+func (s *Seeder) PostBuild(opts *SeedOptions) error {
+	if opts == nil {
+		return fmt.Errorf("opts cannot be nil")
+	}
+	if opts.Info.PostBuildChrootExec == "" {
+		return nil // No post-build script configured.
+	}
+
+	// Start with a pristine environment.
+	env, err := s.generateSharedEnvVars(opts.Env)
+	if err != nil {
+		return err
+	}
+	env, err = s.generateSeederEnvVars(env)
+	if err != nil {
+		return err
+	}
+
+	devDir, err := s.DevDir()
+	if err != nil {
+		return err
+	}
+
+	initScript := filepath.Join(devDir, "build", "init", "init.sh")
+
+	stdin := opts.Stdin
+	if stdin == nil {
+		stdin = s.stdin
+	}
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = s.stdout
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = s.stderr
+	}
+	dir := opts.Dir
+	if dir == "" {
+		dir = "/"
+	}
+
+	return s.chrootRunner(&runner.ChrootCmd{
+		Cmd: runner.Cmd{
+			Name:        opts.Info.PostBuildChrootExec,
+			Env:         env,
+			Dir:         dir,
+			Stdin:       stdin,
+			Stdout:      stdout,
+			Stderr:      stderr,
+			SysProcAttr: opts.SysProcAttr,
 		},
 		ChrootExec: initScript,
 		ChrootDir:  opts.ChrootDir,

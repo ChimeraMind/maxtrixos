@@ -185,13 +185,14 @@ func TestNewConfigAccessors(t *testing.T) {
 	}
 }
 
-// writeParamsScript creates a params.sh in dir that exports the three
-// seeder variables and defines the <seedName>_params.find_latest_chroot_dir
+// writeParamsScript creates a params.sh in dir that exports the seeder
+// variables and defines the <seedName>_params.find_latest_chroot_dir
 // function. Returns the full path to the script.
 func writeParamsScript(t *testing.T, dir, seedName, chrootName, chrootsDir, preferredDir, latestDir string, allDirs []string) string {
 	t.Helper()
 	script := fmt.Sprintf(
 		"#!/bin/bash\n"+
+			"SEEDER_DEPENDS=\"\"\n"+
 			"SEEDER_CHROOT_NAME=%q\n"+
 			"SEEDER_CHROOTS_DIR=%q\n"+
 			"PREFERRED_SEEDER_CHROOT_DIR=%q\n"+
@@ -287,6 +288,44 @@ func TestParseSeederParams_Success(t *testing.T) {
 	}
 }
 
+func TestParseSeederParams_Depends(t *testing.T) {
+	tmp := t.TempDir()
+	latestDir := filepath.Join(tmp, "chroots", "server-20260228")
+	os.MkdirAll(latestDir, 0755)
+
+	script := fmt.Sprintf(
+		"#!/bin/bash\n"+
+			"SEEDER_DEPENDS=\"00-bedrock 10-server\"\n"+
+			"SEEDER_CHROOT_NAME=server-20260228\n"+
+			"SEEDER_CHROOTS_DIR=/mnt/chroots\n"+
+			"PREFERRED_SEEDER_CHROOT_DIR=/mnt/chroots/server-20260228\n"+
+			"server_params.find_latest_chroot_dir() { echo %q; }\n"+
+			"server_params.find_all_chroot_dirs() { echo %q; }",
+		latestDir, latestDir,
+	)
+	paramsFile := filepath.Join(tmp, "params.sh")
+	os.WriteFile(paramsFile, []byte(script), 0755)
+
+	sd := newRealSeeder(tmp)
+	params, err := sd.ParseSeederParams("10-server", paramsFile)
+	if err != nil {
+		t.Fatalf("ParseSeederParams: %v", err)
+	}
+
+	if len(params.Depends) != 2 {
+		t.Fatalf("len(Depends): got %d, want 2 (entries: %v)",
+			len(params.Depends), params.Depends)
+	}
+	if params.Depends[0] != "00-bedrock" {
+		t.Errorf("Depends[0]: got %q, want %q",
+			params.Depends[0], "00-bedrock")
+	}
+	if params.Depends[1] != "10-server" {
+		t.Errorf("Depends[1]: got %q, want %q",
+			params.Depends[1], "10-server")
+	}
+}
+
 func TestParseSeederParams_SpaceSeparatedAllChrootDirs(t *testing.T) {
 	tmp := t.TempDir()
 	latestDir := filepath.Join(tmp, "chroots", "bedrock-20260228")
@@ -301,6 +340,7 @@ func TestParseSeederParams_SpaceSeparatedAllChrootDirs(t *testing.T) {
 	}
 	script := fmt.Sprintf(
 		"#!/bin/bash\n"+
+			"SEEDER_DEPENDS=\"\"\n"+
 			"SEEDER_CHROOT_NAME=bedrock-20260228\n"+
 			"SEEDER_CHROOTS_DIR=/mnt/chroots\n"+
 			"PREFERRED_SEEDER_CHROOT_DIR=/mnt/chroots/bedrock-20260228\n"+
@@ -338,6 +378,7 @@ func TestParseSeederParams_UsesDevDir(t *testing.T) {
 	// params.sh echoes MATRIXOS_DEV_DIR back as the chroot name
 	// so we can verify it was set correctly.
 	script := fmt.Sprintf("#!/bin/bash\n"+
+		"SEEDER_DEPENDS=\"\"\n"+
 		"SEEDER_CHROOT_NAME=\"${MATRIXOS_DEV_DIR}\"\n"+
 		"SEEDER_CHROOTS_DIR=/chroots\n"+
 		"PREFERRED_SEEDER_CHROOT_DIR=/chroots/test\n"+
@@ -449,6 +490,7 @@ func TestParseSeederParams_FunctionMissing(t *testing.T) {
 	// The || true in the template should prevent set -e from killing
 	// the script, yielding an empty 4th and 5th line.
 	script := "#!/bin/bash\n" +
+		"SEEDER_DEPENDS=\"\"\n" +
 		"SEEDER_CHROOT_NAME=bedrock-20260228\n" +
 		"SEEDER_CHROOTS_DIR=/mnt/chroots\n" +
 		"PREFERRED_SEEDER_CHROOT_DIR=/mnt/chroots/bedrock-20260228\n"
@@ -1898,6 +1940,7 @@ func TestParseSeederParams_RealSeeders(t *testing.T) {
 			t.Logf("  PreferredChrootDir: %s", params.PreferredChrootDir)
 			t.Logf("  LatestAvailable:    %s", params.LatestAvailableChrootDir)
 			t.Logf("  AllChrootDirs:      %v", params.AllChrootDirs)
+			t.Logf("  Depends:            %v", params.Depends)
 		})
 	}
 }
