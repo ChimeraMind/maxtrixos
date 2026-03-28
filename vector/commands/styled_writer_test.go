@@ -568,3 +568,93 @@ func TestUISetLogWriterCapturesBothStreams(t *testing.T) {
 		t.Error("log should be ANSI-stripped")
 	}
 }
+
+// --- SetGlobalLogWriter ---
+
+func TestGlobalLogWriterInheritedByNewWriters(t *testing.T) {
+	var logBuf bytes.Buffer
+	SetGlobalLogWriter(&logBuf)
+	defer ClearGlobalLogWriter()
+
+	// Simulate a sub-command creating its own styledWriter
+	// after the global is set — it should inherit the log.
+	var dest bytes.Buffer
+	sw := newStyledWriter(
+		&dest, "[sub]", "\033[34m", "\033[0m", true,
+	)
+
+	sw.Write([]byte("sub-command output\n"))
+
+	// Dest gets the styled output.
+	if !strings.Contains(dest.String(), "sub-command output") {
+		t.Errorf("dest missing output, got %q", dest.String())
+	}
+
+	// Global log gets the ANSI-stripped output.
+	logStr := logBuf.String()
+	if !strings.Contains(logStr, "sub-command output") {
+		t.Errorf("global log missing output, got %q", logStr)
+	}
+	if strings.Contains(logStr, "\033[") {
+		t.Error("global log should be ANSI-stripped")
+	}
+}
+
+func TestGlobalLogWriterClearedAfter(t *testing.T) {
+	var logBuf bytes.Buffer
+	SetGlobalLogWriter(&logBuf)
+	ClearGlobalLogWriter()
+
+	// Writers created after clearing should not log.
+	var dest bytes.Buffer
+	sw := newStyledWriter(&dest, "[P]", "", "", true)
+	sw.Write([]byte("after clear\n"))
+
+	if logBuf.Len() != 0 {
+		t.Errorf(
+			"log should be empty after clear, got %q",
+			logBuf.String(),
+		)
+	}
+}
+
+func TestGlobalLogWriterMultipleSubCommands(t *testing.T) {
+	var logBuf bytes.Buffer
+	SetGlobalLogWriter(&logBuf)
+	defer ClearGlobalLogWriter()
+
+	// Simulate the AllCommand scenario: parent printer set
+	// per-instance, then multiple sub-commands created.
+	var parentDest bytes.Buffer
+	parent := newStyledWriter(
+		&parentDest, "[all]", "\033[32m", "\033[0m", true,
+	)
+	parent.SetLogWriter(&logBuf) // per-instance (pre-existing)
+	parent.Write([]byte("parent line\n"))
+
+	// Sub-command 1: its own UI with own printers.
+	var sub1Dest bytes.Buffer
+	sub1 := newStyledWriter(
+		&sub1Dest, "[seeds]", "\033[34m", "\033[0m", true,
+	)
+	sub1.Write([]byte("seed output\n"))
+
+	// Sub-command 2: its own UI with own printers.
+	var sub2Dest bytes.Buffer
+	sub2 := newStyledWriter(
+		&sub2Dest, "[release]", "\033[35m", "\033[0m", true,
+	)
+	sub2.Write([]byte("release output\n"))
+
+	logStr := logBuf.String()
+	for _, want := range []string{
+		"parent line", "seed output", "release output",
+	} {
+		if !strings.Contains(logStr, want) {
+			t.Errorf("log missing %q, got %q", want, logStr)
+		}
+	}
+	if strings.Contains(logStr, "\033[") {
+		t.Error("log should be ANSI-stripped")
+	}
+}
