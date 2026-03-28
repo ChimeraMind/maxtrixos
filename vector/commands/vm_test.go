@@ -67,8 +67,8 @@ func TestVMCommandInitDefaults(t *testing.T) {
 	if c.memory != "4G" {
 		t.Errorf("default memory should be %q, got %q", "4G", c.memory)
 	}
-	if c.port != "2222" {
-		t.Errorf("default port should be %q, got %q", "2222", c.port)
+	if c.sshPort != "" {
+		t.Errorf("default sshPort should be empty, got %q", c.sshPort)
 	}
 	if c.cpus != "4" {
 		t.Errorf("default cpus should be %q, got %q", "4", c.cpus)
@@ -119,7 +119,7 @@ func TestVMCommandFlagOverrides(t *testing.T) {
 	err := c.fs.Parse([]string{
 		"-image", "/tmp/test.qcow2",
 		"-memory", "8G",
-		"-port", "3333",
+		"-ssh_port", "3333",
 		"-cpus", "8",
 		"-graphical=false",
 		"-gpuaccel=false",
@@ -145,8 +145,8 @@ func TestVMCommandFlagOverrides(t *testing.T) {
 	if c.memory != "8G" {
 		t.Errorf("memory: got %q, want %q", c.memory, "8G")
 	}
-	if c.port != "3333" {
-		t.Errorf("port: got %q, want %q", c.port, "3333")
+	if c.sshPort != "3333" {
+		t.Errorf("sshPort: got %q, want %q", c.sshPort, "3333")
 	}
 	if c.cpus != "8" {
 		t.Errorf("cpus: got %q, want %q", c.cpus, "8")
