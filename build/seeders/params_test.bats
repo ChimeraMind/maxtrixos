@@ -214,3 +214,128 @@ teardown() {
     source "${BATS_TEST_DIRNAME}/21-cosmic/params.sh"
     [ -n "${SEEDER_CHROOTS_DIR}" ]
 }
+
+# ===== find_partial_chroot_dirs tests =====
+
+@test "bedrock params: find_partial_chroot_dirs returns only incomplete dirs" {
+    source "${BATS_TEST_DIRNAME}/00-bedrock/params.sh"
+
+    SEEDER_CHROOTS_DIR="${TEST_TMPDIR}/chroots"
+    mkdir -p "${SEEDER_CHROOTS_DIR}/bedrock-20250601"
+    mkdir -p "${SEEDER_CHROOTS_DIR}/bedrock-20250608"
+
+    # Mark only the first dir as completed.
+    local flag_dir="${SEEDER_CHROOTS_DIR}/bedrock-20250601/phases"
+    mkdir -p "${flag_dir}"
+    touch "${flag_dir}/done-prefix_myseeder"
+
+    local result
+    result=$(bedrock_params.find_partial_chroot_dirs "myseeder" 2>/dev/null)
+    # The incomplete dir should be included.
+    [[ "${result}" == *"bedrock-20250608"* ]]
+    # The completed dir should be excluded.
+    [[ "${result}" != *"bedrock-20250601"* ]]
+}
+
+@test "bedrock params: find_partial_chroot_dirs fails when all dirs are complete" {
+    source "${BATS_TEST_DIRNAME}/00-bedrock/params.sh"
+
+    SEEDER_CHROOTS_DIR="${TEST_TMPDIR}/chroots"
+    mkdir -p "${SEEDER_CHROOTS_DIR}/bedrock-20250601"
+
+    local flag_dir="${SEEDER_CHROOTS_DIR}/bedrock-20250601/phases"
+    mkdir -p "${flag_dir}"
+    touch "${flag_dir}/done-prefix_myseeder"
+
+    run bedrock_params.find_partial_chroot_dirs "myseeder"
+    [ "$status" -ne 0 ]
+}
+
+@test "bedrock params: find_all_chroot_dirs returns only complete dirs" {
+    source "${BATS_TEST_DIRNAME}/00-bedrock/params.sh"
+
+    SEEDER_CHROOTS_DIR="${TEST_TMPDIR}/chroots"
+    mkdir -p "${SEEDER_CHROOTS_DIR}/bedrock-20250601"
+    mkdir -p "${SEEDER_CHROOTS_DIR}/bedrock-20250608"
+
+    # Mark only the first dir as completed.
+    local flag_dir="${SEEDER_CHROOTS_DIR}/bedrock-20250601/phases"
+    mkdir -p "${flag_dir}"
+    touch "${flag_dir}/done-prefix_myseeder"
+
+    local result
+    result=$(bedrock_params.find_all_chroot_dirs "myseeder" 2>/dev/null)
+    [[ "${result}" == *"bedrock-20250601"* ]]
+    [[ "${result}" != *"bedrock-20250608"* ]]
+}
+
+@test "bedrock params: _find_select find_partial for server prefix" {
+    source "${BATS_TEST_DIRNAME}/00-bedrock/params.sh"
+
+    SEEDER_CHROOTS_DIR="${TEST_TMPDIR}/chroots"
+    mkdir -p "${SEEDER_CHROOTS_DIR}/server-20250601"
+    mkdir -p "${SEEDER_CHROOTS_DIR}/server-20250608"
+
+    local flag_dir="${SEEDER_CHROOTS_DIR}/server-20250601/phases"
+    mkdir -p "${flag_dir}"
+    touch "${flag_dir}/done-prefix_myseeder"
+
+    # With find_partial, only incomplete dirs are returned.
+    local result
+    result=$(bedrock_params._find_select_chroot_dirs_for_derived_seeder \
+        "myseeder" "server" "1" "1" 2>/dev/null)
+    [[ "${result}" == *"server-20250608"* ]]
+    [[ "${result}" != *"server-20250601"* ]]
+
+    # Without find_partial, only completed dirs are returned.
+    result=$(bedrock_params._find_select_chroot_dirs_for_derived_seeder \
+        "myseeder" "server" "1" "" 2>/dev/null)
+    [[ "${result}" == *"server-20250601"* ]]
+    [[ "${result}" != *"server-20250608"* ]]
+}
+
+@test "bedrock params: _find_select find_partial for gnome prefix" {
+    source "${BATS_TEST_DIRNAME}/00-bedrock/params.sh"
+
+    SEEDER_CHROOTS_DIR="${TEST_TMPDIR}/chroots"
+    mkdir -p "${SEEDER_CHROOTS_DIR}/gnome-20250601"
+    mkdir -p "${SEEDER_CHROOTS_DIR}/gnome-20250608"
+
+    local flag_dir="${SEEDER_CHROOTS_DIR}/gnome-20250601/phases"
+    mkdir -p "${flag_dir}"
+    touch "${flag_dir}/done-prefix_myseeder"
+
+    local result
+    result=$(bedrock_params._find_select_chroot_dirs_for_derived_seeder \
+        "myseeder" "gnome" "1" "1" 2>/dev/null)
+    [[ "${result}" == *"gnome-20250608"* ]]
+    [[ "${result}" != *"gnome-20250601"* ]]
+
+    result=$(bedrock_params._find_select_chroot_dirs_for_derived_seeder \
+        "myseeder" "gnome" "1" "" 2>/dev/null)
+    [[ "${result}" == *"gnome-20250601"* ]]
+    [[ "${result}" != *"gnome-20250608"* ]]
+}
+
+@test "bedrock params: _find_select find_partial for cosmic prefix" {
+    source "${BATS_TEST_DIRNAME}/00-bedrock/params.sh"
+
+    SEEDER_CHROOTS_DIR="${TEST_TMPDIR}/chroots"
+    mkdir -p "${SEEDER_CHROOTS_DIR}/cosmic-20250601"
+    mkdir -p "${SEEDER_CHROOTS_DIR}/cosmic-20250608"
+
+    local flag_dir="${SEEDER_CHROOTS_DIR}/cosmic-20250601/phases"
+    mkdir -p "${flag_dir}"
+    touch "${flag_dir}/done-prefix_myseeder"
+
+    local result
+    result=$(bedrock_params._find_select_chroot_dirs_for_derived_seeder \
+        "myseeder" "cosmic" "1" "1" 2>/dev/null)
+    [[ "${result}" == *"cosmic-20250608"* ]]
+    [[ "${result}" != *"cosmic-20250601"* ]]
+
+    result=$(bedrock_params._find_select_chroot_dirs_for_derived_seeder \
+        "myseeder" "cosmic" "1" "" 2>/dev/null)
+    [[ "${result}" == *"cosmic-20250601"* ]]
+    [[ "${result}" != *"cosmic-20250608"* ]]
+}

@@ -69,7 +69,8 @@ bedrock_params._find_select_chroot_dirs_for_derived_seeder() {
         echo "${0}: missing parameter chroot name prefix" >&2
         return 1
     fi
-    local want_all_chroots="${3}"  # can be empty
+    local want_all_chroots="${3:-}"  # can be empty
+    local find_partial="${4:-}"  # can be empty
 
     (
         shopt -s nullglob
@@ -92,11 +93,24 @@ bedrock_params._find_select_chroot_dirs_for_derived_seeder() {
             # check for "done" seeder flag.
             local seeder_done_flag=
             seeder_done_flag="$(params_lib.get_chroot_seeder_done_flag_file "${seeder_name}" "${d}")"
-            if [ ! -f "${seeder_done_flag}" ]; then
+            if [ -n "${find_partial}" ] && [ -f "${seeder_done_flag}" ]; then
+                # if we are looking for partial builds, skip completed ones.
+                continue
+            fi
+            if [ -z "${find_partial}" ] && [ ! -f "${seeder_done_flag}" ]; then
                 echo "${seeder_done_flag} does not exist. Skipping ${d} as valid ${chroot_name_prefix} rootfs." >&2
                 continue
             fi
-            valid_dirs+=( "${d}" )
+            if [ -z "${find_partial}" ] && [ -f "${seeder_done_flag}" ]; then
+                # Found a complete chroot, add it.
+                valid_dirs+=( "${d}" )
+                continue
+            fi
+            if [ -n "${find_partial}" ] && [ ! -f "${seeder_done_flag}" ]; then
+                # Found a partial chroot and partial requested, add it.
+                valid_dirs+=( "${d}" )
+                continue
+            fi
         done
         if [[ ${#valid_dirs[@]} -eq 0 ]]; then
             echo "No ${chroot_name_prefix} dirs found in ${SEEDER_CHROOTS_DIR}" >&2
@@ -133,4 +147,12 @@ bedrock_params.find_latest_chroot_dir() {
 bedrock_params.find_all_chroot_dirs() {
     local seeder_name="${1}"
     bedrock_params._find_select_chroot_dirs_for_derived_seeder "${seeder_name}" "bedrock" "1"
+}
+
+# This function can be used by other seeders to get the chroot path of ALL
+# partially built Bedrock builds.
+bedrock_params.find_partial_chroot_dirs() {
+    local seeder_name="${1}"
+    bedrock_params._find_select_chroot_dirs_for_derived_seeder \
+        "${seeder_name}" "bedrock" "1" "1"
 }

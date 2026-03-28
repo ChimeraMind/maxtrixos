@@ -78,3 +78,15 @@ server_params.find_all_chroot_dirs() {
         bedrock_params._find_select_chroot_dirs_for_derived_seeder "${seeder_name}" "server" "1"
     )
 }
+
+# This function can be used by other seeders to get the chroot path of partial
+# Server builds.
+server_params.find_partial_chroot_dirs() {
+    local seeder_name="${1}"
+    (
+        # avoid poisoning our env.
+        source "${MATRIXOS_DEV_DIR}"/build/seeders/00-bedrock/params.sh
+        bedrock_params._find_select_chroot_dirs_for_derived_seeder \
+            "${seeder_name}" "server" "1" "1"
+    )
+}
