@@ -1381,8 +1381,8 @@ func TestGenerateSeederEnvVars_EmptyInputEnv(t *testing.T) {
 		t.Fatalf("generateSeederEnvVars: unexpected error: %v", err)
 	}
 
-	if len(env) != 4 {
-		t.Fatalf("expected exactly 4 env vars, got %d: %v", len(env), env)
+	if len(env) != 5 {
+		t.Fatalf("expected exactly 5 env vars, got %d: %v", len(env), env)
 	}
 
 	wantEnv := map[string]bool{
@@ -1390,6 +1390,7 @@ func TestGenerateSeederEnvVars_EmptyInputEnv(t *testing.T) {
 		"SEEDER_PRIVATE_GIT_REPO_PATH=/srv/private": false,
 		"SEEDER_DISTFILES_DIR=/srv/distfiles":       false,
 		"SEEDER_BINPKGS_DIR=/srv/binpkgs":           false,
+		"RUNNER_TYPE=seeder":                        false,
 	}
 	for _, e := range env {
 		if _, ok := wantEnv[e]; ok {
