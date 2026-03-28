@@ -38,7 +38,9 @@
 # chroot or reuse an existing one.
 #
 set -e
-source /etc/profile
+if [ -e /etc/profile ]; then
+    source /etc/profile
+fi
 set -eu
 
 source "${MATRIXOS_DEV_DIR}/build/seeders/lib/chroots_lib.sh"
