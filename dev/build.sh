@@ -2,7 +2,7 @@
 # build.sh is a script that allows you to build a matrixOS image yourself, using the configs
 # in this repository. It's basically a BYOD (Build Your Own Distro) script for the best
 # Linux distribution out there, Gentoo Linux.
-# This script is a wrapper around vector_builder.sh that helps with the provisioning of important
+# This script is a wrapper around vector that helps with the provisioning of important
 # private keys and configs.
 set -e
 
