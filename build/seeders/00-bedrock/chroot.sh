@@ -167,6 +167,7 @@ bedrock.tweak_nsswitch() {
 
 main() {
     cd /
+    source /etc/profile
 
     chroots_lib.setup
     setup_portage_counter

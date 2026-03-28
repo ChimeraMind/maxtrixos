@@ -89,6 +89,7 @@ server.tweak_resolved() {
 
 main() {
     cd /
+    source /etc/profile
 
     chroots_lib.setup
 
