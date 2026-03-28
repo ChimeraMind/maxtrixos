@@ -40,6 +40,7 @@ Usage:
   cfg         - shell-script-friendly config access (plain stdout, errors to stderr).
     get <key>...    print config values as key=value lines.
   build       - build toolkit command, orchestrates building OS artifacts.
+    all             runs the full build-and-release pipeline (seeds, releases, images, janitor, CDN push).
     seeds           builds chroot filesystems using the configured seeders.
     release         generates a single OS release (ostree commit).
     releases        generates multiple OS releases across all detected seeders.
