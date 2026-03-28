@@ -6,8 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"syscall"
 	"time"
+
+	"matrixos/vector/lib/filesystems"
 )
 
 func (im *Imager) ImageLockDir() (string, error) {
@@ -51,12 +52,6 @@ func (im *Imager) ExecuteWithImageLock(fn func() error) error {
 	}
 	im.Print("Acquiring branch %s lock via %s ...\n", im.ref, lockPath)
 
-	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open lock file %s: %w", lockPath, err)
-	}
-	defer lockFile.Close()
-
 	timeoutStr, err := im.LockWaitSeconds()
 	if err != nil {
 		return fmt.Errorf("failed to get lock wait seconds: %w", err)
@@ -66,24 +61,13 @@ func (im *Imager) ExecuteWithImageLock(fn func() error) error {
 		return fmt.Errorf("invalid lock wait seconds %q: %w", timeoutStr, err)
 	}
 
-	// Try to acquire the exclusive lock with a timeout.
-	locked := make(chan error, 1)
-	go func() {
-		locked <- syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX)
-	}()
-
-	select {
-	case err := <-locked:
-		if err != nil {
-			return fmt.Errorf("failed to acquire lock %s: %w", lockPath, err)
-		}
-	case <-time.After(time.Duration(timeoutSecs) * time.Second):
-		return fmt.Errorf("timed out waiting for imager lock %s", lockPath)
+	unlock, err := filesystems.AcquireFileLock(lockPath, time.Duration(timeoutSecs)*time.Second)
+	if err != nil {
+		return err
 	}
+	defer unlock()
 
 	im.Print("Lock for imager %s, %s acquired!\n", im.ref, lockPath)
 
-	// Execute the function under the lock.
-	// The lock is released when lockFile is closed (deferred above).
 	return fn()
 }

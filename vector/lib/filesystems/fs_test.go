@@ -7,7 +7,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -1336,4 +1339,150 @@ func TestPartitionType(t *testing.T) {
 			t.Error("expected error for empty path")
 		}
 	})
+}
+
+// --- AcquireFileLock tests ---
+
+func TestAcquireFileLock_Basic(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "test.lock")
+
+	unlock, err := AcquireFileLock(lockPath, 5*time.Second)
+	if err != nil {
+		t.Fatalf("AcquireFileLock: %v", err)
+	}
+	defer unlock()
+
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Errorf("lock file should exist: %v", err)
+	}
+}
+
+func TestAcquireFileLock_CreatesFile(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, "subdir", "new.lock")
+
+	// Parent directory doesn't exist — should fail.
+	_, err := AcquireFileLock(lockPath, 1*time.Second)
+	if err == nil {
+		t.Fatal("expected error when parent dir does not exist")
+	}
+}
+
+func TestAcquireFileLock_UnlockReleases(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "release.lock")
+
+	unlock, err := AcquireFileLock(lockPath, 5*time.Second)
+	if err != nil {
+		t.Fatalf("AcquireFileLock: %v", err)
+	}
+
+	// Release the lock.
+	unlock()
+
+	// Should be able to re-acquire immediately.
+	unlock2, err := AcquireFileLock(lockPath, 1*time.Second)
+	if err != nil {
+		t.Fatalf("re-acquire after unlock failed: %v", err)
+	}
+	unlock2()
+}
+
+func TestAcquireFileLock_MutualExclusion(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "contended.lock")
+
+	// Hold the lock externally via a raw flock.
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		t.Fatalf("flock: %v", err)
+	}
+
+	// Try to acquire with a very short timeout — should fail.
+	_, err = AcquireFileLock(lockPath, 200*time.Millisecond)
+	f.Close() // release external lock
+
+	if err == nil {
+		t.Fatal("expected timeout error while lock was held externally")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("expected 'timed out' message, got: %v", err)
+	}
+}
+
+func TestAcquireFileLock_SequentialAccess(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "serial.lock")
+
+	var mu sync.Mutex
+	var order []int
+
+	appendOrder := func(v int) {
+		mu.Lock()
+		defer mu.Unlock()
+		order = append(order, v)
+	}
+
+	var wg sync.WaitGroup
+	for i := 1; i <= 3; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			unlock, err := AcquireFileLock(lockPath, 10*time.Second)
+			if err != nil {
+				t.Errorf("goroutine %d: %v", id, err)
+				return
+			}
+			appendOrder(id)
+			time.Sleep(10 * time.Millisecond)
+			unlock()
+		}(i)
+	}
+	wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(order) != 3 {
+		t.Fatalf("expected 3 executions, got %d", len(order))
+	}
+}
+
+func TestAcquireFileLock_NoOverlap(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "overlap.lock")
+
+	var mu sync.Mutex
+	active := 0
+	maxActive := 0
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			unlock, err := AcquireFileLock(lockPath, 10*time.Second)
+			if err != nil {
+				t.Errorf("AcquireFileLock: %v", err)
+				return
+			}
+			mu.Lock()
+			active++
+			if active > maxActive {
+				maxActive = active
+			}
+			mu.Unlock()
+
+			time.Sleep(5 * time.Millisecond)
+
+			mu.Lock()
+			active--
+			mu.Unlock()
+			unlock()
+		}()
+	}
+	wg.Wait()
+
+	if maxActive > 1 {
+		t.Fatalf("lock did not provide mutual exclusion: maxActive=%d", maxActive)
+	}
 }
