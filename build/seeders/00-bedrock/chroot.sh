@@ -111,7 +111,7 @@ bedrock.build_resolve_conflicts() {
 }
 
 bedrock.build_kernel() {
-    chroots_lib.generic_build "${BUILD_KERNEL_PACKAGES[@]}"
+    chroots_lib.generic_build --newuse --update "${BUILD_KERNEL_PACKAGES[@]}"
 }
 
 bedrock.build_system() {
