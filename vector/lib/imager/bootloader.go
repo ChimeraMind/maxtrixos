@@ -351,96 +351,27 @@ func (im *Imager) InstallBootloader() error {
 		return fmt.Errorf("failed to determine EFI executable: %w", err)
 	}
 
-	// Bind mount EFI into the chroot.
-	efiChrootMount := filepath.Join(im.rootfs, efiRoot)
-	if err := os.MkdirAll(efiChrootMount, 0755); err != nil {
-		return fmt.Errorf("failed to create %s: %w", efiChrootMount, err)
+	env := []string{
+		"IMAGER_EFI_MOUNT=" + im.efifsMount,
+		"IMAGER_BOOT_MOUNT=" + im.bootfsMount,
+		"IMAGER_EFI_ROOT=" + efiRoot,
+		"IMAGER_BOOT_ROOT=" + bootRoot,
 	}
-	im.trackMount(efiChrootMount)
-	efiBind, err := filesystems.NewBindMount(
-		filesystems.BindMountOptions{
-			Src:    im.efifsMount,
-			Dst:    efiChrootMount,
-			Stdout: im.stdout,
-			Stderr: im.stderr,
+
+	err = im.chroot(
+		env,
+		"/usr/bin/grub-install",
+		[]string{
+			"--target=x86_64-efi",
+			"--directory=/usr/lib/grub/x86_64-efi",
+			"--efi-directory=" + efiRoot,
+			"--boot-directory=" + bootRoot,
+			"--themes=" + osName + "-theme",
+			"--removable",
+			"--modules=ext2 btrfs gzio part_gpt fat part_msdos all_video",
+			im.devicePath,
 		},
 	)
-	if err != nil {
-		return fmt.Errorf("failed to bind mount EFI: %w", err)
-	}
-	if err := efiBind.Mount(); err != nil {
-		return fmt.Errorf("failed to bind mount EFI: %w", err)
-	}
-
-	// Bind mount boot into the chroot.
-	bootChrootMount := filepath.Join(im.rootfs, bootRoot)
-	if err := os.MkdirAll(bootChrootMount, 0755); err != nil {
-		return fmt.Errorf("failed to create %s: %w", bootChrootMount, err)
-	}
-	im.trackMount(bootChrootMount)
-	bootBind, err := filesystems.NewBindMount(
-		filesystems.BindMountOptions{
-			Src:    im.bootfsMount,
-			Dst:    bootChrootMount,
-			Stdout: im.stdout,
-			Stderr: im.stderr,
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("failed to bind mount boot: %w", err)
-	}
-	if err := bootBind.Mount(); err != nil {
-		return fmt.Errorf("failed to bind mount boot: %w", err)
-	}
-
-	// Setup common rootfs mounts (dev, proc, etc.) without proc for bootloader.
-	mounter, err := filesystems.NewCommonRootfsMounts(
-		filesystems.CommonRootfsMountsOptions{
-			MountPoint: im.rootfs,
-			Mounting: func(tg string) {
-				im.Print("Mounting: %s ...\n", tg)
-				im.trackMount(tg)
-			},
-			Mounted: func(tg string) {
-				im.Print("Mounted: %s\n", tg)
-			},
-			Stdout: im.stdout,
-			Stderr: im.stderr,
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create common rootfs mounter: %w", err)
-	}
-	if err := mounter.Setup(); err != nil {
-		return fmt.Errorf("failed to setup common rootfs mounts: %w", err)
-	}
-
-	// Run grub-install inside the chroot.
-	err = filesystems.ExecChrootRun(&runner.ChrootCmd{
-		Cmd: runner.Cmd{
-			Name: "/usr/bin/grub-install",
-			Args: []string{
-				"--target=x86_64-efi",
-				"--directory=/usr/lib/grub/x86_64-efi",
-				"--efi-directory=" + efiRoot,
-				"--boot-directory=" + bootRoot,
-				"--themes=" + osName + "-theme",
-				"--removable",
-				"--modules=ext2 btrfs gzio part_gpt fat part_msdos all_video",
-				im.devicePath,
-			},
-			Stdin:  os.Stdin,
-			Stdout: im.stdout,
-			Stderr: im.stdout,
-		},
-		ChrootDir: im.rootfs,
-	})
-
-	// Clean up chroot mounts regardless of grub-install result.
-	bootBind.Unmount()
-	efiBind.Unmount()
-	mounter.Cleanup()
-
 	if err != nil {
 		return fmt.Errorf("grub-install failed: %w", err)
 	}
