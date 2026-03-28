@@ -73,7 +73,7 @@ func enterLockTestSetup(t *testing.T, chrootDirs ...string) (*seeder.MockSeeder,
 	sd := seeder.DefaultMockSeeder()
 	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
-		AllChrootDirs: chrootDirs,
+		CompleteChrootDirs: chrootDirs,
 	}
 	det := &seeder.MockSeederDetector{
 		Detect_: []seeder.SeederInfo{
@@ -211,7 +211,7 @@ func TestEnterRunWithNamedTarget(t *testing.T) {
 		ChrootName:         "bedrock",
 		ChrootsDir:         chrootsDir,
 		PreferredChrootDir: filepath.Join(chrootsDir, "bedrock"),
-		AllChrootDirs:      []string{filepath.Join(chrootsDir, "bedrock")},
+		CompleteChrootDirs: []string{filepath.Join(chrootsDir, "bedrock")},
 	}
 	restore := withMockSeeder(sd)
 	defer restore()
@@ -594,9 +594,9 @@ func TestEnterRunLockUsesSeederName(t *testing.T) {
 	sd := seeder.DefaultMockSeeder()
 	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
-		ChrootName:    "bedrock",
-		ChrootsDir:    chrootsDir,
-		AllChrootDirs: []string{chrootDir},
+		ChrootName:         "bedrock",
+		ChrootsDir:         chrootsDir,
+		CompleteChrootDirs: []string{chrootDir},
 	}
 	restore := withMockSeeder(sd)
 	defer restore()
@@ -649,7 +649,7 @@ func TestEnterRunLockNoMatchingSeeder(t *testing.T) {
 	sd := seeder.DefaultMockSeeder()
 	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
-		AllChrootDirs: []string{"/some/other/dir"},
+		CompleteChrootDirs: []string{"/some/other/dir"},
 	}
 	restore := withMockSeeder(sd)
 	defer restore()
@@ -834,7 +834,7 @@ func TestEnterRunSeederNameTargetPreferredChrootDir(t *testing.T) {
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootsDir:         chrootsDir,
 		PreferredChrootDir: chrootDir,
-		AllChrootDirs:      []string{chrootDir},
+		CompleteChrootDirs: []string{chrootDir},
 	}
 	restore := withMockSeeder(sd)
 	defer restore()
@@ -890,7 +890,7 @@ func TestEnterRunSeederNameTargetLatestAvailableChrootDir(t *testing.T) {
 		ChrootsDir:               chrootsDir,
 		PreferredChrootDir:       "",
 		LatestAvailableChrootDir: chrootDir,
-		AllChrootDirs:            []string{chrootDir},
+		CompleteChrootDirs:       []string{chrootDir},
 	}
 	restore := withMockSeeder(sd)
 	defer restore()
@@ -1010,7 +1010,7 @@ func TestEnterRunLockWithPreferredChrootDirMatch(t *testing.T) {
 	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		PreferredChrootDir: chrootDir,
-		AllChrootDirs:      []string{}, // empty — forces PreferredChrootDir fallback in lock
+		CompleteChrootDirs: []string{}, // empty — forces PreferredChrootDir fallback in lock
 	}
 	restore := withMockSeeder(sd)
 	defer restore()
@@ -1179,7 +1179,7 @@ func TestEnterRunMixedTargetsSeederNameAndDirectory(t *testing.T) {
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootsDir:         chrootsDir,
 		PreferredChrootDir: chrootDir2,
-		AllChrootDirs:      []string{chrootDir1, chrootDir2},
+		CompleteChrootDirs: []string{chrootDir1, chrootDir2},
 	}
 	restore := withMockSeeder(sd)
 	defer restore()
@@ -1196,6 +1196,172 @@ func TestEnterRunMixedTargetsSeederNameAndDirectory(t *testing.T) {
 
 	// First target is a real dir, second is a seeder name (resolved via params).
 	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir1, "sub/00-server"})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	captureStdout(t, func() {
+		if err := cmd.run(); err != nil {
+			t.Fatalf("run failed: %v", err)
+		}
+	})
+
+	if !sd.SeedCalled {
+		t.Fatal("Seed was not called")
+	}
+}
+
+// --- Partial chroot dir tests ---
+
+func TestEnterRunWithPartialChrootDirTarget(t *testing.T) {
+	// A target that is an absolute path listed only in PartialChrootDirs
+	// (not CompleteChrootDirs) should still be accepted and entered.
+	chrootDir := t.TempDir()
+
+	seederDir := filepath.Join(t.TempDir(), "00-test")
+	if err := os.MkdirAll(seederDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	paramsPath := filepath.Join(seederDir, "params.sh")
+	if err := os.WriteFile(paramsPath, []byte("#!/bin/bash\n"), 0755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableName_ = "params.sh"
+	sd.ParseSeederParams_ = &seeder.SeederParams{
+		CompleteChrootDirs: []string{},          // NOT in complete
+		PartialChrootDirs:  []string{chrootDir}, // only in partial
+	}
+	restore := withMockSeeder(sd)
+	defer restore()
+
+	det := &seeder.MockSeederDetector{
+		Detect_: []seeder.SeederInfo{
+			{
+				Name:       "00-test",
+				Dir:        seederDir,
+				ChrootExec: filepath.Join(seederDir, "chroot.sh"),
+			},
+		},
+	}
+
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	captureStdout(t, func() {
+		if err := cmd.run(); err != nil {
+			t.Fatalf("run failed: %v", err)
+		}
+	})
+
+	if !sd.SeedCalled {
+		t.Fatal("Seed was not called")
+	}
+	if !sd.ExecuteWithSeederLockCalled {
+		t.Fatal("ExecuteWithSeederLock was not called")
+	}
+	if sd.ExecuteWithSeederLockName != "00-test" {
+		t.Errorf("Expected lock name %q, got %q", "00-test", sd.ExecuteWithSeederLockName)
+	}
+}
+
+func TestEnterRunLockResolvesPartialChrootDir(t *testing.T) {
+	// chrootDir is only in PartialChrootDirs but not CompleteChrootDirs.
+	// The lock resolution in chrootWorker should still find the matching
+	// seeder via PartialChrootDirs.
+	chrootsDir := t.TempDir()
+	chrootDir := filepath.Join(chrootsDir, "bedrock-20260315")
+	if err := os.MkdirAll(chrootDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	seederDir := filepath.Join(t.TempDir(), "00-bedrock")
+	if err := os.MkdirAll(seederDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	paramsPath := filepath.Join(seederDir, "params.sh")
+	if err := os.WriteFile(paramsPath, []byte("#!/bin/bash\n"), 0755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableName_ = "params.sh"
+	sd.ParseSeederParams_ = &seeder.SeederParams{
+		ChrootName:         "bedrock",
+		ChrootsDir:         chrootsDir,
+		CompleteChrootDirs: []string{},
+		PartialChrootDirs:  []string{chrootDir},
+	}
+	restore := withMockSeeder(sd)
+	defer restore()
+
+	det := &seeder.MockSeederDetector{
+		Detect_: []seeder.SeederInfo{
+			{
+				Name:       "00-bedrock",
+				Dir:        seederDir,
+				ChrootExec: filepath.Join(seederDir, "chroot.sh"),
+			},
+		},
+	}
+
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir})
+	if err != nil {
+		t.Fatalf("newTestEnterCommand: %v", err)
+	}
+
+	captureStdout(t, func() {
+		if err := cmd.run(); err != nil {
+			t.Fatalf("run failed: %v", err)
+		}
+	})
+
+	if !sd.ExecuteWithSeederLockCalled {
+		t.Fatal("ExecuteWithSeederLock was not called")
+	}
+	if sd.ExecuteWithSeederLockName != "00-bedrock" {
+		t.Errorf("Expected lock name %q, got %q", "00-bedrock", sd.ExecuteWithSeederLockName)
+	}
+}
+
+func TestEnterRunPartialAndCompleteMixed(t *testing.T) {
+	// One dir is in CompleteChrootDirs, another is in PartialChrootDirs.
+	// Both should be entered.
+	completeDir := t.TempDir()
+	partialDir := t.TempDir()
+
+	seederDir := filepath.Join(t.TempDir(), "00-test")
+	if err := os.MkdirAll(seederDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	paramsPath := filepath.Join(seederDir, "params.sh")
+	if err := os.WriteFile(paramsPath, []byte("#!/bin/bash\n"), 0755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	sd := seeder.DefaultMockSeeder()
+	sd.ParamsExecutableName_ = "params.sh"
+	sd.ParseSeederParams_ = &seeder.SeederParams{
+		CompleteChrootDirs: []string{completeDir},
+		PartialChrootDirs:  []string{partialDir},
+	}
+	restore := withMockSeeder(sd)
+	defer restore()
+
+	det := &seeder.MockSeederDetector{
+		Detect_: []seeder.SeederInfo{
+			{
+				Name:       "00-test",
+				Dir:        seederDir,
+				ChrootExec: filepath.Join(seederDir, "chroot.sh"),
+			},
+		},
+	}
+
+	cmd, err := newTestEnterCommand(det, nil, []string{completeDir, partialDir})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}

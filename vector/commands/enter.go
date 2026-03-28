@@ -159,10 +159,16 @@ func (c *EnterCommand) run() error {
 		return fmt.Errorf("failed to make params map: %w", err)
 	}
 
-	allChrootDirs := make(map[string]bool)
+	completeChrootDirs := make(map[string]bool)
 	for _, params := range seedersParams {
-		for _, dir := range params.AllChrootDirs {
-			allChrootDirs[dir] = true
+		for _, dir := range params.CompleteChrootDirs {
+			completeChrootDirs[dir] = true
+		}
+	}
+	partialChrootDirs := make(map[string]bool)
+	for _, params := range seedersParams {
+		for _, dir := range params.PartialChrootDirs {
+			partialChrootDirs[dir] = true
 		}
 	}
 
@@ -186,7 +192,11 @@ func (c *EnterCommand) run() error {
 			}
 		}
 
-		if allChrootDirs[target] {
+		if completeChrootDirs[target] {
+			chrootDirs = append(chrootDirs, target)
+			continue
+		}
+		if partialChrootDirs[target] {
 			chrootDirs = append(chrootDirs, target)
 			continue
 		}
@@ -311,7 +321,12 @@ func (c *EnterCommand) chrootWorker(sd seeder.ISeeder, chrootDir string) error {
 			// Skip seeders whose params cannot be parsed.
 			continue
 		}
-		if slices.Contains(params.AllChrootDirs, chrootDir) {
+		if slices.Contains(params.CompleteChrootDirs, chrootDir) {
+			found = true
+			si = info // copy
+			break
+		}
+		if slices.Contains(params.PartialChrootDirs, chrootDir) {
 			found = true
 			si = info // copy
 			break

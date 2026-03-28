@@ -35,6 +35,7 @@ echo "${SEEDER_CHROOTS_DIR}"
 echo "${PREFERRED_SEEDER_CHROOT_DIR}"
 echo $("{{.SeedName}}_params.find_latest_chroot_dir" {{shq .Name}} || true)
 {{.SeedName}}_params.find_all_chroot_dirs {{shq .Name}} || echo ""
+{{.SeedName}}_params.find_partial_chroot_dirs {{shq .Name}} || echo ""
 `))
 )
 
@@ -48,7 +49,8 @@ type SeederParams struct {
 	// This points to the latest effectively available directory, which may
 	// differ from PREFERRED_SEEDER_CHROOT_DIR if that directory is missing or not ready.
 	LatestAvailableChrootDir string
-	AllChrootDirs            []string
+	CompleteChrootDirs       []string
+	PartialChrootDirs        []string
 }
 
 // PrepperOptions configures how the prepper script is executed.
@@ -150,9 +152,9 @@ func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, e
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
-	if len(lines) < 6 {
+	if len(lines) < 7 {
 		return nil, fmt.Errorf(
-			"expected 6 lines from params %s, got %d",
+			"expected 7 lines from params %s, got %d",
 			paramsPath, len(lines),
 		)
 	}
@@ -164,11 +166,20 @@ func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, e
 		}
 	}
 
-	var allChrootDirs []string
-	for _, line := range lines[5:] {
-		for _, field := range strings.Fields(line) {
+	var completeChrootDirs []string
+	for _, line := range lines[5:6] {
+		for field := range strings.FieldsSeq(line) {
 			if field != "" {
-				allChrootDirs = append(allChrootDirs, field)
+				completeChrootDirs = append(completeChrootDirs, field)
+			}
+		}
+	}
+
+	var partialChrootDirs []string
+	for _, line := range lines[6:] {
+		for field := range strings.FieldsSeq(line) {
+			if field != "" {
+				partialChrootDirs = append(partialChrootDirs, field)
 			}
 		}
 	}
@@ -179,7 +190,8 @@ func (s *Seeder) parseParamsVariables(name, paramsPath string) (*SeederParams, e
 		ChrootsDir:               strings.TrimSpace(lines[2]),
 		PreferredChrootDir:       strings.TrimSpace(lines[3]),
 		LatestAvailableChrootDir: strings.TrimSpace(lines[4]),
-		AllChrootDirs:            allChrootDirs,
+		CompleteChrootDirs:       completeChrootDirs,
+		PartialChrootDirs:        partialChrootDirs,
 	}
 
 	if params.ChrootName == "" {
