@@ -287,6 +287,8 @@ func (c *SeedsCommand) runSeeds() error {
 	}
 	if cgPool != nil {
 		psOpts.SysProcAttr = cgPool.SysProcAttr
+		psOpts.BoostWorker = cgPool.BoostWorker
+		psOpts.UnboostWorker = cgPool.UnboostWorker
 	}
 
 	if err := seeder.ParallelSeed(ctx, psOpts); err != nil {
@@ -316,9 +318,9 @@ type cgroupOpts struct {
 }
 
 // createWorkerCgroups sets up per-worker cgroup v2 resource limits.
-// Returns nil when parallelism <= 1 (no isolation needed).
+// Returns nil when parallelism <= 1 and no resource caps are configured.
 func (c *SeedsCommand) createWorkerCgroups(opts *cgroupOpts, parallelism int) (*cgroups.WorkerPool, error) {
-	if parallelism <= 1 {
+	if parallelism <= 1 && opts.maxMemGiB <= 0 && opts.maxCores <= 0 {
 		return nil, nil
 	}
 	var si syscall.Sysinfo_t
@@ -332,6 +334,9 @@ func (c *SeedsCommand) createWorkerCgroups(opts *cgroupOpts, parallelism int) (*
 			totalBytes = configBytes
 		}
 	}
+	if parallelism < 1 {
+		parallelism = 1
+	}
 	memPerWorker := totalBytes / uint64(parallelism)
 	numCPUs := runtime.NumCPU()
 	if opts.maxCores > 0 && opts.maxCores < numCPUs {
@@ -340,6 +345,7 @@ func (c *SeedsCommand) createWorkerCgroups(opts *cgroupOpts, parallelism int) (*
 	cgPool, err := cgroups.NewWorkerPool(&cgroups.WorkerPoolOptions{
 		Parallelism:       parallelism,
 		MemPerWorkerBytes: memPerWorker,
+		TotalMemBytes:     totalBytes,
 		NumCPUs:           numCPUs,
 		CoresMultiplier:   opts.coresMultiplier,
 		CgroupRoot:        c.cgroupRoot,
@@ -350,7 +356,7 @@ func (c *SeedsCommand) createWorkerCgroups(opts *cgroupOpts, parallelism int) (*
 	c.PushCleanup(cgPool.Close)
 	cpusPerWorker := numCPUs / parallelism
 	if opts.coresMultiplier > 0 && opts.coresMultiplier != 1.0 {
-		c.Printf("Worker cgroups: %d workers × %d GiB RAM, %d CPUs each (%.1fx oversubscription)\n",
+		c.Printf("Worker cgroups: %d workers × %d GiB RAM, %d CPUs each (plus %.1fx oversubscription)\n",
 			parallelism, memPerWorker/(1024*1024*1024), cpusPerWorker, opts.coresMultiplier)
 	} else {
 		c.Printf("Worker cgroups: %d workers × %d GiB RAM, %d CPUs each\n",

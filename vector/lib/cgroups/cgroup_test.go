@@ -1,6 +1,7 @@
 package cgroups
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,10 +37,17 @@ func TestNewWorkerPool_InvalidNumCPUs(t *testing.T) {
 	}
 }
 
+func TestNewWorkerPool_InvalidTotalMemBytes(t *testing.T) {
+	_, err := NewWorkerPool(&WorkerPoolOptions{Parallelism: 2, NumCPUs: 4})
+	if err == nil {
+		t.Fatal("expected error for TotalMemBytes=0")
+	}
+}
+
 func TestNewWorkerPool_NoCgroupV2(t *testing.T) {
 	root := t.TempDir() // no cgroup.subtree_control file
 	_, err := NewWorkerPool(&WorkerPoolOptions{
-		Parallelism: 2, NumCPUs: 4, CgroupRoot: root,
+		Parallelism: 2, NumCPUs: 4, TotalMemBytes: 8 * 1024 * 1024 * 1024, CgroupRoot: root,
 	})
 	if err == nil {
 		t.Fatal("expected error when cgroup v2 not available")
@@ -66,6 +74,7 @@ func TestNewWorkerPool_CreatesWorkers(t *testing.T) {
 		Parallelism:       3,
 		NumCPUs:           12,
 		MemPerWorkerBytes: 4 * 1024 * 1024 * 1024,
+		TotalMemBytes:     12 * 1024 * 1024 * 1024,
 		CgroupRoot:        root,
 	})
 	if err != nil {
@@ -92,6 +101,7 @@ func TestNewWorkerPool_CloseNilsWorkers(t *testing.T) {
 		Parallelism:       2,
 		NumCPUs:           4,
 		MemPerWorkerBytes: 1024 * 1024 * 1024,
+		TotalMemBytes:     2 * 1024 * 1024 * 1024,
 		CgroupRoot:        root,
 	})
 	if err != nil {
@@ -121,7 +131,7 @@ func TestSysProcAttr_NilPool(t *testing.T) {
 func TestSysProcAttr_OutOfBounds(t *testing.T) {
 	root := fakeCgroupRoot(t)
 	pool, err := NewWorkerPool(&WorkerPoolOptions{
-		Parallelism: 1, NumCPUs: 2, MemPerWorkerBytes: 1 << 30, CgroupRoot: root,
+		Parallelism: 1, NumCPUs: 2, MemPerWorkerBytes: 1 << 30, TotalMemBytes: 1 << 30, CgroupRoot: root,
 	})
 	if err != nil {
 		t.Fatalf("NewWorkerPool: %v", err)
@@ -136,7 +146,7 @@ func TestSysProcAttr_OutOfBounds(t *testing.T) {
 func TestSysProcAttr_Valid(t *testing.T) {
 	root := fakeCgroupRoot(t)
 	pool, err := NewWorkerPool(&WorkerPoolOptions{
-		Parallelism: 2, NumCPUs: 4, MemPerWorkerBytes: 1 << 30, CgroupRoot: root,
+		Parallelism: 2, NumCPUs: 4, MemPerWorkerBytes: 1 << 30, TotalMemBytes: 2 << 30, CgroupRoot: root,
 	})
 	if err != nil {
 		t.Fatalf("NewWorkerPool: %v", err)
@@ -165,7 +175,7 @@ func TestClose_NilPool(t *testing.T) {
 func TestClose_DoubleClose(t *testing.T) {
 	root := fakeCgroupRoot(t)
 	pool, err := NewWorkerPool(&WorkerPoolOptions{
-		Parallelism: 1, NumCPUs: 2, MemPerWorkerBytes: 1 << 30, CgroupRoot: root,
+		Parallelism: 1, NumCPUs: 2, MemPerWorkerBytes: 1 << 30, TotalMemBytes: 1 << 30, CgroupRoot: root,
 	})
 	if err != nil {
 		t.Fatalf("NewWorkerPool: %v", err)
@@ -298,6 +308,134 @@ func TestWriteCpusetPinning(t *testing.T) {
 	}
 }
 
+// --- BoostWorker / UnboostWorker ---
+
+func TestBoostWorker_NilPool(t *testing.T) {
+	var p *WorkerPool
+	if err := p.BoostWorker(0); err != nil {
+		t.Fatalf("BoostWorker on nil pool should be no-op, got: %v", err)
+	}
+}
+
+func TestUnboostWorker_NilPool(t *testing.T) {
+	var p *WorkerPool
+	if err := p.UnboostWorker(0); err != nil {
+		t.Fatalf("UnboostWorker on nil pool should be no-op, got: %v", err)
+	}
+}
+
+func TestBoostWorker_OutOfBounds(t *testing.T) {
+	root := fakeCgroupRoot(t)
+	pool, err := NewWorkerPool(&WorkerPoolOptions{
+		Parallelism: 1, NumCPUs: 4, MemPerWorkerBytes: 1 << 30, TotalMemBytes: 1 << 30, CgroupRoot: root,
+	})
+	if err != nil {
+		t.Fatalf("NewWorkerPool: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.BoostWorker(5); err != nil {
+		t.Fatalf("out-of-bounds boost should be no-op, got: %v", err)
+	}
+}
+
+func TestBoostUnboostWorker_Memory(t *testing.T) {
+	root := fakeCgroupRoot(t)
+	memPerWorker := uint64(4 * 1024 * 1024 * 1024) // 4 GiB
+	totalMem := uint64(12 * 1024 * 1024 * 1024)     // 12 GiB
+	pool, err := NewWorkerPool(&WorkerPoolOptions{
+		Parallelism:       3,
+		NumCPUs:           12,
+		MemPerWorkerBytes: memPerWorker,
+		TotalMemBytes:     totalMem,
+		CgroupRoot:        root,
+	})
+	if err != nil {
+		t.Fatalf("NewWorkerPool: %v", err)
+	}
+	defer pool.Close()
+
+	// Boost worker 0 — should get total memory (12 GiB).
+	if err := pool.BoostWorker(0); err != nil {
+		t.Fatalf("BoostWorker: %v", err)
+	}
+	got, _ := os.ReadFile(filepath.Join(pool.workers[0].dir, "memory.max"))
+	wantTotal := fmt.Sprintf("%d", totalMem)
+	if string(got) != wantTotal {
+		t.Errorf("boosted memory: got %q, want %q", got, wantTotal)
+	}
+
+	// Unboost — should restore to per-worker limit.
+	if err := pool.UnboostWorker(0); err != nil {
+		t.Fatalf("UnboostWorker: %v", err)
+	}
+	got, _ = os.ReadFile(filepath.Join(pool.workers[0].dir, "memory.max"))
+	wantPerWorker := fmt.Sprintf("%d", memPerWorker)
+	if string(got) != wantPerWorker {
+		t.Errorf("unboosted memory: got %q, want %q", got, wantPerWorker)
+	}
+}
+
+func TestBoostUnboostWorker_CPUQuota(t *testing.T) {
+	dir := t.TempDir()
+	opts := &WorkerPoolOptions{NumCPUs: 8, Parallelism: 4}
+
+	if err := writeCPUQuota(dir, 0, opts); err != nil {
+		t.Fatalf("writeCPUQuota: %v", err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, "cpu.max"))
+	if string(got) != "200000 100000" {
+		t.Errorf("partitioned cpu.max: got %q, want %q", got, "200000 100000")
+	}
+
+	if err := writeCPUQuotaFull(dir, 0, opts); err != nil {
+		t.Fatalf("writeCPUQuotaFull: %v", err)
+	}
+	got, _ = os.ReadFile(filepath.Join(dir, "cpu.max"))
+	if string(got) != "800000 100000" {
+		t.Errorf("boosted cpu.max: got %q, want %q", got, "800000 100000")
+	}
+}
+
+func TestBoostUnboostWorker_Cpuset(t *testing.T) {
+	root := fakeCgroupRoot(t)
+	pool, err := NewWorkerPool(&WorkerPoolOptions{
+		Parallelism:       2,
+		NumCPUs:           12,
+		MemPerWorkerBytes: 1 << 30,
+		TotalMemBytes:     2 << 30,
+		CgroupRoot:        root,
+	})
+	if err != nil {
+		t.Fatalf("NewWorkerPool: %v", err)
+	}
+	defer pool.Close()
+
+	// Worker 0 starts with cpuset "0-5".
+	got, _ := os.ReadFile(filepath.Join(pool.workers[0].dir, "cpuset.cpus"))
+	if string(got) != "0-5" {
+		t.Errorf("initial cpuset: got %q, want %q", got, "0-5")
+	}
+
+	// Boost — should get all 12 CPUs ("0-11").
+	if err := pool.BoostWorker(0); err != nil {
+		t.Fatalf("BoostWorker: %v", err)
+	}
+	got, _ = os.ReadFile(filepath.Join(pool.workers[0].dir, "cpuset.cpus"))
+	if string(got) != "0-11" {
+		t.Errorf("boosted cpuset: got %q, want %q", got, "0-11")
+	}
+
+	// Unboost — should restore to "0-5".
+	if err := pool.UnboostWorker(0); err != nil {
+		t.Fatalf("UnboostWorker: %v", err)
+	}
+	got, _ = os.ReadFile(filepath.Join(pool.workers[0].dir, "cpuset.cpus"))
+	if string(got) != "0-5" {
+		t.Errorf("unboosted cpuset: got %q, want %q", got, "0-5")
+	}
+}
+
 // --- enableControllers ---
 
 func TestEnableControllers_PrefersCpuset(t *testing.T) {
@@ -353,6 +491,7 @@ func TestNewWorkerPool_CpusetFiles(t *testing.T) {
 		Parallelism:       2,
 		NumCPUs:           8,
 		MemPerWorkerBytes: 2 * 1024 * 1024 * 1024,
+		TotalMemBytes:     4 * 1024 * 1024 * 1024,
 		CoresMultiplier:   1.5,
 		CgroupRoot:        root,
 	})
@@ -389,6 +528,7 @@ func TestNewWorkerPool_CPUQuotaFallback(t *testing.T) {
 		Parallelism:       2,
 		NumCPUs:           1,
 		MemPerWorkerBytes: 1 << 30,
+		TotalMemBytes:     2 << 30,
 		CgroupRoot:        root,
 	})
 	if err != nil {

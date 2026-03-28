@@ -580,3 +580,323 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+
+// --- Boost / Unboost tests ---
+
+// boostTracker records boost/unboost calls for testing.
+type boostTracker struct {
+	mu       sync.Mutex
+	boosts   []int // worker indices that were boosted
+	unboosts []int // worker indices that were unboosted
+	boostErr error // if set, BoostWorker returns this error
+}
+
+func (bt *boostTracker) boost(idx int) error {
+	bt.mu.Lock()
+	defer bt.mu.Unlock()
+	bt.boosts = append(bt.boosts, idx)
+	return bt.boostErr
+}
+
+func (bt *boostTracker) unboost(idx int) error {
+	bt.mu.Lock()
+	defer bt.mu.Unlock()
+	bt.unboosts = append(bt.unboosts, idx)
+	return nil
+}
+
+func TestParallelSeedBoostSingleRunnable(t *testing.T) {
+	// 00-bedrock has no deps, 10-server and 20-gnome depend on it.
+	// descCount[bedrock]=2, remaining=3 → 2+1=3 → boost bedrock.
+	// When bedrock completes and server/gnome both become ready,
+	// descCount[server]=0, descCount[gnome]=0, remaining=2 → no boost.
+	names := []string{"00-bedrock", "10-server", "20-gnome"}
+	infos, chrootDirs := setupParallelSeeders(t, names)
+
+	paramsMap := map[string]*SeederParams{
+		"00-bedrock": {
+			ChrootName:         "bedrock",
+			PreferredChrootDir: chrootDirs["00-bedrock"],
+		},
+		"10-server": {
+			Depends:            []string{"00-bedrock"},
+			ChrootName:         "server",
+			PreferredChrootDir: chrootDirs["10-server"],
+		},
+		"20-gnome": {
+			Depends:            []string{"00-bedrock"},
+			ChrootName:         "gnome",
+			PreferredChrootDir: chrootDirs["20-gnome"],
+		},
+	}
+
+	bt := &boostTracker{}
+
+	opts := &ParallelSeedOptions{
+		Seeders:      infos,
+		ParamsByName: paramsMap,
+		Parallelism:  2,
+		NewSeeder: func(_ *NewSeederOptions) (ISeeder, error) {
+			return DefaultMockSeeder(), nil
+		},
+		NewStdoutWriter: noopWriter,
+		NewStderrWriter: noopWriter,
+		PushCleanup:     noopCleanup,
+		BoostWorker:     bt.boost,
+		UnboostWorker:   bt.unboost,
+	}
+
+	if err := ParallelSeed(context.Background(), opts); err != nil {
+		t.Fatalf("ParallelSeed: %v", err)
+	}
+
+	bt.mu.Lock()
+	defer bt.mu.Unlock()
+
+	// Exactly one boost (bedrock) and one matching unboost.
+	if len(bt.boosts) != 1 {
+		t.Fatalf("expected exactly 1 boost call, got %d", len(bt.boosts))
+	}
+	if len(bt.unboosts) != 1 {
+		t.Fatalf("expected exactly 1 unboost call, got %d", len(bt.unboosts))
+	}
+}
+
+func TestParallelSeedNoBoostWhenMultipleRunnable(t *testing.T) {
+	// All seeds are independent → descCount[each]=0, remaining=3 →
+	// 0+1=1≠3 → no boost for any seed.
+	names := []string{"00-alpha", "01-beta", "02-gamma"}
+	infos, chrootDirs := setupParallelSeeders(t, names)
+
+	paramsMap := map[string]*SeederParams{
+		"00-alpha": {ChrootName: "alpha", PreferredChrootDir: chrootDirs["00-alpha"]},
+		"01-beta":  {ChrootName: "beta", PreferredChrootDir: chrootDirs["01-beta"]},
+		"02-gamma": {ChrootName: "gamma", PreferredChrootDir: chrootDirs["02-gamma"]},
+	}
+
+	bt := &boostTracker{}
+
+	opts := &ParallelSeedOptions{
+		Seeders:      infos,
+		ParamsByName: paramsMap,
+		Parallelism:  3,
+		NewSeeder: func(_ *NewSeederOptions) (ISeeder, error) {
+			return DefaultMockSeeder(), nil
+		},
+		NewStdoutWriter: noopWriter,
+		NewStderrWriter: noopWriter,
+		PushCleanup:     noopCleanup,
+		BoostWorker:     bt.boost,
+		UnboostWorker:   bt.unboost,
+	}
+
+	if err := ParallelSeed(context.Background(), opts); err != nil {
+		t.Fatalf("ParallelSeed: %v", err)
+	}
+
+	bt.mu.Lock()
+	defer bt.mu.Unlock()
+
+	// Graph structure says no seed is a bottleneck → zero boosts.
+	if len(bt.boosts) != 0 {
+		t.Errorf("expected 0 boosts for independent seeds, got %d", len(bt.boosts))
+	}
+	if len(bt.unboosts) != 0 {
+		t.Errorf("expected 0 unboosts, got %d", len(bt.unboosts))
+	}
+}
+
+func TestParallelSeedNilBoostCallbacks(t *testing.T) {
+	// Verify that nil BoostWorker/UnboostWorker is handled gracefully.
+	names := []string{"00-bedrock"}
+	infos, chrootDirs := setupParallelSeeders(t, names)
+
+	paramsMap := map[string]*SeederParams{
+		"00-bedrock": {ChrootName: "bedrock", PreferredChrootDir: chrootDirs["00-bedrock"]},
+	}
+
+	opts := &ParallelSeedOptions{
+		Seeders:      infos,
+		ParamsByName: paramsMap,
+		Parallelism:  2,
+		NewSeeder: func(_ *NewSeederOptions) (ISeeder, error) {
+			return DefaultMockSeeder(), nil
+		},
+		NewStdoutWriter: noopWriter,
+		NewStderrWriter: noopWriter,
+		PushCleanup:     noopCleanup,
+		// BoostWorker and UnboostWorker intentionally nil.
+	}
+
+	if err := ParallelSeed(context.Background(), opts); err != nil {
+		t.Fatalf("ParallelSeed with nil boost callbacks: %v", err)
+	}
+}
+
+func TestParallelSeedBoostError(t *testing.T) {
+	names := []string{"00-bedrock"}
+	infos, chrootDirs := setupParallelSeeders(t, names)
+
+	paramsMap := map[string]*SeederParams{
+		"00-bedrock": {ChrootName: "bedrock", PreferredChrootDir: chrootDirs["00-bedrock"]},
+	}
+
+	bt := &boostTracker{boostErr: fmt.Errorf("boost failed")}
+
+	opts := &ParallelSeedOptions{
+		Seeders:      infos,
+		ParamsByName: paramsMap,
+		Parallelism:  1,
+		NewSeeder: func(_ *NewSeederOptions) (ISeeder, error) {
+			return DefaultMockSeeder(), nil
+		},
+		NewStdoutWriter: noopWriter,
+		NewStderrWriter: noopWriter,
+		PushCleanup:     noopCleanup,
+		BoostWorker:     bt.boost,
+		UnboostWorker:   bt.unboost,
+	}
+
+	err := ParallelSeed(context.Background(), opts)
+	if err == nil || !contains(err.Error(), "boost failed") {
+		t.Fatalf("expected boost error, got: %v", err)
+	}
+}
+
+// --- computeDescendantCounts ---
+
+func TestComputeDescendantCounts(t *testing.T) {
+	tests := []struct {
+		name       string
+		seeders    []SeederInfo
+		dependents map[string][]string
+		want       map[string]int
+	}{
+		{
+			name:       "linear_chain",
+			seeders:    []SeederInfo{{Name: "A"}, {Name: "B"}, {Name: "C"}},
+			dependents: map[string][]string{"A": {"B"}, "B": {"C"}},
+			want:       map[string]int{"A": 2, "B": 1, "C": 0},
+		},
+		{
+			name:       "fan_out",
+			seeders:    []SeederInfo{{Name: "A"}, {Name: "B"}, {Name: "C"}},
+			dependents: map[string][]string{"A": {"B", "C"}},
+			want:       map[string]int{"A": 2, "B": 0, "C": 0},
+		},
+		{
+			name:       "diamond",
+			seeders:    []SeederInfo{{Name: "A"}, {Name: "B"}, {Name: "C"}, {Name: "D"}},
+			dependents: map[string][]string{"A": {"B", "C"}, "B": {"D"}, "C": {"D"}},
+			want:       map[string]int{"A": 3, "B": 1, "C": 1, "D": 0},
+		},
+		{
+			name:       "independent",
+			seeders:    []SeederInfo{{Name: "A"}, {Name: "B"}, {Name: "C"}},
+			dependents: map[string][]string{},
+			want:       map[string]int{"A": 0, "B": 0, "C": 0},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := computeDescendantCounts(tt.dependents, tt.seeders)
+			for name, wantCount := range tt.want {
+				if got[name] != wantCount {
+					t.Errorf("%s: got %d, want %d", name, got[name], wantCount)
+				}
+			}
+		})
+	}
+}
+
+// --- Linear chain: every seed in the chain is a bottleneck ---
+
+func TestParallelSeedBoostLinearChain(t *testing.T) {
+	// A→B→C: descCount[A]=2, descCount[B]=1, descCount[C]=0.
+	// At each stage only one seed can run → all 3 should be boosted.
+	names := []string{"00-base", "01-mid", "02-top"}
+	infos, chrootDirs := setupParallelSeeders(t, names)
+
+	paramsMap := map[string]*SeederParams{
+		"00-base": {ChrootName: "base", PreferredChrootDir: chrootDirs["00-base"]},
+		"01-mid":  {ChrootName: "mid", PreferredChrootDir: chrootDirs["01-mid"], Depends: []string{"00-base"}},
+		"02-top":  {ChrootName: "top", PreferredChrootDir: chrootDirs["02-top"], Depends: []string{"01-mid"}},
+	}
+
+	bt := &boostTracker{}
+
+	opts := &ParallelSeedOptions{
+		Seeders:      infos,
+		ParamsByName: paramsMap,
+		Parallelism:  3,
+		NewSeeder: func(_ *NewSeederOptions) (ISeeder, error) {
+			return DefaultMockSeeder(), nil
+		},
+		NewStdoutWriter: noopWriter,
+		NewStderrWriter: noopWriter,
+		PushCleanup:     noopCleanup,
+		BoostWorker:     bt.boost,
+		UnboostWorker:   bt.unboost,
+	}
+
+	if err := ParallelSeed(context.Background(), opts); err != nil {
+		t.Fatalf("ParallelSeed: %v", err)
+	}
+
+	bt.mu.Lock()
+	defer bt.mu.Unlock()
+
+	// Every seed in a linear chain is a bottleneck.
+	if len(bt.boosts) != 3 {
+		t.Fatalf("expected 3 boosts (every seed in chain), got %d", len(bt.boosts))
+	}
+	if len(bt.unboosts) != 3 {
+		t.Fatalf("expected 3 unboosts, got %d", len(bt.unboosts))
+	}
+}
+
+func TestParallelSeedBoostDiamond(t *testing.T) {
+	// A→{B,C}→D: A is a bottleneck (desc=3, remaining=4 → 3+1=4).
+	// B and C run concurrently → not boosted.
+	// D is the last seed (desc=0, remaining=1 → 0+1=1) → boosted.
+	names := []string{"00-root", "01-left", "02-right", "03-join"}
+	infos, chrootDirs := setupParallelSeeders(t, names)
+
+	paramsMap := map[string]*SeederParams{
+		"00-root":  {ChrootName: "root", PreferredChrootDir: chrootDirs["00-root"]},
+		"01-left":  {ChrootName: "left", PreferredChrootDir: chrootDirs["01-left"], Depends: []string{"00-root"}},
+		"02-right": {ChrootName: "right", PreferredChrootDir: chrootDirs["02-right"], Depends: []string{"00-root"}},
+		"03-join":  {ChrootName: "join", PreferredChrootDir: chrootDirs["03-join"], Depends: []string{"01-left", "02-right"}},
+	}
+
+	bt := &boostTracker{}
+
+	opts := &ParallelSeedOptions{
+		Seeders:      infos,
+		ParamsByName: paramsMap,
+		Parallelism:  2,
+		NewSeeder: func(_ *NewSeederOptions) (ISeeder, error) {
+			return DefaultMockSeeder(), nil
+		},
+		NewStdoutWriter: noopWriter,
+		NewStderrWriter: noopWriter,
+		PushCleanup:     noopCleanup,
+		BoostWorker:     bt.boost,
+		UnboostWorker:   bt.unboost,
+	}
+
+	if err := ParallelSeed(context.Background(), opts); err != nil {
+		t.Fatalf("ParallelSeed: %v", err)
+	}
+
+	bt.mu.Lock()
+	defer bt.mu.Unlock()
+
+	// A (bottleneck, descCount=3) and D (last seed, descCount=0) → 2 boosts.
+	if len(bt.boosts) != 2 {
+		t.Fatalf("expected 2 boosts (root + join), got %d", len(bt.boosts))
+	}
+	if len(bt.unboosts) != 2 {
+		t.Fatalf("expected 2 unboosts, got %d", len(bt.unboosts))
+	}
+}

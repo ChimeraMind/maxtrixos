@@ -41,6 +41,13 @@ type ParallelSeedOptions struct {
 	// It receives the seeder name and resolved chroot directory.
 	// Must be safe for concurrent use.
 	OnSeederDone func(name, chrootDir string) error
+
+	// BoostWorker upgrades a worker's resource limits to the full system
+	// capacity.  Called when only one seed is runnable at a time.  May be nil.
+	BoostWorker func(workerIndex int) error
+	// UnboostWorker restores a worker's resource limits to the partitioned
+	// share.  May be nil.
+	UnboostWorker func(workerIndex int) error
 }
 
 // ResolveChrootDir returns the chroot directory for a seeder, preferring
@@ -68,6 +75,10 @@ func ParallelSeed(ctx context.Context, opts *ParallelSeedOptions) error {
 		infoByName[info.Name] = info
 	}
 
+	if (opts.BoostWorker == nil) != (opts.UnboostWorker == nil) {
+		return fmt.Errorf("BoostWorker and UnboostWorker must both be set or both be nil")
+	}
+
 	graph := buildSeedGraph(opts.Seeders, opts.ParamsByName, infoByName)
 
 	return runWorkerPool(ctx, &workerPoolOpts{
@@ -87,6 +98,14 @@ type seedGraph struct {
 	remaining  int
 	stopped    bool
 	ready      chan string
+	// descCount holds the number of transitive dependents for each
+	// seed, computed once at build time.  It is used together with
+	// remaining to decide whether a seed is the sole bottleneck.
+	descCount map[string]int
+	// boostSeed tags seeds that should receive full resources when a
+	// worker picks them up.  Set at dispatch time (under mu) by
+	// checking the graph structure; consumed at receive time.
+	boostSeed map[string]bool
 }
 
 func buildSeedGraph(
@@ -99,6 +118,7 @@ func buildSeedGraph(
 		dependents: make(map[string][]string),
 		remaining:  len(seeders),
 		ready:      make(chan string, len(seeders)),
+		boostSeed:  make(map[string]bool),
 	}
 	for _, info := range seeders {
 		count := 0
@@ -114,13 +134,42 @@ func buildSeedGraph(
 		graph.depCount[info.Name] = count
 	}
 
+	graph.descCount = computeDescendantCounts(graph.dependents, seeders)
+
 	// Seed the ready queue with seeders that have zero unsatisfied deps.
 	for _, info := range seeders {
 		if graph.depCount[info.Name] == 0 {
+			if graph.descCount[info.Name]+1 == graph.remaining {
+				graph.boostSeed[info.Name] = true
+			}
 			graph.ready <- info.Name
 		}
 	}
 	return graph
+}
+
+// computeDescendantCounts returns, for each seed, the number of seeds
+// that transitively depend on it (its descendants in the dependency
+// DAG).  This is a static graph property used to detect bottleneck
+// seeds that block all remaining work.
+func computeDescendantCounts(dependents map[string][]string, seeders []SeederInfo) map[string]int {
+	counts := make(map[string]int, len(seeders))
+	visited := make(map[string]bool)
+	var walk func(n string)
+	walk = func(n string) {
+		for _, d := range dependents[n] {
+			if !visited[d] {
+				visited[d] = true
+				walk(d)
+			}
+		}
+	}
+	for _, info := range seeders {
+		clear(visited)
+		walk(info.Name)
+		counts[info.Name] = len(visited)
+	}
+	return counts
 }
 
 type workerPoolOpts struct {
@@ -175,6 +224,28 @@ func runWorkerPool(ctx context.Context, wp *workerPoolOpts) error {
 					seederName = name
 				}
 
+				// Check whether this seed was tagged for boost at
+				// dispatch time.  The tag is set when the seed's
+				// transitive dependents + itself cover all remaining
+				// seeds, meaning nothing else can run concurrently.
+				wantBoost := false
+				gotBoost := false
+				wp.graph.mu.Lock()
+				if wp.graph.boostSeed[seederName] {
+					delete(wp.graph.boostSeed, seederName)
+					if wp.opts.BoostWorker != nil {
+						wantBoost = true
+					}
+				}
+				wp.graph.mu.Unlock()
+				if wantBoost {
+					if err := wp.opts.BoostWorker(workerIdx); err != nil {
+						setError(fmt.Errorf("[%s] failed to boost worker: %w", seederName, err))
+						return
+					}
+					gotBoost = true
+				}
+
 				info := wp.infoByName[seederName]
 
 				// Create an isolated ISeeder for this worker.
@@ -185,11 +256,27 @@ func runWorkerPool(ctx context.Context, wp *workerPoolOpts) error {
 				}
 				workerSD, err := wp.opts.NewSeeder(sopts)
 				if err != nil {
+					if gotBoost && wp.opts.UnboostWorker != nil {
+						ubErr := wp.opts.UnboostWorker(workerIdx)
+						if ubErr != nil {
+							workerSD.PrintError(
+								"[%s] failed to unboost worker after failed boost: %v\n",
+								seederName,
+								ubErr,
+							)
+						}
+					}
 					setError(fmt.Errorf("[%s] failed to create seeder: %w", seederName, err))
 					return
 				}
 
 				wp.opts.PushCleanup(workerSD.Cleanup)
+				if gotBoost {
+					workerSD.Print(
+						"[%s] Worker boosted to max resources. Woohoo.\n",
+						seederName,
+					)
+				}
 
 				// Run the worker under its file lock.
 				err = workerSD.ExecuteWithSeederLock(seederName, func() error {
@@ -204,8 +291,20 @@ func runWorkerPool(ctx context.Context, wp *workerPoolOpts) error {
 				workerSD.Cleanup()
 
 				if err != nil {
+					if gotBoost && wp.opts.UnboostWorker != nil {
+						_ = wp.opts.UnboostWorker(workerIdx)
+					}
 					setError(fmt.Errorf("seeder %s failed: %w", seederName, err))
 					return
+				}
+
+				// Unboost before releasing dependents so new workers
+				// see the original resource limits.
+				if gotBoost && wp.opts.UnboostWorker != nil {
+					if err := wp.opts.UnboostWorker(workerIdx); err != nil {
+						setError(fmt.Errorf("[%s] failed to unboost worker: %w", seederName, err))
+						return
+					}
 				}
 
 				// Notify dependents and possibly close ready.
@@ -215,6 +314,9 @@ func runWorkerPool(ctx context.Context, wp *workerPoolOpts) error {
 					for _, dep := range wp.graph.dependents[seederName] {
 						wp.graph.depCount[dep]--
 						if wp.graph.depCount[dep] == 0 {
+							if wp.graph.descCount[dep]+1 == wp.graph.remaining {
+								wp.graph.boostSeed[dep] = true
+							}
 							wp.graph.ready <- dep
 						}
 					}

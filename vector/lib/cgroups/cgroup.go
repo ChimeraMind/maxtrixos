@@ -23,13 +23,19 @@ type workerCgroup struct {
 type WorkerPool struct {
 	parentDir string
 	workers   []*workerCgroup
+	opts      *WorkerPoolOptions
+	useCpuset bool
 }
 
 // WorkerPoolOptions contains the resource limits for a worker pool.
 type WorkerPoolOptions struct {
 	Parallelism       int
 	MemPerWorkerBytes uint64
-	NumCPUs           int
+	// TotalMemBytes is the actual total memory budget.  Used by
+	// BoostWorker to give a sole worker full resources without the
+	// lossy MemPerWorkerBytes * Parallelism round-trip.
+	TotalMemBytes uint64
+	NumCPUs       int
 	// CoresMultiplier scales the number of CPU cores assigned to each
 	// worker's cpuset.  Values > 1.0 cause overlapping ranges (cores
 	// shared between workers); values < 1.0 reduce each worker's
@@ -57,6 +63,9 @@ func NewWorkerPool(opts *WorkerPoolOptions) (*WorkerPool, error) {
 	if opts.NumCPUs < 1 {
 		return nil, fmt.Errorf("cgroups: numCPUs must be >= 1, got %d", opts.NumCPUs)
 	}
+	if opts.TotalMemBytes == 0 {
+		return nil, fmt.Errorf("cgroups: TotalMemBytes must be set")
+	}
 
 	root := opts.cgroupRoot()
 
@@ -83,7 +92,11 @@ func NewWorkerPool(opts *WorkerPoolOptions) (*WorkerPool, error) {
 		return nil, err
 	}
 
-	pool := &WorkerPool{parentDir: parentDir}
+	pool := &WorkerPool{
+		parentDir: parentDir,
+		opts: opts,
+		useCpuset: useCpuset,
+	}
 	for i := range opts.Parallelism {
 		wc, err := createWorkerCgroup(parentDir, i, opts, useCpuset)
 		if err != nil {
@@ -249,11 +262,64 @@ func writeCpusetPinning(dir string, index int, opts *WorkerPoolOptions) error {
 	return nil
 }
 
+// BoostWorker reconfigures a worker's cgroup to use all available
+// resources (memory + CPU).  This is intended for situations where only
+// one seed is runnable at a time and should get the full machine.
+func (p *WorkerPool) BoostWorker(workerIndex int) error {
+	if p == nil || workerIndex < 0 || workerIndex >= len(p.workers) {
+		return nil
+	}
+	w := p.workers[workerIndex]
+	if err := writeMemoryLimit(w.dir, workerIndex, p.opts.TotalMemBytes); err != nil {
+		return err
+	}
+	if p.useCpuset {
+		return writeCpusetFull(w.dir, workerIndex, p.opts)
+	}
+	return writeCPUQuotaFull(w.dir, workerIndex, p.opts)
+}
+
+// UnboostWorker restores a worker's cgroup to its partitioned share
+// of resources.
+func (p *WorkerPool) UnboostWorker(workerIndex int) error {
+	if p == nil || workerIndex < 0 || workerIndex >= len(p.workers) {
+		return nil
+	}
+	w := p.workers[workerIndex]
+	if err := writeMemoryLimit(w.dir, workerIndex, p.opts.MemPerWorkerBytes); err != nil {
+		return err
+	}
+	if p.useCpuset {
+		return writeCpusetPinning(w.dir, workerIndex, p.opts)
+	}
+	return writeCPUQuota(w.dir, workerIndex, p.opts)
+}
+
+// writeCpusetFull sets a worker's cpuset to all available CPUs.
+func writeCpusetFull(dir string, index int, opts *WorkerPoolOptions) error {
+	path := filepath.Join(dir, "cpuset.cpus")
+	if err := os.WriteFile(path, fmt.Appendf(nil, "0-%d", opts.NumCPUs-1), 0644); err != nil {
+		return fmt.Errorf("cgroups: failed to write cpuset.cpus (boost) for worker-%d: %w", index, err)
+	}
+	return nil
+}
+
+// writeCPUQuotaFull sets a worker's CPU quota to the full CPU count.
+func writeCPUQuotaFull(dir string, index int, opts *WorkerPoolOptions) error {
+	const cpuPeriod = 100000
+	cpuQuota := opts.NumCPUs * cpuPeriod
+	path := filepath.Join(dir, "cpu.max")
+	if err := os.WriteFile(path, fmt.Appendf(nil, "%d %d", cpuQuota, cpuPeriod), 0644); err != nil {
+		return fmt.Errorf("cgroups: failed to write cpu.max (boost) for worker-%d: %w", index, err)
+	}
+	return nil
+}
+
 // SysProcAttr returns a SysProcAttr configured to spawn a child process
 // directly into the given worker's cgroup via clone3(CLONE_INTO_CGROUP),
 // or nil if the pool is inactive.
 func (p *WorkerPool) SysProcAttr(workerIndex int) *syscall.SysProcAttr {
-	if p == nil || workerIndex >= len(p.workers) {
+	if p == nil || workerIndex < 0 || workerIndex >= len(p.workers) {
 		return nil
 	}
 	return &syscall.SysProcAttr{
