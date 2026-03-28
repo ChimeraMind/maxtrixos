@@ -13,6 +13,27 @@ import (
 	"matrixos/vector/lib/runner"
 )
 
+// --- Bootloader interface compliance ---
+
+func TestGrubBootloaderImplementsBootloader(t *testing.T) {
+	var _ Bootloader = (*GrubBootloader)(nil)
+}
+
+func TestMockBootloaderImplementsBootloader(t *testing.T) {
+	var _ Bootloader = (*MockBootloader)(nil)
+}
+
+func TestGetBootloader(t *testing.T) {
+	im := newTestImager(baseImageConfig(), &ostree.MockOstree{})
+	bl := im.GetBootloader()
+	if bl == nil {
+		t.Fatal("GetBootloader() returned nil")
+	}
+	if _, ok := bl.(*GrubBootloader); !ok {
+		t.Fatalf("expected *GrubBootloader, got %T", bl)
+	}
+}
+
 // --- InstallBootloader Tests ---
 
 func TestInstallBootloader(t *testing.T) {
