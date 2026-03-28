@@ -48,19 +48,10 @@ func (c *EnterCommand) Name() string {
 type SeedersParams map[string]*seeder.SeederParams
 
 func (c *EnterCommand) makeSeederParams(sd seeder.ISeeder) (SeedersParams, error) {
-	paramsName, err := sd.ParamsExecutableName()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get params executable name: %w", err)
-	}
-
 	paramsMap := make(SeedersParams)
 	for _, info := range c.detected {
-		paramsPath := filepath.Join(info.Dir, paramsName)
-		if !filesystems.FileExists(paramsPath) {
-			continue
-		}
-		params, err := sd.ParseSeederParams(info.Name, paramsPath)
-		if err != nil {
+		params, err := sd.ParseSeederParams(info)
+		if err != nil || params == nil {
 			// Skip seeders whose params cannot be parsed.
 			continue
 		}
@@ -303,20 +294,11 @@ func (c *EnterCommand) enter(sd seeder.ISeeder, chrootDir string) error {
 }
 
 func (c *EnterCommand) chrootWorker(sd seeder.ISeeder, chrootDir string) error {
-	paramsName, err := sd.ParamsExecutableName()
-	if err != nil {
-		return fmt.Errorf("failed to get params executable name: %w", err)
-	}
-
 	// Find the corresponding seeder chroot dir matching it with chrootDir.
 	var si seeder.SeederInfo
 	var found bool
 	for _, info := range c.detected {
-		paramsPath := filepath.Join(info.Dir, paramsName)
-		if !filesystems.FileExists(paramsPath) {
-			continue
-		}
-		params, err := sd.ParseSeederParams(info.Name, paramsPath)
+		params, err := sd.ParseSeederParams(info)
 		if err != nil {
 			// Skip seeders whose params cannot be parsed.
 			continue

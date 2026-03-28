@@ -286,10 +286,10 @@ type parallelTestSeeder struct {
 	executed  *[]string
 }
 
-func (p *parallelTestSeeder) ParseSeederParams(name, paramsPath string) (*SeederParams, error) {
-	params, ok := p.paramsMap[name]
+func (p *parallelTestSeeder) ParseSeederParams(info SeederInfo) (*SeederParams, error) {
+	params, ok := p.paramsMap[info.Name]
 	if !ok {
-		return nil, fmt.Errorf("unknown seeder: %s", name)
+		return nil, fmt.Errorf("unknown seeder: %s", info.Name)
 	}
 	return params, nil
 }

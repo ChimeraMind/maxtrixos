@@ -385,7 +385,6 @@ func TestReleasesFindChrootDirParamsError(t *testing.T) {
 		Arch_:   "amd64",
 	}
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParamsErr = fmt.Errorf("bad params")
 
 	baseDir, _ := setupReleasesTestDir(t)

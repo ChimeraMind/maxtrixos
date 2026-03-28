@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"syscall"
 
 	"matrixos/vector/lib/cgroups"
 	"matrixos/vector/lib/config"
-	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/seeder"
 	"matrixos/vector/lib/validation"
 )
@@ -212,8 +210,11 @@ func (c *SeedsCommand) runSeeds() error {
 		return err
 	}
 
+	// Read resource config via SeederConfig.
+	scfg := seeder.NewSeederConfig(c.cfg)
+
 	// Determine parallelism level.
-	parallelism, err := sd.Parallelism()
+	parallelism, err := scfg.Parallelism()
 	if err != nil {
 		return fmt.Errorf("failed to read parallelism config: %w", err)
 	}
@@ -229,16 +230,16 @@ func (c *SeedsCommand) runSeeds() error {
 		c.Printf("Parallel mode: up to %d seeders at once.\n", parallelism)
 	}
 
-	maxMemGiB, err := sd.MaxMemoryGiB()
+	maxMemGiB, err := scfg.MaxMemoryGiB()
 	if err != nil {
 		return fmt.Errorf("failed to read max memory config: %w", err)
 	}
-	maxCores, err := sd.MaxCores()
+	maxCores, err := scfg.MaxCores()
 	if err != nil {
 		return fmt.Errorf("failed to read max cores config: %w", err)
 	}
 
-	coresMultiplier, err := sd.CoresMultiplier()
+	coresMultiplier, err := scfg.CoresMultiplier()
 	if err != nil {
 		return fmt.Errorf("failed to read cores multiplier config: %w", err)
 	}
@@ -406,8 +407,6 @@ func (c *SeedsCommand) runPostBuild(seeders []seeder.SeederInfo, paramsByName ma
 	return nil
 }
 
-
-
 // parseSeedersParams parses the params file for each seeder and returns
 // a map of seeder name to parsed params.
 func (c *SeedsCommand) parseSeedersParams(seeders []seeder.SeederInfo) (map[string]*seeder.SeederParams, error) {
@@ -419,16 +418,7 @@ func (c *SeedsCommand) parseSeedersParams(seeders []seeder.SeederInfo) (map[stri
 			return nil, fmt.Errorf("[%s] failed to create seeder: %w", info.Name, err)
 		}
 
-		paramsName, err := sd.ParamsExecutableName()
-		if err != nil {
-			return nil, fmt.Errorf("[%s] failed to get params name: %w", info.Name, err)
-		}
-		paramsPath := filepath.Join(info.Dir, paramsName)
-		if !filesystems.FileExists(paramsPath) {
-			return nil, fmt.Errorf("[%s] unable to find %s", info.Name, paramsPath)
-		}
-
-		params, err := sd.ParseSeederParams(info.Name, paramsPath)
+		params, err := sd.ParseSeederParams(info)
 		if err != nil {
 			return nil, fmt.Errorf("[%s] failed to parse params: %w", info.Name, err)
 		}

@@ -342,7 +342,6 @@ func TestSeedsFullPipeline(t *testing.T) {
 	defer func() { getEuid = origEuid }()
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	baseDir, chrootDir := setupSeedsTestDir(t)
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootName:         "bedrock-20260228",
@@ -399,7 +398,6 @@ func TestSeedsWorkerPrepperError(t *testing.T) {
 	defer func() { getEuid = origEuid }()
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	baseDir, chrootDir := setupSeedsTestDir(t)
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootName:         "bedrock-20260228",
@@ -434,7 +432,6 @@ func TestSeedsWorkerSkipsDoneSeeder(t *testing.T) {
 	defer func() { getEuid = origEuid }()
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	baseDir, chrootDir := setupSeedsTestDir(t)
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootName:         "bedrock-20260228",
@@ -493,7 +490,6 @@ func TestSeedsOutputFiles(t *testing.T) {
 	seedersFile := filepath.Join(tmp, "seeders.txt")
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	baseDir, chrootDir := setupSeedsTestDir(t)
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootName:         "bedrock-20260228",
@@ -798,7 +794,6 @@ func TestSeedsRunDelegates(t *testing.T) {
 	defer func() { getEuid = origEuid }()
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	baseDir, chrootDir := setupSeedsTestDir(t)
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootName:         "bedrock-20260228",
@@ -906,7 +901,6 @@ func TestSeedsFullPipelineVerbose(t *testing.T) {
 	defer func() { getEuid = origEuid }()
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	baseDir, chrootDir := setupSeedsTestDir(t)
 	sd.ParseSeederParams_ = &seeder.SeederParams{
 		ChrootName:         "bedrock-20260228",
@@ -941,7 +935,6 @@ func TestSeedsExecuteWithSeederLockError(t *testing.T) {
 	defer func() { getEuid = origEuid }()
 
 	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
 	sd.ExecuteWithSeederLockErr = fmt.Errorf("lock failed")
 	baseDir, chrootDir := setupSeedsTestDir(t)
 	sd.ParseSeederParams_ = &seeder.SeederParams{
@@ -1019,10 +1012,10 @@ type parallelTestSeeder struct {
 	executed  *[]string
 }
 
-func (p *parallelTestSeeder) ParseSeederParams(name, paramsPath string) (*seeder.SeederParams, error) {
-	params, ok := p.paramsMap[name]
+func (p *parallelTestSeeder) ParseSeederParams(info seeder.SeederInfo) (*seeder.SeederParams, error) {
+	params, ok := p.paramsMap[info.Name]
 	if !ok {
-		return nil, fmt.Errorf("unknown seeder: %s", name)
+		return nil, fmt.Errorf("unknown seeder: %s", info.Name)
 	}
 	return params, nil
 }
@@ -1057,8 +1050,6 @@ func TestSeedsParallelUsedWhenConfigured(t *testing.T) {
 	origNewSeeder := newSeeder
 	newSeeder = func(_ config.IConfig, opts *seeder.NewSeederOptions) (seeder.ISeeder, error) {
 		sd := seeder.DefaultMockSeeder()
-		sd.ParamsExecutableName_ = "params.sh"
-		sd.Parallelism_ = 2
 		return &parallelTestSeeder{
 			MockSeeder: sd,
 			paramsMap:  paramsMap,

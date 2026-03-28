@@ -19,8 +19,8 @@ import (
 type Cmd struct {
 	Name        string
 	Args        []string
-	Dir         string              // working directory; empty inherits parent
-	Env         []string            // environment; nil inherits parent
+	Dir         string   // working directory; empty inherits parent
+	Env         []string // environment; nil inherits parent
 	Stdin       io.Reader
 	Stdout      io.Writer
 	Stderr      io.Writer
