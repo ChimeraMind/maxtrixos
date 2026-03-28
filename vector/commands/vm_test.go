@@ -209,20 +209,6 @@ func TestVMCommandRunMissingImage(t *testing.T) {
 	}
 }
 
-func TestVMCommandRunNonAmd64Image(t *testing.T) {
-	c := NewVMCommand()
-	_ = c.fs.Parse([]string{"-image", "/tmp/matrixos-arm64.img"})
-	c.cfg = &config.MockConfig{}
-
-	err := c.Run()
-	if err == nil {
-		t.Fatal("expected error for non-amd64 image, got nil")
-	}
-	if !strings.Contains(err.Error(), "only amd64 images are supported") {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
 // --- VMDriver.Send ---
 
 func TestVMDriverSend(t *testing.T) {
@@ -577,8 +563,9 @@ func TestVMCommandExtraDiskSizeWithoutExtraDisk(t *testing.T) {
 // --- Constants ---
 
 func TestConstants(t *testing.T) {
-	if qemuSystemX86_64 != "qemu-system-x86_64" {
-		t.Errorf("qemuSystemX86_64: got %q, want %q", qemuSystemX86_64, "qemu-system-x86_64")
+	bin := qemuSystemBinary()
+	if !strings.HasPrefix(bin, "qemu-system-") {
+		t.Errorf("qemuSystemBinary(): got %q, want prefix %q", bin, "qemu-system-")
 	}
 	if rootPassword != "matrix" {
 		t.Errorf("rootPassword: got %q, want %q", rootPassword, "matrix")

@@ -10,15 +10,28 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
 	"matrixos/vector/lib/filesystems"
 )
 
+var goArchToQemu = map[string]string{
+	"amd64": "x86_64",
+	"arm64": "aarch64",
+}
+
+func qemuSystemBinary() string {
+	arch, ok := goArchToQemu[runtime.GOARCH]
+	if !ok {
+		arch = runtime.GOARCH
+	}
+	return "qemu-system-" + arch
+}
+
 const (
-	qemuSystemX86_64 = "qemu-system-x86_64"
-	rootPassword     = "matrix"
+	rootPassword = "matrix"
 )
 
 type VMDriver struct {
@@ -30,7 +43,7 @@ type VMDriver struct {
 }
 
 func NewVMDriver(ctx context.Context, args []string) (*VMDriver, error) {
-	cmd := exec.CommandContext(ctx, qemuSystemX86_64, args...)
+	cmd := exec.CommandContext(ctx, qemuSystemBinary(), args...)
 	cmd.Stderr = os.Stderr
 
 	cmd.Cancel = func() error {
@@ -168,7 +181,7 @@ func NewVMCommand() *VMCommand {
 	c.fs.StringVar(&c.memory, "memory", "4G", "Amount of RAM for the VM")
 	c.fs.StringVar(&c.gpuMemory, "gpu_memory", "512M", "Amount of memory for the virtual GPU")
 	c.fs.StringVar(&c.audioDev, "audio_dev", "pipewire", "Audio device for the VM (default 'pipewire' for PipeWire)")
-	c.fs.StringVar(&c.sshPort, "ssh_port", "", "Local port for SSH forwarding (empty to disable)")
+	c.fs.StringVar(&c.sshPort, "ssh_port", "", "Local port for SSH forwarding (set to enable)")
 	c.fs.DurationVar(&c.waitBoot, "wait_boot", 120*time.Second, "Seconds to wait for boot login prompt")
 	c.fs.DurationVar(&c.waitTests, "wait_tests", 120*time.Second, "Seconds to wait for tests to complete")
 	c.fs.DurationVar(&c.maxRunTime, "max_run_time", 300*time.Second, "Maximum seconds to allow the entire VM run (including boot and tests), when running in non-interactive mode")
