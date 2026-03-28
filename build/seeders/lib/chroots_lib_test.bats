@@ -188,6 +188,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"--buildpkg"* ]]
     [[ "$output" == *"--usepkg"* ]]
+    [[ "$output" == *"--usepkg-exclude-live=y"* ]]
     [[ "$output" == *"--verbose"* ]]
     [[ "$output" == *"--binpkg-respect-use=y"* ]]
     [[ "$output" == *"--quiet-build=y"* ]]
