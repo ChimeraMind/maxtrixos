@@ -22,6 +22,8 @@ var (
 	bootloaders   = []string{
 		grubEfiBinary,
 	}
+	// pagerBinary is the pager command to use for long output.
+	pagerBinary = "less"
 )
 
 // UpgradeCommand is a command for upgrading the system
@@ -35,6 +37,7 @@ type UpgradeCommand struct {
 	pretend       bool
 	verbose       bool
 	force         bool
+	toCommit      string
 }
 
 // NewUpgradeCommand creates a new UpgradeCommand
@@ -73,6 +76,7 @@ func (c *UpgradeCommand) parseArgs(args []string) error {
 	c.fs.BoolVar(&c.pretend, "pretend", false, "Only fetch updates and show diff without applying them")
 	c.fs.BoolVar(&c.verbose, "verbose", false, "Show detailed output")
 	c.fs.BoolVar(&c.force, "force", false, "Force upgrade even if up to date")
+	c.fs.StringVar(&c.toCommit, "to", "", "Upgrade to a specific commit hash (instead of the latest on the current branch)")
 	c.fs.Usage = func() {
 		fmt.Printf("Usage: vector %s [options]\n", c.Name())
 		c.fs.PrintDefaults()
@@ -106,10 +110,15 @@ func (c *UpgradeCommand) Run() error {
 		return fmt.Errorf("failed to fetch updates: %w", err)
 	}
 
-	c.ot.SetRef(ref)
-	newCommit, err := c.ot.LastCommit()
-	if err != nil {
-		return fmt.Errorf("failed to get new commit: %w", err)
+	var newCommit string
+	if c.toCommit != "" {
+		newCommit = c.toCommit
+	} else {
+		c.ot.SetRef(ref)
+		newCommit, err = c.ot.LastCommit()
+		if err != nil {
+			return fmt.Errorf("failed to get new commit: %w", err)
+		}
 	}
 
 	updateBootloader := func() error {
@@ -490,9 +499,6 @@ func (c *UpgradeCommand) analyzeEtcChanges(oldSHA, newSHA string) error {
 	c.Printf("%s", output)
 	return nil
 }
-
-// pagerBinary is the pager command to use for long output.
-var pagerBinary = "less"
 
 // formatEtcChanges renders the list of EtcChange entries into a
 // human-readable string using the UI icons and colours.
