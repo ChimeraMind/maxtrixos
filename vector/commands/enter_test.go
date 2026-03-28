@@ -159,17 +159,11 @@ func TestEnterParseArgsValid(t *testing.T) {
 func TestEnterRunWithDirectoryTarget(t *testing.T) {
 	chrootDir := t.TempDir()
 
-	var calledWith *runner.ChrootCmd
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		calledWith = cmd
-		return nil
-	}
-
 	sd, det := enterLockTestSetup(t, chrootDir)
 	restore := withMockSeeder(sd)
 	defer restore()
 
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{chrootDir})
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -180,20 +174,8 @@ func TestEnterRunWithDirectoryTarget(t *testing.T) {
 		}
 	})
 
-	if calledWith == nil {
-		t.Fatal("chrootRunner was not called")
-	}
-	if calledWith.ChrootDir != chrootDir {
-		t.Errorf("Expected ChrootDir %q, got %q", chrootDir, calledWith.ChrootDir)
-	}
-	if calledWith.Name != "/bin/sh" {
-		t.Errorf("Expected command /bin/sh, got %q", calledWith.Name)
-	}
-	if len(calledWith.Args) != 1 || calledWith.Args[0] != "--login" {
-		t.Errorf("Expected args [--login], got %v", calledWith.Args)
-	}
-	if !sd.SetupChrootMountsCalled {
-		t.Error("SetupChrootMounts was not called")
+	if !sd.SeedCalled {
+		t.Error("Seed was not called")
 	}
 	if !sd.ExecuteWithSeederLockCalled {
 		t.Error("ExecuteWithSeederLock was not called (lock should be acquired by default)")
@@ -221,12 +203,6 @@ func TestEnterRunWithNamedTarget(t *testing.T) {
 	seederDir := filepath.Join(t.TempDir(), "bedrock")
 	if err := os.MkdirAll(seederDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
-	}
-
-	var calledWith *runner.ChrootCmd
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		calledWith = cmd
-		return nil
 	}
 
 	sd := seeder.DefaultMockSeeder()
@@ -257,7 +233,7 @@ func TestEnterRunWithNamedTarget(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{"bedrock"})
+	cmd, err := newTestEnterCommand(det, nil, []string{"bedrock"})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -268,11 +244,8 @@ func TestEnterRunWithNamedTarget(t *testing.T) {
 		}
 	})
 
-	if calledWith == nil {
-		t.Fatal("chrootRunner was not called")
-	}
-	if calledWith.ChrootDir != chrootDir {
-		t.Errorf("Expected ChrootDir %q, got %q", chrootDir, calledWith.ChrootDir)
+	if !sd.SeedCalled {
+		t.Fatal("Seed was not called")
 	}
 }
 
@@ -286,12 +259,7 @@ func TestEnterRunNoMatchingNames(t *testing.T) {
 		Detect_: nil, // no seeders detected
 	}
 
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		t.Fatal("chrootRunner should not be called")
-		return nil
-	}
-
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{"nonexistent"})
+	cmd, err := newTestEnterCommand(det, nil, []string{"nonexistent"})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -305,20 +273,15 @@ func TestEnterRunNoMatchingNames(t *testing.T) {
 	}
 }
 
-func TestEnterRunSetupMountsError(t *testing.T) {
+func TestEnterRunSeedError(t *testing.T) {
 	chrootDir := t.TempDir()
 
 	sd, det := enterLockTestSetup(t, chrootDir)
-	sd.SetupChrootMountsErr = fmt.Errorf("mount failure")
+	sd.SeedErr = fmt.Errorf("mount failure")
 	restore := withMockSeeder(sd)
 	defer restore()
 
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		t.Fatal("chrootRunner should not be called on mount failure")
-		return nil
-	}
-
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{chrootDir})
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -339,14 +302,11 @@ func TestEnterRunChrootError(t *testing.T) {
 	chrootDir := t.TempDir()
 
 	sd, det := enterLockTestSetup(t, chrootDir)
+	sd.SeedErr = fmt.Errorf("shell exited with error")
 	restore := withMockSeeder(sd)
 	defer restore()
 
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		return fmt.Errorf("shell exited with error")
-	}
-
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{chrootDir})
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -418,17 +378,11 @@ func TestEnterRunMultipleDirectories(t *testing.T) {
 	chrootDir1 := t.TempDir()
 	chrootDir2 := t.TempDir()
 
-	var entered []string
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		entered = append(entered, cmd.ChrootDir)
-		return nil
-	}
-
 	sd, det := enterLockTestSetup(t, chrootDir1, chrootDir2)
 	restore := withMockSeeder(sd)
 	defer restore()
 
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{chrootDir1, chrootDir2})
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir1, chrootDir2})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -439,14 +393,8 @@ func TestEnterRunMultipleDirectories(t *testing.T) {
 		}
 	})
 
-	if len(entered) != 2 {
-		t.Fatalf("Expected 2 chroot entries, got %d", len(entered))
-	}
-	if entered[0] != chrootDir1 {
-		t.Errorf("Expected first entry %q, got %q", chrootDir1, entered[0])
-	}
-	if entered[1] != chrootDir2 {
-		t.Errorf("Expected second entry %q, got %q", chrootDir2, entered[1])
+	if !sd.SeedCalled {
+		t.Fatal("Seed was not called")
 	}
 }
 
@@ -527,15 +475,11 @@ func TestEnterParseArgsSkipLockDefault(t *testing.T) {
 func TestEnterRunAcquiresLockByDefault(t *testing.T) {
 	chrootDir := t.TempDir()
 
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		return nil
-	}
-
 	sd, det := enterLockTestSetup(t, chrootDir)
 	restore := withMockSeeder(sd)
 	defer restore()
 
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{chrootDir})
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -554,17 +498,11 @@ func TestEnterRunAcquiresLockByDefault(t *testing.T) {
 func TestEnterRunSkipsLockWithFlag(t *testing.T) {
 	chrootDir := t.TempDir()
 
-	var calledWith *runner.ChrootCmd
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		calledWith = cmd
-		return nil
-	}
-
 	sd, det := enterLockTestSetup(t, chrootDir)
 	restore := withMockSeeder(sd)
 	defer restore()
 
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{"--skiplock", chrootDir})
+	cmd, err := newTestEnterCommand(det, nil, []string{"--skiplock", chrootDir})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -578,14 +516,8 @@ func TestEnterRunSkipsLockWithFlag(t *testing.T) {
 	if sd.ExecuteWithSeederLockCalled {
 		t.Error("ExecuteWithSeederLock was called; lock should be skipped with --skiplock")
 	}
-	if calledWith == nil {
-		t.Fatal("chrootRunner was not called")
-	}
-	if calledWith.ChrootDir != chrootDir {
-		t.Errorf("Expected ChrootDir %q, got %q", chrootDir, calledWith.ChrootDir)
-	}
-	if !sd.SetupChrootMountsCalled {
-		t.Error("SetupChrootMounts was not called")
+	if !sd.SeedCalled {
+		t.Error("Seed was not called")
 	}
 }
 
@@ -597,12 +529,7 @@ func TestEnterRunLockAcquisitionError(t *testing.T) {
 	restore := withMockSeeder(sd)
 	defer restore()
 
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		t.Fatal("chrootRunner should not be called when lock fails")
-		return nil
-	}
-
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{chrootDir})
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -623,17 +550,11 @@ func TestEnterRunSkipLockWithMultipleDirectories(t *testing.T) {
 	chrootDir1 := t.TempDir()
 	chrootDir2 := t.TempDir()
 
-	var entered []string
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		entered = append(entered, cmd.ChrootDir)
-		return nil
-	}
-
 	sd, det := enterLockTestSetup(t, chrootDir1, chrootDir2)
 	restore := withMockSeeder(sd)
 	defer restore()
 
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{"--skiplock", chrootDir1, chrootDir2})
+	cmd, err := newTestEnterCommand(det, nil, []string{"--skiplock", chrootDir1, chrootDir2})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -644,8 +565,8 @@ func TestEnterRunSkipLockWithMultipleDirectories(t *testing.T) {
 		}
 	})
 
-	if len(entered) != 2 {
-		t.Fatalf("Expected 2 chroot entries, got %d", len(entered))
+	if !sd.SeedCalled {
+		t.Fatal("Seed was not called")
 	}
 	if sd.ExecuteWithSeederLockCalled {
 		t.Error("ExecuteWithSeederLock should not be called with --skiplock")
@@ -690,8 +611,7 @@ func TestEnterRunLockUsesSeederName(t *testing.T) {
 		},
 	}
 
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error { return nil }
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{chrootDir})
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -744,12 +664,7 @@ func TestEnterRunLockNoMatchingSeeder(t *testing.T) {
 		},
 	}
 
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		t.Fatal("chrootRunner should not be called when seeder cannot be resolved")
-		return nil
-	}
-
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{chrootDir})
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -914,12 +829,6 @@ func TestEnterRunSeederNameTargetPreferredChrootDir(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	var calledWith *runner.ChrootCmd
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		calledWith = cmd
-		return nil
-	}
-
 	sd := seeder.DefaultMockSeeder()
 	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
@@ -942,7 +851,7 @@ func TestEnterRunSeederNameTargetPreferredChrootDir(t *testing.T) {
 
 	// Target contains '/' and is NOT an existing directory, so it hits the
 	// seedersParams lookup. The seeder name "sub/00-bedrock" matches.
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{"sub/00-bedrock"})
+	cmd, err := newTestEnterCommand(det, nil, []string{"sub/00-bedrock"})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -953,11 +862,8 @@ func TestEnterRunSeederNameTargetPreferredChrootDir(t *testing.T) {
 		}
 	})
 
-	if calledWith == nil {
-		t.Fatal("chrootRunner was not called")
-	}
-	if calledWith.ChrootDir != chrootDir {
-		t.Errorf("Expected ChrootDir %q, got %q", chrootDir, calledWith.ChrootDir)
+	if !sd.SeedCalled {
+		t.Fatal("Seed was not called")
 	}
 }
 
@@ -976,12 +882,6 @@ func TestEnterRunSeederNameTargetLatestAvailableChrootDir(t *testing.T) {
 	paramsPath := filepath.Join(seederDir, "params.sh")
 	if err := os.WriteFile(paramsPath, []byte("#!/bin/bash\n"), 0755); err != nil {
 		t.Fatalf("WriteFile: %v", err)
-	}
-
-	var calledWith *runner.ChrootCmd
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		calledWith = cmd
-		return nil
 	}
 
 	sd := seeder.DefaultMockSeeder()
@@ -1005,7 +905,7 @@ func TestEnterRunSeederNameTargetLatestAvailableChrootDir(t *testing.T) {
 		},
 	}
 
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{"sub/00-server"})
+	cmd, err := newTestEnterCommand(det, nil, []string{"sub/00-server"})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -1016,11 +916,8 @@ func TestEnterRunSeederNameTargetLatestAvailableChrootDir(t *testing.T) {
 		}
 	})
 
-	if calledWith == nil {
-		t.Fatal("chrootRunner was not called")
-	}
-	if calledWith.ChrootDir != chrootDir {
-		t.Errorf("Expected ChrootDir %q, got %q", chrootDir, calledWith.ChrootDir)
+	if !sd.SeedCalled {
+		t.Fatal("Seed was not called")
 	}
 }
 
@@ -1128,8 +1025,7 @@ func TestEnterRunLockWithPreferredChrootDirMatch(t *testing.T) {
 		},
 	}
 
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error { return nil }
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{chrootDir})
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -1149,12 +1045,12 @@ func TestEnterRunLockWithPreferredChrootDirMatch(t *testing.T) {
 }
 
 func TestEnterRunSkipLockWorkerError(t *testing.T) {
-	// With --skiplock, enterChrootWorker error should be returned
-	// wrapped with the seeder name.
+	// With --skiplock, Seed error should be returned
+	// wrapped with the chroot dir.
 	chrootDir := t.TempDir()
 
 	sd, det := enterLockTestSetup(t, chrootDir)
-	sd.SetupChrootMountsErr = fmt.Errorf("mount exploded")
+	sd.SeedErr = fmt.Errorf("mount exploded")
 	restore := withMockSeeder(sd)
 	defer restore()
 
@@ -1170,7 +1066,7 @@ func TestEnterRunSkipLockWorkerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "chroot enter failed") {
+	if !strings.Contains(err.Error(), "error entering chroot") {
 		t.Errorf("Expected wrapped chroot enter error, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "mount exploded") {
@@ -1278,12 +1174,6 @@ func TestEnterRunMixedTargetsSeederNameAndDirectory(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	var entered []string
-	mockChrootRunner := func(cmd *runner.ChrootCmd) error {
-		entered = append(entered, cmd.ChrootDir)
-		return nil
-	}
-
 	sd := seeder.DefaultMockSeeder()
 	sd.ParamsExecutableName_ = "params.sh"
 	sd.ParseSeederParams_ = &seeder.SeederParams{
@@ -1305,7 +1195,7 @@ func TestEnterRunMixedTargetsSeederNameAndDirectory(t *testing.T) {
 	}
 
 	// First target is a real dir, second is a seeder name (resolved via params).
-	cmd, err := newTestEnterCommand(det, mockChrootRunner, []string{chrootDir1, "sub/00-server"})
+	cmd, err := newTestEnterCommand(det, nil, []string{chrootDir1, "sub/00-server"})
 	if err != nil {
 		t.Fatalf("newTestEnterCommand: %v", err)
 	}
@@ -1316,13 +1206,7 @@ func TestEnterRunMixedTargetsSeederNameAndDirectory(t *testing.T) {
 		}
 	})
 
-	if len(entered) != 2 {
-		t.Fatalf("Expected 2 chroot entries, got %d", len(entered))
-	}
-	if entered[0] != chrootDir1 {
-		t.Errorf("Expected first entry %q, got %q", chrootDir1, entered[0])
-	}
-	if entered[1] != chrootDir2 {
-		t.Errorf("Expected second entry (from PreferredChrootDir) %q, got %q", chrootDir2, entered[1])
+	if !sd.SeedCalled {
+		t.Fatal("Seed was not called")
 	}
 }

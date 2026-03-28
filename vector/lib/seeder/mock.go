@@ -29,8 +29,6 @@ type MockSeeder struct {
 	UseLocalGitRepoInsideChrootErr    error
 	DeleteDotGitFromGitRepo_          bool
 	DeleteDotGitFromGitRepoErr        error
-	DelegatedChrootSystemMounts_      bool
-	DelegatedChrootSystemMountsErr    error
 	GitCloneArgs_                     string
 	GitCloneArgsErr                   error
 	ChrootExecName_                   string
@@ -101,7 +99,6 @@ type MockSeeder struct {
 	ParseSeederParamsErr   error
 	ImportGentooGpgKeysErr error
 	ExecutePrepperErr      error
-	SetupChrootMountsErr   error
 	SetupChrootDNSErr      error
 	SetupChrootDirsErr     error
 	SeedErr                error
@@ -113,7 +110,6 @@ type MockSeeder struct {
 	ExecuteWithSeederLockName        string
 	ImportGentooGpgKeysCalled        bool
 	ExecutePrepperCalled             bool
-	SetupChrootMountsCalled          bool
 	CleanupCalled                    bool
 	SetupChrootDNSCalled             bool
 	SetupChrootDirsCalled            bool
@@ -169,10 +165,6 @@ func (m *MockSeeder) UseLocalGitRepoInsideChroot() (bool, error) {
 
 func (m *MockSeeder) DeleteDotGitFromGitRepo() (bool, error) {
 	return m.DeleteDotGitFromGitRepo_, m.DeleteDotGitFromGitRepoErr
-}
-
-func (m *MockSeeder) DelegatedChrootSystemMounts() (bool, error) {
-	return m.DelegatedChrootSystemMounts_, m.DelegatedChrootSystemMountsErr
 }
 
 func (m *MockSeeder) GitCloneArgs() (string, error) {
@@ -304,10 +296,6 @@ func (m *MockSeeder) ExecutePrepper(
 	m.ExecutePrepperCalled = true
 	return m.ExecutePrepperErr
 }
-func (m *MockSeeder) SetupChrootMounts(opts SetupChrootMountsOptions) error {
-	m.SetupChrootMountsCalled = true
-	return m.SetupChrootMountsErr
-}
 func (m *MockSeeder) Cleanup() {
 	m.CleanupCalled = true
 }
@@ -319,9 +307,7 @@ func (m *MockSeeder) SetupChrootDirs(chrootDir string) error {
 	m.SetupChrootDirsCalled = true
 	return m.SetupChrootDirsErr
 }
-func (m *MockSeeder) Seed(
-	chrootDir string, info SeederInfo,
-) error {
+func (m *MockSeeder) Seed(*SeedOptions) error {
 	m.SeedCalled = true
 	return m.SeedErr
 }

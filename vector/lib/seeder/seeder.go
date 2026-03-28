@@ -24,22 +24,31 @@ type SeederFilterFunc func(name string) bool
 
 // SeederInfo holds the resolved paths for a single discovered seeder.
 type SeederInfo struct {
-	Name             string // e.g. "00-bedrock"
-	Dir              string // absolute directory path
-	ChrootExec       string // path to the chroot executable
-	ChrootChrootExec string // path to the chroot executable inside the chroot
-	PrepperExec      string // path to the prepper executable
+	Name             string   // e.g. "00-bedrock"
+	Dir              string   // absolute directory path
+	ChrootExec       string   // path to the chroot executable itself (e.g. chroot)
+	ChrootChrootExec string   // path to the chroot executable inside the chroot
+	ChrootChrootArgs []string // args to run the chroot executable inside the chroot
+	PrepperExec      string   // path to the prepper executable
 }
 
 // NewSeederOptions contains options for creating a new Seeder.
 type NewSeederOptions struct {
 	Verbose bool // show detailed output
+	Stdin   io.Reader
+	Stdout  io.Writer
+	Stderr  io.Writer
 }
 
-// SetupChrootMountsOptions defines the options for setting up chroot mounts.
-type SetupChrootMountsOptions struct {
-	ChrootDir     string
-	SkipIfMounted bool
+// SeedOptions contains options for running a seeder.
+type SeedOptions struct {
+	ChrootDir string
+	Dir       string
+	Info      SeederInfo
+	Env       []string
+	Stdin     io.Reader
+	Stdout    io.Writer
+	Stderr    io.Writer
 }
 
 // ISeeder defines the interface for seeder operations.
@@ -74,9 +83,6 @@ type ISeeder interface {
 	// DeleteDotGitFromGitRepo returns whether to delete the .git directory from the git repository
 	// when copying it into the chroot.
 	DeleteDotGitFromGitRepo() (bool, error)
-	// DelegatedChrootSystemMounts returns whether the seeding process delegates system mounts inside chroots
-	// to the chroot.sh scripts or not.
-	DelegatedChrootSystemMounts() (bool, error)
 	// ChrootExecName returns the name of the chroot executable inside each seeder directory.
 	ChrootExecName() (string, error)
 	// ParamsExecutableName returns the name of the params executable inside each seeder directory.
@@ -162,8 +168,6 @@ type ISeeder interface {
 	ExecutePrepper(
 		info SeederInfo, params *SeederParams, opts *PrepperOptions,
 	) error
-	// SetupChrootMounts sets up all mounts for a seeder chroot.
-	SetupChrootMounts(opts SetupChrootMountsOptions) error
 	// Cleanup unmounts all mount points tracked by this Seeder instance
 	// in reverse order. It is safe to call multiple times.
 	Cleanup()
@@ -172,7 +176,7 @@ type ISeeder interface {
 	// SetupChrootDirs creates phase dirs and clones the dev toolkit.
 	SetupChrootDirs(chrootDir string) error
 	// Seed runs the seeder script inside the chroot.
-	Seed(chrootDir string, info SeederInfo) error
+	Seed(opts *SeedOptions) error
 }
 
 // Seeder provides seed detection and manipulation operations.
@@ -180,6 +184,7 @@ type Seeder struct {
 	cfg          config.IConfig
 	runner       runner.Func
 	chrootRunner runner.ChrootRunFunc
+	stdin        io.Reader
 	stdout       io.Writer
 	stderr       io.Writer
 
@@ -199,12 +204,25 @@ func NewSeeder(cfg config.IConfig, opts *NewSeederOptions) (*Seeder, error) {
 	if opts == nil {
 		opts = &NewSeederOptions{}
 	}
+
+	stdin := opts.Stdin
+	// keep nil.
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+
 	return &Seeder{
 		cfg:          cfg,
 		runner:       runner.Run,
 		chrootRunner: runner.ChrootRun,
-		stdout:       os.Stdout,
-		stderr:       os.Stderr,
+		stdin:        stdin,
+		stdout:       stdout,
+		stderr:       stderr,
 		verbose:      opts.Verbose,
 	}, nil
 }

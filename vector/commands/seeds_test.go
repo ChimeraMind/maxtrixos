@@ -377,9 +377,6 @@ func TestSeedsFullPipeline(t *testing.T) {
 	if !sd.ExecutePrepperCalled {
 		t.Error("ExecutePrepper not called")
 	}
-	if !sd.SetupChrootMountsCalled {
-		t.Error("SetupChrootMounts not called")
-	}
 	if !sd.SetupChrootDNSCalled {
 		t.Error("SetupChrootDNS not called")
 	}
@@ -426,49 +423,6 @@ func TestSeedsWorkerPrepperError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "prepper failed") {
 		t.Errorf("Unexpected error: %v", err)
-	}
-	// Mount should not have been called.
-	if sd.SetupChrootMountsCalled {
-		t.Error("SetupChrootMounts should not be called after prepper error")
-	}
-}
-
-func TestSeedsWorkerMountError(t *testing.T) {
-	requireSeedsTools(t)
-	origEuid := getEuid
-	getEuid = func() int { return 0 }
-	defer func() { getEuid = origEuid }()
-
-	sd := seeder.DefaultMockSeeder()
-	sd.ParamsExecutableName_ = "params.sh"
-	baseDir, chrootDir := setupSeedsTestDir(t)
-	sd.ParseSeederParams_ = &seeder.SeederParams{
-		ChrootName:         "bedrock-20260228",
-		ChrootsDir:         filepath.Dir(chrootDir),
-		PreferredChrootDir: chrootDir,
-	}
-	sd.SetupChrootMountsErr = fmt.Errorf("mount failed")
-	det := &seeder.MockSeederDetector{
-		Detect_: defaultSeedsTestSeeders(baseDir),
-	}
-	cfg := defaultSeedsTestConfig(t)
-
-	cmd, cleanup, err := newTestSeedsCommand(sd, det, cfg, []string{})
-	if err != nil {
-		t.Fatalf("newTestSeedsCommand: %v", err)
-	}
-	defer cleanup()
-
-	err = cmd.runSeeds()
-	if err == nil {
-		t.Fatal("Expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "mount setup failed") {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	// Chroot execution should not have been attempted.
-	if sd.SeedCalled {
-		t.Error("Seed should not be called after mount error")
 	}
 }
 
