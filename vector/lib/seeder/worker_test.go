@@ -190,6 +190,11 @@ func TestNewConfigAccessors(t *testing.T) {
 // function. Returns the full path to the script.
 func writeParamsScript(t *testing.T, dir, seedName, chrootName, chrootsDir, preferredDir, latestDir string, allDirs []string) string {
 	t.Helper()
+	return writeParamsScriptFull(t, dir, seedName, chrootName, chrootsDir, preferredDir, latestDir, allDirs, nil)
+}
+
+func writeParamsScriptFull(t *testing.T, dir, seedName, chrootName, chrootsDir, preferredDir, latestDir string, completeDirs, partialDirs []string) string {
+	t.Helper()
 	script := fmt.Sprintf(
 		"#!/bin/bash\n"+
 			"SEEDER_DEPENDS=\"\"\n"+
@@ -197,9 +202,12 @@ func writeParamsScript(t *testing.T, dir, seedName, chrootName, chrootsDir, pref
 			"SEEDER_CHROOTS_DIR=%q\n"+
 			"PREFERRED_SEEDER_CHROOT_DIR=%q\n"+
 			"%s_params.find_latest_chroot_dir() { echo %q; }\n"+
-			"%s_params.find_all_chroot_dirs() { echo %q | xargs -n 1; }",
+			"%s_params.find_all_chroot_dirs() { echo %q; }\n"+
+			"%s_params.find_partial_chroot_dirs() { echo %q; }",
 		chrootName, chrootsDir, preferredDir,
-		seedName, latestDir, seedName, strings.Join(allDirs, " "),
+		seedName, latestDir,
+		seedName, strings.Join(completeDirs, " "),
+		seedName, strings.Join(partialDirs, " "),
 	)
 	p := filepath.Join(dir, "params.sh")
 	if err := os.WriteFile(p, []byte(script), 0755); err != nil {
@@ -273,18 +281,18 @@ func TestParseSeederParams_Success(t *testing.T) {
 			params.LatestAvailableChrootDir, latestDir)
 	}
 
-	if len(params.AllChrootDirs) != 2 {
-		t.Errorf("len(AllChrootDirs): got %d, want %d",
-			len(params.AllChrootDirs), 2)
+	if len(params.CompleteChrootDirs) != 2 {
+		t.Errorf("len(CompleteChrootDirs): got %d, want %d",
+			len(params.CompleteChrootDirs), 2)
 	}
 
-	if params.AllChrootDirs[0] != "/mnt/chroots/bedrock-20260228" {
-		t.Errorf("AllChrootDirs[0]: got %q, want %q",
-			params.AllChrootDirs[0], "/mnt/chroots/bedrock-20260228")
+	if params.CompleteChrootDirs[0] != "/mnt/chroots/bedrock-20260228" {
+		t.Errorf("CompleteChrootDirs[0]: got %q, want %q",
+			params.CompleteChrootDirs[0], "/mnt/chroots/bedrock-20260228")
 	}
-	if params.AllChrootDirs[1] != "/mnt/chroots/bedrock-20260104" {
-		t.Errorf("AllChrootDirs[1]: got %q, want %q",
-			params.AllChrootDirs[1], "/mnt/chroots/bedrock-20260104")
+	if params.CompleteChrootDirs[1] != "/mnt/chroots/bedrock-20260104" {
+		t.Errorf("CompleteChrootDirs[1]: got %q, want %q",
+			params.CompleteChrootDirs[1], "/mnt/chroots/bedrock-20260104")
 	}
 }
 
@@ -300,7 +308,8 @@ func TestParseSeederParams_Depends(t *testing.T) {
 			"SEEDER_CHROOTS_DIR=/mnt/chroots\n"+
 			"PREFERRED_SEEDER_CHROOT_DIR=/mnt/chroots/server-20260228\n"+
 			"server_params.find_latest_chroot_dir() { echo %q; }\n"+
-			"server_params.find_all_chroot_dirs() { echo %q; }",
+			"server_params.find_all_chroot_dirs() { echo %q; }\n"+
+			"server_params.find_partial_chroot_dirs() { echo; }",
 		latestDir, latestDir,
 	)
 	paramsFile := filepath.Join(tmp, "params.sh")
@@ -326,14 +335,14 @@ func TestParseSeederParams_Depends(t *testing.T) {
 	}
 }
 
-func TestParseSeederParams_SpaceSeparatedAllChrootDirs(t *testing.T) {
+func TestParseSeederParams_SpaceSeparatedCompleteChrootDirs(t *testing.T) {
 	tmp := t.TempDir()
 	latestDir := filepath.Join(tmp, "chroots", "bedrock-20260228")
 	os.MkdirAll(latestDir, 0755)
 
 	// Create a params.sh where find_all_chroot_dirs echoes
-	// all directories on a SINGLE line, space-separated (no xargs).
-	allDirs := []string{
+	// all directories on a SINGLE line, space-separated.
+	completeDirs := []string{
 		"/mnt/chroots/bedrock-20260228",
 		"/mnt/chroots/bedrock-20260104",
 		"/mnt/chroots/bedrock-20251015",
@@ -345,8 +354,9 @@ func TestParseSeederParams_SpaceSeparatedAllChrootDirs(t *testing.T) {
 			"SEEDER_CHROOTS_DIR=/mnt/chroots\n"+
 			"PREFERRED_SEEDER_CHROOT_DIR=/mnt/chroots/bedrock-20260228\n"+
 			"bedrock_params.find_latest_chroot_dir() { echo %q; }\n"+
-			"bedrock_params.find_all_chroot_dirs() { echo %q; }",
-		latestDir, strings.Join(allDirs, " "),
+			"bedrock_params.find_all_chroot_dirs() { echo %q; }\n"+
+			"bedrock_params.find_partial_chroot_dirs() { echo; }",
+		latestDir, strings.Join(completeDirs, " "),
 	)
 	paramsFile := filepath.Join(tmp, "params.sh")
 	os.WriteFile(paramsFile, []byte(script), 0755)
@@ -357,16 +367,56 @@ func TestParseSeederParams_SpaceSeparatedAllChrootDirs(t *testing.T) {
 		t.Fatalf("ParseSeederParams: %v", err)
 	}
 
-	if len(params.AllChrootDirs) != 3 {
-		t.Fatalf("len(AllChrootDirs): got %d, want 3 (entries: %v)",
-			len(params.AllChrootDirs), params.AllChrootDirs)
+	if len(params.CompleteChrootDirs) != 3 {
+		t.Fatalf("len(CompleteChrootDirs): got %d, want 3 (entries: %v)",
+			len(params.CompleteChrootDirs), params.CompleteChrootDirs)
 	}
 
-	for i, want := range allDirs {
-		if params.AllChrootDirs[i] != want {
-			t.Errorf("AllChrootDirs[%d]: got %q, want %q",
-				i, params.AllChrootDirs[i], want)
+	for i, want := range completeDirs {
+		if params.CompleteChrootDirs[i] != want {
+			t.Errorf("CompleteChrootDirs[%d]: got %q, want %q",
+				i, params.CompleteChrootDirs[i], want)
 		}
+	}
+}
+
+func TestParseSeederParams_PartialChrootDirs(t *testing.T) {
+	tmp := t.TempDir()
+	latestDir := filepath.Join(tmp, "chroots", "bedrock-20260228")
+	os.MkdirAll(latestDir, 0755)
+
+	partialDirs := []string{
+		"/mnt/chroots/bedrock-20260301",
+		"/mnt/chroots/bedrock-20260308",
+	}
+	paramsFile := writeParamsScriptFull(t, tmp,
+		"bedrock", "bedrock-20260228", "/mnt/chroots",
+		"/mnt/chroots/bedrock-20260228", latestDir,
+		[]string{"/mnt/chroots/bedrock-20260228"},
+		partialDirs,
+	)
+
+	sd := newRealSeeder(tmp)
+	params, err := sd.ParseSeederParams("00-bedrock", paramsFile)
+	if err != nil {
+		t.Fatalf("ParseSeederParams: %v", err)
+	}
+
+	if len(params.PartialChrootDirs) != 2 {
+		t.Fatalf("len(PartialChrootDirs): got %d, want 2 (entries: %v)",
+			len(params.PartialChrootDirs), params.PartialChrootDirs)
+	}
+	for i, want := range partialDirs {
+		if params.PartialChrootDirs[i] != want {
+			t.Errorf("PartialChrootDirs[%d]: got %q, want %q",
+				i, params.PartialChrootDirs[i], want)
+		}
+	}
+
+	// CompleteChrootDirs should still work.
+	if len(params.CompleteChrootDirs) != 1 {
+		t.Fatalf("len(CompleteChrootDirs): got %d, want 1",
+			len(params.CompleteChrootDirs))
 	}
 }
 
@@ -383,7 +433,8 @@ func TestParseSeederParams_UsesDevDir(t *testing.T) {
 		"SEEDER_CHROOTS_DIR=/chroots\n"+
 		"PREFERRED_SEEDER_CHROOT_DIR=/chroots/test\n"+
 		"bedrock_params.find_latest_chroot_dir() { echo %q; }\n"+
-		"bedrock_params.find_all_chroot_dirs() { echo %q; }\n",
+		"bedrock_params.find_all_chroot_dirs() { echo %q; }\n"+
+		"bedrock_params.find_partial_chroot_dirs() { echo; }\n",
 		latestDir, latestDir)
 	paramsFile := filepath.Join(tmp, "params.sh")
 	os.WriteFile(paramsFile, []byte(script), 0755)
@@ -531,9 +582,9 @@ func TestParseSeederParams_LatestChrootDirNotExist(t *testing.T) {
 			params.LatestAvailableChrootDir, missingDir)
 	}
 
-	if len(params.AllChrootDirs) != 0 {
-		t.Errorf("len(AllChrootDirs): got %d, want %d",
-			len(params.AllChrootDirs), 0)
+	if len(params.CompleteChrootDirs) != 0 {
+		t.Errorf("len(CompleteChrootDirs): got %d, want %d",
+			len(params.CompleteChrootDirs), 0)
 	}
 }
 
@@ -1939,7 +1990,8 @@ func TestParseSeederParams_RealSeeders(t *testing.T) {
 			t.Logf("  ChrootsDir:         %s", params.ChrootsDir)
 			t.Logf("  PreferredChrootDir: %s", params.PreferredChrootDir)
 			t.Logf("  LatestAvailable:    %s", params.LatestAvailableChrootDir)
-			t.Logf("  AllChrootDirs:      %v", params.AllChrootDirs)
+			t.Logf("  CompleteChrootDirs: %v", params.CompleteChrootDirs)
+			t.Logf("  PartialChrootDirs:  %v", params.PartialChrootDirs)
 			t.Logf("  Depends:            %v", params.Depends)
 		})
 	}

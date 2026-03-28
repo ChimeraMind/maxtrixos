@@ -154,13 +154,20 @@ func (c *SeedsCleaner) Run() error {
 		if params.LatestAvailableChrootDir == "" {
 			fmt.Fprintf(
 				os.Stderr,
-				"[%s] A latest available chroot dir does not exist. Skipping ...",
+				"[%s] A latest available chroot dir variable does not exist. Skipping ...",
 				info.Name,
 			)
 			continue
 		}
 
-		if len(params.AllChrootDirs) == 0 {
+		var consideredDirs []string
+		consideredDirs = append(consideredDirs, params.CompleteChrootDirs...)
+		consideredDirs = append(consideredDirs, params.PartialChrootDirs...)
+		// Deduplicate considered dirs.
+		slices.Sort(consideredDirs)
+		consideredDirs = slices.Compact(consideredDirs)
+
+		if len(consideredDirs) == 0 {
 			fmt.Fprintf(
 				os.Stderr,
 				"[%s] No chroot dirs exist. Skipping ...",
@@ -169,10 +176,10 @@ func (c *SeedsCleaner) Run() error {
 			continue
 		}
 
-		for _, chrootDir := range params.AllChrootDirs {
+		for _, chrootDir := range consideredDirs {
 			fmt.Printf("[%s] Dir: %s\n", info.Name, chrootDir)
 		}
-		if len(params.AllChrootDirs) < minAmountOfSeeds {
+		if len(consideredDirs) < minAmountOfSeeds {
 			fmt.Printf(
 				"[%s] Nothing to do. Within the minimum amount of seeds (%d).\n",
 				info.Name,
@@ -181,7 +188,7 @@ func (c *SeedsCleaner) Run() error {
 			continue
 		}
 
-		sortedChrootDirs := sortChrootDirs(params.AllChrootDirs)
+		sortedChrootDirs := sortChrootDirs(consideredDirs)
 		for _, chrootDir := range sortedChrootDirs {
 			fmt.Printf("[%s|sorted] Dir: %s\n", info.Name, chrootDir)
 		}
