@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
@@ -302,14 +301,6 @@ func (c *ReleasesCommand) releaseWorker(info seeder.SeederInfo) (string, error) 
 		}
 		rel.SetImageDir(imageDir)
 
-		// TODO: check if this is really needed.
-		// Transfer private git repo into image dir.
-		// if err := c.transferMatrixOSPrivate(imageDir); err != nil {
-		//	return fmt.Errorf(
-		//		"failed to transfer private repo: %w", err,
-		//	)
-		// }
-
 		if err := rel.Build(); err != nil {
 			return err
 		}
@@ -361,52 +352,6 @@ func (c *ReleasesCommand) findChrootDir(info seeder.SeederInfo) (string, error) 
 // directory, mirroring the bash chroot_dir_for_image_dir function.
 func chrootDirForImageDir(chrootDir string) string {
 	return chrootDir + ".ostree_rootfs"
-}
-
-// transferMatrixOSPrivate copies the private git repo into the image
-// directory.  Mirrors the bash transfer_matrixos_private function.
-func (c *ReleasesCommand) transferMatrixOSPrivate(imageDir string) error {
-	if imageDir == "" {
-		return fmt.Errorf(
-			"missing parameter to transferMatrixOSPrivate",
-		)
-	}
-
-	scfg := seeder.NewSeederConfig(c.cfg)
-	srcRepo, err := scfg.PrivateGitRepoPath()
-	if err != nil {
-		return fmt.Errorf("failed to get private git repo path: %w", err)
-	}
-	defaultPath, err := scfg.DefaultPrivateGitRepoPath()
-	if err != nil {
-		return fmt.Errorf(
-			"failed to get default private git repo path: %w",
-			err,
-		)
-	}
-	dstRepo := filepath.Join(imageDir, defaultPath)
-
-	c.sd.Print(
-		"Copying %s to %s ... (will be removed before commit)\n",
-		srcRepo, dstRepo,
-	)
-
-	dstParent := filepath.Dir(dstRepo)
-	if err := os.MkdirAll(dstParent, 0755); err != nil {
-		return fmt.Errorf(
-			"failed to create destination dir %s: %w",
-			dstParent, err,
-		)
-	}
-
-	return filesystems.RsyncCopy(filesystems.RsyncCopyOptions{
-		Src:      srcRepo,
-		Dst:      dstParent,
-		Excludes: []string{".git"},
-		Verbose:  c.verbose,
-		Stdout:   c.sd.Stdout(),
-		Stderr:   c.sd.Stderr(),
-	})
 }
 
 // skipFilter returns a SeederFilterFunc that skips seeders present in
