@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -224,6 +225,17 @@ func (ui *UI) StdoutWriter() *styledWriter {
 // SetupPrinters has not been called.
 func (ui *UI) StderrWriter() *styledWriter {
 	return ui.errPrinter
+}
+
+// SetLogWriter sets a secondary log writer on both the stdout and
+// stderr styled writers so that ANSI-stripped output is teed to it.
+func (ui *UI) SetLogWriter(w io.Writer) {
+	if ui.printer != nil {
+		ui.printer.SetLogWriter(w)
+	}
+	if ui.errPrinter != nil {
+		ui.errPrinter.SetLogWriter(w)
+	}
 }
 
 // Println prints a styled line to the command's stdout writer.
