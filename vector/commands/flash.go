@@ -463,32 +463,20 @@ type partitionTypes struct {
 
 // loadPartitionTypes reads partition type GUIDs from the imager config.
 func (c *FlashCommand) loadPartitionTypes() (*partitionTypes, error) {
-	im, err := c.tempImager()
-	if err != nil {
-		return nil, err
-	}
-	esp, err := im.EspPartitionType()
+	icfg := imager.NewImagerConfig(c.cfg)
+	esp, err := icfg.EspPartitionType()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read ESP partition type: %w", err)
 	}
-	boot, err := im.BootPartitionType()
+	boot, err := icfg.BootPartitionType()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read boot partition type: %w", err)
 	}
-	root, err := im.RootPartitionType()
+	root, err := icfg.RootPartitionType()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read root partition type: %w", err)
 	}
 	return &partitionTypes{esp: esp, boot: boot, root: root}, nil
-}
-
-// tempImager creates a temporary imager instance solely for reading config values.
-func (c *FlashCommand) tempImager() (imager.IImager, error) {
-	fsenc, err := filesystems.NewFsenc(c.cfg, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return imager.NewImager(c.cfg, c.ot, fsenc, nil)
 }
 
 // promptPartition interactively asks for a partition device and validates

@@ -104,17 +104,17 @@ func (c *ImageCommand) Run() error {
 	return c.RunWithGuard(c.runImage)
 }
 
-func failFastChecks(ot ostree.IOstree, im imager.IImager) error {
-	if _, err := im.CreateQcow2(); err != nil {
+func failFastChecks(ot ostree.IOstree, icfg *imager.ImagerConfig) error {
+	if _, err := icfg.CreateQcow2(); err != nil {
 		return err
 	}
-	if _, err := im.Productionize(); err != nil {
+	if _, err := icfg.Productionize(); err != nil {
 		return err
 	}
-	if _, err := im.ImageTests(); err != nil {
+	if _, err := icfg.ImageTests(); err != nil {
 		return err
 	}
-	if _, err := im.Compressor(); err != nil {
+	if _, err := icfg.Compressor(); err != nil {
 		return err
 	}
 	_, err := ot.GpgEnabled()
@@ -177,7 +177,7 @@ func (c *ImageCommand) runImage() error {
 	c.im.SetStderr(c.StderrWriter())
 
 	// Fail fast on bad params.
-	if err := failFastChecks(c.ot, im); err != nil {
+	if err := failFastChecks(c.ot, imager.NewImagerConfig(c.cfg)); err != nil {
 		return err
 	}
 
