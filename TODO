@@ -1,7 +1,7 @@
 # Overall TODO
 
 Golang migration:
-    - [WAITING] Migrate vector_builder.sh to Golang.
+    - [WAITING] Migrate vector_builder.sh to Golang (vector build all done, need to wait).
     - add integration tests for vector usage inside VM to run manually first
       - [WAITING] vector setupOS
       - [WAITING] vector jailbreak
@@ -14,5 +14,6 @@ Features:
         Step 3: add bootc support.
     - Add UKI building to kernel build (make USE flag optional).
     - Investigate root-less builds using unshare.
+    - Remove dev-lang/go runtime, remove gcc? (hard to maintain).
     - Support Cloud Init (add VM tests).
     - Add more VM tests (test flatpak, test snap, test SecureBoot, etc).
