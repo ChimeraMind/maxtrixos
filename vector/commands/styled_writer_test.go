@@ -440,3 +440,131 @@ func TestWriteConcurrent(t *testing.T) {
 		t.Errorf("expected 10 lines from concurrent writes, got %d", len(lines))
 	}
 }
+
+// --- SetLogWriter ---
+
+func TestSetLogWriterCaptures(t *testing.T) {
+	var dest, logBuf bytes.Buffer
+	sw := newStyledWriter(&dest, "[P]", "\033[32m", "\033[0m", true)
+	sw.SetLogWriter(&logBuf)
+
+	sw.Write([]byte("hello world\n"))
+
+	// Dest (stdout/stderr) should receive the styled output.
+	if !strings.Contains(dest.String(), "hello world") {
+		t.Errorf("dest should contain line, got %q", dest.String())
+	}
+
+	// Log should receive the ANSI-stripped output.
+	got := logBuf.String()
+	if !strings.Contains(got, "hello world") {
+		t.Errorf("log should contain line, got %q", got)
+	}
+	if strings.Contains(got, "\033[") {
+		t.Error("log output should be ANSI-stripped")
+	}
+}
+
+func TestSetLogWriterBlankLine(t *testing.T) {
+	var dest, logBuf bytes.Buffer
+	sw := newStyledWriter(&dest, "[P]", "\033[32m", "\033[0m", true)
+	sw.SetLogWriter(&logBuf)
+
+	sw.Write([]byte("\n"))
+
+	if logBuf.String() != "\n" {
+		t.Errorf("log blank line = %q, want %q", logBuf.String(), "\n")
+	}
+}
+
+func TestSetLogWriterNoPrefix(t *testing.T) {
+	var dest, logBuf bytes.Buffer
+	sw := newStyledWriter(&dest, "", "", "", true)
+	sw.SetLogWriter(&logBuf)
+
+	sw.Write([]byte("plain\n"))
+
+	if logBuf.String() != "plain\n" {
+		t.Errorf("log = %q, want %q", logBuf.String(), "plain\n")
+	}
+}
+
+func TestSetLogWriterNil(t *testing.T) {
+	var dest bytes.Buffer
+	sw := newStyledWriter(&dest, "[P]", "\033[32m", "\033[0m", true)
+	// No log writer set — should not panic.
+	sw.Write([]byte("safe\n"))
+	if !strings.Contains(dest.String(), "safe") {
+		t.Error("dest should still receive output")
+	}
+}
+
+func TestSetLogWriterFlush(t *testing.T) {
+	var dest, logBuf bytes.Buffer
+	sw := newStyledWriter(&dest, "[P]", "\033[32m", "\033[0m", true)
+	sw.SetLogWriter(&logBuf)
+
+	// Write partial (no newline), then flush.
+	sw.Write([]byte("partial"))
+	sw.Flush()
+
+	got := logBuf.String()
+	if !strings.Contains(got, "partial") {
+		t.Errorf("log after flush should contain partial, got %q", got)
+	}
+	if strings.Contains(got, "\033[") {
+		t.Error("log output after flush should be ANSI-stripped")
+	}
+}
+
+// --- UI.SetLogWriter ---
+
+func TestUISetLogWriterCapturesBothStreams(t *testing.T) {
+	var stdoutDest, stderrDest, logBuf bytes.Buffer
+
+	ui := &UI{}
+	ui.printer = newStyledWriter(
+		&stdoutDest, "[out]", "\033[32m", "\033[0m", true,
+	)
+	ui.errPrinter = newStyledWriter(
+		&stderrDest, "[err]", "\033[31m", "\033[0m", true,
+	)
+
+	// Both printers share the same log writer.
+	ui.SetLogWriter(&logBuf)
+
+	// Write through stdout printer.
+	ui.Printf("stdout line\n")
+	// Write through stderr printer.
+	ui.PrintErrf("stderr line\n")
+
+	// stdout dest should have the stdout line only.
+	if !strings.Contains(stdoutDest.String(), "stdout line") {
+		t.Errorf("stdout dest missing output, got %q",
+			stdoutDest.String())
+	}
+	if strings.Contains(stdoutDest.String(), "stderr line") {
+		t.Error("stdout dest should not contain stderr output")
+	}
+
+	// stderr dest should have the stderr line only.
+	if !strings.Contains(stderrDest.String(), "stderr line") {
+		t.Errorf("stderr dest missing output, got %q",
+			stderrDest.String())
+	}
+	if strings.Contains(stderrDest.String(), "stdout line") {
+		t.Error("stderr dest should not contain stdout output")
+	}
+
+	// Log should have BOTH lines, ANSI-stripped.
+	logStr := logBuf.String()
+	if !strings.Contains(logStr, "stdout line") {
+		t.Errorf("log missing stdout line, got %q", logStr)
+	}
+	if !strings.Contains(logStr, "stderr line") {
+		t.Errorf("log missing stderr line, got %q", logStr)
+	}
+	if strings.Contains(logStr, "\033[") {
+		t.Error("log should be ANSI-stripped")
+	}
+}

@@ -226,6 +226,8 @@ func (c *AllCommand) run() error {
 	}
 	defer logF.Close()
 
+	c.SetLogWriter(logF)
+
 	c.Printf("Logfile at: %s\n", c.logFile)
 
 	// Run the pipeline; send mail on exit.

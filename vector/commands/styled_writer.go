@@ -27,12 +27,13 @@ var ansiStripRe = regexp.MustCompile(
 type styledWriter struct {
 	mu           sync.Mutex
 	dest         io.Writer
-	prefix       string // already styled prefix string (e.g. icon + label)
-	style        string // ANSI escape applied to the line body
-	reset        string // ANSI reset sequence
-	buf          []byte // partial-line accumulator
-	isTTY        bool   // whether dest is a terminal
-	hasOverwrite bool   // TTY-only: an overwrite line is currently displayed
+	logDest      io.Writer // optional secondary writer for log capture
+	prefix       string    // already styled prefix string (e.g. icon + label)
+	style        string    // ANSI escape applied to the line body
+	reset        string    // ANSI reset sequence
+	buf          []byte    // partial-line accumulator
+	isTTY        bool      // whether dest is a terminal
+	hasOverwrite bool      // TTY-only: an overwrite line is currently displayed
 }
 
 // newStyledWriter creates a writer that prefixes every complete line with
@@ -46,6 +47,26 @@ func newStyledWriter(dest io.Writer, prefix, style, reset string, isTTY bool) *s
 		reset:  reset,
 		isTTY:  isTTY,
 	}
+}
+
+// SetLogWriter sets a secondary writer that receives ANSI-stripped
+// copies of every completed line.  Pass nil to disable.
+func (w *styledWriter) SetLogWriter(lw io.Writer) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.logDest = lw
+}
+
+// writeToLog writes content to the log writer after stripping ANSI
+// escape sequences.  It is a no-op when no log writer is set.
+func (w *styledWriter) writeToLog(content string) {
+	if w.logDest == nil {
+		return
+	}
+	_, _ = io.WriteString(
+		w.logDest,
+		ansiStripRe.ReplaceAllString(content, ""),
+	)
 }
 
 // Write implements io.Writer.  It buffers partial lines and flushes each
@@ -125,17 +146,21 @@ func (w *styledWriter) writeCompleteLine(line string) error {
 
 	// Preserve blank lines without the prefix to keep output tidy.
 	if strings.TrimSpace(line) == "" {
+		w.writeToLog("\n")
 		_, err := fmt.Fprintln(w.dest)
 		return err
 	}
 
 	// Plain mode: no prefix/style decoration.
 	if w.prefix == "" {
+		plain := fmt.Sprintf("%s\n", line)
+		w.writeToLog(plain)
 		_, err := fmt.Fprintf(w.dest, "%s\n", line)
 		return err
 	}
 
 	formatted := fmt.Sprintf("%s%s %s%s\n", w.style, w.prefix, line, w.reset)
+	w.writeToLog(formatted)
 	_, err := io.WriteString(w.dest, formatted)
 	return err
 }
@@ -196,11 +221,14 @@ func (w *styledWriter) flushLocked(addNewline bool) {
 	}
 
 	if w.prefix == "" {
+		plain := fmt.Sprintf("%s%s", line, nl)
+		w.writeToLog(plain)
 		_, _ = fmt.Fprintf(w.dest, "%s%s", line, nl)
 		return
 	}
 
 	formatted := fmt.Sprintf("%s%s %s%s%s", w.style, w.prefix, line, w.reset, nl)
+	w.writeToLog(formatted)
 	_, _ = io.WriteString(w.dest, formatted)
 }
 
