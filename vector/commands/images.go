@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"time"
 
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/imager"
@@ -205,6 +206,19 @@ func (c *ImagesCommand) runImages() error {
 // imageWorker creates a per-ref imager instance, acquires an image lock,
 // and delegates to the ImageCommand-style image building pipeline.
 func (c *ImagesCommand) imageWorker(ref string) error {
+	imageStart := time.Now()
+	c.Printf(
+		"[%s] Imaging started at %s\n",
+		ref, imageStart.Format(time.RFC3339),
+	)
+	defer func() {
+		imageEnd := time.Now()
+		c.Printf(
+			"[%s] Imaging finished at %s (elapsed: %s)\n",
+			ref, imageEnd.Format(time.RFC3339), imageEnd.Sub(imageStart),
+		)
+	}()
+
 	// Create per-ref styled writers.
 	stdoutWriter := c.NewStdoutWriter(fmt.Sprintf("image:%s", c.shortRef(ref)))
 	stderrWriter := c.NewStderrWriter(fmt.Sprintf("image:%s", c.shortRef(ref)))

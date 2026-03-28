@@ -3,6 +3,7 @@ package commands
 import (
 	"flag"
 	"fmt"
+	"time"
 
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/imager"
@@ -126,6 +127,19 @@ func failFastChecks(ot ostree.IOstree, icfg *imager.ImagerConfig) error {
 
 // runImage implements the image building logic.
 func (c *ImageCommand) runImage() error {
+	imageStart := time.Now()
+	c.Printf(
+		"[%s] Imaging started at %s\n",
+		c.ref, imageStart.Format(time.RFC3339),
+	)
+	defer func() {
+		imageEnd := time.Now()
+		c.Printf(
+			"[%s] Imaging finished at %s (elapsed: %s)\n",
+			c.ref, imageEnd.Format(time.RFC3339), imageEnd.Sub(imageStart),
+		)
+	}()
+
 	c.SetupPrinters(fmt.Sprintf("image:%s", c.shortRef(c.ref)))
 	defer c.FlushPrinters()
 

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/releaser"
@@ -101,6 +102,19 @@ func (c *ReleaseCommand) Run() error {
 
 // runRelease implements the release workflow.
 func (c *ReleaseCommand) runRelease() error {
+	releaseStart := time.Now()
+	c.Printf(
+		"[%s] runRelease started at %s\n",
+		c.ref, releaseStart.Format(time.RFC3339),
+	)
+	defer func() {
+		releaseEnd := time.Now()
+		c.Printf(
+			"[%s] Release finished at %s (elapsed: %s)\n",
+			c.ref, releaseEnd.Format(time.RFC3339), releaseEnd.Sub(releaseStart),
+		)
+	}()
+
 	c.PushCleanup(c.killGpg)
 
 	ref := c.ref

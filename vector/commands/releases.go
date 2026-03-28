@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
@@ -217,6 +218,19 @@ func (c *ReleasesCommand) releaseWorker(info seeder.SeederInfo) (string, error) 
 
 	c.updateStdWriters(seederName)
 	c.PushCleanup(c.FlushPrinters)
+
+	releaseStart := time.Now()
+	c.sd.Print(
+		"[%s] Release started at %s\n",
+		seederName, releaseStart.Format(time.RFC3339),
+	)
+	defer func() {
+		releaseEnd := time.Now()
+		c.sd.Print(
+			"[%s] Release finished at %s (elapsed: %s)\n",
+			seederName, releaseEnd.Format(time.RFC3339), releaseEnd.Sub(releaseStart),
+		)
+	}()
 
 	c.sd.Print(
 		"Working on seeder %s, ostree branch short name: %s\n",
