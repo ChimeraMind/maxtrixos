@@ -17,6 +17,79 @@ func TestGpgHelpers(t *testing.T) {
 	}
 }
 
+func TestKillGpgDaemons(t *testing.T) {
+	var called []string
+	mockRunner := func(cmd *runner.Cmd) error {
+		called = append(called, cmd.Name+" "+strings.Join(cmd.Args, " "))
+		return nil
+	}
+
+	// Empty homedir should be a no-op.
+	KillGpgDaemons(mockRunner, "", nil, nil)
+	if len(called) != 0 {
+		t.Errorf("Expected no calls for empty homedir, got %v", called)
+	}
+
+	// Non-empty homedir should call gpgconf.
+	KillGpgDaemons(mockRunner, "/tmp/test-gpg", nil, nil)
+	if len(called) != 1 {
+		t.Fatalf("Expected 1 call, got %d", len(called))
+	}
+	want := "gpgconf --homedir /tmp/test-gpg --kill all"
+	if called[0] != want {
+		t.Errorf("KillGpgDaemons command = %q, want %q", called[0], want)
+	}
+
+	// Errors should not propagate (fire-and-forget).
+	errRunner := func(cmd *runner.Cmd) error {
+		return fmt.Errorf("gpgconf failed")
+	}
+	KillGpgDaemons(errRunner, "/tmp/test-gpg", nil, nil) // should not panic
+}
+
+func TestOstreeKillGpgDaemons(t *testing.T) {
+	var called []string
+	tmpDir := t.TempDir()
+
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.DevGpgHomeDir": {filepath.Join(tmpDir, "gpg")},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	if err != nil {
+		t.Fatalf("NewOstree failed: %v", err)
+	}
+	o.runner = func(cmd *runner.Cmd) error {
+		called = append(called, cmd.Name+" "+strings.Join(cmd.Args, " "))
+		return nil
+	}
+
+	o.KillGpgDaemons()
+
+	if len(called) != 1 {
+		t.Fatalf("Expected 1 call, got %d: %v", len(called), called)
+	}
+	want := "gpgconf --homedir " + filepath.Join(tmpDir, "gpg") + " --kill all"
+	if called[0] != want {
+		t.Errorf("KillGpgDaemons command = %q, want %q", called[0], want)
+	}
+}
+
+func TestOstreeKillGpgDaemons_BadConfig(t *testing.T) {
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Ostree.DevGpgHomeDir": {""},
+		},
+	}
+	o, err := NewOstree(NewOstreeOptions{Config: cfg})
+	if err != nil {
+		t.Fatalf("NewOstree failed: %v", err)
+	}
+	// Should not panic on bad config.
+	o.KillGpgDaemons()
+}
+
 func TestPatchGpgHomeDir(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("Skipping TestPatchGpgHomeDir: requires root privileges for chown")

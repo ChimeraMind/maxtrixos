@@ -188,6 +188,7 @@ func (m *MockOstree) GpgSignFile(string) error       { return nil }
 func (m *MockOstree) GpgKeys() ([]string, error)     { return nil, nil }
 func (m *MockOstree) InitializeSigningGpg() error    { return nil }
 func (m *MockOstree) MaybeInitializeGpg() error      { return nil }
+func (m *MockOstree) KillGpgDaemons()                {}
 func (m *MockOstree) MaybeInitializeRemote() error   { return nil }
 func (m *MockOstree) Pull() error                    { return nil }
 func (m *MockOstree) Prune() error {

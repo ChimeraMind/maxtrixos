@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -13,6 +14,21 @@ import (
 
 	"matrixos/vector/lib/runner"
 )
+
+// KillGpgDaemons kills any gpg-agent, dirmngr, and scdaemon processes
+// associated with the given GPG homedir. This prevents leftover daemon
+// processes from lingering after GPG operations complete.
+func KillGpgDaemons(run runner.Func, homeDir string, stdout, stderr io.Writer) {
+	if homeDir == "" {
+		return
+	}
+	_ = run(&runner.Cmd{
+		Name:   "gpgconf",
+		Args:   []string{"--homedir", homeDir, "--kill", "all"},
+		Stdout: stdout,
+		Stderr: stderr,
+	})
+}
 
 // ClientSideGpgArgs returns arguments for client-side GPG verification.
 func ClientSideGpgArgs(gpgEnabled bool, pubKeyPath string) ([]string, error) {
@@ -343,4 +359,15 @@ func (o *Ostree) GpgArgs() ([]string, error) {
 		"--gpg-sign=" + keyID,
 		"--gpg-homedir=" + homeDir,
 	}, nil
+}
+
+// KillGpgDaemons kills any gpg-agent, dirmngr, and scdaemon processes
+// for the OSTree GPG homedir.
+func (o *Ostree) KillGpgDaemons() {
+	homeDir, err := o.getDevGpgHomeDir()
+	if err != nil {
+		return
+	}
+	o.Print("Killing GPG daemons for %s ...\n", homeDir)
+	KillGpgDaemons(o.runner, homeDir, o.stdout, o.stderr)
 }

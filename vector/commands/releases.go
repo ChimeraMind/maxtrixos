@@ -150,6 +150,8 @@ func (c *ReleasesCommand) runReleases() error {
 	}
 	writerSetup()
 
+	c.PushCleanup(c.killGpg)
+
 	// Verify releaser environment.
 	if err := c.qa.VerifyReleaserEnvironmentSetup("/"); err != nil {
 		return fmt.Errorf("environment verification failed: %w", err)

@@ -1624,6 +1624,56 @@ func TestImportGentooGpgKeys_RunnerError(t *testing.T) {
 	}
 }
 
+func TestKillGpgDaemons_Success(t *testing.T) {
+	tmp := t.TempDir()
+	gpgDir := filepath.Join(tmp, "gpg")
+
+	mr := runner.NewMockRunner()
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.GpgKeysDir"] = []string{gpgDir}
+
+	sd := &Seeder{
+		SeederConfig: NewSeederConfig(cfg),
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	sd.KillGpgDaemons() // should not panic
+
+	if len(mr.Calls) != 1 {
+		t.Fatalf("Expected 1 call, got %d", len(mr.Calls))
+	}
+	if mr.Calls[0].Name != "gpgconf" {
+		t.Errorf("Expected gpgconf, got %s", mr.Calls[0].Name)
+	}
+	wantArgs := []string{"--homedir", gpgDir, "--kill", "all"}
+	if strings.Join(mr.Calls[0].Args, " ") != strings.Join(wantArgs, " ") {
+		t.Errorf("args = %v, want %v", mr.Calls[0].Args, wantArgs)
+	}
+}
+
+func TestKillGpgDaemons_BadConfig(t *testing.T) {
+	cfg := workerTestConfig()
+	cfg.Items["Seeder.GpgKeysDir"] = []string{""} // empty → error
+
+	mr := runner.NewMockRunner()
+	sd := &Seeder{
+		SeederConfig: NewSeederConfig(cfg),
+		runner:       mr.Run,
+		chrootRunner: mr.ChrootRun,
+		stdout:       &bytes.Buffer{},
+		stderr:       &bytes.Buffer{},
+	}
+
+	sd.KillGpgDaemons() // should not panic, should be a no-op
+
+	if len(mr.Calls) != 0 {
+		t.Error("Expected no calls for bad config")
+	}
+}
+
 // --- SetupChrootDNS tests ---
 
 func TestSetupChrootDNS_Success(t *testing.T) {

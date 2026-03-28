@@ -208,6 +208,7 @@ func (c *FlashCommand) runFlash() error {
 	if err := c.initGpg(); err != nil {
 		return err
 	}
+	c.PushCleanup(c.killGpg)
 
 	if err := c.showLocalRefs(); err != nil {
 		return err

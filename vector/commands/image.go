@@ -210,6 +210,7 @@ func (c *ImageCommand) runImage() error {
 		if err := c.initGpg(); err != nil {
 			return err
 		}
+		c.PushCleanup(c.killGpg)
 
 		// Initialize ostree.
 		if c.localOstree {
