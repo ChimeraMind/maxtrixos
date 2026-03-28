@@ -118,7 +118,6 @@ func (c *ReleaseCommand) runRelease() error {
 	c.ot.SetStdout(c.StdoutWriter())
 	c.ot.SetStderr(c.StderrWriter())
 	c.ot.SetVerbose(false) // ostree's own verbose flag, separate from ours.
-
 	c.ot.SetRef(ref)
 
 	// Create c.imageDir if it doesn't exist and check it's a valid directory.
