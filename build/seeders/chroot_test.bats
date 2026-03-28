@@ -29,7 +29,7 @@ setup() {
 
     # Stubs for heavy external commands (emerge, eselect, emaint, etc.)
     for cmd in emerge eselect emaint env-update locale-gen emerge-webrsync \
-               eclean-dist eclean-pkg qlist; do
+               qlist; do
         cat > "${STUB_BIN}/${cmd}" << 'EOF'
 #!/bin/bash
 exit 0

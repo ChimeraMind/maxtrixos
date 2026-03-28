@@ -76,10 +76,6 @@ cosmic.build_everything() {
 
 cosmic.clean_temporary_artifacts() {
     chroots_lib.default_clean_temporary_artifacts
-
-    # Clean stale distfiles
-    eclean-dist
-    eclean-pkg
 }
 
 cosmic.tweak_nsswitch() {

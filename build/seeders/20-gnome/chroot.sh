@@ -72,14 +72,6 @@ gnome.build_everything() {
     chroots_lib.generic_forced_rebuild "${BUILD_KERNEL_PACKAGES[@]}"
 }
 
-gnome.clean_temporary_artifacts() {
-    chroots_lib.default_clean_temporary_artifacts
-
-    # Clean stale distfiles
-    eclean-dist
-    eclean-pkg
-}
-
 gnome.tweak_nsswitch() {
     # make the default /etc/nsswitch.conf a bit less dumb
     # and add support for dns and mdns resolution.
@@ -109,7 +101,6 @@ main() {
         gnome.build_everything
         gnome.tweak_nsswitch
         gnome.tweak_resolved
-        gnome.clean_temporary_artifacts
     )
 
     # Pre-run tests to check that for every phase we have a function declared
