@@ -53,6 +53,7 @@ BOOTSTRAP_PACKAGES=(
 # TODO: maybe we can infer the kernel from the package list.
 BUILD_KERNEL_PACKAGES=(
     sys-kernel/matrixos-kernel::matrixos
+    sys-kernel/matrixos-initramfs::matrixos
 )
 UPSTREAM_PORTAGE_REPOS=(
     matrixos
