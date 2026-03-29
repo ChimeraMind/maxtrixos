@@ -6,6 +6,7 @@ import (
 	"io"
 	"sync"
 	"syscall"
+	"time"
 )
 
 // ParallelSeedOptions configures the parallel seed execution engine.
@@ -279,6 +280,11 @@ func runWorkerPool(ctx context.Context, wp *workerPoolOpts) error {
 				}
 
 				// Run the worker under its file lock.
+				workerStart := time.Now()
+				workerSD.Print(
+					"[%s] Worker started at %s\n",
+					seederName, workerStart.Format(time.RFC3339),
+				)
 				err = workerSD.ExecuteWithSeederLock(seederName, func() error {
 					return seedWorker(ctx, &seedWorkerOpts{
 						sd:          workerSD,
@@ -289,6 +295,11 @@ func runWorkerPool(ctx context.Context, wp *workerPoolOpts) error {
 					})
 				})
 				workerSD.Cleanup()
+				workerEnd := time.Now()
+				workerSD.Print(
+					"[%s] Worker finished at %s (elapsed: %s)\n",
+					seederName, workerEnd.Format(time.RFC3339), workerEnd.Sub(workerStart),
+				)
 
 				if err != nil {
 					if gotBoost && wp.opts.UnboostWorker != nil {
@@ -350,6 +361,19 @@ func seedWorker(ctx context.Context, sw *seedWorkerOpts) error {
 	info := sw.info
 	params := sw.params
 	opts := sw.opts
+
+	seedStart := time.Now()
+	sd.Print(
+		"[%s] seedWorker started at %s\n",
+		info.Name, seedStart.Format(time.RFC3339),
+	)
+	defer func() {
+		seedEnd := time.Now()
+		sd.Print(
+			"[%s] seedWorker finished at %s (elapsed: %s)\n",
+			info.Name, seedEnd.Format(time.RFC3339), seedEnd.Sub(seedStart),
+		)
+	}()
 
 	sd.Print(
 		"[%s] Accepted seeder for execution\n", info.Name,
