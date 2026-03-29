@@ -139,7 +139,7 @@ type VMCommand struct {
 	imagePath     string
 	memory        string
 	gpuMemory     string
-	port          string
+	sshPort       string
 	waitBoot      time.Duration
 	waitTests     time.Duration
 	maxRunTime    time.Duration
@@ -168,7 +168,7 @@ func NewVMCommand() *VMCommand {
 	c.fs.StringVar(&c.memory, "memory", "4G", "Amount of RAM for the VM")
 	c.fs.StringVar(&c.gpuMemory, "gpu_memory", "512M", "Amount of memory for the virtual GPU")
 	c.fs.StringVar(&c.audioDev, "audio_dev", "pipewire", "Audio device for the VM (default 'pipewire' for PipeWire)")
-	c.fs.StringVar(&c.port, "port", "2222", "Local port for SSH forwarding")
+	c.fs.StringVar(&c.sshPort, "ssh_port", "", "Local port for SSH forwarding (empty to disable)")
 	c.fs.DurationVar(&c.waitBoot, "wait_boot", 120*time.Second, "Seconds to wait for boot login prompt")
 	c.fs.DurationVar(&c.waitTests, "wait_tests", 120*time.Second, "Seconds to wait for tests to complete")
 	c.fs.DurationVar(&c.maxRunTime, "max_run_time", 300*time.Second, "Maximum seconds to allow the entire VM run (including boot and tests), when running in non-interactive mode")
@@ -290,10 +290,15 @@ func (c *VMCommand) Run() error {
 		format = "qcow2"
 	}
 
+	nicArg := "user,model=virtio-net-pci"
+	if c.sshPort != "" {
+		nicArg += fmt.Sprintf(",hostfwd=tcp::%s-:22", c.sshPort)
+	}
+
 	qemuArgs := []string{
 		"-enable-kvm", "-m", c.memory,
 		"-cpu", "host", "-smp", c.cpus,
-		"-nic", fmt.Sprintf("user,model=virtio-net-pci,hostfwd=tcp::%s-:22", c.port),
+		"-nic", nicArg,
 		"-drive", "if=pflash,format=raw,readonly=on,file=" + codeDst,
 		"-drive", "if=pflash,format=raw,file=" + varsDst,
 		"-drive", fmt.Sprintf("file=%s,format=%s,if=virtio", c.imagePath, format),
