@@ -19,7 +19,7 @@ func newOstreeTestReleaser(tb testing.TB) (*Releaser, *ostree.MockOstree) {
 	tb.Helper()
 	mock := &ostree.MockOstree{}
 	r := &Releaser{
-		cfg:          &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}},
+		ReleaserConfig: &ReleaserConfig{cfg:          &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}},
 		ostree:       mock,
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		stdout:       &bytes.Buffer{},

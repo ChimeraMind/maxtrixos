@@ -23,7 +23,7 @@ func newTestReleaserWithQA(t *testing.T, cfg *config.MockConfig) *Releaser {
 		t.Fatalf("validation.New: %v", err)
 	}
 	return &Releaser{
-		cfg:    cfg,
+		ReleaserConfig: &ReleaserConfig{cfg:    cfg},
 		ostree: &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		qa:     qa,
@@ -43,7 +43,7 @@ func TestCheckMatrixOS_ConfigError(t *testing.T) {
 	wantErr := errors.New("cfg broken")
 	qa, _ := validation.New(&config.ErrConfig{Err: wantErr})
 	r := &Releaser{
-		cfg:    &config.ErrConfig{Err: wantErr},
+		ReleaserConfig: &ReleaserConfig{cfg:    &config.ErrConfig{Err: wantErr}},
 		ostree: &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		qa:     qa,
@@ -150,7 +150,7 @@ func TestPreCleanQAChecks_SecureBootCertPathConfigError(t *testing.T) {
 	cfg := &config.ErrConfig{Err: wantErr}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		cfg:      cfg,
+		ReleaserConfig: &ReleaserConfig{cfg:      cfg},
 		ostree:   &ostree.MockOstree{},
 		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
 		qa:       qa,
