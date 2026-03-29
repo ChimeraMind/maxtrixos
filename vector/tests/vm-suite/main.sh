@@ -222,12 +222,13 @@ main() {
     )
 
     local exit_st=0
-    for test in "${tests[@]}"; do
-        if ! "${test}"; then
-            echo "Test failed: ${test}"
+    local test_f=
+    for test_f in "${tests[@]}"; do
+        if ! "${test_f}"; then
+            echo "Test failed: ${test_f}"
             exit_st=1
         else
-            echo "Test passed: ${test}"
+            echo "Test passed: ${test_f}"
         fi
     done
 
