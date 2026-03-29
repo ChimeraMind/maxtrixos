@@ -251,6 +251,8 @@ func (c *ReleasesCommand) releaseWorker(info seeder.SeederInfo) (string, error) 
 	relStderr := c.NewStderrWriter(
 		fmt.Sprintf("release:%s", c.shortRef(branch)),
 	)
+	defer relStdout.Flush()
+	defer relStderr.Flush()
 
 	// Set up ostree for this branch.
 	c.ot.SetStdout(relStdout)
