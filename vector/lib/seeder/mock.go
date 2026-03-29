@@ -40,6 +40,7 @@ type MockSeeder struct {
 	// Track calls
 	MaybeInitializePrivateRepoCalled bool
 	ImportGentooGpgKeysCalled        bool
+	KillGpgDaemonsCalled             bool
 	ExecutePrepperCalled             bool
 	CleanupCalled                    bool
 	SetupChrootDNSCalled             bool
@@ -112,6 +113,10 @@ func (m *MockSeeder) MaybeInitializePrivateRepo() error {
 func (m *MockSeeder) ImportGentooGpgKeys() error {
 	m.ImportGentooGpgKeysCalled = true
 	return m.ImportGentooGpgKeysErr
+}
+
+func (m *MockSeeder) KillGpgDaemons() {
+	m.KillGpgDaemonsCalled = true
 }
 
 func (m *MockSeeder) ExecutePrepper(

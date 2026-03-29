@@ -274,6 +274,7 @@ func (c *ImagesCommand) imageWorker(ref string) error {
 		if err := c.initGpg(); err != nil {
 			return err
 		}
+		c.PushCleanup(c.killGpg)
 
 		// Initialize ostree for this ref.
 		if c.localOstree {

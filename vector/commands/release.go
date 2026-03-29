@@ -101,6 +101,8 @@ func (c *ReleaseCommand) Run() error {
 
 // runRelease implements the release workflow.
 func (c *ReleaseCommand) runRelease() error {
+	c.PushCleanup(c.killGpg)
+
 	ref := c.ref
 	if ostree.IsBranchShortName(ref) {
 		return fmt.Errorf(

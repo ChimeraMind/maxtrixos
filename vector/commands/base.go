@@ -294,3 +294,10 @@ func (c *BaseCommand) initGpg() error {
 	}
 	return nil
 }
+
+// killGpg kills any GPG daemons spawned for the OSTree GPG homedir.
+func (c *BaseCommand) killGpg() {
+	if c.ot != nil {
+		c.ot.KillGpgDaemons()
+	}
+}

@@ -11,6 +11,7 @@ import (
 
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/runner"
 )
 
@@ -267,6 +268,17 @@ func (s *Seeder) ImportGentooGpgKeys() error {
 		Stdout: s.stdout,
 		Stderr: s.stderr,
 	})
+}
+
+// KillGpgDaemons kills any gpg-agent, dirmngr, and scdaemon processes
+// for the seeder GPG keys homedir.
+func (s *Seeder) KillGpgDaemons() {
+	homedir, err := s.GpgKeysDir()
+	if err != nil {
+		return
+	}
+	s.Print("Killing GPG daemons for %s ...\n", homedir)
+	ostree.KillGpgDaemons(s.runner, homedir, s.stdout, s.stderr)
 }
 
 // generateSharedEnvVars generates the environment variables that need to be shared

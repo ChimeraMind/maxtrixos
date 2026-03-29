@@ -116,6 +116,8 @@ type IOstree interface {
 	InitializeSigningGpg() error
 	// MaybeInitializeGpg initializes GPG keys for an ostree repository.
 	MaybeInitializeGpg() error
+	// KillGpgDaemons kills gpg-agent/dirmngr/scdaemon for the OSTree GPG homedir.
+	KillGpgDaemons()
 	// MaybeInitializeRemote initializes an ostree remote.
 	MaybeInitializeRemote() error
 	// Pull pulls the instance ref from its configured remote.

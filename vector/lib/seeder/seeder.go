@@ -102,6 +102,8 @@ type ISeeder interface {
 	MaybeInitializePrivateRepo() error
 	// ImportGentooGpgKeys imports Gentoo release engineering GPG keys.
 	ImportGentooGpgKeys() error
+	// KillGpgDaemons kills gpg-agent/dirmngr/scdaemon for the seeder GPG homedir.
+	KillGpgDaemons()
 	// ExecutePrepper runs the prepper script with required env vars.
 	ExecutePrepper(
 		info SeederInfo, params *SeederParams, opts *PrepperOptions,

@@ -189,6 +189,7 @@ func (c *SeedsCommand) runSeeds() error {
 	if err := sd.ImportGentooGpgKeys(); err != nil {
 		return fmt.Errorf("GPG key import failed: %w", err)
 	}
+	c.PushCleanup(sd.KillGpgDaemons)
 
 	// Detect seeders.
 	seeders, err := c.det.Detect(c.skipFilter(), c.onlyFilter())
