@@ -211,10 +211,6 @@ func (c *VMCommand) Run() error {
 		return fmt.Errorf("missing required flag: --image")
 	}
 
-	if !strings.Contains(c.imagePath, "amd64") {
-		return fmt.Errorf("only amd64 images are supported (image path must contain 'amd64')")
-	}
-
 	// Set up styled writers for output.
 	c.stdout = c.NewStdoutWriter("vm")
 	c.stderr = c.NewStderrWriter("vm")
