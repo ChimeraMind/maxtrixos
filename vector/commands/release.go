@@ -111,7 +111,9 @@ func (c *ReleaseCommand) runRelease() error {
 		releaseEnd := time.Now()
 		c.Printf(
 			"[%s] Release finished at %s (elapsed: %s)\n",
-			c.ref, releaseEnd.Format(time.RFC3339), releaseEnd.Sub(releaseStart),
+			c.ref,
+			releaseEnd.Format(time.RFC3339),
+			releaseEnd.Sub(releaseStart).Round(time.Second),
 		)
 	}()
 
