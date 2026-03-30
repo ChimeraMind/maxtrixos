@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
+	"time"
 
 	"matrixos/vector/lib/cgroups"
 	"matrixos/vector/lib/config"
@@ -291,6 +292,19 @@ func (c *SeedsCommand) runSeeds() error {
 		psOpts.BoostWorker = cgPool.BoostWorker
 		psOpts.UnboostWorker = cgPool.UnboostWorker
 	}
+
+	seedStart := time.Now()
+	sd.Print(
+		"Seeding started at %s\n",
+		seedStart.Format(time.RFC3339),
+	)
+	defer func() {
+		seedEnd := time.Now()
+		sd.Print(
+			"Seeding finished at %s (elapsed: %s)\n",
+			seedEnd.Format(time.RFC3339), seedEnd.Sub(seedStart),
+		)
+	}()
 
 	if err := seeder.ParallelSeed(ctx, psOpts); err != nil {
 		writerSetup(sd)

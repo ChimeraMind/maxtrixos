@@ -364,13 +364,13 @@ func seedWorker(ctx context.Context, sw *seedWorkerOpts) error {
 
 	seedStart := time.Now()
 	sd.Print(
-		"[%s] seedWorker started at %s\n",
+		"[%s] Seed started at %s\n",
 		info.Name, seedStart.Format(time.RFC3339),
 	)
 	defer func() {
 		seedEnd := time.Now()
 		sd.Print(
-			"[%s] seedWorker finished at %s (elapsed: %s)\n",
+			"[%s] Seed finished at %s (elapsed: %s)\n",
 			info.Name, seedEnd.Format(time.RFC3339), seedEnd.Sub(seedStart),
 		)
 	}()
