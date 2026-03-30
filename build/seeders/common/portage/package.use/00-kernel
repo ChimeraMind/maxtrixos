@@ -1,9 +1,9 @@
 sys-kernel/installkernel grub dracut
 sys-fs/lvm2 lvm thin
 dev-util/ostree grub dracut
-sys-kernel/gentoo-kernel initramfs ostree
+sys-kernel/matrixos-kconfig slim-initramfs
 sys-kernel/matrixos-kernel initramfs ostree modules-compress
-sys-kernel/matrixos-initramfs initramfs ostree modules-compress
+sys-kernel/matrixos-initramfs initramfs ostree modules-compress slim-initramfs
 sys-boot/grub mount secureboot
 sys-apps/fwupd amdgpu lzma nvme synaptics tpm uefi gnutls
 sys-fs/squashfs-tools lzma lzo
