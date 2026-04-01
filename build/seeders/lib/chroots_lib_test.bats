@@ -175,16 +175,22 @@ teardown() {
 # --- try_get_emerge_jobs_flags ---
 
 @test "try_get_emerge_jobs_flags returns --jobs and --load-average" {
-    run chroots_lib.try_get_emerge_jobs_flags
+    run chroots_lib.try_get_emerge_jobs_flags 4
     [ "$status" -eq 0 ]
-    [[ "$output" == *"--jobs="* ]]
-    [[ "$output" == *"--load-average="* ]]
+    [[ "$output" == *"--jobs=4"* ]]
+    [[ "$output" == *"--load-average=4"* ]]
+}
+
+@test "try_get_emerge_jobs_flags returns empty when num_procs is empty" {
+    run chroots_lib.try_get_emerge_jobs_flags ""
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
 }
 
 # --- emerge_common_args ---
 
 @test "emerge_common_args includes expected flags" {
-    run chroots_lib.emerge_common_args
+    run chroots_lib.emerge_common_args 4
     [ "$status" -eq 0 ]
     [[ "$output" == *"--buildpkg"* ]]
     [[ "$output" == *"--usepkg"* ]]
@@ -192,21 +198,21 @@ teardown() {
     [[ "$output" == *"--verbose"* ]]
     [[ "$output" == *"--binpkg-respect-use=y"* ]]
     [[ "$output" == *"--quiet-build=y"* ]]
-    [[ "$output" == *"--jobs="* ]]
+    [[ "$output" == *"--jobs=4"* ]]
 }
 
 # --- emerge_common_rebuild_args ---
 
 @test "emerge_common_rebuild_args includes expected flags" {
-    run chroots_lib.emerge_common_rebuild_args
+    run chroots_lib.emerge_common_rebuild_args 4
     [ "$status" -eq 0 ]
     [[ "$output" == *"--quiet-build=y"* ]]
     [[ "$output" == *"--verbose"* ]]
-    [[ "$output" == *"--jobs="* ]]
+    [[ "$output" == *"--jobs=4"* ]]
 }
 
 @test "emerge_common_rebuild_args does not include --buildpkg" {
-    run chroots_lib.emerge_common_rebuild_args
+    run chroots_lib.emerge_common_rebuild_args 4
     [ "$status" -eq 0 ]
     [[ "$output" != *"--buildpkg"* ]]
 }

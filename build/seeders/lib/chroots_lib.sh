@@ -395,7 +395,7 @@ chroots_lib.try_get_cgroup_memory_max() {
     echo "${num_gib}"
 }
 
-chroots_lib.try_get_emerge_jobs_flags() {
+chroots_lib._try_get_procs() {
     # Prefer cpuset (reflects pinned cores via nproc) over cpu.max
     # (bandwidth throttling).  Fall back to nproc if neither is set.
     local num_procs=
@@ -432,12 +432,17 @@ chroots_lib.try_get_emerge_jobs_flags() {
             num_gib_procs=$(( num_gib_procs + 1 ))
         fi
         if [ "${num_gib_procs}" -lt "${num_procs}" ]; then
-            echo "WARNING: Limiting emerge jobs to ${num_gib_procs} based on available memory (${num_gib} GiB)." >&2
+            echo "Limiting emerge jobs to ${num_gib_procs} based on available memory (${num_gib} GiB)." >&2
             num_procs="${num_gib_procs}"
         fi
         echo "Determined emerge jobs flags: --jobs=${num_procs} --load-average=${num_procs}" >&2
     fi
 
+    echo "${num_procs}"
+}
+
+chroots_lib.try_get_emerge_jobs_flags() {
+    local num_procs="${1}"
     local flags=()
     if [ -n "${num_procs}" ]; then
         flags+=(
@@ -449,8 +454,10 @@ chroots_lib.try_get_emerge_jobs_flags() {
 }
 
 chroots_lib.emerge_common_args() {
+    local num_procs="${1}"
+
     local jobs_flags
-    read -ra jobs_flags <<< "$(chroots_lib.try_get_emerge_jobs_flags)"
+    read -ra jobs_flags <<< "$(chroots_lib.try_get_emerge_jobs_flags "${num_procs}")"
     local args=(
         --binpkg-respect-use=y
         --buildpkg
@@ -463,8 +470,10 @@ chroots_lib.emerge_common_args() {
 }
 
 chroots_lib.emerge_common_rebuild_args() {
+    local num_procs="${1}"
+
     local jobs_flags
-    read -ra jobs_flags <<< "$(chroots_lib.try_get_emerge_jobs_flags)"
+    read -ra jobs_flags <<< "$(chroots_lib.try_get_emerge_jobs_flags "${num_procs}")"
     local args=(
         --quiet-build=y
         --verbose
@@ -473,21 +482,27 @@ chroots_lib.emerge_common_rebuild_args() {
 }
 
 chroots_lib.generic_build() {
-    env-update
+    if [ -z "${NO_ENV_UPDATE:-}" ]; then
+        env-update
+    fi
+    local num_procs=$(chroots_lib._try_get_procs)
+
     local common_args
-    read -ra common_args <<< "$(chroots_lib.emerge_common_args)"
+    read -ra common_args <<< "$(chroots_lib.emerge_common_args "${num_procs}")"
 
     echo ">> emerge" "${common_args[@]}" "${@}"
-    emerge "${common_args[@]}" "${@}"
+    MAKEOPTS="-j${num_procs} -l${num_procs}" emerge "${common_args[@]}" "${@}"
 }
 
 chroots_lib.generic_forced_rebuild() {
     env-update
+    local num_procs=$(chroots_lib._try_get_procs)
+
     local common_args
-    read -ra common_args <<< "$(chroots_lib.emerge_common_rebuild_args)"
+    read -ra common_args <<< "$(chroots_lib.emerge_common_rebuild_args "${num_procs}")"
 
     echo ">> emerge (forcing rebuild)" "${common_args[@]}" "${@}"
-    emerge "${common_args[@]}" "${@}"
+    MAKEOPTS="-j${num_procs} -l${num_procs}" emerge "${common_args[@]}" "${@}"
 }
 
 chroots_lib.clean_old_distfiles() {
