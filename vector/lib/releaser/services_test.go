@@ -3,14 +3,12 @@ package releaser
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"matrixos/vector/lib/config"
-	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/runner"
 	"matrixos/vector/lib/validation"
@@ -164,6 +162,110 @@ func TestParseServicesFile_WhitespaceVariations(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// buildServicesScript
+// ---------------------------------------------------------------------------
+
+func TestBuildServicesScript_FullScript(t *testing.T) {
+	script, err := buildServicesScript(buildServicesScriptOptions{
+		enable:        []string{"sshd.service", "NetworkManager.service"},
+		disable:       []string{"bluetooth.service"},
+		mask:          []string{"cups.service"},
+		presetEnable:  []string{"pipewire.socket"},
+		presetDisable: []string{"tracker.service"},
+		presetMask:    []string{"avahi.service"},
+		defaultTarget: "graphical.target",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Must start with shebang and set -e.
+	if !strings.HasPrefix(script, "#!/bin/bash\nset -e\n") {
+		t.Error("script missing shebang or set -e")
+	}
+
+	expectations := []string{
+		"systemctl enable sshd.service NetworkManager.service",
+		"systemctl disable bluetooth.service",
+		"systemctl mask cups.service",
+		"systemctl --global enable pipewire.socket",
+		"systemctl --global disable tracker.service",
+		"systemctl --global mask avahi.service",
+		"systemctl set-default graphical.target",
+	}
+	for _, want := range expectations {
+		if !strings.Contains(script, want) {
+			t.Errorf("script missing %q", want)
+		}
+	}
+}
+
+func TestBuildServicesScript_Empty(t *testing.T) {
+	script, err := buildServicesScript(buildServicesScriptOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if script != "" {
+		t.Errorf("expected empty script, got %q", script)
+	}
+}
+
+func TestBuildServicesScript_InvalidServiceName(t *testing.T) {
+	tests := []struct {
+		name string
+		svc  string
+	}{
+		{"semicolon", "sshd.service; rm -rf /"},
+		{"backtick", "`evil`"},
+		{"dollar", "${HOME}"},
+		{"pipe", "sshd|cat"},
+		{"space", "sshd .service"},
+		{"slash", "../etc/passwd"},
+		{"newline", "sshd\n.service"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := buildServicesScript(buildServicesScriptOptions{
+				enable: []string{tt.svc},
+			})
+			if err == nil {
+				t.Fatalf("expected error for %q, got nil", tt.svc)
+			}
+			if !strings.Contains(err.Error(), "invalid service") {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestBuildServicesScript_ValidSpecialNames(t *testing.T) {
+	// Systemd allows @, dots, dashes, underscores, backslashes.
+	valid := []string{
+		"getty@tty1.service",
+		"my_service.service",
+		"my-service.timer",
+		`dbus-org.freedesktop.NetworkManager.service`,
+	}
+	opts := buildServicesScriptOptions{
+		enable: valid,
+	}
+	_, err := buildServicesScript(opts)
+	if err != nil {
+		t.Fatalf("unexpected error for valid names: %v", err)
+	}
+}
+
+func TestBuildServicesScript_InvalidDefaultTarget(t *testing.T) {
+	opts := buildServicesScriptOptions{
+		defaultTarget: "graphical.target; echo pwned",
+	}
+	_, err := buildServicesScript(opts)
+	if err == nil {
+		t.Fatal("expected error for invalid default target, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // SetupHostname
 // ---------------------------------------------------------------------------
 
@@ -178,12 +280,12 @@ func TestSetupHostname_HappyPath(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     imageDir,
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       imageDir,
 	}
 
 	if err := r.SetupHostname(); err != nil {
@@ -208,12 +310,12 @@ func TestSetupHostname_HostnameConfigError(t *testing.T) {
 	// Missing Releaser.Hostname key → error.
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
 	}
 
 	if err := r.SetupHostname(); err == nil {
@@ -225,12 +327,12 @@ func TestSetupHostname_ErrConfigPropagates(t *testing.T) {
 	wantErr := errors.New("cfg broken")
 	cfg := &config.ErrConfig{Err: wantErr}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
 	}
 
 	err := r.SetupHostname()
@@ -249,12 +351,12 @@ func TestSetupHostname_WriteFailsNoEtcDir(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     imageDir,
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       imageDir,
 	}
 
 	if err := r.SetupHostname(); err == nil {
@@ -274,12 +376,12 @@ func TestSetupHostname_OverwritesExistingFile(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     imageDir,
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       imageDir,
 	}
 
 	if err := r.SetupHostname(); err != nil {
@@ -299,17 +401,83 @@ func TestSetupServices_HooksDirError(t *testing.T) {
 	// Missing Releaser.HooksDir → error.
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "origin/matrixos"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "origin/matrixos",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "origin/matrixos"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
+		ref:            "origin/matrixos",
 	}
 
 	if err := r.SetupServices(); err == nil {
 		t.Fatal("expected error for missing HooksDir config, got nil")
+	}
+}
+
+func TestSetupServices_HappyPath(t *testing.T) {
+	imageDir := t.TempDir()
+	os.MkdirAll(filepath.Join(imageDir, "tmp"), 0o755)
+
+	hooksDir := t.TempDir()
+	svcFile := filepath.Join(hooksDir, "myref.conf")
+	content := `enable sshd.service NetworkManager.service
+disable bluetooth.service
+mask cups.service
+preset-enable pipewire.socket
+set-default graphical.target
+`
+	os.WriteFile(svcFile, []byte(content), 0o644)
+
+	devDir := t.TempDir()
+	// The chroot method checks for build/init/init.sh.
+	initDir := filepath.Join(devDir, "build", "init")
+	os.MkdirAll(initDir, 0o755)
+	os.WriteFile(filepath.Join(initDir, "init.sh"), nil, 0o755)
+
+	var capturedArgs []string
+	cfg := &config.MockConfig{
+		Items: map[string][]string{
+			"Releaser.HooksDir": {hooksDir},
+			"matrixOS.Root":     {devDir},
+		},
+		Bools: map[string]bool{},
+	}
+	r := &Releaser{
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error {
+			capturedArgs = c.Args
+			return nil
+		}),
+		stdout:   &bytes.Buffer{},
+		stderr:   &bytes.Buffer{},
+		imageDir: imageDir,
+		ref:      "myref",
+	}
+
+	if err := r.SetupServices(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The chroot should have been called with the script path.
+	if len(capturedArgs) != 1 ||
+		capturedArgs[0] != "/tmp/_matrixos_services.sh" {
+		t.Errorf(
+			"chroot args = %v, want [/tmp/_matrixos_services.sh]",
+			capturedArgs,
+		)
+	}
+
+	// The script file should have been cleaned up (defer os.Remove).
+	scriptPath := filepath.Join(imageDir, "tmp", "_matrixos_services.sh")
+	if _, err := os.Stat(scriptPath); err == nil {
+		t.Error("expected script to be removed after execution")
+	}
+
+	out := r.stdout.(*bytes.Buffer).String()
+	if !strings.Contains(out, "Setting up services in a single chroot call") {
+		t.Errorf("expected progress message, got: %s", out)
 	}
 }
 
@@ -323,13 +491,13 @@ func TestSetupServices_NoServicesFile_SkipsGracefully(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
+		ref:            "myref",
 	}
 
 	err := r.SetupServices()
@@ -342,8 +510,6 @@ func TestSetupServices_NoServicesFile_SkipsGracefully(t *testing.T) {
 }
 
 func TestSetupServices_FallbackToServicesSubdir(t *testing.T) {
-	mockMountSyscalls(t)
-
 	// Primary path doesn't exist, but the fallback (parent/services/ref.conf) does.
 	baseDir := t.TempDir()
 	hooksDir := filepath.Join(baseDir, "hooks")
@@ -362,17 +528,17 @@ func TestSetupServices_FallbackToServicesSubdir(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
+		ref:            "myref",
 	}
 
-	// SetupServices will find the fallback file and parse it, then
-	// set up (mocked) chroot mounts and run (mocked) systemctl.
+	// SetupServices will find the fallback file and parse it.
+	// Since the file only contains comments, no chroot call is needed.
 	err := r.SetupServices()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -406,13 +572,13 @@ func TestSetupServices_ParseError(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
+		ref:            "myref",
 	}
 
 	err := r.SetupServices()
@@ -421,14 +587,8 @@ func TestSetupServices_ParseError(t *testing.T) {
 	}
 }
 
-func TestSetupServices_MountSetupFailure(t *testing.T) {
-	// Mock Mount to fail so Setup returns an error.
-	origMount := filesystems.Mount
-	filesystems.Mount = func(source, target, fstype string, flags uintptr, data string) error {
-		return fmt.Errorf("mock mount failure")
-	}
-	t.Cleanup(func() { filesystems.Mount = origMount })
-
+func TestSetupServices_ScriptWriteFailure(t *testing.T) {
+	// imageDir has no tmp/ subdirectory → script write fails.
 	hooksDir := t.TempDir()
 	svcFile := filepath.Join(hooksDir, "myref.conf")
 	os.WriteFile(svcFile, []byte("enable sshd.service\n"), 0o644)
@@ -440,18 +600,21 @@ func TestSetupServices_MountSetupFailure(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(), // no tmp/ inside
+		ref:            "myref",
 	}
 
 	err := r.SetupServices()
 	if err == nil {
-		t.Fatal("expected error from mount Setup, got nil")
+		t.Fatal("expected error from script write, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to write services script") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
@@ -459,13 +622,13 @@ func TestSetupServices_ErrConfigPropagates(t *testing.T) {
 	wantErr := errors.New("cfg broken")
 	cfg := &config.ErrConfig{Err: wantErr}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "ref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "ref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "ref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
+		ref:            "ref",
 	}
 
 	err := r.SetupServices()
@@ -481,13 +644,13 @@ func TestSetupServices_ErrConfigPropagates(t *testing.T) {
 func TestReleaseHook_HooksDirError(t *testing.T) {
 	cfg := &config.MockConfig{Items: map[string][]string{}, Bools: map[string]bool{}}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "ref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "ref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "ref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
+		ref:            "ref",
 	}
 
 	if err := r.ReleaseHook(); err == nil {
@@ -509,13 +672,13 @@ func TestReleaseHook_NoHookFile_SkipsGracefully(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
+		ref:            "myref",
 	}
 
 	err := r.ReleaseHook()
@@ -552,13 +715,13 @@ func TestReleaseHook_ExecutesHookScript(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     imageDir,
-		ref:          "myref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       imageDir,
+		ref:            "myref",
 	}
 
 	if err := r.ReleaseHook(); err != nil {
@@ -601,13 +764,13 @@ func TestReleaseHook_HookScriptFails(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
+		ref:            "myref",
 	}
 
 	err := r.ReleaseHook()
@@ -637,13 +800,13 @@ func TestReleaseHook_HookScriptStdout(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &stdout,
-		stderr:       &stderr,
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &stdout,
+		stderr:         &stderr,
+		imageDir:       t.TempDir(),
+		ref:            "myref",
 	}
 
 	if err := r.ReleaseHook(); err != nil {
@@ -661,13 +824,13 @@ func TestReleaseHook_ErrConfigPropagates(t *testing.T) {
 	wantErr := errors.New("cfg broken")
 	cfg := &config.ErrConfig{Err: wantErr}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "ref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "ref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "ref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
+		ref:            "ref",
 	}
 
 	err := r.ReleaseHook()
@@ -697,13 +860,13 @@ func TestReleaseHook_NonExecutableFile(t *testing.T) {
 		Bools: map[string]bool{},
 	}
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{Ref_: "myref"},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     t.TempDir(),
-		ref:          "myref",
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{Ref_: "myref"},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       t.TempDir(),
+		ref:            "myref",
 	}
 
 	// Even root cannot execute a file with zero execute bits (0o644).
@@ -744,13 +907,13 @@ func TestSetupHostname_WithQA(t *testing.T) {
 	}
 	qa, _ := validation.New(cfg)
 	r := &Releaser{
-		ReleaserConfig: &ReleaserConfig{cfg:          cfg},
-		ostree:       &ostree.MockOstree{},
-		chrootRunner: runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
-		qa:           qa,
-		stdout:       &bytes.Buffer{},
-		stderr:       &bytes.Buffer{},
-		imageDir:     imageDir,
+		ReleaserConfig: &ReleaserConfig{cfg: cfg},
+		ostree:         &ostree.MockOstree{},
+		chrootRunner:   runner.ChrootRunFunc(func(c *runner.ChrootCmd) error { return nil }),
+		qa:             qa,
+		stdout:         &bytes.Buffer{},
+		stderr:         &bytes.Buffer{},
+		imageDir:       imageDir,
 	}
 
 	if err := r.SetupHostname(); err != nil {

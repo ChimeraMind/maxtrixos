@@ -7,11 +7,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/ostree"
+)
+
+// validServiceName matches systemd unit names and targets.
+// Allowed: alphanumeric, dash, underscore, dot, at-sign, backslash.
+var validServiceName = regexp.MustCompile(
+	`^[a-zA-Z0-9@._\\\-]+$`,
 )
 
 func (r *Releaser) SetupHostname() error {
@@ -156,74 +163,122 @@ func (r *Releaser) SetupServices() error {
 				defaultTarget = a.services[len(a.services)-1]
 			}
 		default:
-			r.PrintWarning("Unrecognized action in %s: %s\n", servicesFile, a.action)
+			r.PrintWarning(
+				"Unrecognized action in %s: %s\n",
+				servicesFile, a.action,
+			)
 		}
 	}
 
-	systemctl := func(args ...string) error {
-		systemctlCmd := strings.Join(args, " ")
-		r.Print("Running systemctl %s ...\n", systemctlCmd)
-		// Use "$@" to safely pass arguments without shell interpolation,
-		// preventing injection via malicious service names.
-		// bash -c 'cmd "$@"' -- <args...> passes args as positional params.
-		// The exit $? ensures we return the correct exit code from systemctl and
-		// prevent bash from optimizing the command, making systemctl run as PID 1
-		// and writing to /dev/kmsg instead of our captured stdout/stderr.
-		cmdArgs := []string{"-c", `systemctl "$@"; exit $?`, "--"}
-		cmdArgs = append(cmdArgs, args...)
+	script, err := buildServicesScript(buildServicesScriptOptions{
+		enable:        enable,
+		disable:       disable,
+		mask:          mask,
+		presetEnable:  presetEnable,
+		presetDisable: presetDisable,
+		presetMask:    presetMask,
+		defaultTarget: defaultTarget,
+	})
+	if err != nil {
+		return err
+	}
+	if script == "" {
+		r.Print("No service actions to perform.\n")
+		return nil
+	}
 
-		return r.chroot(
-			nil,
-			"/bin/bash",
-			cmdArgs,
+	r.Print("Setting up services in a single chroot call ...\n")
+
+	// Write the script into the chroot's /tmp so it is accessible
+	// inside the chroot at /tmp/_matrixos_services.sh.
+	scriptName := "_matrixos_services.sh"
+	hostPath := filepath.Join(r.imageDir, "tmp", scriptName)
+	if err := os.WriteFile(hostPath, []byte(script), 0o700); err != nil {
+		return fmt.Errorf(
+			"failed to write services script: %w", err,
+		)
+	}
+	defer os.Remove(hostPath)
+
+	chrootScript := filepath.Join("/tmp", scriptName)
+	return r.chroot(
+		nil,
+		"/bin/bash",
+		[]string{chrootScript},
+	)
+}
+
+type buildServicesScriptOptions struct {
+	enable, disable, mask,
+	presetEnable, presetDisable, presetMask []string
+	defaultTarget string
+}
+
+// buildServicesScript generates a bash script that performs all
+// systemctl operations in one shot. Every service name is validated
+// against validServiceName to prevent command injection.
+func buildServicesScript(opts buildServicesScriptOptions) (string, error) {
+	allNames := make([]string, 0,
+		len(opts.enable)+len(opts.disable)+len(opts.mask)+
+			len(opts.presetEnable)+len(opts.presetDisable)+
+			len(opts.presetMask))
+	allNames = append(allNames, opts.enable...)
+	allNames = append(allNames, opts.disable...)
+	allNames = append(allNames, opts.mask...)
+	allNames = append(allNames, opts.presetEnable...)
+	allNames = append(allNames, opts.presetDisable...)
+	allNames = append(allNames, opts.presetMask...)
+	if opts.defaultTarget != "" {
+		allNames = append(allNames, opts.defaultTarget)
+	}
+
+	for _, n := range allNames {
+		if !validServiceName.MatchString(n) {
+			return "", fmt.Errorf(
+				"invalid service/target name %q", n,
+			)
+		}
+	}
+
+	if len(allNames) == 0 {
+		return "", nil
+	}
+
+	var b strings.Builder
+	b.WriteString("#!/bin/bash\nset -e\n\n")
+
+	writeBlock := func(cmd string, global bool, svcs []string) {
+		if len(svcs) == 0 {
+			return
+		}
+		args := "systemctl"
+		if global {
+			args += " --global"
+		}
+		args += " " + cmd
+		for _, s := range svcs {
+			args += " " + s
+		}
+		fmt.Fprintf(&b, "echo '%s %s ...'\n", cmd, strings.Join(svcs, " "))
+		b.WriteString(args + "\n\n")
+	}
+
+	writeBlock("enable", false, opts.enable)
+	writeBlock("disable", false, opts.disable)
+	writeBlock("mask", false, opts.mask)
+	writeBlock("enable", true, opts.presetEnable)
+	writeBlock("disable", true, opts.presetDisable)
+	writeBlock("mask", true, opts.presetMask)
+
+	if opts.defaultTarget != "" {
+		fmt.Fprintf(&b,
+			"echo 'set-default %s ...'\n"+
+				"systemctl set-default %s\n",
+			opts.defaultTarget, opts.defaultTarget,
 		)
 	}
 
-	for _, svc := range enable {
-		r.Print("Enabling service: %s\n", svc)
-		if err := systemctl("enable", svc); err != nil {
-			return err
-		}
-	}
-	for _, svc := range disable {
-		r.Print("Disabling service: %s\n", svc)
-		if err := systemctl("disable", svc); err != nil {
-			return err
-		}
-	}
-	for _, svc := range mask {
-		r.Print("Masking service: %s\n", svc)
-		if err := systemctl("mask", svc); err != nil {
-			return err
-		}
-	}
-	for _, svc := range presetEnable {
-		r.Print("Preset enabling for service: %s\n", svc)
-		if err := systemctl("--global", "enable", svc); err != nil {
-			return err
-		}
-	}
-	for _, svc := range presetDisable {
-		r.Print("Preset disabling for service: %s\n", svc)
-		if err := systemctl("--global", "disable", svc); err != nil {
-			return err
-		}
-	}
-	for _, svc := range presetMask {
-		r.Print("Preset masking for service: %s\n", svc)
-		if err := systemctl("--global", "mask", svc); err != nil {
-			return err
-		}
-	}
-
-	if defaultTarget != "" {
-		r.Print("Setting default target to: %s\n", defaultTarget)
-		if err := systemctl("set-default", defaultTarget); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return b.String(), nil
 }
 
 func (r *Releaser) ReleaseHook() error {
