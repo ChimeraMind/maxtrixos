@@ -218,6 +218,66 @@ func TestDetectRemotedAndPlainRefs_DifferentRemotesSameBranch(t *testing.T) {
 	}
 }
 
+// --- shortRef unit tests ---
+
+func TestShortRef(t *testing.T) {
+	cmd := &BaseCommand{}
+
+	tests := []struct {
+		name string
+		ref  string
+		want string
+	}{
+		{
+			name: "multi-segment ref",
+			ref:  "matrixos/x86_64/dev/gnome",
+			want: "m/x/d/gnome",
+		},
+		{
+			name: "remoted multi-segment ref",
+			ref:  "origin:matrixos/x86_64/dev/gnome",
+			want: "o:m/x/d/gnome",
+		},
+		{
+			name: "single segment",
+			ref:  "matrixos",
+			want: "matrixos",
+		},
+		{
+			name: "two segments",
+			ref:  "matrixos/x86_64",
+			want: "m/x86_64",
+		},
+		{
+			name: "remoted single segment",
+			ref:  "origin:matrixos",
+			want: "o:matrixos",
+		},
+		{
+			name: "empty ref",
+			ref:  "",
+			want: "",
+		},
+		{
+			name: "different remote prefix",
+			ref:  "upstream:matrixos/x86_64/dev/cosmic",
+			want: "u:m/x/d/cosmic",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cmd.shortRef(tt.ref)
+			if got != tt.want {
+				t.Errorf(
+					"shortRef(%q) = %q, want %q",
+					tt.ref, got, tt.want,
+				)
+			}
+		})
+	}
+}
+
 // --- resolveRefRemote tests ---
 
 func TestResolveRefRemote_PlainRef(t *testing.T) {

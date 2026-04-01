@@ -120,11 +120,18 @@ func (c *BaseCommand) shortRef(ref string) string {
 		remote = fmt.Sprintf("%s:", string(remote[0]))
 	}
 
-	// for each element /, get the first letter.
+	// for each element /, get the first letter unless it's the last
+	// element.
 	parts := strings.Split(ref, "/")
 	var srefs []string
-	for _, part := range parts {
-		if part != "" {
+	for idx, part := range parts {
+		if part == "" {
+			continue
+		}
+
+		if idx == len(parts)-1 {
+			srefs = append(srefs, part)
+		} else {
 			srefs = append(srefs, string(part[0]))
 		}
 	}
