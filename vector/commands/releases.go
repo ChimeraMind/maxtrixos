@@ -1,13 +1,15 @@
 package commands
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"sync"
 	"time"
 
 	"matrixos/vector/lib/filesystems"
-	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/releaser"
 	"matrixos/vector/lib/seeder"
 	"matrixos/vector/lib/validation"
@@ -37,6 +39,9 @@ type ReleasesCommand struct {
 	// Parsed from flags
 	skipSeeders []string
 	onlySeeders []string
+
+	// Mutex for concurrent access to results
+	mu sync.Mutex
 
 	// Results populated during Run().
 	BuiltReleases []string
@@ -173,13 +178,40 @@ func (c *ReleasesCommand) runReleases() error {
 		return err
 	}
 
+	// Read parallelism config.
+	rcfg := releaser.NewReleaserConfig(c.cfg)
+	parallelism, err := rcfg.Parallelism()
+	if err != nil {
+		return fmt.Errorf(
+			"failed to read parallelism config: %w", err,
+		)
+	}
+	if parallelism < 1 {
+		c.sd.Print(
+			"WARNING: Releaser.Parallelism=%d is invalid, assuming 1.\n",
+			parallelism,
+		)
+		parallelism = 1
+	}
+
 	c.sd.Print("Selected release stage: %s\n", c.releaseStage)
+	if parallelism > 1 {
+		c.sd.Print(
+			"Parallel mode: up to %d releases at once.\n",
+			parallelism,
+		)
+	}
 	c.sd.Print(
 		"Will release seeds in the following order:\n",
 	)
 	for _, s := range seeders {
 		c.sd.Print("  %s\n", s.Name)
 	}
+
+	// Context cancelled on SIGINT/SIGTERM via PushCleanup.
+	ctx, cancel := context.WithCancel(context.Background())
+	c.PushCleanup(cancel)
+	defer cancel()
 
 	releaseStart := time.Now()
 	c.sd.Print(
@@ -190,167 +222,42 @@ func (c *ReleasesCommand) runReleases() error {
 		releaseEnd := time.Now()
 		c.sd.Print(
 			"Releasing finished at %s (elapsed: %s)\n",
-			releaseEnd.Format(time.RFC3339), releaseEnd.Sub(releaseStart),
+			releaseEnd.Format(time.RFC3339),
+			releaseEnd.Sub(releaseStart),
 		)
 	}()
 
-	// Release each seeder under its release lock.
-	var released []string
-	for _, info := range seeders {
-		branch, err := c.releaseWorker(info)
-		if err != nil {
-			writerSetup()
-			return fmt.Errorf(
-				"seeder %s release failed: %w", info.Name, err,
-			)
-		}
-		released = append(released, branch)
+	prOpts := &releaser.ParallelReleaseOptions{
+		Seeders:      seeders,
+		Parallelism:  parallelism,
+		ReleaseStage: c.releaseStage,
+		Verbose:      c.verbose,
+		Config:       c.cfg,
+		Ostree:       c.ot,
+		NewStdoutWriter: func(label string) io.Writer {
+			return c.UI.NewStdoutWriter(label)
+		},
+		NewStderrWriter: func(label string) io.Writer {
+			return c.UI.NewStderrWriter(label)
+		},
+		PushCleanup:   c.PushCleanup,
+		FindChrootDir: c.findChrootDir,
+		ShortRef:      c.shortRef,
+		OnReleaseDone: c.recordBuiltRelease,
+	}
+
+	if err := releaser.ParallelRelease(ctx, prOpts); err != nil {
+		writerSetup()
+		return err
 	}
 
 	writerSetup()
-	c.sd.Print("SUCCESS: All builds released to ostree.\n")
-	for _, b := range released {
+	c.sd.Print("SUCCESS: All builds released.\n")
+	for _, b := range c.BuiltReleases {
 		c.sd.Print("  %s\n", b)
 	}
 
 	return nil
-}
-
-// releaseWorker processes a single seeder under an exclusive release lock:
-// 1. Parses seeder params to find the chroot directory.
-// 2. Computes the ostree branch from the seeder name and release stage.
-// 3. Computes the image directory from the chroot directory.
-// 4. Creates a Releaser and runs the full release pipeline.
-// 5. Records the released branch.
-// Returns the released branch name.
-func (c *ReleasesCommand) releaseWorker(info seeder.SeederInfo) (string, error) {
-	seederName := info.Name
-	// The branch short name is the seeder name without the numeric order prefix
-	// (e.g. "00-bedrock" → "bedrock").
-	branchShortname := seeder.SeederNameWithoutOrderPrefix(seederName)
-
-	c.updateStdWriters(seederName)
-	c.PushCleanup(c.FlushPrinters)
-
-	releaseStart := time.Now()
-	c.sd.Print(
-		"[%s] Release started at %s\n",
-		seederName, releaseStart.Format(time.RFC3339),
-	)
-	defer func() {
-		releaseEnd := time.Now()
-		c.sd.Print(
-			"[%s] Release finished at %s (elapsed: %s)\n",
-			seederName,
-			releaseEnd.Format(time.RFC3339),
-			releaseEnd.Sub(releaseStart).Round(time.Second),
-		)
-	}()
-
-	c.sd.Print(
-		"Working on seeder %s, ostree branch short name: %s\n",
-		seederName, branchShortname,
-	)
-
-	// Compute the full ostree branch name from the short name.
-	osName, err := c.ot.OsName()
-	if err != nil {
-		return "", fmt.Errorf("failed to get OS name: %w", err)
-	}
-	arch, err := c.ot.Arch()
-	if err != nil {
-		return "", fmt.Errorf("failed to get arch: %w", err)
-	}
-	branch, err := ostree.BranchShortnameToNormal(
-		c.releaseStage, branchShortname, osName, arch,
-	)
-	if err != nil {
-		return "", fmt.Errorf(
-			"unable to find ostree branch for %s: %w",
-			branchShortname, err,
-		)
-	}
-
-	c.sd.Print("Determined ostree branch to be: %s\n", branch)
-
-	// Set up release-specific styled writers.
-	relStdout := c.NewStdoutWriter(
-		fmt.Sprintf("release:%s", c.shortRef(branch)),
-	)
-	relStderr := c.NewStderrWriter(
-		fmt.Sprintf("release:%s", c.shortRef(branch)),
-	)
-	defer relStdout.Flush()
-	defer relStderr.Flush()
-
-	// Set up ostree for this branch.
-	c.ot.SetStdout(relStdout)
-	c.ot.SetStderr(relStderr)
-	c.ot.SetVerbose(false)
-	c.ot.SetRef(branch)
-
-	// Create the releaser instance.
-	opts := &releaser.NewReleaserOptions{
-		Ref:     branch,
-		Verbose: c.verbose,
-	}
-	rel, err := releaser.NewReleaser(c.cfg, c.ot, opts)
-	if err != nil {
-		return "", fmt.Errorf(
-			"failed to initialize releaser: %w", err,
-		)
-	}
-	rel.SetStdout(relStdout)
-	rel.SetStderr(relStderr)
-
-	// Run the entire release pipeline under an exclusive release lock
-	// (mirrors bash release_lib.execute_with_release_lock).
-	err = rel.ExecuteWithReleaseLock(func() error {
-		c.PushCleanup(func() {
-			rel.Cleanup()
-			relStdout.Flush()
-			relStderr.Flush()
-		})
-
-		// Locate the chroot directory from seeder params.
-		chrootDir, err := c.findChrootDir(info)
-		if err != nil {
-			return err
-		}
-		c.sd.Print(
-			"Selected chroot dir: %s for seeder: %s\n",
-			chrootDir, seederName,
-		)
-		rel.SetChrootDir(chrootDir)
-
-		// Compute image directory.
-		imageDir := chrootDirForImageDir(chrootDir)
-		if err := os.MkdirAll(imageDir, 0755); err != nil {
-			return fmt.Errorf(
-				"failed to create image dir %s: %w", imageDir, err,
-			)
-		}
-		rel.SetImageDir(imageDir)
-
-		if err := rel.Build(); err != nil {
-			return err
-		}
-
-		rel.Print(
-			"Released filesystem to ostree as branch: %s.\n",
-			branch,
-		)
-
-		// Record the released branch.
-		if err := c.recordBuiltRelease(branch); err != nil {
-			return fmt.Errorf(
-				"failed to record built release: %w", err,
-			)
-		}
-
-		return nil
-	})
-	return branch, err
 }
 
 // --- Helper methods ---
@@ -380,9 +287,9 @@ func (c *ReleasesCommand) findChrootDir(info seeder.SeederInfo) (string, error) 
 }
 
 // chrootDirForImageDir computes the image directory path from a chroot
-// directory, mirroring the bash chroot_dir_for_image_dir function.
+// directory.  Delegates to the releaser library.
 func chrootDirForImageDir(chrootDir string) string {
-	return chrootDir + ".ostree_rootfs"
+	return releaser.ChrootDirForImageDir(chrootDir)
 }
 
 // skipFilter returns a SeederFilterFunc that skips seeders present in
@@ -421,7 +328,11 @@ func (c *ReleasesCommand) initBuiltReleasesFile() error {
 
 // recordBuiltRelease appends the given branch to the built-releases
 // output file if the corresponding flag was provided.
+// It is safe for concurrent use.
 func (c *ReleasesCommand) recordBuiltRelease(branch string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.BuiltReleases = append(c.BuiltReleases, branch)
 
 	if c.builtReleasesFile == "" {

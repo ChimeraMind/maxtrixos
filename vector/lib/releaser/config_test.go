@@ -171,3 +171,47 @@ func TestGenerateStaticDeltas_PropagatesError(t *testing.T) {
 		t.Errorf("got error %v, want %v", err, wantErr)
 	}
 }
+
+func TestParallelism_Default(t *testing.T) {
+	r := newTestReleaser()
+	got, err := r.Parallelism()
+	if err != nil {
+		t.Fatalf("Parallelism: %v", err)
+	}
+	if got != 1 {
+		t.Errorf("Parallelism = %d, want 1", got)
+	}
+}
+
+func TestParallelism_Set(t *testing.T) {
+	r := newTestReleaser()
+	r.cfg.(*config.MockConfig).Items["Releaser.Parallelism"] = []string{"4"}
+	got, err := r.Parallelism()
+	if err != nil {
+		t.Fatalf("Parallelism: %v", err)
+	}
+	if got != 4 {
+		t.Errorf("Parallelism = %d, want 4", got)
+	}
+}
+
+func TestParallelism_InvalidValue(t *testing.T) {
+	r := newTestReleaser()
+	r.cfg.(*config.MockConfig).Items["Releaser.Parallelism"] = []string{"notanumber"}
+	_, err := r.Parallelism()
+	if err == nil {
+		t.Fatal("expected error for invalid parallelism, got nil")
+	}
+}
+
+func TestParallelism_NegativeValue(t *testing.T) {
+	r := newTestReleaser()
+	r.cfg.(*config.MockConfig).Items["Releaser.Parallelism"] = []string{"-1"}
+	got, err := r.Parallelism()
+	if err != nil {
+		t.Fatalf("Parallelism: %v", err)
+	}
+	if got != 1 {
+		t.Errorf("Parallelism = %d, want 1 (clamped)", got)
+	}
+}
