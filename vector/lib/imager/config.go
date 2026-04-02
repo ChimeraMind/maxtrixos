@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
 
 	"matrixos/vector/lib/config"
 )
@@ -165,4 +166,26 @@ func (c *ImagerConfig) Productionize() (bool, error) {
 
 func (c *ImagerConfig) ImageTests() (bool, error) {
 	return c.cfg.GetBool("Imager.ImageTests")
+}
+
+// Parallelism returns the maximum number of images to build
+// in parallel.  Defaults to 1 (sequential) if not set or invalid.
+func (c *ImagerConfig) Parallelism() (int, error) {
+	v, err := c.cfg.GetItem("Imager.Parallelism")
+	if err != nil {
+		return 1, nil
+	}
+	if v == "" {
+		return 1, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"invalid Imager.Parallelism %q: %w", v, err,
+		)
+	}
+	if n < 1 {
+		return 1, nil
+	}
+	return n, nil
 }
