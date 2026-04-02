@@ -2,12 +2,16 @@ package ostree
 
 import (
 	"fmt"
+	"io"
 	"matrixos/vector/lib/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 	"matrixos/vector/lib/runner"
 )
 
@@ -757,4 +761,177 @@ func TestGpgIntegration(t *testing.T) {
 			t.Errorf("args[1] = %q, want --gpg-homedir=...", args[1])
 		}
 	})
+}
+
+// concurrencyRunner returns a mock runner that tracks the maximum number
+// of concurrent executions.  Each invocation holds for the given
+// duration to create a window where overlap would be detected.
+func concurrencyRunner(hold time.Duration, maxConcurrent *atomic.Int32) runner.Func {
+	var active atomic.Int32
+	return func(cmd *runner.Cmd) error {
+		n := active.Add(1)
+		defer active.Add(-1)
+		// Record the high-water mark.
+		for {
+			cur := maxConcurrent.Load()
+			if n <= cur || maxConcurrent.CompareAndSwap(cur, n) {
+				break
+			}
+		}
+		time.Sleep(hold)
+		return nil
+	}
+}
+
+func TestImportGpgKey_Serialized(t *testing.T) {
+	tmpDir := t.TempDir()
+	keyFile := filepath.Join(tmpDir, "key.asc")
+	if err := os.WriteFile(keyFile, []byte("key data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var maxConcurrent atomic.Int32
+	mockRun := concurrencyRunner(50*time.Millisecond, &maxConcurrent)
+
+	const workers = 8
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			cfg := &config.MockConfig{
+				Items: map[string][]string{
+					"Ostree.DevGpgHomeDir": {filepath.Join(tmpDir, "gpg")},
+				},
+			}
+			o, err := NewOstree(NewOstreeOptions{Config: cfg})
+			if err != nil {
+				t.Errorf("NewOstree failed: %v", err)
+				return
+			}
+			o.runner = mockRun
+			if err := o.ImportGpgKey(keyFile); err != nil {
+				t.Errorf("ImportGpgKey failed: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if mc := maxConcurrent.Load(); mc > 1 {
+		t.Errorf("ImportGpgKey allowed %d concurrent executions, want 1", mc)
+	}
+}
+
+func TestKillGpgDaemons_Serialized(t *testing.T) {
+	var maxConcurrent atomic.Int32
+	mockRun := concurrencyRunner(50*time.Millisecond, &maxConcurrent)
+
+	const workers = 8
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			KillGpgDaemons(mockRun, "/tmp/test-gpg", io.Discard, io.Discard)
+		}()
+	}
+	wg.Wait()
+
+	if mc := maxConcurrent.Load(); mc > 1 {
+		t.Errorf("KillGpgDaemons allowed %d concurrent executions, want 1", mc)
+	}
+}
+
+func TestInitializeRemoteSigningGpg_Serialized(t *testing.T) {
+	tmpDir := t.TempDir()
+	keyFile := filepath.Join(tmpDir, "key.asc")
+	if err := os.WriteFile(keyFile, []byte("key data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var maxConcurrent atomic.Int32
+	mockRun := concurrencyRunner(50*time.Millisecond, &maxConcurrent)
+
+	const workers = 8
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			cfg := &config.MockConfig{
+				Items: map[string][]string{
+					"Ostree.GpgPrivateKey":        {keyFile},
+					"Ostree.GpgPublicKey":         {keyFile},
+					"Ostree.GpgOfficialPublicKey": {keyFile},
+				},
+			}
+			o, err := NewOstree(NewOstreeOptions{Config: cfg})
+			if err != nil {
+				t.Errorf("NewOstree failed: %v", err)
+				return
+			}
+			o.runner = mockRun
+			if err := o.initializeRemoteSigningGpg("origin", "/repo"); err != nil {
+				t.Errorf("initializeRemoteSigningGpg failed: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if mc := maxConcurrent.Load(); mc > 1 {
+		t.Errorf("initializeRemoteSigningGpg allowed %d concurrent executions, want 1", mc)
+	}
+}
+
+func TestGpgMutex_CrossFunction(t *testing.T) {
+	tmpDir := t.TempDir()
+	keyFile := filepath.Join(tmpDir, "key.asc")
+	if err := os.WriteFile(keyFile, []byte("key data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var maxConcurrent atomic.Int32
+	mockRun := concurrencyRunner(50*time.Millisecond, &maxConcurrent)
+
+	// Mix ImportGpgKey, KillGpgDaemons, and initializeRemoteSigningGpg
+	// concurrently to verify they all share the same mutex.
+	const workers = 12
+	var wg sync.WaitGroup
+	wg.Add(workers)
+
+	for i := 0; i < workers; i++ {
+		fn := i % 3
+		go func() {
+			defer wg.Done()
+			switch fn {
+			case 0:
+				cfg := &config.MockConfig{
+					Items: map[string][]string{
+						"Ostree.DevGpgHomeDir": {filepath.Join(tmpDir, "gpg")},
+					},
+				}
+				o, _ := NewOstree(NewOstreeOptions{Config: cfg})
+				o.runner = mockRun
+				_ = o.ImportGpgKey(keyFile)
+			case 1:
+				KillGpgDaemons(mockRun, "/tmp/test-gpg", io.Discard, io.Discard)
+			case 2:
+				cfg := &config.MockConfig{
+					Items: map[string][]string{
+						"Ostree.GpgPrivateKey":        {keyFile},
+						"Ostree.GpgPublicKey":         {keyFile},
+						"Ostree.GpgOfficialPublicKey": {keyFile},
+					},
+				}
+				o, _ := NewOstree(NewOstreeOptions{Config: cfg})
+				o.runner = mockRun
+				_ = o.initializeRemoteSigningGpg("origin", "/repo")
+			}
+		}()
+	}
+	wg.Wait()
+
+	if mc := maxConcurrent.Load(); mc > 1 {
+		t.Errorf("cross-function GPG calls allowed %d concurrent executions, want 1", mc)
+	}
 }
