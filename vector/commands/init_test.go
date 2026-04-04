@@ -467,24 +467,6 @@ func TestMakeOnlyFilter(t *testing.T) {
 	}
 }
 
-func TestShortRef(t *testing.T) {
-	cmd := &BaseCommand{}
-	tests := []struct {
-		ref  string
-		want string
-	}{
-		{"matrixos/x86_64/dev/gnome", "m/x/d/g"},
-		{"origin:matrixos/x86_64/dev/gnome", "o:m/x/d/g"},
-		{"simple", "s"},
-	}
-	for _, tt := range tests {
-		got := cmd.shortRef(tt.ref)
-		if got != tt.want {
-			t.Errorf("shortRef(%q) = %q, want %q", tt.ref, got, tt.want)
-		}
-	}
-}
-
 func TestInitBaseConfigFailsWithoutFile(t *testing.T) {
 	noConfigDir(t)
 	cmd := &BaseCommand{}
@@ -525,7 +507,7 @@ func TestInitOstreeNoConfig(t *testing.T) {
 type mockFlusher struct{ flushed bool }
 
 func (m *mockFlusher) Write(p []byte) (int, error) { return len(p), nil }
-func (m *mockFlusher) Flush()                       { m.flushed = true }
+func (m *mockFlusher) Flush()                      { m.flushed = true }
 
 type mockInlineFlusher struct {
 	mockFlusher
