@@ -215,7 +215,9 @@ func (c *ImagesCommand) imageWorker(ref string) error {
 		imageEnd := time.Now()
 		c.Printf(
 			"[%s] Imaging finished at %s (elapsed: %s)\n",
-			ref, imageEnd.Format(time.RFC3339), imageEnd.Sub(imageStart),
+			ref,
+			imageEnd.Format(time.RFC3339),
+			imageEnd.Sub(imageStart).Round(time.Second),
 		)
 	}()
 

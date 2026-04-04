@@ -228,7 +228,9 @@ func (c *ReleasesCommand) releaseWorker(info seeder.SeederInfo) (string, error) 
 		releaseEnd := time.Now()
 		c.sd.Print(
 			"[%s] Release finished at %s (elapsed: %s)\n",
-			seederName, releaseEnd.Format(time.RFC3339), releaseEnd.Sub(releaseStart),
+			seederName,
+			releaseEnd.Format(time.RFC3339),
+			releaseEnd.Sub(releaseStart).Round(time.Second),
 		)
 	}()
 
