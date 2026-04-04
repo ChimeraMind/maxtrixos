@@ -11,9 +11,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"matrixos/vector/lib/runner"
 )
+
+// gpgMu serialises operations that invoke the gpg binary for key
+// import or daemon management.  The gpg binary does not handle
+// concurrent invocations safely.
+var gpgMu sync.Mutex
 
 // KillGpgDaemons kills any gpg-agent, dirmngr, and scdaemon processes
 // associated with the given GPG homedir. This prevents leftover daemon
@@ -22,6 +28,8 @@ func KillGpgDaemons(run runner.Func, homeDir string, stdout, stderr io.Writer) {
 	if homeDir == "" {
 		return
 	}
+	gpgMu.Lock()
+	defer gpgMu.Unlock()
 	_ = run(&runner.Cmd{
 		Name:   "gpgconf",
 		Args:   []string{"--homedir", homeDir, "--kill", "all"},
@@ -183,6 +191,8 @@ func (o *Ostree) ImportGpgKey(keyPath string) error {
 		return err
 	}
 
+	gpgMu.Lock()
+	defer gpgMu.Unlock()
 	return o.runner(&runner.Cmd{
 		Name:   "gpg",
 		Args:   []string{"--homedir", homeDir, "--batch", "--yes", "--import", keyPath},
@@ -298,7 +308,9 @@ func (o *Ostree) initializeRemoteSigningGpg(remote, repoDir string) error {
 			o.PrintError("WARNING: Remote signing GPG key %s not present, skipping import ...\n", key)
 			continue
 		}
+		gpgMu.Lock()
 		err := o.ostreeRun("--repo="+repoDir, "remote", "gpg-import", remote, "-k", key)
+		gpgMu.Unlock()
 		if err != nil {
 			return fmt.Errorf("failed to import gpg key %s to remote %s: %w", key, remote, err)
 		}
