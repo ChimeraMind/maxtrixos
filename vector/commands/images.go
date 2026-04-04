@@ -1,13 +1,14 @@
 package commands
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"time"
 
-	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/imager"
+	"matrixos/vector/lib/ostree"
 	"matrixos/vector/lib/releaser"
 	"matrixos/vector/lib/validation"
 )
@@ -143,7 +144,10 @@ func (c *ImagesCommand) onlyFilter() releaser.RefFilterFunc {
 
 // runImages implements the main images building logic.
 func (c *ImagesCommand) runImages() error {
-	c.SetupPrinters("images:all")
+	writerSetup := func() {
+		c.SetupPrinters("images:all")
+	}
+	writerSetup()
 	defer c.FlushPrinters()
 
 	c.ot.SetStdout(c.StdoutWriter())
@@ -166,31 +170,14 @@ func (c *ImagesCommand) runImages() error {
 		return fmt.Errorf("No release refs found, detected or surviving the filters.")
 	}
 
-	imageStart := time.Now()
-	c.Printf(
-		"Images building started at %s\n",
-		imageStart.Format(time.RFC3339),
-	)
-	defer func() {
-		imageEnd := time.Now()
-		c.Printf(
-			"Images building finished at %s (elapsed: %s)\n",
-			imageEnd.Format(time.RFC3339), imageEnd.Sub(imageStart),
-		)
-	}()
-
-	// Important note: here we have 3 cases.
-	// 1) on build server. Branches have no remote: prefix.
-	// 2) on "client server", user just building images away from
-	//    the mothership (client side). Branches have remote:a/b/c (remote: prefix)
-	// 3) on images only build server, where ostree repo is pulled from a remote.
-	// Case 2 and 3 are fine, we use the remote prefix and happy days.
-	// For case 1, we detect this from the absence of the remote: prefix and set remote="local".
-	var released []string
+	// Filter full-suffixed branches before parallel execution.
+	var filteredRefs []string
 	for _, ref := range refs {
-		// Skip full-suffixed branches unless explicitly included.
-		c.ot.SetRef(ref)
-		isFull, err := c.ot.IsBranchFullSuffixed()
+		ot, err := c.ot.CloneForRef(ref)
+		if err != nil {
+			return fmt.Errorf("failed to clone ostree for ref %s: %w", ref, err)
+		}
+		isFull, err := ot.IsBranchFullSuffixed()
 		if err != nil {
 			return fmt.Errorf("failed to check full branch suffix for %s: %w", ref, err)
 		}
@@ -199,14 +186,127 @@ func (c *ImagesCommand) runImages() error {
 				"Skipping full branch: %s (use --include-full-branches to include)\n", ref)
 			continue
 		}
-
-		c.Printf("Working on release branch: %s ...\n", ref)
-		if err := c.imageWorker(ref); err != nil {
-			return fmt.Errorf("image build failed for ref %s: %w", ref, err)
-		}
-		released = append(released, ref)
+		filteredRefs = append(filteredRefs, ref)
 	}
 
+	if len(filteredRefs) == 0 {
+		c.PrintErr("No release refs remaining after filtering.")
+		return fmt.Errorf("no release refs remaining after filtering")
+	}
+
+	// Fail fast on bad params.
+	icfg := imager.NewImagerConfig(c.cfg)
+	if err := failFastChecks(c.ot, icfg); err != nil {
+		return err
+	}
+
+	// Read parallelism config.
+	parallelism, err := icfg.Parallelism()
+	if err != nil {
+		return fmt.Errorf("failed to read parallelism config: %w", err)
+	}
+	if parallelism < 1 {
+		c.Printf(
+			"WARNING: Imager.Parallelism=%d is invalid, assuming 1.\n",
+			parallelism,
+		)
+		parallelism = 1
+	}
+	if parallelism > 1 {
+		c.Printf(
+			"Parallel mode: up to %d images at once.\n",
+			parallelism,
+		)
+	}
+
+	// Detect ambiguous local refs once before parallel execution.
+	if err := c.detectRemotedAndPlainRefs(func(format string, args ...any) {
+		fmt.Fprintf(c.StderrWriter(), format, args...)
+	}); err != nil {
+		return err
+	}
+
+	// Important note: here we have 3 cases.
+	// 1) on build server. Branches have no remote: prefix.
+	// 2) on "client server", user just building images away from
+	//    the mothership (client side). Branches have remote:a/b/c (remote: prefix)
+	// 3) on images only build server, where ostree repo is pulled from a remote.
+	// Case 2 and 3 are fine, we use the remote prefix and happy days.
+	// For case 1, we detect this from the absence of the remote: prefix and set remote="local".
+	//
+	// Resolve remote prefixes sequentially before parallel execution
+	// to avoid concurrent writes to the shared config overlay.
+	var resolvedRefs []string
+	for _, ref := range filteredRefs {
+		rr, err := c.resolveRefRemote(ref, func(format string, args ...any) {
+			fmt.Fprintf(c.StderrWriter(), format, args...)
+		})
+		if err != nil {
+			return err
+		}
+		resolvedRefs = append(resolvedRefs, rr.Ref)
+	}
+
+	imageStart := time.Now()
+	c.Printf("Images building started at %s\n", imageStart.Format(time.RFC3339))
+	defer func() {
+		imageEnd := time.Now()
+		c.Printf(
+			"Images building finished at %s (elapsed: %s)\n",
+			imageEnd.Format(time.RFC3339), imageEnd.Sub(imageStart),
+		)
+	}()
+
+	c.Printf("Will image the following refs:\n")
+	for _, ref := range resolvedRefs {
+		c.Printf("  %s\n", ref)
+	}
+
+	// Context cancelled on SIGINT/SIGTERM via PushCleanup.
+	ctx, cancel := context.WithCancel(context.Background())
+	c.PushCleanup(cancel)
+	defer cancel()
+
+	var released []string
+
+	piOpts := &imager.ParallelImageOptions{
+		Refs:        resolvedRefs,
+		Parallelism: parallelism,
+		Config:      c.cfg,
+		NewStdoutWriter: func(label string) io.Writer {
+			return c.UI.NewStdoutWriter(label)
+		},
+		NewStderrWriter: func(label string) io.Writer {
+			return c.UI.NewStderrWriter(label)
+		},
+		PushCleanup: c.PushCleanup,
+		ShortRef:    c.shortRef,
+		OnImageDone: func(ref string) error {
+			released = append(released, ref)
+			return nil
+		},
+		SetupBuild: func(pushCleanup func(func()), ot ostree.IOstree, im imager.IImager) error {
+			if err := ot.MaybeInitializeRemote(); err != nil {
+				return fmt.Errorf("failed to initialize remote: %w", err)
+			}
+			if err := ot.MaybeInitializeGpg(); err != nil {
+				return fmt.Errorf("failed to initialize GPG: %w", err)
+			}
+			pushCleanup(func() { ot.KillGpgDaemons() })
+
+			if c.localOstree {
+				return c.showLocalRefs(ot, im)
+			}
+			return c.initializeRemoteOstree(ot, im)
+		},
+	}
+
+	if err := imager.ParallelImage(ctx, piOpts); err != nil {
+		writerSetup()
+		return err
+	}
+
+	writerSetup()
 	c.Printf("Successfully built images for %d releases:\n",
 		len(released))
 	for _, r := range released {
@@ -216,133 +316,31 @@ func (c *ImagesCommand) runImages() error {
 	return nil
 }
 
-// imageWorker creates a per-ref imager instance, acquires an image lock,
-// and delegates to the ImageCommand-style image building pipeline.
-func (c *ImagesCommand) imageWorker(ref string) error {
-	imageStart := time.Now()
-	c.Printf(
-		"[%s] Imaging started at %s\n",
-		ref, imageStart.Format(time.RFC3339),
-	)
-	defer func() {
-		imageEnd := time.Now()
-		c.Printf(
-			"[%s] Imaging finished at %s (elapsed: %s)\n",
-			ref,
-			imageEnd.Format(time.RFC3339),
-			imageEnd.Sub(imageStart).Round(time.Second),
-		)
-	}()
-
-	// Create per-ref styled writers.
-	stdoutWriter := c.NewStdoutWriter(fmt.Sprintf("image:%s", c.shortRef(ref)))
-	stderrWriter := c.NewStderrWriter(fmt.Sprintf("image:%s", c.shortRef(ref)))
-
-	// Set up ostree for this ref.
-	c.ot.SetStdout(stdoutWriter)
-	c.ot.SetStderr(stderrWriter)
-	c.ot.SetVerbose(false)
-
-	// Create the fsenc instance.
-	fsenc, err := filesystems.NewFsenc(
-		c.cfg,
-		func(mapperName string) {
-			fmt.Fprintf(stdoutWriter, "Opening encrypted rootfs as %s ...\n", mapperName)
-		},
-		func(mapperName string) {
-			fmt.Fprintf(stdoutWriter, "Closing encrypted rootfs as %s ...\n", mapperName)
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("failed to initialize fsenc: %w", err)
-	}
-
-	// Validate LUKS variables.
-	if err := fsenc.ValidateLuksVariables(); err != nil {
-		return fmt.Errorf("LUKS validation failed: %w", err)
-	}
-
-	// Initialize the imager for this ref.
-	opts := imager.NewImagerOptions{}
-	im, err := imager.NewImager(c.cfg, c.ot, fsenc, &opts)
-	if err != nil {
-		return fmt.Errorf("failed to initialize imager: %w", err)
-	}
-	im.SetStdout(stdoutWriter)
-	im.SetStderr(stderrWriter)
-
-	if err := c.detectRemotedAndPlainRefs(im.PrintError); err != nil {
-		return err
-	}
-
-	// Handle refs that contain the remote prefix (e.g. "origin:matrixos/...").
-	rr, err := c.resolveRefRemote(ref, im.PrintWarning)
-	if err != nil {
-		return err
-	}
-	im.SetRef(rr.Ref)
-	c.ot.SetRef(rr.Ref)
-
-	// Fail fast on bad params.
-	if err := failFastChecks(c.ot, imager.NewImagerConfig(c.cfg)); err != nil {
-		return err
-	}
-
-	buildOpts := &imager.BuildOptions{}
-
-	// Execute the build under an exclusive image lock.
-	return im.ExecuteWithImageLock(func() error {
-		c.PushCleanup(im.Cleanup)
-		c.PushCleanup(fsenc.Cleanup)
-		c.PushCleanup(func() {
-			stdoutWriter.Flush()
-			stderrWriter.Flush()
-		})
-		defer c.RunCleanups()
-
-		if err := c.initGpg(); err != nil {
-			return err
-		}
-		c.PushCleanup(c.killGpg)
-
-		// Initialize ostree for this ref.
-		if c.localOstree {
-			if err := c.showLocalRefs(im); err != nil {
-				return err
-			}
-		} else {
-			if err := c.initializeRemoteOstree(im); err != nil {
-				return err
-			}
-		}
-
-		return im.Build(buildOpts)
-	})
-}
-
 // initializeRemoteOstree sets up the ostree remote and pulls
-// the specified ref.  Mirrors image.go initializeRemoteOstree().
-func (c *ImagesCommand) initializeRemoteOstree(im imager.IImager) error {
-	remote, err := c.ot.Remote()
+// the specified ref.  The ot parameter is the per-worker ostree
+// instance (cloned for parallel safety).
+func (c *ImagesCommand) initializeRemoteOstree(ot ostree.IOstree, im imager.IImager) error {
+	remote, err := ot.Remote()
 	if err != nil {
 		return err
 	}
 
-	if err := c.showRemoteRefs(im); err != nil {
+	if err := c.showRemoteRefs(ot, im); err != nil {
 		return err
 	}
 
 	im.Print("\n%s%sPulling ostree ref %s:%s ...%s\n",
-		c.cBold, c.iconDownload, remote, c.ot.Ref(), c.cReset)
-	if err := c.ot.Pull(); err != nil {
+		c.cBold, c.iconDownload, remote, ot.Ref(), c.cReset)
+	if err := ot.Pull(); err != nil {
 		return fmt.Errorf("ostree pull failed: %w", err)
 	}
 	return nil
 }
 
 // showLocalRefs prints the local ostree refs to the provided printf function.
-func (c *ImagesCommand) showLocalRefs(im imager.IImager) error {
-	refs, err := c.ot.LocalRefs()
+// The ot parameter is the per-worker ostree instance.
+func (c *ImagesCommand) showLocalRefs(ot ostree.IOstree, im imager.IImager) error {
+	refs, err := ot.LocalRefs()
 	if err != nil {
 		return fmt.Errorf("failed to list local refs: %w", err)
 	}
@@ -354,8 +352,9 @@ func (c *ImagesCommand) showLocalRefs(im imager.IImager) error {
 }
 
 // showRemoteRefs prints the remote ostree refs to the provided printf function.
-func (c *ImagesCommand) showRemoteRefs(im imager.IImager) error {
-	refs, err := c.ot.RemoteRefs()
+// The ot parameter is the per-worker ostree instance.
+func (c *ImagesCommand) showRemoteRefs(ot ostree.IOstree, im imager.IImager) error {
+	refs, err := ot.RemoteRefs()
 	if err != nil {
 		return fmt.Errorf("failed to list remote refs: %w", err)
 	}
