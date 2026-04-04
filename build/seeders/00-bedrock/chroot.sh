@@ -70,10 +70,8 @@ bedrock.system_bootstrap() {
     locale-gen
     emerge-webrsync --quiet
 
-    local common_args
-    read -ra common_args <<< "$(chroots_lib.emerge_common_args)"
     # special bootstrapping command, skipping env-update.
-    emerge "${common_args[@]}" "${BOOTSTRAP_PACKAGES[@]}"
+    NO_ENV_UPDATE=1 chroots_lib.generic_build "${BOOTSTRAP_PACKAGES[@]}"
 }
 
 bedrock.buildenv_bootstrap() {
