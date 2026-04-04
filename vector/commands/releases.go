@@ -181,6 +181,19 @@ func (c *ReleasesCommand) runReleases() error {
 		c.sd.Print("  %s\n", s.Name)
 	}
 
+	seedStart := time.Now()
+	c.sd.Print(
+		"Seeding started at %s\n",
+		seedStart.Format(time.RFC3339),
+	)
+	defer func() {
+		seedEnd := time.Now()
+		c.sd.Print(
+			"Seeding finished at %s (elapsed: %s)\n",
+			seedEnd.Format(time.RFC3339), seedEnd.Sub(seedStart),
+		)
+	}()
+
 	// Release each seeder under its release lock.
 	var released []string
 	for _, info := range seeders {

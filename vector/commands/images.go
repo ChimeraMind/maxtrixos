@@ -166,6 +166,19 @@ func (c *ImagesCommand) runImages() error {
 		return fmt.Errorf("No release refs found, detected or surviving the filters.")
 	}
 
+	imageStart := time.Now()
+	c.Printf(
+		"Images building started at %s\n",
+		imageStart.Format(time.RFC3339),
+	)
+	defer func() {
+		imageEnd := time.Now()
+		c.Printf(
+			"Images building finished at %s (elapsed: %s)\n",
+			imageEnd.Format(time.RFC3339), imageEnd.Sub(imageStart),
+		)
+	}()
+
 	// Important note: here we have 3 cases.
 	// 1) on build server. Branches have no remote: prefix.
 	// 2) on "client server", user just building images away from
