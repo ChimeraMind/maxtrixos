@@ -181,16 +181,16 @@ func (c *ReleasesCommand) runReleases() error {
 		c.sd.Print("  %s\n", s.Name)
 	}
 
-	seedStart := time.Now()
+	releaseStart := time.Now()
 	c.sd.Print(
-		"Seeding started at %s\n",
-		seedStart.Format(time.RFC3339),
+		"Releasing started at %s\n",
+		releaseStart.Format(time.RFC3339),
 	)
 	defer func() {
-		seedEnd := time.Now()
+		releaseEnd := time.Now()
 		c.sd.Print(
-			"Seeding finished at %s (elapsed: %s)\n",
-			seedEnd.Format(time.RFC3339), seedEnd.Sub(seedStart),
+			"Releasing finished at %s (elapsed: %s)\n",
+			releaseEnd.Format(time.RFC3339), releaseEnd.Sub(releaseStart),
 		)
 	}()
 
