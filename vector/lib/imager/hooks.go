@@ -10,12 +10,18 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/pms"
 )
+
+// testImageMu serialises TestImage calls across all Imager
+// instances to prevent QEMU resource exhaustion during
+// parallel image builds.
+var testImageMu sync.Mutex
 
 func (im *Imager) GetKernelPath() (string, error) {
 	if im.rootfs == "" {
@@ -165,6 +171,9 @@ func (im *Imager) SetupHooks() error {
 }
 
 func (im *Imager) TestImage() error {
+	testImageMu.Lock()
+	defer testImageMu.Unlock()
+
 	if err := im.validateImageModeForCreation(); err != nil {
 		return err
 	}
