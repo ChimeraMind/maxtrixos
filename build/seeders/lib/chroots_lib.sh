@@ -187,6 +187,9 @@ chroots_lib.default_portage_bootstrap() {
     for repo in "${@}"; do
         emaint --repo="${repo}" sync
     done
+    echo "Portage bootstrap complete with repos: ${*}"
+    echo "Preparing binhost for use..."
+    emaint binhost -f || true
 }
 
 chroots_lib.default_buildenv_bootstrap() {
