@@ -263,10 +263,7 @@ func imageWorker(ctx context.Context, opts *ParallelImageOptions, ref string) er
 			return err
 		}
 
-		im.Print(
-			"Built image for ref: %s.\n",
-			ref,
-		)
+		im.Print("Built image for ref: %s.\n", ref)
 
 		if opts.OnImageDone != nil {
 			opts.onImageDoneMu.Lock()

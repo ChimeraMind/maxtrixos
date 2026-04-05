@@ -54,9 +54,7 @@ type ParallelReleaseOptions struct {
 // ParallelRelease builds releases concurrently using a simple
 // semaphore-based worker pool.  Unlike seed parallelism, releases
 // have no inter-dependencies so all seeders are immediately eligible.
-func ParallelRelease(
-	ctx context.Context, opts *ParallelReleaseOptions,
-) error {
+func ParallelRelease(ctx context.Context, opts *ParallelReleaseOptions) error {
 	return runReleaseWorkerPool(ctx, opts)
 }
 
