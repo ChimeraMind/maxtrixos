@@ -93,6 +93,7 @@ test.os_release() {
     local matrixos_id="matrixos"
     if ! grep -q "${matrixos_id}" "${os_release}"; then
         echo "ID does not contain ${matrixos_id} in ${os_release}"
+        cat "${os_release}" || echo "Failed to read ${os_release}"
         return 1
     fi
 }
@@ -207,6 +208,7 @@ test.jailbreak() {
 main() {
     cd /
 
+    local failed_tests=()
     local tests=(
         test.start_sshd
         test.wait_boot_complete
@@ -226,6 +228,7 @@ main() {
     for test_f in "${tests[@]}"; do
         if ! "${test_f}"; then
             echo "Test failed: ${test_f}"
+            failed_tests+=("${test_f}")
             exit_st=1
         else
             echo "Test passed: ${test_f}"
@@ -235,6 +238,7 @@ main() {
     if [ "${exit_st}" != "0" ]; then
         echo "One or more tests failed. Collecting logs for debugging."
         _dump_logs || true
+        echo "Failed tests: ${failed_tests[*]}"
     fi
 
     return "${exit_st}"
