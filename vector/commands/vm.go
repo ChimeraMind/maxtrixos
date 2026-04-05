@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -82,31 +81,22 @@ func (vm *VMDriver) Expect(target string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// Compile regex to strip specific terminal control sequences that pollute output
-	// Matches CSI sequences (excluding SGR/colors 'm') and Device Control Strings
-	ansiStrip := regexp.MustCompile(`\x1b\[[0-9;?]*[a-ln-zA-Z]|\x1bP.*?\x1b\\`)
-
 	resultCh := make(chan error)
 
 	go func() {
 		buf := make([]byte, 1024)
-		var matchBuf string
+		var matchBuf strings.Builder
 		for {
 			n, err := vm.reader.Read(buf)
 			if n > 0 {
 				chunk := string(buf[:n])
 				if vm.display != nil {
-					fmt.Fprint(vm.display, ansiStrip.ReplaceAllString(chunk, ""))
+					fmt.Fprint(vm.display, chunk)
 				}
-				matchBuf += chunk
-				if strings.Contains(matchBuf, target) {
+				matchBuf.WriteString(chunk)
+				if strings.Contains(matchBuf.String(), target) {
 					resultCh <- nil
 					return
-				}
-				// Prevent unbounded growth of the match buffer
-				// Keep enough context for the target string
-				if len(matchBuf) > 4096 {
-					matchBuf = matchBuf[len(matchBuf)-2048:]
 				}
 			}
 			if err != nil {
@@ -384,7 +374,7 @@ func (c *VMCommand) runInteractive(qemuArgs []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to init VM: %w", err)
 	}
-	vm.display = c.stdout
+	vm.display = os.Stdout
 	defer vm.Close()
 
 	if err := vm.Start(); err != nil {
@@ -406,7 +396,7 @@ func (c *VMCommand) runTests(qemuArgs []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to init VM: %w", err)
 	}
-	vm.display = c.stdout
+	vm.display = os.Stdout
 	defer vm.Close()
 
 	if err := vm.Start(); err != nil {
