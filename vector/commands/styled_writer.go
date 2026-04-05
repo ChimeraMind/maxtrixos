@@ -124,8 +124,13 @@ func (w *styledWriter) Write(p []byte) (int, error) {
 		}
 
 		// Standalone \r – the process is overwriting the current line
-		// (e.g. a progress bar).
+		// (e.g. a progress bar).  However, if \r is the very last byte
+		// in the buffer we cannot tell yet whether a \n follows (making
+		// it a \r\n pair).  Keep it buffered and wait for the next Write.
 		if crIdx >= 0 && (nlIdx < 0 || crIdx < nlIdx) {
+			if crIdx == len(w.buf)-1 {
+				break // wait for more data
+			}
 			content := string(w.buf[:crIdx])
 			w.buf = w.buf[crIdx+1:]
 
