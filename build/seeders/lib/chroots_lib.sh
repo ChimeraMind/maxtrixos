@@ -494,7 +494,9 @@ chroots_lib.generic_build() {
     read -ra common_args <<< "$(chroots_lib.emerge_common_args "${num_procs}")"
 
     echo ">> emerge" "${common_args[@]}" "${@}"
-    MAKEOPTS="-j${num_procs} -l${num_procs}" emerge "${common_args[@]}" "${@}"
+    MAKEOPTS="-j${num_procs} -l${num_procs}" \
+    NINJAOPTS="-j${num_procs} -l${num_procs}" \
+        emerge "${common_args[@]}" "${@}"
 }
 
 chroots_lib.generic_forced_rebuild() {
@@ -505,7 +507,9 @@ chroots_lib.generic_forced_rebuild() {
     read -ra common_args <<< "$(chroots_lib.emerge_common_rebuild_args "${num_procs}")"
 
     echo ">> emerge (forcing rebuild)" "${common_args[@]}" "${@}"
-    MAKEOPTS="-j${num_procs} -l${num_procs}" emerge "${common_args[@]}" "${@}"
+    MAKEOPTS="-j${num_procs} -l${num_procs}" \
+    NINJAOPTS="-j${num_procs} -l${num_procs}" \
+        emerge "${common_args[@]}" "${@}"
 }
 
 chroots_lib.clean_old_distfiles() {
