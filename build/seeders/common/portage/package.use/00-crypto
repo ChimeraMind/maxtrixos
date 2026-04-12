@@ -1,1 +1,4 @@
 sys-apps/systemd cryptsetup
+# samba requires ngtcp2 built with gnutls.
+net-libs/ngtcp2 gnutls
+
