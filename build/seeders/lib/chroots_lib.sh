@@ -462,6 +462,7 @@ chroots_lib.emerge_common_args() {
     local jobs_flags
     read -ra jobs_flags <<< "$(chroots_lib.try_get_emerge_jobs_flags "${num_procs}")"
     local args=(
+        --backtrack=100
         --binpkg-respect-use=y
         --buildpkg
         --usepkg
