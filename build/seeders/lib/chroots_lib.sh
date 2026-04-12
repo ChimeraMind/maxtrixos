@@ -239,7 +239,7 @@ chroots_lib.default_build_everything() {
     for p in "${packages[@]}"; do
         echo ">> ${p}"
     done
-    chroots_lib.generic_build --newuse -v "${packages[@]}"
+    chroots_lib.generic_build --update --newuse --deep -v "${packages[@]}"
 }
 
 chroots_lib.default_clean_temporary_artifacts() {
