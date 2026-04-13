@@ -18,7 +18,7 @@ func TestDownloadsCleaner_Name(t *testing.T) {
 func TestDownloadsCleaner_Init(t *testing.T) {
 	cleaner := &DownloadsCleaner{}
 	mockCfg := &config.MockConfig{Items: map[string][]string{}}
-	err := cleaner.Init(mockCfg)
+	err := cleaner.Init(mockCfg, os.Stdout, os.Stderr)
 	if err != nil {
 		t.Errorf("Init should not return an error, but got: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestDownloadsCleaner_Run(t *testing.T) {
 			mockCfg.Items["Seeder.DownloadsDir"] = []string{tempDir}
 
 			cleaner := &DownloadsCleaner{}
-			err = cleaner.Init(mockCfg)
+			err = cleaner.Init(mockCfg, os.Stdout, os.Stderr)
 			if err != nil {
 				t.Fatalf("Init failed: %v", err)
 			}

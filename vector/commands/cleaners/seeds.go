@@ -2,6 +2,7 @@ package cleaners
 
 import (
 	"fmt"
+	"io"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
 	"matrixos/vector/lib/seeder"
@@ -33,15 +34,19 @@ func sortChrootDirs(dirs []string) []string {
 }
 
 type SeedsCleaner struct {
-	cfg config.IConfig
+	cfg    config.IConfig
+	stdout io.Writer
+	stderr io.Writer
 }
 
 func (c *SeedsCleaner) Name() string {
 	return "seeds"
 }
 
-func (c *SeedsCleaner) Init(cfg config.IConfig) error {
+func (c *SeedsCleaner) Init(cfg config.IConfig, stdout, stderr io.Writer) error {
 	c.cfg = cfg
+	c.stdout = stdout
+	c.stderr = stderr
 	return nil
 }
 
@@ -65,23 +70,23 @@ func (c *SeedsCleaner) MinAmountOfSeeds() (int, error) {
 	return amount, nil
 }
 
-func filterChrootEntry(regex *regexp.Regexp, path string, entry os.DirEntry) bool {
+func filterChrootEntry(regex *regexp.Regexp, path string, entry os.DirEntry, stdout, stderr io.Writer) bool {
 	stat, err := os.Lstat(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to stat image %s: %v\n", path, err)
+		fmt.Fprintf(stderr, "Failed to stat image %s: %v\n", path, err)
 		return false
 	}
 
 	// Only accept files.
 	if stat.IsDir() {
-		fmt.Fprintf(os.Stdout, "Path %s is a directory. Skipping.\n", path)
+		fmt.Fprintf(stdout, "Path %s is a directory. Skipping.\n", path)
 		return false
 	}
 
 	mode := stat.Mode()
 	isFile := mode.IsRegular()
 	if !isFile {
-		fmt.Fprintf(os.Stdout, "Path %s is not a regular file. Ignoring this file.\n", path)
+		fmt.Fprintf(stdout, "Path %s is not a regular file. Ignoring this file.\n", path)
 		return false
 	}
 
@@ -102,9 +107,9 @@ func (c *SeedsCleaner) Run() error {
 		return err
 	}
 
-	fmt.Printf("Detected %d seeds:\n", len(infos))
+	fmt.Fprintf(c.stdout, "Detected %d seeds:\n", len(infos))
 	for _, info := range infos {
-		fmt.Printf(" [%s] %s\n", info.Name, info.Dir)
+		fmt.Fprintf(c.stdout, " [%s] %s\n", info.Name, info.Dir)
 	}
 
 	opts := seeder.NewSeederOptions{}
@@ -123,13 +128,13 @@ func (c *SeedsCleaner) Run() error {
 
 	for _, info := range infos {
 		name := seeder.SeederNameWithoutOrderPrefix(info.Name)
-		fmt.Printf("[%s] Working on seed %s ...\n", info.Name, name)
+		fmt.Fprintf(c.stdout, "[%s] Working on seed %s ...\n", info.Name, name)
 
 		// Parse seeder params.
 		params, err := sd.ParseSeederParams(info)
 		if err != nil {
 			fmt.Fprintf(
-				os.Stderr,
+				c.stderr,
 				"[%s] Unable to parse params: %v",
 				info.Name, err,
 			)
@@ -138,7 +143,7 @@ func (c *SeedsCleaner) Run() error {
 
 		if params.LatestAvailableChrootDir == "" {
 			fmt.Fprintf(
-				os.Stderr,
+				c.stderr,
 				"[%s] A latest available chroot dir variable does not exist. Skipping ...",
 				info.Name,
 			)
@@ -154,7 +159,7 @@ func (c *SeedsCleaner) Run() error {
 
 		if len(consideredDirs) == 0 {
 			fmt.Fprintf(
-				os.Stderr,
+				c.stderr,
 				"[%s] No chroot dirs exist. Skipping ...",
 				info.Name,
 			)
@@ -162,10 +167,11 @@ func (c *SeedsCleaner) Run() error {
 		}
 
 		for _, chrootDir := range consideredDirs {
-			fmt.Printf("[%s] Dir: %s\n", info.Name, chrootDir)
+			fmt.Fprintf(c.stdout, "[%s] Dir: %s\n", info.Name, chrootDir)
 		}
 		if len(consideredDirs) < minAmountOfSeeds {
-			fmt.Printf(
+			fmt.Fprintf(
+				c.stdout,
 				"[%s] Nothing to do. Within the minimum amount of seeds (%d).\n",
 				info.Name,
 				minAmountOfSeeds,
@@ -175,18 +181,18 @@ func (c *SeedsCleaner) Run() error {
 
 		sortedChrootDirs := sortChrootDirs(consideredDirs)
 		for _, chrootDir := range sortedChrootDirs {
-			fmt.Printf("[%s|sorted] Dir: %s\n", info.Name, chrootDir)
+			fmt.Fprintf(c.stdout, "[%s|sorted] Dir: %s\n", info.Name, chrootDir)
 		}
 		// Pick the first N elements up to minAmountOfSeeds
 		rmrf := sortedChrootDirs[:len(sortedChrootDirs)-minAmountOfSeeds]
 		for _, chrootDir := range rmrf {
-			fmt.Printf("[%s|marked] Dir: %s\n", info.Name, chrootDir)
+			fmt.Fprintf(c.stdout, "[%s|marked] Dir: %s\n", info.Name, chrootDir)
 		}
 		markedForRemoval = append(markedForRemoval, rmrf...)
 	}
 
 	if len(markedForRemoval) == 0 {
-		fmt.Println("No seeds to remove.")
+		fmt.Fprintln(c.stdout, "No seeds to remove.")
 		return nil
 	}
 
@@ -201,46 +207,46 @@ func (c *SeedsCleaner) Run() error {
 		stat, err := os.Stat(path)
 		if err != nil {
 			errors = append(errors, err)
-			fmt.Fprintf(os.Stderr, "Failed to stat path %s: %v\n", path, err)
+			fmt.Fprintf(c.stderr, "Failed to stat path %s: %v\n", path, err)
 			continue
 		}
 		if stat.Mode().IsRegular() {
-			fmt.Fprintf(os.Stderr, "Path %s is a regular file. Removing ...\n", path)
+			fmt.Fprintf(c.stderr, "Path %s is a regular file. Removing ...\n", path)
 			if err := os.Remove(path); err != nil {
 				errors = append(errors, err)
-				fmt.Fprintf(os.Stderr, "Failed to remove path %s: %v\n", path, err)
+				fmt.Fprintf(c.stderr, "Failed to remove path %s: %v\n", path, err)
 			}
 			continue
 		}
 
 		if !stat.IsDir() {
 			errors = append(errors, fmt.Errorf("path %s is not a directory", path))
-			fmt.Fprintf(os.Stderr, "Path %s is not a directory. Skipping.\n", path)
+			fmt.Fprintf(c.stderr, "Path %s is not a directory. Skipping.\n", path)
 			continue
 		}
 
 		if !filesystems.DirectoryExists(path) {
 			errors = append(errors, fmt.Errorf("directory %s does not exist", path))
-			fmt.Fprintf(os.Stderr, "Directory %s does not exist. Skipping.\n", path)
+			fmt.Fprintf(c.stderr, "Directory %s does not exist. Skipping.\n", path)
 			continue
 		}
 
 		if err := filesystems.CheckActiveMounts(path); err != nil {
 			errors = append(errors, err)
-			fmt.Fprintf(os.Stderr, "Directory %s has active mounts. Skipping.\n", path)
+			fmt.Fprintf(c.stderr, "Directory %s has active mounts. Skipping.\n", path)
 			continue
 		}
 
 		if dryRun {
-			fmt.Printf("Dry run mode enabled. Not removing %s ...\n", path)
+			fmt.Fprintf(c.stdout, "Dry run mode enabled. Not removing %s ...\n", path)
 			continue
 		}
 
-		fmt.Printf("Removing: %s\n", path)
+		fmt.Fprintf(c.stdout, "Removing: %s\n", path)
 		if err := os.RemoveAll(path); err != nil {
 			errors = append(errors, err)
 			fmt.Fprintf(
-				os.Stderr, "Failed to remove path %s: %v. Continuing ...\n",
+				c.stderr, "Failed to remove path %s: %v. Continuing ...\n",
 				path,
 				err,
 			)

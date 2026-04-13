@@ -21,7 +21,7 @@ func TestSeedsCleaner_Name(t *testing.T) {
 func TestSeedsCleaner_Init(t *testing.T) {
 	cleaner := &SeedsCleaner{}
 	mockCfg := &config.MockConfig{Items: map[string][]string{}}
-	err := cleaner.Init(mockCfg)
+	err := cleaner.Init(mockCfg, os.Stdout, os.Stderr)
 	if err != nil {
 		t.Errorf("Init should not return an error, but got: %v", err)
 	}
@@ -310,7 +310,7 @@ func TestFilterChrootEntry(t *testing.T) {
 				t.Fatalf("Entry %s not found in temp dir", tt.fileName)
 			}
 			path := filepath.Join(tempDir, tt.fileName)
-			got := filterChrootEntry(ChrootDirNamePattern, path, entry)
+			got := filterChrootEntry(ChrootDirNamePattern, path, entry, os.Stdout, os.Stderr)
 			if got != tt.expected {
 				t.Errorf("filterChrootEntry(%q) = %v, want %v", tt.fileName, got, tt.expected)
 			}
@@ -337,7 +337,7 @@ func TestFilterChrootEntry_NonExistent(t *testing.T) {
 	// Remove the file so Lstat will fail.
 	os.Remove(tmpFile)
 
-	got := filterChrootEntry(ChrootDirNamePattern, tmpFile, entries[0])
+	got := filterChrootEntry(ChrootDirNamePattern, tmpFile, entries[0], os.Stdout, os.Stderr)
 	if got {
 		t.Error("filterChrootEntry should return false for non-existent path")
 	}
@@ -380,7 +380,7 @@ func TestFilterChrootEntry_Symlink(t *testing.T) {
 	}
 
 	// Lstat on a symlink returns the symlink itself, which is not a regular file.
-	got := filterChrootEntry(ChrootDirNamePattern, symlinkPath, symlinkEntry)
+	got := filterChrootEntry(ChrootDirNamePattern, symlinkPath, symlinkEntry, os.Stdout, os.Stderr)
 	if got {
 		t.Error("filterChrootEntry should return false for symlinks (Lstat reports non-regular)")
 	}
@@ -560,7 +560,7 @@ func TestSeedsCleaner_Run_Integration(t *testing.T) {
 			)
 
 			cleaner := &SeedsCleaner{}
-			if err := cleaner.Init(mockCfg); err != nil {
+			if err := cleaner.Init(mockCfg, os.Stdout, os.Stderr); err != nil {
 				t.Fatalf("Init failed: %v", err)
 			}
 
@@ -615,7 +615,7 @@ func TestSeedsCleaner_Run_Integration_MultipleSeeders(t *testing.T) {
 	mockCfg := buildSeedsCleanerConfig(seedersDir, chrootsSeedersDir, devDir, "false", "2")
 
 	cleaner := &SeedsCleaner{}
-	if err := cleaner.Init(mockCfg); err != nil {
+	if err := cleaner.Init(mockCfg, os.Stdout, os.Stderr); err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
 
@@ -666,7 +666,7 @@ func TestSeedsCleaner_Run_Integration_NoSeeders(t *testing.T) {
 	mockCfg := buildSeedsCleanerConfig(seedersDir, chrootsSeedersDir, devDir, "false", "2")
 
 	cleaner := &SeedsCleaner{}
-	if err := cleaner.Init(mockCfg); err != nil {
+	if err := cleaner.Init(mockCfg, os.Stdout, os.Stderr); err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
 

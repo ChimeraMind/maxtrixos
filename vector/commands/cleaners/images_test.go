@@ -18,7 +18,7 @@ func TestImagesCleaner_Name(t *testing.T) {
 func TestImagesCleaner_Init(t *testing.T) {
 	cleaner := &ImagesCleaner{}
 	mockCfg := &config.MockConfig{Items: map[string][]string{}}
-	err := cleaner.Init(mockCfg)
+	err := cleaner.Init(mockCfg, os.Stdout, os.Stderr)
 	if err != nil {
 		t.Errorf("Init should not return an error, but got: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestImagesCleaner_Run(t *testing.T) {
 			mockCfg.Items["Imager.ImagesDir"] = []string{subTempDir}
 
 			cleaner := &ImagesCleaner{}
-			err = cleaner.Init(mockCfg)
+			err = cleaner.Init(mockCfg, os.Stdout, os.Stderr)
 			if err != nil {
 				t.Fatalf("Init failed: %v", err)
 			}

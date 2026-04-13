@@ -1,6 +1,7 @@
 package cleaners
 
 import (
+	"io"
 	"matrixos/vector/lib/config"
 	"time"
 )
@@ -10,15 +11,19 @@ const (
 )
 
 type DownloadsCleaner struct {
-	cfg config.IConfig
+	cfg    config.IConfig
+	stdout io.Writer
+	stderr io.Writer
 }
 
 func (c *DownloadsCleaner) Name() string {
 	return "downloads"
 }
 
-func (c *DownloadsCleaner) Init(cfg config.IConfig) error {
+func (c *DownloadsCleaner) Init(cfg config.IConfig, stdout, stderr io.Writer) error {
 	c.cfg = cfg
+	c.stdout = stdout
+	c.stderr = stderr
 	return nil
 }
 
@@ -48,5 +53,5 @@ func (c *DownloadsCleaner) Run() error {
 		return err
 	}
 
-	return cleanDirectoryBasedOnMtime(downloadsDir, downloadsCutoffAge, dryRun)
+	return cleanDirectoryBasedOnMtime(downloadsDir, downloadsCutoffAge, dryRun, c.stdout, c.stderr)
 }

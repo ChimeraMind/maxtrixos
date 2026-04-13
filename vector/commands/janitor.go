@@ -49,25 +49,25 @@ func (c *JanitorCommand) Run() error {
 
 	c.Println("Initializing seeds cleaner ...")
 	scln := &cleaners.SeedsCleaner{}
-	if err := scln.Init(c.cfg); err != nil {
+	if err := scln.Init(c.cfg, c.printer, c.errPrinter); err != nil {
 		return fmt.Errorf("error initializing seeds cleaner: %w", err)
 	}
 
 	c.Println("Initializing images cleaner ...")
 	icln := &cleaners.ImagesCleaner{}
-	if err := icln.Init(c.cfg); err != nil {
+	if err := icln.Init(c.cfg, c.printer, c.errPrinter); err != nil {
 		return fmt.Errorf("error initializing images cleaner: %w", err)
 	}
 
 	c.Println("Initializing downloads cleaner ...")
 	dcln := &cleaners.DownloadsCleaner{}
-	if err := dcln.Init(c.cfg); err != nil {
+	if err := dcln.Init(c.cfg, c.printer, c.errPrinter); err != nil {
 		return fmt.Errorf("error initializing downloads cleaner: %w", err)
 	}
 
 	c.Println("Initializing logs cleaner ...")
 	lcln := &cleaners.LogsCleaner{}
-	if err := lcln.Init(c.cfg); err != nil {
+	if err := lcln.Init(c.cfg, c.printer, c.errPrinter); err != nil {
 		return fmt.Errorf("error initializing logs cleaner: %w", err)
 	}
 

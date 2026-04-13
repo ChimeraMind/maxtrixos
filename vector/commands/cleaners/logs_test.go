@@ -18,7 +18,7 @@ func TestLogsCleaner_Name(t *testing.T) {
 func TestLogsCleaner_Init(t *testing.T) {
 	cleaner := &LogsCleaner{}
 	mockCfg := &config.MockConfig{Items: map[string][]string{}}
-	err := cleaner.Init(mockCfg)
+	err := cleaner.Init(mockCfg, os.Stdout, os.Stderr)
 	if err != nil {
 		t.Errorf("Init should not return an error, but got: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestLogsCleaner_Run(t *testing.T) {
 			}
 
 			cleaner := &LogsCleaner{}
-			err = cleaner.Init(mockCfg)
+			err = cleaner.Init(mockCfg, os.Stdout, os.Stderr)
 			if err != nil {
 				t.Fatalf("Init failed: %v", err)
 			}

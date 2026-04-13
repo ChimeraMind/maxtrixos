@@ -2,9 +2,9 @@ package cleaners
 
 import (
 	"fmt"
+	"io"
 	"matrixos/vector/lib/config"
 	"matrixos/vector/lib/filesystems"
-	"os"
 	"path"
 	"time"
 )
@@ -14,15 +14,19 @@ const (
 )
 
 type LogsCleaner struct {
-	cfg config.IConfig
+	cfg    config.IConfig
+	stdout io.Writer
+	stderr io.Writer
 }
 
 func (c *LogsCleaner) Name() string {
 	return "logs"
 }
 
-func (c *LogsCleaner) Init(cfg config.IConfig) error {
+func (c *LogsCleaner) Init(cfg config.IConfig, stdout, stderr io.Writer) error {
 	c.cfg = cfg
+	c.stdout = stdout
+	c.stderr = stderr
 	return nil
 }
 
@@ -51,7 +55,7 @@ func (c *LogsCleaner) Run() error {
 		return err
 	}
 	if !filesystems.DirectoryExists(logsDir) {
-		fmt.Fprintf(os.Stderr, "Logs directory %s does not exist. Nothing to do.\n", logsDir)
+		fmt.Fprintf(c.stderr, "Logs directory %s does not exist. Nothing to do.\n", logsDir)
 		return nil
 	}
 
@@ -60,13 +64,13 @@ func (c *LogsCleaner) Run() error {
 		return err
 	}
 
-	fmt.Printf("Cleaning old logs from %s ...\n", logsDir)
+	fmt.Fprintf(c.stdout, "Cleaning old logs from %s ...\n", logsDir)
 
 	dirs := []string{
 		path.Join(logsDir, "weekly-builder"),
 	}
 	for _, dir := range dirs {
-		err := cleanDirectoryBasedOnMtime(dir, logsCutoffAge, dryRun)
+		err := cleanDirectoryBasedOnMtime(dir, logsCutoffAge, dryRun, c.stdout, c.stderr)
 		if err != nil {
 			return err
 		}
