@@ -53,6 +53,8 @@ BOOTSTRAP_PACKAGES=(
 # TODO: maybe we can infer the kernel from the package list.
 BUILD_KERNEL_PACKAGES=(
     sys-kernel/matrixos-kernel::matrixos
+)
+BUILD_KERNEL_INITRAMFS=(
     sys-kernel/matrixos-initramfs::matrixos
 )
 UPSTREAM_PORTAGE_REPOS=(
@@ -115,7 +117,8 @@ bedrock.build_resolve_conflicts() {
 }
 
 bedrock.build_kernel() {
-    chroots_lib.generic_build --newuse --update "${BUILD_KERNEL_PACKAGES[@]}"
+    chroots_lib.generic_build --newuse --update "${BUILD_KERNEL_PACKAGES[@]}" \
+        "${BUILD_KERNEL_INITRAMFS[@]}"
 }
 
 bedrock.build_system() {
@@ -133,6 +136,9 @@ bedrock.build_system() {
 
 bedrock.build_everything() {
     chroots_lib.default_build_everything "${_seeder_name}"
+    # Trigger a rebuild of the initramfs so that we bundle the latest and
+    # correct initramfs setup.
+    chroots_lib.generic_forced_rebuild "${BUILD_KERNEL_INITRAMFS[@]}"
 
     echo "Initial portage counter was: ${INITIAL_PORTAGE_COUNTER}"
     echo "Packages with a counter greater than this, were built with matrixOS setup."
