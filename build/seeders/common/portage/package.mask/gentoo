@@ -1,2 +1,5 @@
 # We need matrixos mesa w/ostree support patches
 media-libs/mesa::gentoo
+
+# Temporary mask to debug potential boot failure caused by newer dracut
+>=sys-kernel/dracut-109
