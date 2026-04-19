@@ -2,4 +2,7 @@
 media-libs/mesa::gentoo
 
 # Temporary mask to debug potential boot failure caused by newer dracut
+# Ostree and Dracut 109+ fight:
+# https://github.com/ostreedev/ostree/commit/81c175153aa8c36af3368c04d1cdf089c05a941f
+# Need a newer ostree for the newer dracut
 >=sys-kernel/dracut-109
