@@ -63,12 +63,15 @@ func runImageWorkerPool(ctx context.Context, opts *ParallelImageOptions) error {
 	var firstErr error
 	var errMu sync.Mutex
 
+	poolStderr := opts.NewStderrWriter("images")
+
 	setError := func(err error) {
 		errMu.Lock()
+		defer errMu.Unlock()
 		if firstErr == nil {
 			firstErr = err
 		}
-		errMu.Unlock()
+		fmt.Fprintf(poolStderr, "%v\n", err)
 	}
 
 	work := make(chan string, len(opts.Refs))
@@ -94,6 +97,8 @@ func runImageWorkerPool(ctx context.Context, opts *ParallelImageOptions) error {
 					failed := firstErr != nil
 					errMu.Unlock()
 					if failed {
+						fmt.Fprintf(poolStderr,
+							"Skipping ref %s due to earlier failure.\n", ref)
 						return
 					}
 
@@ -111,6 +116,13 @@ func runImageWorkerPool(ctx context.Context, opts *ParallelImageOptions) error {
 	}
 
 	wg.Wait()
+
+	// Drain any refs that were never picked up by a worker.
+	for ref := range work {
+		fmt.Fprintf(poolStderr,
+			"Skipping ref %s due to earlier failure.\n", ref)
+	}
+
 	return firstErr
 }
 

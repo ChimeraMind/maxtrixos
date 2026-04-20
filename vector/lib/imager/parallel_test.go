@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 
@@ -119,4 +120,57 @@ func TestParallelImage_CancelledContextStopsWorkers(t *testing.T) {
 	// either return nil (no work picked up) or return ctx.Err.
 	// Both are acceptable outcomes.
 	_ = err
+}
+
+func TestParallelImage_AllErrorsPrinted(t *testing.T) {
+	refs := []string{
+		"matrixos/amd64/dev/bedrock",
+		"matrixos/amd64/dev/server",
+		"matrixos/amd64/dev/gnome",
+	}
+
+	var stderrBufs []*bytes.Buffer
+	var stderrMu sync.Mutex
+
+	opts := testParallelImageOpts(refs)
+	opts.Parallelism = 1
+	opts.NewStderrWriter = func(label string) io.Writer {
+		buf := &bytes.Buffer{}
+		stderrMu.Lock()
+		stderrBufs = append(stderrBufs, buf)
+		stderrMu.Unlock()
+		return buf
+	}
+	opts.SetupBuild = func(pushCleanup func(func()), ot ostree.IOstree, im IImager) error {
+		return errors.New("setup broken")
+	}
+
+	ctx := context.Background()
+	err := ParallelImage(ctx, opts)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	// Collect all stderr output.
+	stderrMu.Lock()
+	var allStderr string
+	for _, buf := range stderrBufs {
+		allStderr += buf.String()
+	}
+	stderrMu.Unlock()
+
+	// The first ref's error should be in the returned error.
+	if got := err.Error(); !strings.Contains(got, "image failed") {
+		t.Errorf("returned error should mention image failure, got: %s", got)
+	}
+
+	// The first ref's error should also be printed to stderr.
+	if !strings.Contains(allStderr, "image failed") {
+		t.Errorf("stderr should contain the first error, got:\n%s", allStderr)
+	}
+
+	// Remaining refs should be reported as skipped.
+	if !strings.Contains(allStderr, "Skipping ref") {
+		t.Errorf("stderr should report skipped refs, got:\n%s", allStderr)
+	}
 }

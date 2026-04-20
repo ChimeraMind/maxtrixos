@@ -23,6 +23,10 @@ var (
 	ioctlLoopInfo = unix.IoctlLoopSetStatus64
 	closeFile     = func(f *os.File) error { return f.Close() }
 	readFileBytes = os.ReadFile
+
+	// attachMu serialises Attach calls across all Loop instances to
+	// prevent the TOCTOU race between LOOP_CTL_GET_FREE and LOOP_SET_FD.
+	attachMu sync.Mutex
 )
 
 // Loop manages the lifecycle of a Linux loop device backed by an image file.
@@ -105,6 +109,9 @@ func (l *Loop) Attach() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	attachMu.Lock()
+	defer attachMu.Unlock()
+
 	if l.attached {
 		return fmt.Errorf("loop attach: already attached to %s", l.Device)
 	}
@@ -136,7 +143,10 @@ func (l *Loop) Attach() error {
 	}
 	defer closeFile(loopFile)
 
-	if err := ioctlSetInt(int(loopFile.Fd()), unix.LOOP_SET_FD, int(imgFile.Fd())); err != nil {
+	loopFd := int(loopFile.Fd())
+	imgFileFd := int(imgFile.Fd())
+
+	if err := ioctlSetInt(loopFd, unix.LOOP_SET_FD, imgFileFd); err != nil {
 		return fmt.Errorf("loop attach: LOOP_SET_FD on %s: %w", loopPath, err)
 	}
 
@@ -144,9 +154,17 @@ func (l *Loop) Attach() error {
 	info := unix.LoopInfo64{
 		Flags: unix.LO_FLAGS_PARTSCAN,
 	}
-	if err := ioctlLoopInfo(int(loopFile.Fd()), &info); err != nil {
+	if err := ioctlLoopInfo(loopFd, &info); err != nil {
 		// Best-effort detach on failure.
-		_ = ioctlSetInt(int(loopFile.Fd()), unix.LOOP_CLR_FD, 0)
+		beErr := ioctlSetInt(loopFd, unix.LOOP_CLR_FD, 0)
+		if beErr != nil {
+			return fmt.Errorf(
+				"loop attach: LOOP_SET_STATUS64 on %s: %v (also failed to detach: %v)",
+				loopPath,
+				err,
+				beErr,
+			)
+		}
 		return fmt.Errorf("loop attach: LOOP_SET_STATUS64 on %s: %w", loopPath, err)
 	}
 

@@ -173,7 +173,13 @@ func (im *Imager) Cleanup() {
 
 	for _, loop := range loops {
 		if err := loop.Detach(); err != nil {
-			fmt.Fprintf(im.stderr, "warning: failed to detach loop device %s: %v\n", loop.Device, err)
+			fmt.Fprintf(
+				im.stderr,
+				"warning: failed to detach loop device %s (path: %s): %v\n",
+				loop.Device,
+				loop.Path,
+				err,
+			)
 		}
 	}
 
