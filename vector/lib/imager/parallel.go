@@ -132,8 +132,7 @@ func imageWorker(ctx context.Context, opts *ParallelImageOptions, ref string) er
 	defer func() {
 		imageEnd := time.Now()
 		workerPrint(
-			"[%s] Image finished at %s (elapsed: %s)\n",
-			ref,
+			"Image finished at %s (elapsed: %s)\n",
 			imageEnd.Format(time.RFC3339),
 			imageEnd.Sub(imageStart).Round(time.Second),
 		)
