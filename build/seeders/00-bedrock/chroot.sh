@@ -105,7 +105,8 @@ bedrock.portage_bootstrap() {
 bedrock.build_resolve_conflicts() {
     # Break circular dependencies
     USE="-gpm" chroots_lib.generic_build -1 sys-libs/ncurses:0
-    chroots_lib.generic_build -1 virtual/libelf
+    # --update --newuse added to avoid pulling in sys-libs/zlib-ng prematurely
+    chroots_lib.generic_build -1 --update --newuse virtual/libelf
     USE="-sysprof -avif -truetype" chroots_lib.generic_build -1 dev-libs/glib:2
     chroots_lib.generic_build -1 dev-libs/glib
 
