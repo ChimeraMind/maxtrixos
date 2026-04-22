@@ -19,3 +19,6 @@ sys-kernel/linux-firmware -initramfs -dist-kernel
 # Ship with systemd-boot in case someone wants to switch
 sys-apps/systemd boot
 sys-kernel/installkernel systemd-boot
+
+# Ship with ukify so that we can develop UKI support
+sys-apps/systemd ukify
