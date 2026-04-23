@@ -396,12 +396,22 @@ func TestImagesDetectRemotedAndPlainRefs_LocalRefsError(t *testing.T) {
 		t.Fatalf("newTestImagesCommand failed: %v", err)
 	}
 
-	errf := func(format string, args ...any) {}
-	err = cmd.detectRemotedAndPlainRefs(errf)
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	var warnings []string
+	errf := func(format string, args ...any) {
+		warnings = append(warnings, fmt.Sprintf(format, args...))
 	}
-	if !strings.Contains(err.Error(), "failed to list local refs") {
-		t.Errorf("unexpected error: %v", err)
+	err = cmd.detectRemotedAndPlainRefs(errf)
+	if err != nil {
+		t.Fatalf("expected no error (LocalRefs failure should be ignored), got: %v", err)
+	}
+	if len(warnings) == 0 {
+		t.Fatal("expected warning message from errf callback")
+	}
+	combined := strings.Join(warnings, " ")
+	if !strings.Contains(combined, "WARNING: failed to list local refs") {
+		t.Errorf("expected warning about failed local refs, got: %s", combined)
+	}
+	if !strings.Contains(combined, "localrefs failed") {
+		t.Errorf("expected warning to contain wrapped error, got: %s", combined)
 	}
 }

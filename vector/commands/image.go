@@ -203,6 +203,7 @@ func (c *ImageCommand) runImage() error {
 		return err
 	}
 
+	// Check against mixing refs with remote embedded in the ref and not, warn the user about it.
 	if err := c.detectRemotedAndPlainRefs(c.im.PrintError); err != nil {
 		return err
 	}

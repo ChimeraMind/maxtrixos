@@ -218,7 +218,8 @@ type resolveRefRemoteResult struct {
 func (c *BaseCommand) detectRemotedAndPlainRefs(errf func(format string, args ...any)) error {
 	localRefs, err := c.ot.LocalRefs()
 	if err != nil {
-		return fmt.Errorf("failed to list local refs: %w", err)
+		errf("WARNING: failed to list local refs: %v. Ignoring as we may have an empty ostree repository.\n", err)
+		return nil
 	}
 
 	duplicates := make(map[string][]string)
