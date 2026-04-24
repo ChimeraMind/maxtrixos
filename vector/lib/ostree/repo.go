@@ -25,29 +25,7 @@ func (o *Ostree) InitRepo() error {
 
 	args := []string{"--repo=" + repoDir, "init", "--mode=archive"}
 
-	collectionID, _ := o.cfg.GetItem("Ostree.CollectionId")
-	if collectionID != "" {
-		collArgs, err := CollectionIDArgs(collectionID)
-		if err != nil {
-			return err
-		}
-		args = append(args, collArgs...)
-	}
-
 	return o.ostreeRun(args...)
-}
-
-// CollectionIDArgs returns the ostree --collection-id argument if a collection ID is provided.
-func CollectionIDArgs(collectionID string) ([]string, error) {
-	if collectionID == "" {
-		return nil, errors.New("missing collectionID parameter")
-	}
-
-	var args []string
-	if collectionID != "" {
-		args = append(args, "--collection-id="+collectionID)
-	}
-	return args, nil
 }
 
 // LastCommit returns the commit hash of the latest commit in the given ref.

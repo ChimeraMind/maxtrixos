@@ -3,11 +3,11 @@ package ostree
 import (
 	"fmt"
 	"matrixos/vector/lib/config"
+	"matrixos/vector/lib/runner"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"matrixos/vector/lib/runner"
 )
 
 func TestRepoOperations(t *testing.T) {
@@ -59,19 +59,6 @@ func TestRepoOperations(t *testing.T) {
 	}
 	if len(refs) != 0 {
 		t.Errorf("expected 0 refs, got %d", len(refs))
-	}
-}
-
-func TestCollectionIDArgs(t *testing.T) {
-	args, _ := CollectionIDArgs("org.example.Collection")
-	if len(args) != 1 || args[0] != "--collection-id=org.example.Collection" {
-		t.Errorf("CollectionIDArgs = %v", args)
-	}
-
-	// Test empty (error expected based on implementation)
-	_, err := CollectionIDArgs("")
-	if err == nil {
-		t.Error("CollectionIDArgs(\"\") expected error, got nil")
 	}
 }
 
