@@ -13,6 +13,8 @@ Our two main goals are:
 
 TL;DR: Download from: [Cloudflare](https://images.matrixos.org)
 
+> **CPU requirement**: matrixOS requires an `x86-64-v3` CPU (AVX2 + FMA — Intel Haswell 2013+ or AMD Ryzen 1000+ series). Older hardware will fail to boot. See [Prerequisites](#-prerequisites) for details.
+
 ## Table of Contents
 
 - [Disambiguation](#️-disambiguation)
@@ -137,6 +139,8 @@ There are two default users:
 - **root**: password `matrix`
 - **matrix** (UID=1000): password `matrix`
 - **LUKS password** (if encrypted): `MatrixOS2026Enc`
+
+> **⚠️ Change these credentials immediately.** The defaults above are publicly documented and must not be left in place. Run `sudo vector setupOS` after first boot to set new passwords and a LUKS passphrase before connecting to any network.
 
 ### Option 2: Install from matrixOS
 
