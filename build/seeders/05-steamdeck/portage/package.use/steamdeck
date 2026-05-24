@@ -1,1 +1,6 @@
-IyBGb3JjZSBSQURWIChWdWxrYW4pIGFuZCBoYXJkd2FyZSBhY2NlbGVyYXRpb24KbWVkaWEtbGlicy9tZXNhIHZ1bGthbiByYWRlb24gemluayArd2F5bGFuZCArZ2JtICtsbHZtICtsbHZtX3Nsb3RfMTcKbWVkaWEtbGlicy9saWJlcG94eSBlZ2wKc3lzLWtlcm5lbC9saW51eC1maXJtd2FyZSBAYmluYXJ5LXJlZGlzdHJpYnV0YWJsZQojIEVuYWJsZSBzcGVjaWZpYyBTdGVhbSBEZWNrIHBhdGNoZXMgaW4geW91ciBNYXRyaXgga2VybmVsCnN5cy1rZXJuZWwvbWF0cml4b3Mta2VybmVsIGFtZGdwdSBqdXBpdGVyLXBhdGNoZXMK
+# Force RADV (Vulkan) and hardware acceleration
+media-libs/mesa vulkan radeon zink +wayland +gbm +llvm +llvm_slot_17
+media-libs/libepoxy egl
+sys-kernel/linux-firmware @binary-redistributable
+# Enable specific Steam Deck patches in your Matrix kernel
+sys-kernel/matrixos-kernel amdgpu jupiter-patches
