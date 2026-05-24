@@ -1,1 +1,13 @@
-IyEvYmluL2Jhc2gKc2V0IC1lCgojIEVuc3VyZSB0aGUgQU1ER1BVIGZpcm13YXJlIGlzIHByaW9yaXRpemVkCmVjaG8gJ1ZJREVPX0NBUkRTPSJhbWRncHUgcmFkZW9uc2kiJyA+PiAvZXRjL3BvcnRhZ2UvbWFrZS5jb25mCgojIFJlYnVpbGQgbWVzYSB3aXRoIHRoZSBuZXcgVnVsa2FuIGZsYWdzCmVtZXJnZSAtLXVwZGF0ZSAtLW5ldXVzZSBtZWRpYS1saWJzL21lc2EKCiMgU2V0IHVwIHRoZSBzcGVjaWFsaXplZCBTdGVhbSBEZWNrIGlucHV0IHJ1bGVzCmlmIFsgLWQgIi9saWIvdWRldi9ydWxlcy5kIiBdOyB0aGVuCiAgICBlY2hvICdLRVJORUw9PSJ1aW5wdXQiLCBNT0RFPSIwNjYwIiwgR1JPVVA9ImlucHV0IiwgT1BUSU9OUys9InN0YXRpY19ub2RlPXVpbnB1dCInID4gL2xpYi91ZGV2L3J1bGVzLmQvOTktc3RlYW1kZWNrLWlucHV0LnJ1bGVzCmZpCg==
+#!/bin/bash
+set -e
+
+# Ensure the AMDGPU firmware is prioritized
+echo 'VIDEO_CARDS="amdgpu radeonsi"' >> /etc/portage/make.conf
+
+# Rebuild mesa with the new Vulkan flags
+emerge --update --newuse media-libs/mesa
+
+# Set up the specialized Steam Deck input rules
+if [ -d "/lib/udev/rules.d" ]; then
+    echo 'KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"' > /lib/udev/rules.d/99-steamdeck-input.rules
+fi
