@@ -1,6 +1,7 @@
 # Force RADV (Vulkan) and hardware acceleration
-media-libs/mesa vulkan radeon zink +wayland +gbm +llvm +llvm_slot_17
+media-libs/mesa vulkan radeon zink +wayland +gbm +llvm +llvm_slot_17 +video_cards_amdgpu +video_cards_radeonsi
 media-libs/libepoxy egl
 sys-kernel/linux-firmware @binary-redistributable
-# Enable specific Steam Deck patches in your Matrix kernel
+sys-firmware/amd-gpu-firmware @binary-redistributable
+# Enable Steam Deck patches in the kernel
 sys-kernel/matrixos-kernel amdgpu jupiter-patches
