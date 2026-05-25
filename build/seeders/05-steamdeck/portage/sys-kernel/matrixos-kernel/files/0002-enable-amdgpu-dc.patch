@@ -1,0 +1,20 @@
+--- a/drivers/gpu/drm/amd/amdgpu/Kconfig
++++ b/drivers/gpu/drm/amd/amdgpu/Kconfig
+@@ -100,7 +100,7 @@ config DRM_AMDGPU
+ 	select INTERVAL_TREE
+ 	select DRM_TTM
+ 	select DRM_GEM_CMA_HELPER
+-	select DRM_DP_AUX_CHARDEV if DRM_AMD_DC
++	select DRM_DP_AUX_CHARDEV
+ 	select DRM_KMS_HELPER
+ 	select DRM_VM
+ 	select HMM_MIRROR
+@@ -120,7 +120,7 @@ config DRM_AMDGPU_DC
+ 	bool "AMDGPU Display Core"
+ 	depends on DRM_AMDGPU
+ 	depends on BACKLIGHT_CLASS_DEVICE
+-	default n
++	default y
+ 	help
+ 	  Enable AMDGPU Display Core (DC) for modern AMD GPUs.
+ 	  Required for Steam Deck (Jupiter APU).
