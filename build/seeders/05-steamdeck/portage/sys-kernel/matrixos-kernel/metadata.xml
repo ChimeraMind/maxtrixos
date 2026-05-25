@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+    <maintainer type="person">
+        <email>steven@chimera.mind</email>
+        <name>Steven Thompson</name>
+    </maintainer>
+    <longdescription>
+        Custom kernel for MatrixOS with Steam Deck (Jupiter APU) support.
+        Includes patches from Valve's SteamOS and AMDGPU Display Core (DC).
+    </longdescription>
+    <use>
+        <flag name="amdgpu">Enable AMDGPU DRM support for Van Gogh APU.</flag>
+        <flag name="jupiter-patches">Apply Steam Deck (Jupiter) specific patches.</flag>
+    </use>
+</pkgmetadata>
